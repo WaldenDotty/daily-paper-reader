@@ -2457,6 +2457,23 @@ window.$docsify = {
         });
       };
 
+      const bindSidebarVirtualHashLinks = () => {
+        const nav = document.querySelector('.sidebar-nav');
+        if (!nav) return;
+        const links = nav.querySelectorAll('a[data-dpr-hash]');
+        links.forEach((a) => {
+          if (a.dataset.dprHashBound === '1') return;
+          a.dataset.dprHashBound = '1';
+          a.addEventListener('click', (e) => {
+            const target = normalizeHref(a.getAttribute('data-dpr-hash') || '');
+            if (!target) return;
+            e.preventDefault();
+            DPR_NAV_STATE.lastNavSource = 'click';
+            window.location.hash = target;
+          });
+        });
+      };
+
       // 侧边栏/正文的论文页标题条：英文右侧，中文左侧，中间竖线
       const isPaperRouteFile = (file) => {
         const f = String(file || '');
@@ -3721,6 +3738,7 @@ window.$docsify = {
         // ----------------------------------------------------
         setupCollapsibleSidebarByDay();
         hydrateStructuredSidebarItems();
+        bindSidebarVirtualHashLinks();
         neutralizeSidebarNoactiveLinks();
 
         // ----------------------------------------------------
