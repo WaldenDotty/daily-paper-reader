@@ -1,0 +1,451 @@
+Title: Lightweight Model Predictive Control for Spacecraft Rendezvous Attitude Synchronization
+
+URL Source: https://arxiv.org/pdf/2603.18921v1
+
+Published Time: Fri, 20 Mar 2026 01:12:44 GMT
+
+Number of Pages: 6
+
+Markdown Content:
+# Lightweight Model Predictive Control for Spacecraft Rendezvous Attitude Synchronization 
+
+Peter Stadler 1, Alexander Meinert 1, Niklas Baldauf 1 and Alen Turnwald 2
+
+Abstract — This work introduces two lightweight model predic-tive control (MPC) approaches for attitude tracking with reaction wheels during spacecraft rendezvous synchronization. Both approaches are based on a novel attitude deviation formulation, which enables the use of inherently linear constraints on angular velocity. We develop a single-loop and a dual-loop MPC; the latter embeds a stabilizing feedback controller within the inner loop, yielding a linear time-invariant system. Both controllers are implemented with CasADi—including automatic code generation—evaluated across various solvers, and validated within the Basilisk astrodynamics simulation framework. The experimental results demonstrate improved tracking accuracy alongside reductions in computational effort and memory consumption. Finally, embedded delivery to an ARM Cortex-M7—representative of commercial off-the-shelf devices used in New Space platforms—confirms the real-time feasibility of these approaches and highlights their suitability for onboard attitude control in resource-constrained spacecraft rendezvous missions. 
+
+I. I NTRODUCTION 
+
+Attitude pointing and tracking are standard spacecraft op-erations. A challenging example arises during the rendezvous of two satellites, where attitude is controlled using reaction wheels. We focus on the synchronization of rotational motion as described in [ 1 ]. During this phase, the servicer aligns its angular velocity to the target’s momentum vector and tracks its attitude. The stabilization phase would involve a similar task: detumbling amounts to attitude pointing. The difficulty in this phase arises from the uncertain inertia of the coupled system, for which [2] proposes a Lyapunov controller. There are various ways to represent attitude. Rotation matrices describe the attitude continuously and uniquely, and we use them for certain purposes as they yield compact formulas. Unit quaternions are a common representation used for attitude tracking as in [ 3 ]. However, neither is a minimal representation of the inherently 3-dimensional attitude. Projecting the quaternions down to generalized Rodrigues parameters, as in [ 4], introduces a singularity. Instead, we lift the rotation matrices to rotation vectors in R3. Rotation vectors correspond to elements of the Lie algebra so (3) 
+
+as used by [ 5] for developing an iterative linear-quadratic regulator (iLQR).  
+
+> This work was supported by the Bavarian Ministry of Economic Affairs, Regional Development and Energy (grant no. MRF-2307-0009)
+> 1Peter Stadler, Alexander Meinert and Niklas Baldauf are with the Space Applications Group, e:fs TechHub GmbH, 85080 Gaimersheim, Germany
+> {Peter.Stadler, Alexander.Meinert, Niklas.Baldauf }@efs-techhub.com
+> 2Alen Turnwald is with the Faculty of Electrical Engineering and Information Technology, Ingolstadt University of Applied Sciences, Germany
+> Alen.Turnwald@thi.de
+
+One disadvantage of rotation vectors is that they cannot represent orientations both uniquely and continuously. This is not a drawback for attitude control, since no globally asymptotically stable continuous attitude controller exists [ 6]. Enforcing safety and hardware constraints, such as angular velocity bounds and reaction wheel torque limitations, is paramount for attitude control. Non-linear model predictive control (MPC) considers these constraints explicitly like in [ 6]but demands high computational resources. To address limited onboard resources, we leverage linear MPC, for which a variety of quadratic-program solvers are available. For attitude tracking, the system can be linearized around the reference trajectory using the tracking error. We introduce a novel multiplicative attitude-error definition obtained by reversing the conventional order of the rotation matrices. This yields inherently linear angular-velocity constraints. Based on this formulation, we introduce two linear MPCs for spacecraft attitude synchronization: a conventional single-loop design, and a dual-loop design that uses a stabilizing feedback controller for the inner control loop. The latter augments the dual-loop MPC in [ 7], where the attitude error is the difference of unit quaternions. High-fidelity simulations in Basilisk [ 8] validate improved attitude tracking performance of the proposed controllers compared to [ 7 ]. We inspect different solvers for the quadratic programs given by the linear MPCs using CasADi [ 9 ] and deliver the MPCs to an embedded commercial off-the-shelf processor. The dual-loop MPC outperforms the other two linear MPCs in terms of runtime and memory usage. II. P RELIMINARIES 
+
+A. Attitude Kinematics 
+
+The attitude of a spacecraft is given by its rotation with respect to an inertial frame. It can be represented by the direction cosine matrix R ∈ R3×3. The angular velocity of the spacecraft with respect to the inertial frame expressed in the spacecraft body frame is denoted as ω ∈ R3.
+
+> arXiv:2603.18921v1 [cs.RO] 19 Mar 2026
+
+The derivative of the rotation matrix obeys the kinematic equation: ˙R = R ω × (1) Here, the operator × maps a vector to its skew-symmetric matrix:  xyz
+
+
+
+× := 
+
+ 0 −z yz 0 −x  
+
+> −yx0
+
+
+
+It yields the cross-product by multiplying with another vector. 
+
+B. Rotation Vector 
+
+For optimization purposes as in MPC, it is desirable to represent the attitude in a 3-dimensional vector space: solvers can use it without additional constraints or projections. We lift the direction cosine matrices to rotation vectors, which have this property. A rotation vector ϕ ∈ R3 is co-directional with the axis and its length ∥ϕ∥2 equals the angle of the rotation. The matrix exponential gives exp( ϕ×) = R.The theoretical superstructure is that the rotation matrices form the Lie group SO(3) . They are constrained to have the determinant det( R) = 1 . The corresponding Lie algebra 
+
+so (3) forms a vector space (essentially the rotation vectors); this is the key benefit. Other advantages of using the Lie algebra for control are elaborated in [5]. The advantages of the rotation matrices are that composing rotations corresponds to multiplying matrices, and that the kinematics (1) are easier to handle. The kinematics in terms of the rotation vector result in the non-linear Bortz equation [ 10 ]: 
+
+˙ϕ = ω + ϕ ×
+
+ 12 ω + 1
+
+∥ϕ∥22
+
+
+
+1 − ∥ϕ∥2 sin ∥ϕ∥2
+
+2 − 2 cos ∥ϕ∥2
+
+
+
+ϕ × ω
+
+
+
+(2) 
+
+C. Attitude Dynamics 
+
+The angular velocity ω obeys the dynamic equation: 
+
+J ˙ω = τ − ω × L (3) Here, τ is the applied torque, J is the inertia tensor of the spacecraft, and L is its angular momentum. For rigid bodies, the angular momentum would be J ω ;however, the spacecraft considered here has moving parts due to the use of reaction wheels. Actuating reaction wheels or other momentum-exchange devices keeps the total angular momentum L constant (law of conservation), and the angular acceleration ˙ω depends linearly on the torque τ and the current angular velocity ω. This is valid only for momentum-exchange devices, not for actuators that generate an external torque, such as attitude thrusters and magnetorquers. III. M ETHODS 
+
+For attitude tracking, we focus on controlling the spacecraft to follow a desired trajectory given in a reference frame by:  
+
+> •
+
+rotation matrix Rd, 
+
+> •
+
+angular velocity ωd and  
+
+> •
+
+angular acceleration ˙ωd
+
+These reference functions depend on time and fulfill the kinematic equation ˙Rd = Rd ωd×, analogous to (1). To constrain the components of the exerted torque τ and of the spacecraft’s angular velocity ω, we assume some realistic lower bounds τ− and ω− as well as upper bounds τ+ and ω+.
+
+A. Proposed Error System 
+
+We define the attitude deviation in reverse order: 
+
+∆R := R R Td
+
+and the deviation of the angular velocity as: 
+
+∆ω := Rd (ω − ωd) (4) It is common to define the attitude deviation as RTd R or the same quantity in another representation, e.g., as rotation vector [ 5]. The reversed deviation has advantages for MPC as it yields linear angular-velocity constraints (7f) and (11f). Although the error in reverse order lacks the usual in-terpretation as a coordinate transformation, the product is mathematically valid and equals the identity I3 if and only if 
+
+Rd = R. We rely purely on the mathematical properties of this reversed matrix product. The deviations fulfill an equation similar to the kinematics in (1): 
+
+∆ ˙R = R (ω× − ωd×) RTd = ∆ R ∆ω×
+
+This follows from the identity  RTd ∆ω × = RTd ∆ω× Rd.A rotation vector error ∆ϕ corresponding to ∆R obeys the respective Bortz equation (2). The vector is not uniquely determined because of its 2 π-periodicity. We could restrict its length to π using the main branch of the matrix logarithm of ∆R. However, since we recompute ∆ϕ at each control step, its sign could flip at π. Instead, we relax this restriction to make the calculation continuous for small steps. 
+
+B. Single-Loop Linear MPC 
+
+Linearizing the Bortz equation of the error system (at 0) and differentiating the angular velocity error ∆ω leads to the parameter-varying (LPV) error system: 
+
+∆ ˙ϕ ≈ ∆ω (5a) 
+
+∆ ˙ ω = Rd (ωd × ω + ˙ ω − ˙ωd) (5b) The latter is affine in τ and ∆ω, since ˙ω depends linearly on τ and ω according to (3), and ω is an affine transform of 
+
+∆ω because of (4). The linearized error system is used as model for the single-loop MPC (Figure 1a). Constraints Error System Error System Stabilizer MPC MPC Inner Loop Outer Loop Constraints Reference   
+
+> (a) Single Loop (b) Dual Loop
+> Reference
+> Fig. 1. Layouts of the Proposed Linear MPCs for Attitude Tracking Both designs use the same reference trajectory, the same constraints, and the proposed error system based on the attitude deviation in reverse order. (a) The single-loop MPC (7) directly uses the error system linearized at zero: The model for the predictions is a discretization of the affine but parameter-varying (LPV) error system (5). (b) The dual-loop MPC (11) linearizes and discretizes an already stable inner loop for the MPC in the outer loop. The inner system is the closed loop of the error system with the stable feedback controller (8), which also eliminates the parameter variance. The linearization of the inner loop results in the stable and time-invariant (LTI) system (10).
+
+The MPC has a finite horizon of N constant increments 
+
+∆t, a state cost matrix Qsingle-loop and an input cost matrix 
+
+Rsingle-loop (both symmetric and positive semi-definite). The terminal cost matrix Psingle-loop and positively invariant poly-tope Xsingle-loop are calculated by solving the discrete algebraic Riccati equation. For time-dependent quantities, the index k
+
+indicates its value at time k ∆t in the future; x0 estimates the current state, and the other xk denote the predicted states: 
+
+xk := 
+
+∆ϕk
+
+∆ωk
+
+
+
+=
+
+∆ϕ(k ∆t)∆ω(k ∆t)
+
+
+
+(6) The single-loop linear MPC is formulated as the optimal control problem by the following quadratic program (QP): 
+
+min 
+
+> τk
+
+∥xN ∥2 
+
+> Psingle-loop
+
++ X
+
+> k<N
+
+∥xk∥2 
+
+> Qsingle-loop
+
++ ∥τk∥2 
+
+> Rsingle-loop
+
+(7a) subject to xk+1 = Ak xk + Bk τk + ck (7b) 
+
+xN ∈ Xsingle-loop (7c) 
+
+ωk ∈ [ω−, ω +]3 (7d) 
+
+τk ∈ [τ−, τ +]3 (7e) The system matrices Ak, Bk, and the offset vector ck dis-cretize the affine but parameter-varying (LPV) error system (5) by zero order hold. The predicted angular velocity ωk is affine in the optimization variable ∆ωk:
+
+ωk := ωd,k + RTd,k ∆ωk (7f) The angular velocity ωk is affine since we defined the attitude error ∆R in reverse order in (4). Using the conven-tional attitude-error definition, the angular-velocity deviation would be ω − RT Rd ωd, where the rotation matrix depends nonlinearly on the rotation vector. If this conventional angular-velocity error were linearized to preserve linear constraints on angular velocity, prediction accuracy would deteriorate. 
+
+C. Stable Feedback Controller 
+
+We define a stabilizing control torque for attitude tracking similar to [ 3], but use rotation vectors instead of quaternions: 
+
+τc := ω × L
+
+| {z } 
+
+> gyroscopic
+
++ J ( ˙ ωd − ωd × ω)
+
+| {z }
+
+> tracking feedforward
+
+− J R Td (kc ∆ϕ + kω ∆ω)
+
+| {z }
+
+> linear feedback
+
+(8) The positive gains kc and kω can be chosen arbitrarily. The control law τc serves as the stabilizer of the inner loop in Figure 1b. Together with the error system (5), it forms the inner loop of the dual-loop MPC defined below. It is designed to simplify the derivative of the angular velocity error: 
+
+∆ ˙ ω = −kc ∆ϕ − kω ∆ω (9) Stability of the controller can be shown with the function: 
+
+V := kc
+
+2 ∥∆ϕ∥22 + 12 ∥∆ω∥22
+
+V is a Lyapunov function: it is clearly positive definite and radially unbounded; its derivative is non-positive by (2), (9), and the fact that the product ∆ϕ × ... is orthogonal to ∆ϕ:
+
+˙V = kc ⟨∆ϕ | ∆ ˙ϕ⟩ + ⟨∆ω | ∆ ˙ ω⟩
+
+= kc ⟨∆ϕ | ∆ω + ∆ ϕ × ... ⟩ + ⟨∆ω | −kc ∆ϕ − kω ∆ω⟩
+
+= −kω ∥∆ω∥22
+
+By (9), the equilibrium point at the origin 0 is the only trajectory with constant ∆ω ≡ 0. LaSalle’s invariance principle [ 11 ] implies global asymptotic stability. Similar to [ 2 ], one could prove even exponential stability by adding 
+
+c ⟨∆ϕ | ∆ω⟩ to V and determining c for ∥∆ϕ∥ ≤ M < 2 π.
+
+D. Inner Loop System 
+
+Closing the loop around the error system (5) yields a parameter- and time-invariant (LTI) system: 
+
+ddt
+
+∆ϕ
+
+∆ω
+
+
+
+≈
+
+ 0 I3
+
+−kc I3 −kω I3
+
+  ∆ϕ
+
+∆ω
+
+
+
++
+
+ 0
+
+I3
+
+
+
+∆α
+
+(10) The system remains parameter-invariant if the input accelera-tion ∆α is added linearly, via J R Td ∆α, to the stabilizer (8). It models the inner loop of the dual-loop MPC (Figure 1b). The system has the poles: 
+
+− kc + kω
+
+2 ±
+
+r k2
+
+> ω
+
+4 − kc
+
+It is asymptotically stable for all positive gains. We set the discriminant to zero by choosing 4 kc = k2 
+
+> ω
+
+. Our experiments suggest satisfactory performance for attitude tracking, at least for 0.5 < k ω < 2.
+
+E. Dual-Loop Linear MPC 
+
+This controller uses the already stable inner system (10) as model (Figure 1b). It connects the stabilizer (8) with the error system (5); the single-loop MPC uses the latter solely. Again, the MPC has a horizon of N steps of length ∆t, a state cost matrix Qdual-loop and an input cost matrix Rdual-loop 
+
+(both symmetric and positive semi-definite). The terminal cost matrix Pdual-loop and positively invariant polytope Xdual-loop are calculated by solving the discrete algebraic Riccati equation. The index k denotes the discretization at k ∆t in the future, 
+
+x0 the current estimation and xk the predicted states (6). The dual-loop linear MPC is formulated as the following quadratic program (QP). The terms shared with (7) are gray: 
+
+min 
+
+> ∆αk
+
+∥xN ∥2 
+
+> Pdual-loop
+
++ X
+
+> k<N
+
+∥xk∥2 
+
+> Qdual-loop
+
++ ∥∆αk∥2 
+
+> Rdual-loop
+
+(11a) subject to xk+1 = A x k + B ∆αk (11b) 
+
+xN ∈ Xdual-loop (11c) 
+
+ωk ∈ [ω−, ω +]3 (11d) 
+
+τk ∈ [τ−, τ +]3 (11e) The system matrices A and B are constant as they discretize the parameter- and time-invariant (LTI) system (10) by zero order hold. The predicted angular velocity ωk and torque τk
+
+are affine relative to the optimization variables xk and ∆αk:
+
+ωk := ωd,k + RTd,k ∆ωk (11f) 
+
+τk := τc,k + J R Td,k ∆αk (11g) Fig. 2. Attitude Tracking Quality of Different MPCs in Simulation with Basilisk The proposed dual-loop MPC and the single-loop MPC are quite similar and better than the previous MPC from [ 7]. For the former two MPCs, the deviations of both attitude and angular speed fall faster with time and the effort measured as accumulated torque is slightly lower. The angular velocity error for the previous MPC must be linearized. This makes it difficult to constrain the angular velocity exactly; here, ωz exceeds the upper bound (highlighted). 
+
+The constraints are linear: the torque τc,k of the stable controller (8) is an affine function of ∆ϕk, ∆ωk and ωk; the angular velocity ωk is affine, identical to (7f). IV. R ESULTS 
+
+We compare the two proposed MPCs to the dual-loop MPC from [ 7] in a simulated environment and analyze their runtime for increasing horizons. The runtimes are visualized for each horizon with a violin plot on a logarithmic scale as they cover a wide range. Their geometric means are connected and the maximum values are emphasized. 
+
+A. Comparison in Simulation 
+
+We tuned the parameters to match the accuracy of the previous MPC given in [ 7]. For the single-loop MPC (7) the selected cost matrices are: 
+
+Qsingle-loop =
+
+2 I3 00 3 I3
+
+
+
+and Rsingle-loop = 5 Rd J−1
+
+For the dual-loop MPC (11), the costs and gain are set to: 
+
+Qdual-loop =
+
+10 I3 00 I3
+
+
+
+, R dual-loop = 100 I3 and kω = 1 .2
+
+This determines the other gain ( kc = 0 .36 ) as well as the terminal cost matrices and maximal positively invariant sets. We set up the astrodynamics simulation for a spacecraft with reaction wheels in Basilisk [ 8]. Every MPC was run with the same constraints, the same initial values, and the same fixed prediction time step. We used the following parameters:  
+
+> •
+
+inertia tensor J = diag(85 , 94 , 92) kgm 2, 
+
+> •
+
+reference angular velocity ωd ≡  0.4, 0.3, 0T rad /s, 
+
+> •
+
+angular velocity constraints ω± = ±0.5 rad /s, 
+
+> •
+
+torque constraints τ± = ±40 Nm , and  
+
+> •
+
+time increment ∆t = 0 .1 s .To compare the quality of attitude tracking, the three MPCs run with a receding horizon of N = 11 steps for 25 seconds: The simulation calls a controller with the current state, uses the first calculated torque τ0 as input for ∆t = 0 .1 s , and reinvokes the controller with the new state, closing the loop. Figure 2 shows the advantages of the proposed two MPCs over the previous MPC: inherently linear constraints, faster error decay and a slightly lower total torque requirement. For workload comparison of the three MPCs, we replay (in open loop) a run with a large horizon (high quality) for each MPC using horizons with different numbers of steps N .Figure 3 shows the advantages of the dual-loop MPC over the other two and that the single-loop MPC scales better than the previous MPC. As it shows the best performance, we present the details for the dual-loop MPC in the following. 5 10 15 20 25 30 35 40 45 50  
+
+> Horizon [steps] 0.01 0.1 110 100 Runtime [ms]
+> Single-Loop MPC Dual-Loop MPC Previous MPC
+> 510 15 20 25 30 35 40 45 50
+> Horizon [steps]
+> 0
+> 1
+> 2
+> 3
+> 4
+> 5
+> Compiled Size [MiB]
+> Single-Loop MPC Dual-Loop MPC Previous MPC
+
+Fig. 3. Workload of Different MPCs in C++ on Intel i7-11850H The proposed dual-loop MPC is faster than the previous MPC. For horizons less than 20 steps, the single-loop MPC is as slow as the previous MPC. For larger horizons, the runtimes of the single-loop MPC and the proposed dual-loop MPC are similarly low, while the compiled size of the dual-loop MPC is smaller. For each algorithm and horizon, we choose the solver and sparsity pattern yielding the best runtime. The solver switches at 20 steps for the proposed dual-loop MPC and at 40 steps for previous MPC yield visible changes in runtimes distribution and compiled size. B. Evaluation of Solvers 
+
+The dual-loop MPC (11) is given in sparse form (multiple shooting). Because different solvers perform best under different sparsity patterns, we condensed the problem fully (single shooting) or partially for each horizon (Figure 4). For each horizon, we ran every solver with all relevant sparsity formulations. Constraints Matrix  Modulo 1 Modulo 2 Modulo 3 Modulo 4 Modulo 5 Modulo 7 Modulo 10 Modulo 20 
+
+> Cost Matrix
+
+Fig. 4. Sparsities of the Dual-Loop MPC with a Horizon of N = 20 Steps The optimal solution to a quadratic program remains unchanged if we condense some optimization variables. However, the corresponding constraint and cost matrices change in size (gray) and non-zero entries (black). We use any number of blocks that can be generated for a given horizon. The patterns vary from N blocks for the sparse formulation to one block for the dense formulation. 0.01          
+
+> 0.1
+> 1
+> 10
+> 100
+> Runtime [ms]
+> DAQP HiGHS qpOASES SuperSCS Preparation
+> 510 15 20 25 30 35 40 45 50
+> Horizon [steps]
+> 0.01
+> 0.1
+> 1
+> 10
+> 100
+> Runtime [ms]
+> HPIPM OSQP ProxQP QRQP Preparation
+
+Fig. 5. Runtimes of Dual-Loop MPC with CasADi on Intel i7-11850H For each solver and horizon, we selected the sparsity formulation that yields the lowest runtime. We divided the solvers into two plots: those using condensed matrices (solid lines) and those using sparser matrices (dashed lines). In each case, preparation accounts for only a fraction of the total runtime (note the logarithmic scale). DAQP and qpOASES are the fastest for smaller horizons. Yet, the latter exhibits high variation in runtime; computing the initial solution is particularly expensive. ProxQP and OSQP are the fastest for larger horizons, though the runtimes of the former vary less. All of them have lower mean runtimes than HPIPM and HiGHS. However, the former exhibits low variation in runtime, and for larger horizons its maximum runtime is lower than that of qpOASES and OSQP. No violin plots are shown for SuperSCS, QRQP, or ipqp at horizons for which they failed to solve all quadratic programs. 
+
+We implemented the MPCs using CasADi [ 9]. It can generate C code for the corresponding quadratic programs and interfaces the following open-source solvers: DAQP [ 12 ], HiGHS [ 13 ], HPIPM [ 14 ], ipqp, OSQP [ 15 ], ProxQP [ 16 ], qpOASES [ 17 ], QRQP, and SuperSCS [ 18 ]. Figure 5 shows the runtimes of the solvers at different horizons. We identified the best-performing solvers and statically compiled C++ code to solve the generated quadratic programs with DAQP, OSQP, qpOASES, and QRQP. Figure 6 shows runtime behavior similar to that observed with CasADi for the selected solvers, except that OSQP is notably faster. In contrast, qpOASES is slightly slower due to the use of its integrated linear algebra backend, which is platform agnostic. 5 10 15 20 25 30 35 40 45 50  
+
+> Horizon [steps] 0.01 0.1 110 100 Runtime [ms]
+> DAQP OSQP qpOASES QRQP Preparation
+> 510 15 20 25 30 35 40 45 50
+> Horizon [steps]
+> 0
+> 1
+> 2
+> 3
+> 4
+> 5
+> Compiled Size [MiB]
+> DAQP OSQP qpOASES QRQP
+
+Fig. 6. Workload of Dual-Loop MPC in C++ on Intel i7-11850H DAQP is the fastest solver for smaller horizons, where it can benefit from a dense formulation. However, sparser formulations scale better, and OSQP is faster from 20 steps onwards. The runtime of qpOASES falls between the two. Its runtime is slightly higher only at 20 steps, albeit with high variance. QRQP succeeded only for small horizons and was slower than the other solvers. The compiled size for DAQP and qpOASES grows much faster with the horizon than for OSQP. This is particularly relevant for deployment on embedded devices with more restricted memory. 
+
+We analyzed the previous MPC in [ 19 ] for attitude pointing. Notably, QRQP performed well in that case. Here, however, it proves to be quite fragile because of the more demanding attitude tracking problem. It cannot complete a full run on the embedded device even for small horizons. Preparing the quadratic programs to be solved is slower in the dense formulation than in the sparse formulations because it requires more matrix multiplications. However, both preparations are minor in view of the solvers’ runtimes. 
+
+C. Delivery to an Embedded Platform 
+
+We ported the MPCs with the selected solvers to the microcontroller Teensy 4.1 (ARM Cortex M-7) using CMake. Initially, we tried the Arduino IDE and PlatformIO, which support the embedded device inherently. The standalone code generated by CasADi (including QRQP) and OSQP [ 20 ]worked there immediately; yet, libraries for other solvers were not available. Instead, we used their build files directly in CMake, included the library for the embedded platform and set up the parameters for the compilation. On the ARM Cortex M-7, the runtimes are approximately 40 times higher than on the Intel i7-11850H in accordance with their clock speed. Notably, for each horizon, the runtimes for the preparations vary much less. This is because the preparations only involve a fixed number of matrix operations (without iterations) and the code is executed standalone on the embedded device. The dual-loop MPC runs on the Teensy 4.1 for horizons up to 30 steps. Figure 7 shows that DAQP is best suited for horizons up to 20 steps, while only OSQP works for larger horizons. 5 10 15 20 25 30 35 40 45 50  
+
+> Horizon [steps] 0.01 0.1 110 100 Runtime [ms]
+> DAQP OSQP qpOASES Preparation
+> 510 15 20 25 30 35 40 45 50
+> Horizon [steps]
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> RAM Allocation [MiB]
+> DAQP OSQP qpOASES RAM1+2 RAM1
+
+Fig. 7. Workload of Dual-Loop MPC in C++ on ARM Cortex M-7 For all selected solvers, the fast memory (RAM1) is the limiting resource for the horizon. The memory consumption is about linear for OSQP, which benefits from a sparser formulation. In contrast, it increases more with the horizon for DAQP and qpOASES as they work with dense matrices. When it has enough memory, DAQP is best suited (up to 20 steps). OSQP works up to 30 steps, where we would expect it to be the fastest solver, too. However, the other solvers cannot run there: QRQP could not solve all arising quadratic programs even for small horizons, and qpOASES runs out of memory after 15 steps. At 15 steps, qpOASES has the lowest mean runtime but with high variation. 
+
+The limiting factor is the available RAM. For the generated CasADi code, we shift work arrays to the slower memory (DMAMEM). It had a negligible impact on the runtimes, but the code could run for larger horizons. There is room for improvement by shifting further allocations. V. C ONCLUSION 
+
+We developed two linear MPCs based on the multiplicative attitude deviation in reverse order, which makes the constraints on the spacecraft’s angular velocity inherently linear. Both exhibit accurate attitude tracking in the high-fidelity astrody-namics simulation Basilisk while obeying angular-velocity and torque constraints. They run on a commercial off-the-shelf processor (ARM Cortex-M7), which is representative of a New Space platform, supporting onboard deployment for attitude tracking in resource-constrained spacecraft. The dual-loop MPC outperforms the single-loop MPC in terms of runtime and memory consumption: it is faster for smaller horizons while requiring less memory for larger horizons at similar runtimes. This is because the dual-loop MPC is based on a linear time-invariant system, whereas the linear system of the single-loop MPC is parameter-varying. Future work includes running the MPC on the embedded device in closed loop with the simulation. To improve disturbance resilience, it could be extended to a robust MPC formulation, as in [ 21 ]. The controllers could consider relative deviations of spacecraft in a formation for decentralized coordinated attitude control like in [ 3]. The controllers could also be extended to the affine group SE(3) including translational motion as in [ 22 ], e.g., for close proximity rendezvous with 6 degrees of freedom. REFERENCES [1] P. Colmenarejo, J. Branco, N. Santos, P. Serra, J. Telaar, H. Strauch, M. Fruhnert, A. M. Giordano, M. D. Stefano, C. Ott, M. Reiner, D. Henry, J. Jaworski, E. Papadopoulos, G. Visentin, F. Ankersen, and J. Gil-Fern ´andez, “Methods and outcomes of the comrade project - design of robust combined control for robotic spacecraft and manipulator in servicing missions: comparison between between hinf and nonlinear lyapunov-based approaches,” in Proceedings of the International Astronautical Congress, IAC , 2018. [2] T. Lee, “Geometric tracking control of the attitude dynamics of a rigid body on so(3),” in Proceedings of the 2011 American Control Conference , 2011, pp. 1200–1205. [3] M. C. VanDyke, “Decentralized coordinated attitude control of a formation of spacecraft,” Master’s thesis, Virginia Polytechnic Institute and State University, 2004. [4] H. Schaub and J. L. Junkins, “Stereographic orientation parameters for attitude dynamics: A generalization of the rodrigues parameters,” 
+
+Journal of the Astronautical Sciences , vol. 44, no. 1, pp. 1–19, 1996. [5] S. Teng, W. Clark, A. Bloch, R. Vasudevan, and M. Ghaffari, “Lie algebraic cost function design for control on lie groups,” in 2022 IEEE 61st Conference on Decision and Control (CDC) , 2022, pp. 1867–1874. [6] U. V. Kalabi ´c, R. Gupta, S. Di Cairano, A. M. Bloch, and I. V. Kolmanovsky, “Mpc on manifolds with an application to the control of spacecraft attitude on so(3),” Automatica , vol. 76, pp. 293–300, 2017. [7] A. Turnwald and N. Baldauf, “Constraints-aware trajectory tracking control of spacecraft attitude using lpv and mpc,” in 2023 27th International Conference on Methods and Models in Automation and Robotics (MMAR) , 2023, pp. 139–144. [8] P. W. Kenneally, S. Piggott, and H. Schaub, “Basilisk: A flexible, scalable and modular astrodynamics simulation framework,” Journal of Aerospace Information Systems , vol. 17, no. 9, pp. 496–507, 2020. [9] J. A. E. Andersson, J. Gillis, G. Horn, J. B. Rawlings, and M. Diehl, “CasADi – A software framework for nonlinear optimization and optimal control,” Mathematical Programming Computation , 2018. [10] J. E. Bortz, “A new mathematical formulation for strapdown inertial navigation,” IEEE Trans. Aerosp. Electron. Syst. , vol. AES-7, no. 1, pp. 61–66, 1971. [11] J. LaSalle, “Some extensions of liapunov’s second method,” IRE Trans. Circuit Theory , vol. 7, no. 4, pp. 520–527, 1960. [12] D. Arnstr ¨om, A. Bemporad, and D. Axehill, “A dual active-set solver for embedded quadratic programming using recursive LDL T updates,” 
+
+IEEE Trans. Automat. Contr. , vol. 67, no. 8, pp. 4362–4369, 2022. [13] Q. Huangfu and J. A. J. Hall, “Parallelizing the dual revised simplex method,” Mathematical Programming Computation , vol. 10, no. 1, pp. 119–142, 2018. [14] G. Frison and M. Diehl, “Hpipm: a high-performance quadratic programming framework for model predictive control,” 2020. [15] B. Stellato, G. Banjac, P. Goulart, A. Bemporad, and S. Boyd, “OSQP: an operator splitting solver for quadratic programs,” Mathematical Programming Computation , vol. 12, no. 4, pp. 637–672, 2020. [16] A. Bambade, F. Schramm, A. Taylor, and J. Carpentier, “Leveraging augmented-Lagrangian techniques for differentiating over infeasible quadratic programs in machine learning,” in ICLR 2024 - The Twelfth International Conference on Learning Representations , 2024. [17] H. Ferreau, C. Kirches, A. Potschka, H. Bock, and M. Diehl, “qpOASES: A parametric active-set algorithm for quadratic program-ming,” Mathematical Programming Computation , vol. 6, no. 4, pp. 327–363, 2014. [18] P. Sopasakis, K. Menounou, and P. Patrinos, “SuperSCS: A fast and accurate conic optimization solver,” kul-optec.github.io/superscs/, 2017. [19] A. Turnwald, J. Scharnagl, P. Stadler, and A. N. Pe ˇcujli ´c, “Model predictive attitude control for cubesats: feasibility and requirements for in-orbit testing,” in Small Satellites Systems and Services Symposium (4S 2024) . SPIE, 2025, p. 141. [20] G. Banjac, B. Stellato, N. Moehle, P. Goulart, A. Bemporad, and S. Boyd, “Embedded code generation using the OSQP solver,” in IEEE Conference on Decision and Control (CDC) , 2017. [21] A. Meinert, N. Baldauf, and A. Turnwald, “Robust spacecraft attitude reference tracking using tube-based model predictive control,” in 
+
+2024 28th International Conference on System Theory, Control and Computing (ICSTCC) , 2024, pp. 229–234. [22] S. Teng, D. Chen, W. Clark, and M. Ghaffari, “An error-state model predictive control on connected matrix lie groups for legged robot control,” in 2022 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , 2022, pp. 8850–8857.

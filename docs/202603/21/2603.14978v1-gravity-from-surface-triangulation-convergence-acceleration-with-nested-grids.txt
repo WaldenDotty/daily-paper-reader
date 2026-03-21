@@ -1,0 +1,1348 @@
+Title: Gravity from surface triangulation: convergence acceleration with nested grids
+
+URL Source: https://arxiv.org/pdf/2603.14978v1
+
+Published Time: Tue, 17 Mar 2026 05:35:15 GMT
+
+Number of Pages: 34
+
+Markdown Content:
+# Gravity from surface triangulation: convergence acceleration with nested grids 
+
+## Huré Jean-Marc 
+
+University of Bordeaux, CNRS, Laboratoire d’Astrophysique de Bordeaux, UMR 5804, Pessac, 33600, France. Contributing authors: jean-marc.hure@u-bordeaux.fr; 
+
+Abstract 
+
+The determination of the gravitational potential by the polyhedral method is revisited in the case where the surface of a body is composed of triangular facets. Based upon six test-shapes of astrophysical interest (sphere, spheroid, triaxial, lemon-shape, dumbell and torus) projected on nested grids, we verify that the convergence toward reference values is second-order in the step size of the grid, inside the body, at the surface and outside. We then show that the accuracy or computing time can be drastically enhanced by implementing the Repeated Richardson Extrapolation. This technique is especially efficient when the body’s surface is smooth enough, and is therefore well adapted to the theory of figures (single and multi-layer fluids) and to dynamical studies (test-particle and mutual interactions), which require a large number of field evaluations. For real objects like asteroids that have very irregular terrains at small scales, the gain is modest. In that context, we estimate the discretization level beyond which the typi-cal error in potential values due to altimetric uncertainties dominates over the contribution of sub-grid cavities and bumps. For bodies close to spherical, the criterion reads T ≳ 64 D 
+
+> 3λ
+
+, where D is the diameter of the body, λ the typical shape error and T the number of triangular facets involved. The case of 433 Eros is considered as an example. 
+
+Keywords: Analytical methods, numerical methods, gravitational potential, 433 Eros 
+
+# 1 Introduction and motivations 
+
+The polyhedral decomposition is a well-proven technique for estimating the gravity field of certain celestial bodies with complex shape (Werner 1994). Homogeneous 1
+
+> arXiv:2603.14978v1 [astro-ph.EP] 16 Mar 2026
+
+objects whose surface is entirely made of planar facets (bounded by straight edges) are actually among rare cases for which the expressions for the Newtonian potential and accelerations are mathematically exact, expressible in closed form from Cartesian coordinates and singularity-free (Paul 1974; Waldvogel 1976; Çavşak 2012). Even if real bodies are covered with cavities and bumps and exhibit mass-density variations, this approach is of immense interest for analyzing the structure, composition and surface of asteroids, satellites and dwarf planets from topological data (e.g. Hamayun et al. 2009; Roberts et al. 2014; D’Urso 2014b; D’Urso and Di Lieto 2024; Yu and Baoyin 2015; Barnouin et al. 2020), the mutual interaction of aggregates and rubber piles, their growth, stability and disruption (Korycansky 2003, 2004; Korycansky and Asphaug 2005; Michel et al. 2004; Fahnestock and Scheeres 2006; Ferrari and Tanga 2020; Ho et al. 2023; Lu et al. 2025), and for investigating the trajectory of test-particles or probes orbiting around (Scheeres et al. 2002; Jiang et al. 2018; Jiang and Liu 2019; Karydis et al. 2021; Peñarroya and Paoli 2022; Fu et al. 2024; Pedros-Faura et al. 2024). In terms of computational cost, the Polyhedron Gravity Method (PGM) is compa-rable to an elementary multi-body code (Binney and Tremaine 1987). A closed surface discretized into N × N nodes contains 2N 2 triangles (and the same amount of tetra-hedra) typically, and the time τ (N ) required to compute the potential or acceleration at a given point in space is proportional to N 2, and it is to N 4 for a full coverage (ie. all nodes visited). This becomes prohibitive for large grids, especially when comput-ing the trajectory of test-particles. On the other hand, the accuracy, traditionnally measured through the error E(N ), increases with N (for a second-order scheme, this is E(N ) ∝ 1/N 2). But accuracy is also limited by the arithmetic of computers (e.g., Mathews and Fink 2004). Raising the resolution is therefore at the expense of the computing time, and one generally seeks for a compromise between accuracy and rapidity of algorithms. In these conditions, it appears that the only way to reduce the computional cost τ without impacting the quality of outputs is parallel and/or GPU-based processing (Wen and Zeng 2023; Schuhmacher et al. 2024), which enables to reach the lower limit τ ∝ N 2.This paper deals with the Tetrahedron Gravity Method (TGM), a subclass of the PGM, where all primitive facets of the body’s surface are triangles. We investigate the degree of convergence of potential values in the vicinity of the body as the number of facets increases. We show that a given accuracy level can be reached by implement-ing a classical numerical recipe of convergence acceleration, which enables to reduce the actual grid size ( N → N ′ < N ), thereby decreasing τ again, possibly by orders of magnitude depending on the smoothness of the surface in question. In Sect. 2, we shortly revisit the TGM by deriving a collection of compact formula established in local coordinates. In Sect. 3, we test the accuracy of the method by considering six test-shapes of astrophysical interest (simply and multiply connected domains). Com-parisons with references (e.g., sphere, triaxial) is essential. To our knowledge, this has never been published yet. In particular, by using nested grids (required for conver-gence acceleration), we verify first that that potential values are second-order accurate in the mesh spacing for any evaluation point. The conditions are therefore ideal to apply a Repeated Richardson Extrapolation (RRE), which enables to generate much 2better values without significant computational effort (Floater et al. 2007). This is the aim of Sect. 4. As demonstrated, the performances of the RRE technique are optimal if the surface in consideration is smooth enough, with no altimetric variations below a certain length scale. We then discuss the efficiency of the method in a real case for asteroid 433 Eros by using shape data from the NASA Data Planetary System (Gaskell 2021). As expected and tested, the RRE technique is less usefull, due to ter-rain irreguarities at the smallest scales. The impact of shape uncertainty in potential values is discussed (e.g. Bercovici et al. 2020), and compared to the contribution of small-scale cavities and bumps. Quantitative gains in terms of computing time and error reduction are outlined in Sect. 6. A few perspectives are listed in the conclusion. 
+
+# 2 Statement of the problem and exact solution 
+
+The Newtonian potential at point P (r) in space of a homogeneous body is given by the fundamental expression (e.g., Kellogg 1929; Durand 1953) 
+
+Ψ( r) = −Gρ 
+
+∫ ∫ ∫ 
+
+> V
+
+dV ′
+
+|r − r′| , (1) where ρ is the mass density and V is to the total volume occupied by matter. The presence of sharp edges and vertices in the geometry (like for a cube for instance) does not produce any kind of singularities, for the potential itself, and its first and second spatial derivatives according to the Poisson equation (Durand 1953; Waldvogel 1976; Chappell et al. 2012; D’Urso 2014a). By applying the divergence Gauss-Ostrogradsky theorem, we get the equivalent form 
+
+Ψ( r) = + 12 Gρ 
+
+∫ ∫ 
+
+> S
+
+u(r|r′) · n(r′)dS ′, (2) where S is the total surface of the body associated with the volume V, n is the local unit vector, normal to the surface oriented outwards, and 
+
+u(r|r′) = r − r′
+
+|r − r′| . (3) The main advantage of this double integral is that the hyperbolic singularity in the integrand of Eq. (1) is removed as u(r|r′) · n is just a cosine. This integral can be converted into a line integral from the curl theorem due to Stokes, but this does not necessarily renders the analytical treatment much easier (e.g., Werner 1994; Zhou 2009; Tsoulis 2012; Conway 2015; Majic 2020). 
+
+## 2.1 Surface triangulation 
+
+In practice, the double integral in Eq. (2) is calculated by discretization of the sur-face S, in the form of connected nodes V i(ri). The most basic bidimensionnal pattern in flat geometry being the triangle, we assume here that the nodes can be associ-ated by triplets {Vi,Vj ,Vk} ≡ T ijk forming non-intersecting triangles Tijk , sharing 3O              
+
+> triangulated surface
+> a triangle
+> its vertices
+> a point P
+> intermediate vertex A Fig. 1 Part of a sphere triangulated with 960 triangles obtained with N= 2 M= 32 equally-spaced nodes along the azimuth ϕand Mequally-spaced nodes in colatitude θ. Also shown are a particular triangle ( bold line ), the local basis vectors ( red arrows ), a point P (x, y, z )of space where the potential
+> Ψis evaluated, the intermediate vertex A defined as the projection of point P in the plane of the actual triangle ( black cross ), and the basis vectors of the global reference frame ( black arrows )
+
+edges and vertices. Regarding Eq. (1), this is equivalent to an assembly of tetrahedra 
+
+{O,Vi,Vj ,Vk} where point O is, for instance, the center of mass. Figure 1 shows an example of triangulated sphere with unit radius (see Sect. 3.1 for the definition for the vertices). In these conditions, Eq.(2) becomes 
+
+Ψ( r) = ∑
+
+> all triangles
+
+δΨijk (r), (4) where δΨijk is the contribution of triangle Tijk , namely 
+
+δΨijk = + 12 Gρ 
+
+∫ ∫  
+
+> triangle Tijk
+
+u(r|r′) · ndS ′. (5) At this level, the labels i, j and k are arbitrary but must refer to a unique, non-ambiguous numbering of nodes. We do not go into the details of mesh generation, which is well-documented (e.g., Pellerin 2021). 
+
+## 2.2 Local coordinate system and intermediate vertex A 
+
+Inspired by Stirling (2017) and Amaral (2019), we calculate δΨijk by using a local coordinate system, which is sometimes very efficient for establishing a compact formula and avoiding explicit singularities (Tisserand 1891; Paul 1974; Waldvogel 1976; Lass and Blitzer 1983). For a given triangle Tijk , the local system is defined by the triangle’s plane and its unit normal vector nijk oriented outwards, as depicted in Fig. 2. In this plane, the coordinates are denoted (X′, Y ′, Z ′). The local basis (eX′ , eY ′ , eZ′ )ijk 
+
+4ey        
+
+> Ti
+> Tk
+> ezex
+> Cijk
+> ey
+> ezex
+> Tj
+> βi
+> Cijk
+> βj
+> Vi
+> Vk
+> Vj
+> Vk
+> Vi
+> Vj
+> Vi
+> jX’ iX’
+> O
+> path 2 path 4
+> path 3
+> Ptriangle’s plane
+> r’
+> P’ A
+> r
+> Opath 1
+> θ=π/4 φ=π/4
+> path 5 inward outward AP
+> n
+> triangle’s plane h
+> ex’
+> AxyzxzyX’ triangle’s plane Z’ e= n ex’ ey’ nijk ijk Z=0
+
+Fig. 2 A triangle Tijk = {Vi,V j ,V k } as part of the triangulated surface S of the body, its plane and the normal vector nijk , oriented outwards. Point A is the projection of P in this plane following its normal nijk , leaving 3 intermediate triangles AV iVj , AV j Vk and AV k Vi; see Fig. 3 
+
+is formed by a few trivial vectorial manipulations. We first define the unit vector tij 
+
+such that || ViVj || tij = ViVj and set eX′ ≡ tij . Next, from cos α = tij · tik , we have 
+
+eZ′ ≡ tij × tjk 
+
+sin α ≡ nijk , (6) where || ViVk|| tik = ViVk and || Vj Vk|| tjk = Vj Vk. The last vector of the local basis is eY ′ ≡ eZ′ × eX′ . In the local frame, the Cartesian coordinates are denoted 
+
+(X′, Y ′, Z ), with the consequence that the point P’ (X′, Y ′, 0) belongs to the triangle’s plane. Finally, we consider the point A as the projection of the evaluation point P onto the plane of the triangle (see below); see Figs. 1 and 2. This point is also set as the origin of the local coordinate system, i.e., A (0 , 0, 0) . Three intermediate, coplanar triangles AV iVj , AV j Vk and AV kVi are then formed, as shown in Fig. 3. Note that, as done for the unit vector n, points A is specific to each triangle and must be formally denoted A ijk . Similarly, P (x, y, z ) is unique but its coordinates in the local frame, i.e., 
+
+(X′, Y ′, Z ′), are specific to each triangle, and so we should write P ijk and the local altidude is Z′ ≡ Z′
+
+> ijk
+
+. We omit these extra notations in the following for the comfort of reading. 
+
+## 2.3 Double integration over the 3 intermediate triangles 
+
+In the local coordinate system, we have P (0 , 0, Z ′) and it follows that 
+
+r − r′ = −X′eX′ − Y ′eY ′ + Z′eZ′ . (7) 5β i    
+
+> βj
+> Vk
+> Vi
+> Vj
+> ViVjjX’ iX’ Aintermediate triangle
+> Ah
+> Y’ X’ triangle’s plane Z’ e= n ex’ ey’
+> ijk Z=0
+
+Fig. 3 Local Cartesian coordinates (X′, Y ′, Z ′) in the plane of the triangle Tijk = {Vi,V j ,V k } (dark gray ) and local basis is (eX′ , eY ′ , eZ′ ), with eZ′ ≡ nijk ; see Fig. 2. The height of the intermediate triangle AV iVj (light gray ) is h
+
+Unless P lies in the triangle’s plane, Z′ is nonzero (see below). As dS ′ = dX ′dY ′, we have 
+
+dS ′
+
+|r − r′| = dX ′dY ′
+
+√
+
+X′2 + Y ′2 + Z′2 , (8) and so the integrand in Eq. (5) is 
+
+u(r|r′) · nijk dS ′ = Z′ dX ′dY ′
+
+√
+
+X′2 + Y ′2 + Z′2 . (9) That expression is attractive because it is fully integrable over X′ and Y ′ by analytical means. In this purpose, it is interesting to split the integral in Eq. (5) into three integrals running over the area of the 3 intermediate triangles AV iVj , AV j Vk and AV kVi; see again Fig. 3. For the first intermediate triangle AV iVj , we integrate first along the X′ axis, and we find 
+
+∫ X′
+
+> j
+> X′
+> i
+
+dX ′
+
+√
+
+X′2 + Y ′2 + Z′2 =
+
+[
+
+atanh X′
+
+√
+
+X′2 + Y ′2 + Z′2
+
+]X′
+
+> j
+> X′
+> i
+
+, (10) where the lower and upper bounds are X′ 
+
+> i
+
+(Y ′) = Y ′cotan βi and X′ 
+
+> j
+
+(Y ′) = Y ′cotan βj ,respectively, and the β’s are measured with respect to eX′ , i.e., βi = ( eX′ , AV i),with a similar definition for βj . These angles must be signed, automatically ensuring the right sign of the integral. The next integration runs over the variable Y ′. For the 6lower-bound of Eq. (10), we have 
+
+∫ h
+
+> 0
+
+atanh cotan βiY ′
+
+√
+
+(1 + cotan 2βi)Y ′2 + Z′2
+
+dY ′ ≡ I(cotan βi, Z ′; h), (11) where I(a, b ; x) is fully analytical (see the Appendix A), and h denotes the height of the triangle AV iVj . This is positive quantity defined by h =AV i sin βi =AV j sin βj . The formula is similar for the upper-bound of Eq.(10). It follows that the full integration of Eq. (9) over X′ and Y ′ for the first intermediate triangle AV iVj is 
+
+IAV iVj =
+
+∫ ∫ 
+
+> triangle AV iVj
+
+dX ′dY ′
+
+√
+
+X′2 + Y ′2 + Z′2 (12) 
+
+= I(cotan βj , Z ′; h) − I(cotan βi, Z ′; h),
+
+which depends uniquely on the height h of the intermediate triangle, on the two angles 
+
+βi and βj , and on the relative position of point P, i.e., Z′. It can be verified that Eq. (12) is valid and finite for any point A relative to the vector ViVj , including cases where A is at a vertex. Note that the two angles βi and βj need to be renamed βij,i and 
+
+βij,j , respectively, because these refer to the triangle AV iVj specifically, and there are three intermediate triangles in total. In a similar manner, the height h becomes hij .We repeat the calculation for the other two intermediate triangles AV j Vk and AV kVi with the same local coordinate system, leading to 
+
+IAV j Vk = I(cotan βjk,k , Z ′; hjk ) − I(cotan βjk,j , Z ′; hjk ), (13) and 
+
+IAV k Vi = I(cotan βki,k , Z ′; hki ) − I(cotan βki,i , Z ′; hjk ). (14) These formula are not new (Paul 1974; Waldvogel 1976; Werner 1994; Holstein and Ketteridge 1996; Çavşak 2012; Conway 2015), and can take different forms (Tsoulis 2012). 
+
+## 2.4 Contribution of a triangle 
+
+The integral over the triangular domain Tijk is a combination of the integrals over the 
+
+3 intermediate triangles, namely IAV iVj , IAV j Vk and IAV k Vi . The result is therefore of the form 
+
+∫ ∫  
+
+> triangle Tijk
+
+dS ′
+
+|r − r′| = sij IAV iVj + sjk IAV j Vk + ski IAV k Vi , (15) where the coefficients s ∈ {− 1, 0, +1 }. t can be verified that 
+
+sij = sign [ eZ′ · (AV i × AV j )] , (16) 7and with a similar definition for sjk and ski . Then Eq. (5) becomes 
+
+δΨijk = + 12 GρZ ′ (sij IAV iVj + sjk IAV j Vk + ski IAV k Vi
+
+) . (17) Note that we have: • sij = 0 , when point A stands on the line (V iVj ), and then sjk = ski = +1 . The remark is similar for sjk and ski .• sij = sjk = 0 , when point A is at the vertex V j , and then ski = +1 . The remark is similar for the next two vertices. • sij = sjk = sjk = +1 , when point A stands inside the triangle triangle T iVj Vk.
+
+## 2.5 Summing all contributions 
+
+The above procedure, dedicated to a single triangle, is to be repeated for all triangles composing the closed surface, and there is no difficulty in programming the method. A special attention must, however, be paid to treat situations where the height h → 0 and 
+
+β → ± π 
+
+> 2
+
+to avoid spurious, diverging values. For each triangle in the sample, one must determine the intermediate vertex A, three heights h and six angles β. As the surface is generally defined in a fixed, non-local frame, it is necessary to connect each local coordinate system to the general coordinate system (O, ex, ey , ez ). The conversion formula are given in the Appendix B. See the Appendix C for a few comments. 
+
+# 3 Testing the direct method 
+
+## 3.1 Three test-geometries with known reference 
+
+The potential is known in closed form for the cube (e.g., Chappell et al. 2012) and its surface is decomposable into 12 triangles. The cube is therefore a perfect reference body for benchmarking the performance of the potential computation outlined above. More interesting tests concern systems with curved surfaces, and we begin with the following shapes: • a sphere with radius a, as illustrated in Fig. 1, • a spheroid (i.e., an ellipsoid of revolution) with polar radius c and equatorial radius 
+
+a,• a triaxial ellipsoid with a as the semi-major axis, and b and c as the semi-minor axis. In the purpose of the tests, we use spherical coordinates (r, θ, ϕ ) to generate M ×N
+
+angles according to 
+
+{
+
+θj = π jM (polar angle) , j ∈ [0 , M ],ϕi = 2 π iN (azimuth) , i ∈ [0 , N ]. (18) 8O triangulated sphere 
+
+> equator
+> 12
+> 3
+> 4
+> 5
+> 6
+> 7
+> 8
+> 9
+> test-lines
+
+Fig. 4 Same caption as for Fig. 1, but showing the test-lines defined by Eq. (19) along which the potential is compared with references values 
+
+At each vertex V ij (θj , ϕ i), we calculate the radius rij ≡ r(ϕi, θ j ) to model the sphere, the spheroid and the triaxial. In these conditions 1 there are T = 2 N (M − 1) trian-gles in total. We take N = 2 ℓ where ℓ is the discretization level, which enables to easily generate nested grids (see below). In addition, we set N = 2 M , which implies 
+
+θj+1 − θj = ϕi+1 − ϕi and leaves isoceles, right triangles at the equator. Then, we compute numerically Ψ by direct summation of the individual contributions δΨijk ,according to Eq. (4). This is the “direct method” in the following. We could com-pare potential values to reference ones in several meridional planes, which is relatively tedious. Instead, the comparison is made along a few test-lines defined as 
+
+r(k) = 2kK OV , (19) where K and k ∈ [0 , K ] are integers, point O is the center of coordinates, and V (r) is a vertex in the sample. With this prescription, the field point P (r) is • inside the body when 2k < K ,• just at a vertex for 2k = K,• outside the body when 2k > K .For these three solids, the potential Ψref . is exactly known, and it can therefore serve as a reference (see, e.g., Binney and Tremaine 1987). In order to compare the potential with this reference, we define the error index 
+
+E = log 
+
+∣∣∣∣1 − ΨΨref .
+
+∣∣∣∣ , (20)                                       
+
+> 1For each quadruplet {Vi,j ,Vi+1 ,j ,Vi,j +1 ,Vi+1 ,j +1 }with i∈[0 , N −1] and j∈[1 , M −2] , we build two triangles with vertices at {Vi,j ,Vi,j +1 ,Vi+1 ,j +1 }for the first one, and {Vi,j ,Vi+1 ,j +1 ,Vi+1 ,j }for the second one. For j∈ { 0, M −1}which correspond to the poles, there are only two triangles, namely
+> {Vi, 0,Vi, 1,Vi+1 ,1}and {Vi,M −1,Vi,M ,Vi+1 ,M −1}for any given index i∈[0 , N −1] ; again, see Fig. 1.
+
+9-2                                            
+
+> -1.9
+> -1.8
+> -1.7
+> -1.6
+> -1.5
+> -1.4
+> 00.5 11.5 2
+> error index E
+> radial distance r
+> survey
+> pole
+> equator
+> sphere -2
+> -1.9
+> -1.8
+> -1.7
+> -1.6
+> -1.5
+> -1.4
+> 00.5 11.5 2
+> error index E
+> radial distance r
+> spheroid -2
+> -1.9
+> -1.8
+> -1.7
+> -1.6
+> -1.5
+> -1.4
+> 00.5 11.5 2
+> error index E
+> radial distance r
+> triaxial Fig. 5 Error index Efor the gravitational potential computed from surface triangulation by direct summation, i.e., from Eq. (4), for the sphere with a= 1 (left ), for the spheroid with a= 1 and
+> b= 3 a/ 4(middle ) and for the triaxial ellipsoid with a= 1 ,c=a/ 2and b= 3 a/ 4(right ) along the nine test-lines defined by Eq. (19), with 0≤k≤Kand K= 32 . The surface triangulation is performed with N= 2 M= 32 ; see Fig. 4 for the sphere
+
+and −E is basically the number of correct digits. Because the sphere, the spheroid and the triaxial have all two planes of symmetry, we do not visit all the vertices with Eq. (19) to test the method. First, we take j ∈ { 0, 1, . . . , M 
+
+> 2
+
+}, which corresponds to the upper-plane z ≥ 0 (j = 0 is for the pole while j = M/ 2 is for the equator). Second, we limit ϕ to values in the range [0 , π ], which is performed by setting i = j.This represents M 
+
+> 2
+
++ 1 test-lines in total. So, for a discretization level ℓ = 5 , we have 
+
+N = 32 and M = 16 , leaving T = 960 triangles and 9 test-lines, which are visible in Fig. 4 for the sphere. We show in Fig. 5 the error index E computed along these test-lines for the three geometries, where we have set a = 1 , c = a/ 2 and b = 3 a/ 4. The radial sampling is performed with k ≤ K and K = 32 in Eq. (19). We observe that, whatever the geometry, the error is slightly smaller inside that body than outside it, but it remains relatively uniform, of the order of 0.03 in relative. This is not really satisfactory yet, but that resolution is very low. We have also noticed that the results are unchanged if, in Eq. (19), point V is replaced by the center C of the triangle and for the middle of edges. This confirms that the triangle’s edges, its center and its vertices represent fully regular field points. 
+
+## 3.2 Effect of the numerical resolution 
+
+We have repeated the tests presented above by varying the numerical resolution. Changing ℓ modifies the number of triangles drastically, decreases their size and pushes all the vertices closer to the circumscribed surface of the body. As we increase the resolution and change ℓ → ℓ + 1 , each triangle is replaced by four smaller triangles. 10 -15             
+
+> -12.5
+> -10
+> -7.5
+> -5
+> -2.5
+> 0
+> 11.5 22.5 3
+> error index E
+> resolution, log(N)
+> 8
+> 16
+> 32
+> 64
+> 128
+> 256
+> 512
+> sphere -15
+> -12.5
+> -10
+> -7.5
+> -5
+> -2.5
+> 0
+> 11.5 22.5 3
+> error index E
+> resolution, log(N)
+> direct
+> 8
+> 16
+> 32
+> 64
+> 128
+> 256
+> 512
+> RRE (k=1)
+> RRE (k=2)
+> RRE (k=3)
+> RRE mean
+> linear fits
+> spheroid -15
+> -12.5
+> -10
+> -7.5
+> -5
+> -2.5
+> 0
+> 11.5 22.5 3
+> error index E
+> resolution, log(N)
+> 8
+> 16
+> 32
+> 64
+> 128
+> 256
+> 512
+> triaxial
+
+Fig. 6 Error index E computed by direct summation ( black dots ), i.e., from Eq. (4), for the trian-guled sphere with unit radius ( left ). Labels 8, 16 ,..., 512 refer to N = 2 M . With direct summation, the convergence is second-order; see Table 1 for the fits. When applying a Repeated Richardson Extrap-olation ( bold lines and colored zones ), which uses the evaluation of the potential on coarser grids, the precision obtained at the same resolution is boosted (see Sect. 4). We have considered three regions: inside the sphere ( k = 1 ; purple ), at the vertices ( k = 2 ; brown ) and outside the sphere ( k = 3 ;
+
+turquoise ), according to Eq. (19) fed with K = 4 . The results obtained for the spheroid and the tri-axial ellipsoid are also shown ( middle and right )
+
+For these new tests, we use ℓ = 3 for the coarsest grid and ℓ = 10 for the finest one, which corresponds to N = 1024 and T = 1 046 528 triangles at most. We consider the same test-lines but with the parameters K = 4 and k ∈ { 1, 2, 3} in Eq. (19), which limits the radial sampling to only three points, namely one point inside, one point at a vertex (i.e., the surface), and one point outside the body. We show in Fig. 6 the variation of the error with N for the sphere, the spheroid and the triaxial. We first see that we get a 5-digit accuracy with ℓ = 10 inside the body, at a vertex and outside the body. The error index is very well represented by a linear fit 
+
+E(N ) = α log N + β, (21) where α is reported in Table 1 (rows 1 to 3). Clearly, the convergence rate is second-order with respect to log N . It is therefore second order with respect to the number of triangles, and with respect to the size of triangles. 
+
+## 3.3 Three test-geometries with unknown reference 
+
+As new test-bodies, we have considered three new geometries, namely • a dumbell, • a lemon-shape surface, 11 Table 1 Coefficient α of the linear fit of the error index E(N ) via Eq.(21) for the six test-geometries when using the direct method Inside ( k = 1 ) Surface ( k = 2 ) Outside ( k = 3 )Sphere −1.999 ± 0.000 −1.996 ± 0.001 −1.998 ± 0.001                                                                                                                                  
+
+> Spheroid −1.996 ±0.001 −1.994 ±0.001 −1.995 ±0.002
+> Triaxial ellipsoid −1.997 ±0.001 −1.995 ±0.002 −1.996 ±0.002
+> Dumbell −1.997 ±0.001 −1.994 ±0.002 −1.996 ±0.001
+> Lemon-shape −2.000 ±0.000 −1.997 ±0.001 −2.000 ±0.000
+> Torus −1.998 ±0.001 −1.996 ±0.001 −1.997 ±0.001
+> 433 Eros −2.094 ±0.055 −2.092 ±0.055 −2.071 ±0.054
+> The statistics are performed by omitting the first two points, i.e. for N≥32 .The last row is for 433 Eros (see Sect. 4.3).
+> Table 2 Spherical radius r(θ, ϕ )for the three geometries shown Fig. 7, and specific values of the coefficients a,band c
+> Shape Spherical radius rComment Dumbell r=a+bcos(2 θ)a= 1 ,b=12
+> Lemon-shape r√(1 + asin θ)2+ cos 2θ=ca= 2 ,c=√2
+> Torus r2=a2+b2+ 2 ab cos 2 θa=34,b=14
+> In all cases, θ∈[0 , π ]and ϕ∈[0 ,2π]. Regarding the torus, θis defined by sin θ=ΩV ·ezwhere Ω( acos ϕ, a sin ϕ, 0) is the centre of the meridional section.
+
+• a torus with circular sections, again with triangulated surface based on spherical coordinates (see above). The equations r(θ, ϕ ) are given in Table 2 and the shapes are displayed in Fig. 7. Note that last two geometries are particularly interesting: the poles of lemon-shape are sharp, and the torus is not a simply connected body. The potential being unfortunately not known for these new shapes, the reference is defined as the potential computed at a higher resolution. As the convergence rate is second-order, the reference obtained with 8N is sufficient, and so we take Ψref . ≡ Ψ(8 N ).We have performed the same series of tests as above, first at low resolution along 9
+
+test-lines, and second at three points by varying the spatial resolution. For the torus, the test-lines run from the center Ω of the local meridional section (see the figure), i.e., we use Eq. (19) but OV is replaced by ΩV . Figure 8 shows the error index E along the 9 test-lines for the dumbell, the lemon-shape surface and the torus. The evolution of this index with the numerical resolution N for k ∈ { 1, 2, 3} and K = 4 is displayed in Fig. 9. We give in Table 1 (rows 4 to 6) the coefficient α obtained by linearly fitting 
+
+E versus log N via Eq. (21). All the results are very similar as those obtained for the sphere, the spheroid and the triaxial. In particular, the convergence is second-order in the mesh spacing, which is ideal for convergence acceleration (see below). 12 + O 
+
+12
+
+3
+
+4
+
+5
+
+6
+
+7 8 9
+
+dumbell + O 
+
+1
+
+2
+
+3
+
+4
+
+5
+
+6
+
+789
+
+lemon-shape + O 
+
++
+
+Ω
+
+1
+
+2
+
+345678
+
+9
+
+torus Fig. 7 Surface triangulation of the dumbell ( left ), the lemon-shape surface ( middle ) and the torus (right ) obtained with N = 2 M = 32 , and the 9 test-lines used to test the method -2.1 
+
+-2 
+
+-1.9 
+
+-1.8 
+
+-1.7 
+
+-1.6 
+
+-1.5 
+
+-1.4 
+
+0 0.5 1 1.5 2
+
+> error index E
+
+radial distance r 
+
+dumbell -2.1 
+
+-2 
+
+-1.9 
+
+-1.8 
+
+-1.7 
+
+-1.6 
+
+-1.5 
+
+-1.4 
+
+0 0.5 1 1.5 2
+
+> error index E
+
+radial distance r 
+
+lemon-shape -2.1 
+
+-2 
+
+-1.9 
+
+-1.8 
+
+-1.7 
+
+-1.6 
+
+-1.5 
+
+-1.4 
+
+0 0.5 1 1.5 2
+
+> error index E
+
+radial distance r 
+
+torus 
+
+Fig. 8 Same caption and same conditions as for Fig. 5 but for the dumbell ( left ), for the lemon-shape surface ( middle ) and for the torus ( right ); see Fig. 4 for the sphere 
+
+# 4 Convergence acceleration by using the Repeated Richardson Extrapolation (RRE) 
+
+Richardson’s Extrapolation (RE) is a standard numerical technique for improving quadratures and derivatives. It uses two evaluations of a given quantity obtained at two different resolutions. A subtle combination of the same quantity obtained at these resolutions greatly improves the accuracy, provided the quantity is sufficiently smooth 13 -15              
+
+> -12.5
+> -10
+> -7.5
+> -5
+> -2.5
+> 0
+> 11.5 22.5 3
+> error index E
+> resolution, log(N)
+> 8
+> 16
+> 32
+> 64
+> 128
+> 256
+> 512
+> dumbell -15
+> -12.5
+> -10
+> -7.5
+> -5
+> -2.5
+> 0
+> 11.5 22.5 3
+> error index E
+> resolution, log(N)
+> 8
+> 16
+> 32
+> 64
+> 128
+> 256
+> 512
+> lemon-shape -15
+> -12.5
+> -10
+> -7.5
+> -5
+> -2.5
+> 0
+> 11.5 22.5 3
+> error index E
+> resolution, log(N)
+> 8
+> 16
+> 32
+> 64
+> 128
+> 256
+> 512
+> torus Fig. 9 Same caption and same conditions as for Fig. 6 but for the dumbell ( left ), for the lemon-shape surface ( middle ) and for the torus ( right )
+
+or regular. The process is repeated for a series of increasing resolutions to achieve a desired accuracy. The ratio of sucessives spacings is typically 2. This is the Repeated Richardson Extrapolation (RRE); see the Appendix E. As the determination of the potential values from surface triangulation is clearly a 2nd-order quadrature in the mesh spacing, applying the RRE technique is fully appropriate in the present situation. In practice, for a given geometry or body, we first generate a series of nested grids starting with N = 2 3 = 8 (the coarsest grid), then 
+
+N = 2 4 = 16 , ... up to N = 2 10 = 1024 (the finest grid), which therefore correspond to ℓ ∈ [3 , 10] ; see Sect. 3.1. Next, we select a point P (r) in space and we compute the potential Ψ( r) from Eq. (4) for each grid. Values are slightly different to each other, and are denoted Ψ3(r), Ψ4(r), . . . Ψ10 (r), and we set 
+
+Aℓ, 3(r) = Ψ ℓ(r), with ℓ ∈ [3 , 10] . (22) Next, we compute all the elements Aℓ,m (r) for m ∈ [4 , ℓ ] according to Eq.(48) of Appendix E. The element obtained for m = ℓ, i.e., Aℓ,ℓ , is the improved estimate for 
+
+Ψ( r). This technique works for any field point P (r).
+
+## 4.1 Example at the centre of the sphere 
+
+Table 3 lists potential values obtained at the center of the sphere with unit radius (the exact value is −2π) for all discretization levels ℓ ∈ [3 , 10] , as well as all the elements 
+
+Al,k of the table. This field point being inside the body, the RRE is especially efficient in drastically reducing the error. We observe that, from ℓ = 8 , the error increases with ℓ, which is a well-known effect of arithmetic with computers. When the amount 14 Table 3 Potential at the center of the homogeneous sphere with unit radius (column 3) computed with the RRE technique in double precision, to be compared to the exact value Ψref .(0) = −2πℓ Aℓ, 3 Aℓ, 4 Aℓ, 5 Aℓ, 6
+
+3 -5.2658724606271727 4 −6.0177824547115533 −6.2684191194063468 
+
+5 −6.2161323588550710 −6.2822489935695769 −6.2831709851804591 
+
+6 −6.2663780221959700 −6.2831265766429363 −6.2831850821811601 −6.2831853059430758 
+
+7 −6.2789807304638492 −6.2831816332198089 −6.2831853036582670 −6.2831853071737767 
+
+8 −6.2821339907476057 −6.2831850775088576 −6.2831853071281270 −6.2831853071832038 
+
+9 −6.2829224673155020 −6.2831852928381338 −6.2831853071934187 −6.2831853071944552 
+
+10 −6.2831195965837843 −6.2831853063398784 −6.2831853072399948 −6.2831853072407338 
+
+ℓ Aℓ, 7 Aℓ, 8 Aℓ, 9 Aℓ, 10 
+
+7 −6.2831853071786030 
+
+8 −6.2831853071832402 −6.2831853071832446 
+
+9 −6.2831853071944996 −6.2831853071945112 −6.2831853071945138 
+
+10 −6.2831853072409158 −6.2831853072409611 −6.2831853072409727 −6.2831853072409753 
+
+reference (exact) −6.2831853071795864 
+
+The table of elements Aℓ,m is constructed according to Eq. (48). The second column contains Aℓ, 3, which corresponds to Ψ3(0), Ψ4(0), . . . Ψ10 (0). See the appendix, Table 9, for quadruple precision. 
+
+Table 4 Same caption as for Table 1, but after applying the Repeated Richardson Extrapolation (RRE) in columns 2, 4 and 6; see also Figs. 6 and 9 
+
+αRRE (inside) ∆α αRRE (surface) ∆α αRRE (outside) ∆α
+
+Sphere −8.461 ± 0.224 6.5 −4.313 ± 0.198 2.1 −7.403 ± 0.204 5.7
+
+Spheroid −6.147 ± 0.423 4.1 −4.582 ± 0.386 2.6 −6.344 ± 0.405 4.3
+
+Triaxial −6.584 ± 0.241 4.6 −4.569 ± 0.321 2.6 −6.700 ± 0.151 4.7
+
+dumbell −7.552 ± 0.085 5.6 −4.385 ± 0.246 2.4 −6.920 ± 0.112 4.9
+
+Lemon-shape −6.713 ± 0.490 4.7 −3.620 ± 0.139 1.6 −6.339 ± 0.319 4.3
+
+Torus −6.413 ± 0.231 4.4 −4.031 ± 0.285 2.0 −6.566 ± 0.359 4.6
+
+433 Eros −2.541 ± 0.249 0.4 −2.485 ± 0.245 0.4 −2.556 ± 0.250 0.5 see Sect. 4.3 The statistics are performed by omitting the first point and points beyond the knee, i.e. for 32 ≤ N ≤ 256 .The quantity ∆α in columns 3, 5 and 7 ( bold ) represent the improvement in accuracy for every ten-fold increase in N with respect to the direct method, i.e. α − αRRE ≡ ∆α.
+
+of surface triangles become extremely large, substration cancellations and round off errors inevitably inhibit onvergence (e.g., Press et al. 1992; Fukushima 2017). We have verified that the this effect disappears with quadruple precision; see Tab. 9 in the Appendix. 
+
+## 4.2 Revisiting the six test-geometries 
+
+We show in Figs. 6 and 9 the potential computed along test-lines when using the Repeated Richardson Extrapolation, compared with the direct method. We see that 15 the gain in the precision is large outside and inside the body. In particular, the preci-sion of the direct method obtained for N = 1024 is reached with only N = 64 with the RRE technique. The computing time is therefore decreased by about (1024 /64) 4, the-oretically (see Sect. 7). Table 4 (rows 1 to 6) gives the coefficients αRRE obtained by fitting the error index ERRE , according to Eq. (21). We find αRRE ≲ −6 on average for six geometries (inside and outside matter), which means a gain ∆α ≡ α−αRRE ≈ 4. At the surface, the results are less remarkable but still very satisfactory, with αRRE ≲ −4
+
+and ∆α ≈ 2 (i.e. twice extra digits fixed with the RRE method). first plate f=1          
+
+> V2
+> V5
+> V3
+> V4
+> V6
+> central vertex V 1
+> test-line
+> circumscribed box
+> y
+> x
+> z
+> Fig. 10 Surface of asteroid 433 Eros by using data from the NASA Data Planetary System (Gaskell 2021). The resolution corresponds to q= 16 , leaving 3072 triangles in total. The first plate f= 1 is colored ( red ) and the test-line passing through the central vertex V 1are marked ( green )
+
+## 4.3 Real case. Example with asteroid 433 Eros 
+
+As shown in the previous sections, the performance of the RRE method are quite sim-ilar for all geometries, with an advantage for the sphere. For this reason, we decided to continue exploring the performance of the method with a relatively irregular, really non-spherical object. Undoubtedly, real asteroids have no smooth surface, and dis-apointed results are expected. Figure 10 shows the surface of 433 Eros reproduced from the ASCII-files available at NASA Planetary Data System (Gaskell 2008, 2021). The topographic data, deduced from NEAR MSI images, are stored according to the implicitly connected quadrilateral (ICQ) format, which consists of 6 square plates, labeled with f ∈ [1 , 6] , and containing q + 1 nodes per direction. Each node has ICQ-coordinates V ijf (i, j, f ) and Cartesian coordinates V ijf (xijf , y ijf , z ijf ). The unit is kilometer, and there are 7 significant figures (see below). The finest grid available is for q = 512 ≡ Q, leaving T = 12 × 512 2 triangles in total, and this is the grid we use in the following. This format is especially appropriate regarding the present purpose as each quadruplet of adjacent nodes is already arranged into 2q2 triangles per plate. More importantly, one gets easily nested grids by skipping 1 node (with q = Q/ 2), 
+
+3 nodes (with q = Q/ 4), 7 nodes (with q = Q/ 8) etc. per direction. In practice, we divide all Cartesian coordinates by a length scale L. We define L = max {Lx, L y , L z },16 where 
+
+Lx = max {| xijk |} all triangles T , (23) and similar definitions for Ly and Lz . Next, we assume a constant mass-density ρ for Eros. Potential values are therefore expressed in units of GρL 2. From the data, the circumscribed box is 33 km × 17 km × 12 km and we find L = Lx = 17 .57339 km, 
+
+Ly /L ≈ 0.490 and Lz /L ≈ 0.346 , and a mean spherical radius of about 0.5467 L. The adimensionned surface area and mass are found to be A/L 2 ≈ 3.6864 and M/ρL 3 ≈
+
+0.4620 , respectively. The centre of coordinates is almost the center of mass G, as we find G (−1.47 ×10 −5, −1.26 ×10 −5, +6 .48 ×10 −5) in units of L. The typical geometrical parameters of the triangles are listed in Table 5 for various grid parameter q.                                                   
+
+> Table 5 Typical geometrical parameters of the triangles versus the resolution q
+> for 433 Eros : mean triangle surface area (column 3) and mean length of triangles (columns 4 and 5). Data are from Gaskell (2021)
+> qTA/L 2T√2⟨A⟩ T(m) ⟨tij ⟩T(m) Comment
+> 512 3145728 1.2172 ×10 −626 .932 .8q=Q
+> 256 786432 4.6840 ×10 −653 .865 .6128 196608 1.8695 ×10 −5107 .5131 .064 49152 7.4439 ×10 −5214 .4261 .232 12288 2.9579 ×10 −4427 .4520 .216 3072 1.1730 ×10 −4851 .21035 .6◁see Fig. 10
+
+We show in Fig. 11 the normalized spherical radius √x2 + y2 + z2/L , and the potential Ψ computed at full resolution q = Q by direct summation 2, which constitutes the reference, ΨQ ≡ Ψref . Mean values for the potential and for the acceleration at the surface are 
+
+{ 1 
+
+> GρL 2
+
+⟨Ψ⟩T ≈ − 0.891  
+
+> 1
+> GρL 3
+
+⟨|∇ Ψ|⟩ T ≈ 1.684 . (24) Table 6 lists the potential values obtained with the direct method at the central vertex V 1( q 
+
+> 2
+
+, q 
+
+> 2
+
+, 1) ICQ of the first plate f = 1 (see Fig. 10), at different resolutions 
+
+q ∈ { Q, Q/ 2, Q/ 4, . . . , Q/ 32 }, including the finest grid q = Q. A zoom of the region around this node is visible in Fig. 12. We immediately see from the table that the potential reaches a plateau around −0.9777 from q = 128 , but it does not really converge in the classical sense. The evolution of the number of digits fixed from one resolution to the next one is not really linear in log. scale. As done in Sect. 4, we have considered six test-lines passing through the central vertices V f ( q 
+
+> 2
+
+, q 
+
+> 2
+
+, f )ICQ , according to Eq. (19) with K = 4 and k ∈ { 1, 2, 3}. This enables to check the method inside and outside the body. Figure 13 shows the error index E(N ) obtained by direct summation          
+
+> 2In Sect. 4.3, we limit the computations to the vertices of a coarse grid corresponding to q=Q/ 32 = 16 .This saves a lot of computing time which goes like τ(N)∝N4. This choice is not critical for the present purposes
+
+17 V1               
+
+> V2V3V4V5
+> V6
+> 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1
+> 6
+> 2
+> plate f=1
+> 345
+> 433 EROS - Spherical radius
+> T 3145728
+> min 0.171884
+> max 1.003390
+> mean 0.545209 V1
+> V2V3V4V5
+> V6
+> -1.1 -1 -0.9 -0.8 -0.7 -0.6
+> 6
+> 2
+> plate f=1
+> 345
+> 433 EROS -Ψsurface potential
+> T 3145728
+> min -1.107876
+> max -0.618712
+> mean -0.891051
+
+Fig. 11 Spherical radius r/L of asteroid 433 Eros ( top panel ) and potential Ψ/GρL 2 at the surface (bottom panel ) by using data from the NASA Data Planetary System Gaskell (2021). The first panel 
+
+f = 1 is colored ( red ) and the central vertex V 1 is marked; see also Fig. 10. 
+
+and with the RRE technique. The slopes are reported in Tables 1 and 4, respectively (last row). With direct summation, α ≈ − 2, but this coefficient varies significantly with N , as already noticed for the central vertex V 1. With αRRE ≈ − 2.5, the benefit of the RRE technique is indeed poor, inside, at the surface and outside the body. This is not a great surprise. Solid bodies considered in the previous sections are ideal, with smooth surfaces and no sub-grid terrain irregularities. The real asteroids’s surface lacks smoothness that is required for the RRE method (Cheng et al. 2002; Susorney and Barnouin 2018). Thus, its benefit is modest. 18 Table 6 Potential at the test-vertex V 1 located at the center of the first plate f = 1 obtained at different resolutions (column 3) and mean contribution of triangles ⟨δΨijk ⟩ (column 4) 
+
+q T Ψ/GρL 2 at V 1 ⟨δΨijk ⟩/GρL 2 Comment 
+
+512 3145728 −0.97779130 −3.1 × 10 −7 q = Q
+
+256 786432 −0.97777931 −1.2 × 10 −6
+
+128 196608 −0.97773042 −5.0 × 10 −6
+
+64 49152 −0.97750019 −2.0 × 10 −5
+
+32 12288 −0.97681906 −7.9 × 10 −5
+
+16 3072 −0.97378461 −3.2 × 10 −4 ◁ see Fig. 10 Values (only 8 digits are given) are normalized to GρL 2 where L =17 .57339 km (see text). Values of q and T refer to the number of facets of each panel per direction in the ICQ format and total number of triangles, respectively. See also Fig. 10 high res. q=Q  
+
+> resolution q=Q/4
+> resolution q=Q/8
+> central vertex V 1(plate f=1)
+
+Fig. 12 Surface of 433 Eros at three different resolutions zoomed around the central vertex V 1 of the first panel f = 1 ; see also Fig. 10 
+
+Although the position of the ICQF-nodes is given with 7 figures for 433 Eros, the relative separation of vertices has significant imprecisions. Errors in the altimetric data are estimated to be of the order of 6 m for this asteroid, mainly associated with uncertainties of navigation (Palmer et al. 2024). Bercovici et al. (2020) have investigated in great details the impact of shape uncertainty on key-quantities, in particular on the gravitational acceleration outside bodies, with an application to 25143 Itokawa whose shape errors are about 20 m, comparable to Eros, in absolute. This addresses the question of the link between potential values and altimetric errors at the surface (see below). 
+
+# 5 Impact of altimetric uncertainties 
+
+As shown, the RRE method is very powerful for regular surfaces. Not only asteroids have non-smooth terrains but their shape are also uncertain. The arbitrary displace-ment of one and only one vertex V ijk → Vnew  
+
+> ijk
+
+of the triangulated surface corresponds to generating a bump if V new  
+
+> ijk
+
+is outside the initial surface (a cavity otherwise). This 19 -15               
+
+> -12.5
+> -10
+> -7.5
+> -5
+> -2.5
+> 0
+> 11.5 22.5 3
+> error index E
+> resolution, log(N)
+> direct
+> 14
+> 28
+> 56
+> 111
+> 222
+> 444
+> 887
+> RRE (inside; k=1)
+> RRE (vertices; k=2)
+> RRE (outside; k=3)
+> RRE mean
+> linear fits
+> 433 Eros Fig. 13 Same caption as for Fig. 6 but for 433 Eros. Test-lines pass through the central vertices Vf=1 ,6, according to Eq. (19) with K= 4 and k={1,2,3}; see also Fig. 10.
+
+operation changes the volume and the mass in a relatively simple manner. It has, however, a less trivial effect on the potential, especially locally, because the new posi-tion V new  
+
+> ijk
+
+also impacts all relative separations involved in Eq. (1). In other words, not only a cavity/bump is created but the location where the potential is evaluated is changed. This is particularly important when studying mechanical processes at the surface of asteroids and below (Roberts et al. 2014; Ballouz et al. 2025). 
+
+## 5.1 The prescription 
+
+We can estimate the deviation ∆Ψ = Ψ(V new  
+
+> ijk
+
+) − Ψ(V ijk ) from a Taylor expansion, namely 
+
+Ψ(V new  
+
+> ijk
+
+) ≈ Ψ(V ijk ) ± λ∇Ψ. (25) where ∇Ψ ≡ g is the gravitational acceleration along the direction of the displacement, and λ is the height of the bump that can be associated to a shape error ( λ ≈ 6 mfor 433 Eros). This formula means that any uncertainty in the position of a vertex sets a limit in the precision of the local potential (in units of GρL 2) of the order of 
+
+λ/L . Determining ∆Ψ from the formula given in Sect. 2 is cumbersome, even for very simple geometries. In fact, ∆Ψ is roughly the self-gravitating potential of the bump, 
+
+δΨself , evaluated at the vertex V new  
+
+> ijk
+
+. If we assume that a vertex V ijk is shared by 4
+
+similar, right triangles with edges a1 and a2, then moving this vertex V ijk → Vnew 
+
+> ijk
+
+by λ > 0 perpendicularly to the local plane forms a pyramidal bump with height 
+
+λ, diamond-shape base, and volume V = 43 a1a2λ. It would be possible to determine 
+
+δΨself exactly from Eq. (38), but, again, this is a tedious calculus and the final formula 20 remains a complicated analytical expression (see also Çavşak 2012). If we replace the pyramidal bump by point mass (or a sphere) at λ/ 4 from the base (the center of mass), then the potential at vertex V new  
+
+> ijk
+
+is −4Gm/ 3λ, where m = 43 ρa 1a2λ is the mass of the pyramid. As the self-gravitating potential of a pyramidal bump generated by stretching V ijk , we therefore retain 
+
+δΨself ∼ − 16 9 Gρa 1a2 (26) We can even link a1a2 to the number T of triangles by a supplementary hypothesis. If the surface of the body is triangulated in a rather uniform manner (there are no large and tiny triangles) and has total area A, then a1a2 ≃ 2A/T . So, by dividing Eqs. (25) and (26) by GρL 2 and setting ∆Ψ ≈ δΨself , which is the typical absolute error in potential values, leads to 
+
+32 9
+
+A
+
+L2T ≃ ˜g λL , (27) where ˜g is the magnitude of gravitational acceleration at the surface in units of GρL .By solving this expression for the number of triangles, we find 
+
+T ≃ 32 9
+
+A
+
+L2 × Lλ × 1˜g ≡ Tλ (28) This formula gives the resolution, in term of number of triangles, beyond which a shape error has the same impact in the potential as a bump or a cavity. Except for very elongated bodies, ˜g is of the order of unity, and so Eq. (28) is Tλ ≃ 32 A/9Lλ .Note that, if the body is close to spherical, then A ≈ 4πL 2, and so Eq. (28) simplifies for 
+
+Tλ ≃ 128 π
+
+9
+
+Lλ , (29) hence the formula in the abstract.                                                  
+
+> Table 7 Dimensionless potential at the central vertex V 1of plate f= 1 when its altitude z1is changed for z1±λ(columns 5 and 6), compared to the unperturbed surface (colum 3).
+> Ψ/GL 2at the surface
+> qTat V 1at V new 1(z1+λ)Vnew 1(z1−λ)Comment
+> 512 3145728 −0.97779130 −0.97720367 −0.97837893 Reference Ψref
+> 256 786432 −0.97777931 −0.97719272 −0.97836589 128 196608 −0.97773042 −0.97714598 −0.97831487 64 49152 −0.97750019 −0.97692036 −0.97808005 32 12288 −0.97681906 −0.97624908 −0.97738906 16 3072 −0.97378461 −0.97323698 −0.97433227
+
+21 5.2 Application to 433 Eros 
+
+In the case of 433 Eros, we have λ/L ≈ 0.00034 with λ = 6 m, and then we get 
+
+∆Ψ ≈ 1.684 × λ/L ≈ 5.7 × 10 −4 from Eqs. (24) and (25). This implies that the error level can not allow to fix Ψ with more than 3 to 4 significant digits at most, whatever the resolution. As an illustration, we have replaced the altitude z1 of the central vertex of plate f = 1 by z1 ± λ, and we have computed the potential at the two new positions V new  
+
+> ijk
+
+. Columns 4 and 5 of Table 7 list the results. We find 
+
+Ψ( V1)/GL 2 ≈ − 0.97779 ± 0.0006 and we see that no more than 3 digits are fixed for 
+
+q ≥ 64 . This is coherent with Eqs. (24) and (25). V1              
+
+> V2V3V4V5
+> V6
+> 05x10 -5 0.0001 0.00015 0.0002 0.00025 0.0003
+> 6
+> 2
+> plate f=1
+> 345
+> 433 EROS - Sub-grid contibution ΔΨ 64
+> T 49152
+> min 1.10E-04
+> max 5.05E-04
+> mean 3.14E-04 V1
+> V2V3V4V5
+> V6
+> 05x10 -5 0.0001 0.00015 0.0002 0.00025 0.0003
+> 6
+> 2
+> plate f=1
+> 345
+> 433 EROS - Sub-grid contibution ΔΨ 128
+> T 196608
+> min 2.09E-05
+> max 1.22E-04
+> mean 7.30E-05
+
+Fig. 14 Deviation ∆Ψ q showing the contribution of cavity and bumps present below a given reso-lution, q = 64 (top ) and q = 128 (bottom )
+
+22 high res. q=Q     
+
+> resolution q=Q/4
+> resolution q=Q/8
+> central vertex V 1(plate f=1) Fig. 15 Same caption as for Fig. 12 by after moving all vertices randomly, with a maximum shift of
+> λ= 6 m
+
+We can test the prescription established in Sect. 5.1. Feeding Eq. (28) with appro-priate values for 433 Eros gives Tλ = 22889 , which corresponds to qλ ≈ 44 , in between grid parameters q = 32 and q = 64 . It means that, with Eros data, the resolution corresponding to q = 32 (i.e., about 0.5 km on average) is in principle sufficient to reproduce the bulk of the potential (and acceleration), with 3 significant digits. Equivalently, for q ≳ 64 (i.e., below 260 m on average), cavities and bumps present at smaller scales leave imprints comparable to altimetric uncertainties. To prove this point, we need two kinds of experiments: • quantifying the contribution of sub-grid irregularities. This is performed by com-paring the potential Ψq obtained with grid parameter q to the reference Ψref ≡ ΨQ.We define Ψq − Ψref = ∆Ψ q , which gives the contribution of sub-grid irregulari-ties. The results are displayed in Fig. 14 for q = Q/ 8 = 64 and for q = Q/ 4 = 128 
+
+(these correspond to resolutions of 260 m and 131 m at the surface, respectively; see Table 5). Wee see that the contribution of sub-grid irregularities, in units of 
+
+GρL 2, is about 0.0003 at q = 64 and about a quater this value at q = 128 . This is similar to what is observed for vertex V 1.• estimating the contribution of altimetric uncertainties. In this purpose, we have shifted all vertices of the finest grid according to 
+
+OV noise  
+
+> ijk
+
+= OV ijk ×
+
+[
+
+1 + ( −1 + 2 σ) λ
+
+OV ijk 
+
+]
+
+, (30) where σ ∈ [0 , 1] is a random number, and λ = 6 m (in this way, the V noise  
+
+> ijk
+
+can be below or above the surface). A similar technique has been used in Bercovici et al. (2020). Figure 15 shows the “noisy” surface around the central vertex V1 so obtained. The new potential, Ψnoise  
+
+> q
+
+, is then compared to the reference corresponding to the unperturbed surface. The deviation is now denoted Ψnoise  
+
+> q
+
+− Ψref = ∆Ψ noise  
+
+> q
+
+. The results are displayed in Fig. 16, again for q = Q/ 8 = 64 and for q = Q/ 4 = 128 .We notice that the contribution of errors in the shape of the asteroid are of the order of λ/L on average, and this level remains the same if we consider the next grid parameter q = 256 .23 V1
+
+V2V3V4V5
+
+V6
+
+0 0.0001 0.0002 0.0003 0.0004 0.0005 
+
+6
+
+2
+
+plate f=1 
+
+345
+
+433 EROS - Sub-grid contibution ΔΨ 64 
+
+T 49152 
+
+min 2.70E-08 
+
+max 9.84E-04 
+
+mean 3.46E-04 V1
+
+V2V3V4V5
+
+V6
+
+0 0.0001 0.0002 0.0003 0.0004 0.0005 
+
+6
+
+2
+
+plate f=1 
+
+345
+
+433 EROS - Shape error ΔΨ noise 128 
+
+T 196608 
+
+min 6.90E-08 
+
+max 6.78E-04 
+
+mean 2.46E-04 Fig. 16 Same caption as for Fig. 16 but for ∆Ψ noise 
+
+> q
+
+If we now compare Figs. 14 and 16, we clearly see that ∆Ψ 64 ≳ ∆Ψ noise 64 while 
+
+∆Ψ 128 ≲ ∆Ψ noise 128 . This proves that the contribution of altimetric uncertainties dominates over sub-grid irregularities for q ≳ 64 , in agreement with the prescription. 24 6 Comments on the computing time and error reduction 
+
+If τ (ℓ) is the typical computing time at mesh level ℓ to get the potential at all nodes/vertices, then we have for the RRE technique 
+
+τRRE (ℓ) = ∑
+
+> l=0 ,ℓ
+
+τ (l) ∝ ∑
+
+> l=0 ,ℓ
+
+(2l)4 (31) 
+
+∝ 16 ℓ ×
+
+(
+
+1 + 116 + 1256 + ... 
+
+)
+
+≃ 1.07 τ (ℓ),
+
+where ℓ remains relatively small 3. In terms of computing time, the extra cost repre-sented by the acceleration therefore appears marginal, when compared to the number of digit fixed. In case of a full parallel treatment, we have τ (k) ∝ 22k and then 
+
+τRRE (ℓ) ≃ 1.33 τ (ℓ), which is still very satisfactory. 4
+
+Beyond this resolution, all the details of the terrain and shape errors contribute at the same level, and can be regarded as a background noise. 
+
+Table 8 Same caption as for Tab.le 1, but after applying the Repeated Richardson Extrapolation (RRE) in columns 2, 4 and 6; see also Figs. 6 and 9 Inside ( k = 1 ) Surface ( k = 2 ) oOutside ( k = 3 )
+
+> 2ααRRE
+> 4ααRRE
+> 2ααRRE
+> 4ααRRE
+> 2ααRRE
+> 4ααRRE
+
+Sphere 0.472 0.945 0.926 1.851 0.540 1.080 
+
+Spheroid 0.649 1.299 0.870 1.741 0.629 1.258 
+
+Triaxial 0.607 1.213 0.873 1.747 0.596 1.192 
+
+Dumbell 0.529 1.058 0.910 1.820 0.577 1.154 
+
+Lemon-shape 0.596 1.192 1.103 2.207 0.631 1.262 
+
+Torus 0.623 1.246 0.990 1.981 0.608 1.217 
+
+. The statistics are performed by omitting the first point and points beyond the knee, i.e. for 32 ≤ N ≤ 256 . The numbers in columns 3, 5 and 7 ( bold ) represent the gain per decade in N with respect to the direct method, i.e. α − αRRE ≡ ∆α
+
+Regarding accuracy, the gain obtained at a given resolution is simply measured by the difference E − ERRE ∝ ∆α. Table 4 contains (columns 3, 5 and 7) the extra number of digits fixed per decade in N . Finally, it is interesting to couple the accuracy and computing time. Let us consider a given error level, reached with a grid N ×M by direct summation and with NRRE × MRRE by applying the RRE technique. Equating 
+
+E(N ) and ERRE (NRRE ) leads to the relationship 
+
+NRRE = e(βRRE −β)/α RRE N α/α RRE (32)           
+
+> 3For ℓ→ ∞ , the sum tends to π4/90 ≈1.082
+> 4For ℓ→ ∞ , that sum tends to π2/6≈1.64
+
+25 and then we get 
+
+τRRE ∝
+
+{
+
+N 4α/α RRE per grid (sequential processing) ,N 2α/α RRE per vertex (parallel processing) . (33) The exponents 2α/α RRE and 4α/α RRE are listed in Table 8 for the six solid bodies considered in Sect. 2. 
+
+# 7 Discussion 
+
+In potential theory, there are a few finite size, solid bodies that admit a closed form expression for the gravitational potential and acceleration (Durand 1953). The tetrah-dron is one of these (see the references in the introduction). As a consequence, for any system whose volume (surface) can be decomposed into a series of tetrahedra (resp. triangles), the solution to the Poisson equation is analytical. If the process of surface triangulation can incorporate nested grids as assumed here (with N ∝ 2ℓ nodes per direction), then we can take benefit of classical extrapolation methods to accelerate the convergence of potential and gravity toward values that would be obtained at infinite resolution. Note that the method applies to other quantities, like the mass, surfce area, moment of inertia, etc., but imposes that the surface in question is smooth enough. A few simple shapes have been tested, and it happens that the RRE tech-nique is very efficient for points located outside and inside matter; see Table 4. This is particularly interesting for following test-particles orbiting around, which requires a very large number of evaluations. At the surface of body, the convergence rate is still excellent, although significantly lower (see the table, again). Surface values are fundamental to study the mechanics of the terrain itself (tectonics, crumbling, piles, etc.). A possible extension of the work concerns the mesh. In Sect. 2, surface trian-gulation is based on spherical coordinates, which leaves triangles with inequal shapes and surface area, in between the poles and the equator. In some sense, there is possi-ble bias, not in the approach, but in the tests we have performed. For instance, testing the Fibonacci lattice on a sphere would be interesting. As discussed in Sect. 4.3, real body like asteroids, comets, dwarf planets have irregular and fractal terrains, inherent in the mechanisms of formation and evolution. In such a case, the RRE technique does not offer a great gain, with respect to perfect shapes. This has been illustrated with 433 Eros. However, we have shown that the errors in the shape of the asteroid, which are of the order of a few meters, leaves imprints in potential values at the surface comparable to and even larger than terrain irregularities at resolutions of the order of 261 m and below, corresponding to the grid parameter q ≳ 64 (see also Bercovici et al. 2020). This limit is expressed by Eq. (28) and it varies as the inverse of the typical topographic uncertainties associated to a given shape model. It is established in very simple conditions and therefore, it remains an indicator. The criterion must therefore be used with caution, but it applies to most shapes. This is especially interesting for dynamical studies, as it permits to select an optimal spatial resolution for the gravity source. The paper, which focuses on the gravitational potential, could be continued by analyzing the gravitational acceleration 26 and gravitational slopes (e.g., Prockter et al. 2002; Thomas et al. 2002; Chapman et al. 2002), which are fundamental regarding the mechanical stability of the terrains (formation of ponds, landslides and avalanches). 
+
+Acknowledgements. It is a pleasure to thank E.E. Palmer at Planetary Science Institute for his help in using the data of asteroid 433 Eros and advices about uncer-tainties, L. Jorda at the Laboratoire d’Astrophysique de Marseille and C. Staelen at the Institut de Physique du Globe de Paris for fruitful inputs on the manucript before submission. I would like to thank the anonymous referee for very interesting com-ments and criticisms on the method, and several suggestions to improve the reading of the article. 
+
+# References 
+
+Amaral, L.: J. Appl. Mathl and Physl 07 , 2423–2439 (2019) https://doi.org/10.4236/ jamp.2019.710164 Barnouin, O.S., Daly, M.G., Palmer, E.E., Johnson, C.L., Gaskell, R.W., Al Asad, M., Bierhaus, E.B., Craft, K.L., Ernst, C.M., Espiritu, R.C., Nair, H., Neumann, G.A., Nguyen, L., Nolan, M.C., Mazarico, E., Perry, M.E., Philpott, L.C., Roberts, J.H., Steele, R.J., Seabrook, J., Susorney, H.C.M., Weirich, J.R., Lauretta, D.S.: Planet. Space Sci. 180 , 104764 (2020) https://doi.org/10.1016/j.pss.2019.104764 Ballouz, R.-L., Ernst, C.M., Barnouin, O.S., Daly, R.T., DellaGiustina, D.N., Hyatt, B.A., Martin, A.C.: Nat. Astronomy 9, 347–357 (2025) https://doi.org/10.1038/ s41550-024-02411-8 Bercovici, B., Panicucci, P., McMahon, J.: Celestial Mechanics and Dynamical Astronomy 132 (5), 29 (2020) https://doi.org/10.1007/s10569-020-09967-3 Binney, J., Tremaine, S.: Galactic dynamics. Princeton University Press Princeton (1987), Cheng, A.F., Barnouin-Jha, O., Prockter, L., Zuber, M.T., Neumann, G., Smith, D.E., Garvin, J., Robinson, M., Veverka, J., Thomas, P.: Icarus 155 (1), 51–74 (2002) https://doi.org/10.1006/icar.2001.6750 Çavşak, H.: Studia Geophysica et Geodaetica 56 (1), 185–195 (2012) https://doi.org/ 10.1007/s11200-011-9004-x Chappell, J.M., Chappell, M.J., Iqbal, A., Abbott, D.: The gravitational field of a cube. arXiv e-prints (2012) arXiv:1206.3857 [physics.class-ph] Chandrasekhar, S.: Ellipsoidal figures of equilibrium. Yale University Press, NewHaven (1969) Chapman, C.R., Merline, W.J., Thomas, P.C., Joseph, J., Cheng, A.F., Izenberg, N.: Icarus 155 (1), 104–118 (2002) https://doi.org/10.1006/icar.2001.6744 27 Conway, J.T.: Celestial Mechanics and Dynamical Astronomy 121 (1), 17–38 (2015) https://doi.org/10.1007/s10569-014-9588-x D’Urso, M.G., Di Lieto, D.: Gravitational Fields of Polyhedral Bodies with 3D Poly-nomial Density Contrast. Surveys in Geophysics 45 (3), 887–975 (2024) https: //doi.org/10.1007/s10712-023-09822-8 D’Urso, M.G.: Journal of Geodesy 88 (1), 13–29 (2014) https://doi.org/10.1007/ s00190-013-0664-x D’Urso, M.G.: Celestial Mechanics and Dynamical Astronomy 120 (4), 349–372 (2014) https://doi.org/10.1007/s10569-014-9578-z Durand, E.: Electrostatique. Vol. I. Les Distributions. Ed. Masson, (1953) Floater, M., Rasmussen, A., Reif, U.: Numer. Algorithms 44 (3), 235–248 (2007) https: //doi.org/10.1007/s11075-007-9095-1 Fahnestock, E.G., Scheeres, D.J.: Celestial Mechanics and Dynamical Astronomy 
+
+96 (3-4), 317–339 (2006) https://doi.org/10.1007/s10569-006-9045-6 Fu, X., Soldini, S., Ikeda, H., Scheeres, D.J., Tsuda, Y.: Celestial Mechan-ics and Dynamical Astronomy 136 (4), 29 (2024) https://doi.org/10.1007/ s10569-024-10199-y Ferrari, F., Tanga, P.: Icarus 350 , 113871 (2020) Fukushima, T.: Astron. Journal 154 (4), 145 (2017) https://doi.org/10.3847/ 1538-3881/aa88b8 Gaskell, R.W.: Gaskell Eros Shape Model V1.0 Gaskell, R.: Gaskell Eros Shape Model V1.1. NASA Planetary Data System (2021) Holstein, H., Ketteridge, B.: Gravimetric analysis of uniform polyhedra. Geophysics 
+
+61 (2), 357–364 (1996) https://doi.org/10.1190/1.1443964 Hamayun, Prutkin, I., Tenzer, R.: J. Geodesy 83 (12), 1163–1170 (2009) Ho, A., Wold, M., Poursina, M., Conway, J.T.: Astron. & Astrophys. 671 , 38 (2023) Jiang, Y., Baoyin, H., Li, H.: Adv. Space Res. 61 (5), 1371–1385 (2018) https://doi. org/10.1016/j.asr.2017.12.011 arXiv:1803.06781 Jiang, Y., Liu, X.: New Astron. 69 , 8–20 (2019) https://doi.org/10.1016/j.newast. 2018.11.007 Korycansky, D.G., Asphaug, E.: Polyhedron models for asteroid rubble piles in 28 collision. In: AAS/Division for Planetary Sciences Meeting Abstracts #37. AAS/-Division for Planetary Sciences Meeting Abstracts, vol. 37, pp. 15–13 (2005) Kellogg, O.D.: Foundations of Potential Theory. Frederick Ungar Publishing Com-pany, New-York (1929) Korycansky, D.G.: Orbital dynamics for rigid bodies. In: AAS/Division for Planetary Sciences Meeting Abstracts #35. AAS/Division for Planetary Sciences Meeting Abstracts, vol. 35, pp. 46–02 (2003) Korycansky, D.G.: Orbital dynamics for rigid bodies. Astrophys. Space Sci/ 291 (1), 57–74 (2004) https://doi.org/10.1023/B:ASTR.0000029954.42344.cf Karydis, D., Voyatzis, G., Tsiganis, K.: Adv. Space Res. 68 (11), 4418–4433 (2021) Lass, H., Blitzer, L.: Celest. Mech. 30 , 225–228 (1983) Lu, J., Shang, H., Zhang, X.: A global binary asteroid system model with irreg-ularly shaped components via iterated surface integral. Monthly Notices of the Royal Astronomical Society 536 (1), 592–602 (2025) https://doi.org/10.1093/ mnras/stae2630 Lyttleton, R.A.: The Stability of Rotating Liquid Masses. University Press (1953). Majic, M.: Appl. Numer. Math/ 148 , 98–108 (2020) Michel, P., Benz, W., Richardson, D.C.: Catastrophic disruption of asteroids and family formation: a review of numerical simulations including both fragmentation and gravitational reaccumulations. Planet. Space Sci. 52 (12), 1109–1117 (2004) https://doi.org/10.1016/j.pss.2004.07.008 Mathews, J.H., Fink, K.D.: Numerical Methods Using MATLAB. Prentice Hall, Upper Saddle River (2004). Première publication sous le titre : Numerical methods for mathematics, science, and engineering (1992). http://opac.inria.fr/record=b1132370 
+
+Paul, M.K.: Pure and Applied Geophysics 112 (3), 553–561 (1974) https://doi.org/ 10.1007/BF00877292 Pedros-Faura, A., Brown, G.M., McMahon, J.W., Scheeres, D.J.: Celest. Mech. and Dyn. Astron. 136 (5), 34 (2024) https://doi.org/10.1007/s10569-024-10206-2 Pellerin, J.: Mesh Generation. Université de Lorraine, Ecole Doctorale IAEM (2021). 
+
+https://hal.univ-lorraine.fr/tel-03249549v1/file/main.pdf 
+
+Peñarroya, P., Paoli, R.: Orbit propagation around small bodies using spherical har-monic coefficients obtained from polyhedron shape models. In: Celletti, A., Galeş, C., Beaugé, C., Lemaître, A. (eds.) Multi-Scale (Time and Mass) Dynamics of Space Objects. IAU Symposium, vol. 364, pp. 203–210 (2022). https://doi.org/10.1017/ 29 S1743921321001496 Prockter, L., Thomas, P., Robinson, M., Joseph, J., Milne, A., Bussey, B., Veverka, J., Cheng, A.: Surface expressions of structural features on eros. Icarus 155 (1), 75–93 (2002) https://doi.org/10.1006/icar.2001.6770 Press, W.H., Teukolsky, S.A., Vetterling, W.T., Flannery, B.P.: Numerical Recipes in FORTRAN. The Art of Scientific Computing, (1992) Palmer, E.E., Weirich, J.R., Gaskell, R.W., Lambert, D., Campbell, T., Drozd, K., Barnouin, O.S., Daly, M.G., Getzandanner, K., Kidd, J.N., Adam, C.D., Lauretta, D.S.: Planet. Sci. J. 5(2), 46 (2024) Roberts, J.H., Kahn, E.G., Barnouin, O.S., Ernst, C.M., Prockter, L.M., Gaskell, R.W.: Meteorit. & Planet. Sci 49 (10), 1735–1748 (2014) https://doi.org/10.1111/ maps.12348 Susorney, H.C.M., Barnouin, O.S.: Icarus 314 , 299–310 (2018) Schuhmacher, J., Blazquez, E., Gratl, F., Izzo, D., Gómez, P.: J. of Open Source Softw. 9(98), 6384 (2024) Scheeres, D.J., Miller, J.K., Yeomans, D.K.: Interplanet. Netw. Prog. Rep. 152 , 1–26 (2002) Stirling, J.: New Journal of Physics 19 (7), 073032 (2017) https://doi.org/10.1088/ 1367-2630/aa7c80 Tisserand, F.: Traité de Mécanique Céleste - II. Théorie de la Figure des Corps Célestes et de Leur Mouvement de rotation. Gauthier-Villars et fils, (1891) Thomas, P.C., Joseph, J., Carcich, B., Veverka, J., Clark, B.E., Bell, J.F., Byrd, A.W., Chomko, R., Robinson, M., Murchie, S., Prockter, L., Cheng, A., Izenberg, N., Malin, M., Chapman, C., McFadden, L.A., Kirk, R., Gaffey, M., Lucey, P.G.: Eros: Shape, topography, and slope processes. Icarus 155 (1), 18–37 (2002) https: //doi.org/10.1006/icar.2001.6755 Tsoulis, D.: Analytical computation of the full gravity tensor of a homogeneous arbi-trarily shaped polyhedral source using line integrals. Geophysics 77 (2), 1–11 (2012) https://doi.org/10.1190/geo2010-0334.1 https://doi.org/10.1190/geo2010-0334.1 Waldvogel, J.: Zeitschrift für Angewandte Mathematik und Physik (ZAMP) 27 , 867– 871 (1976). 10.1007/BF01595137 Werner, R.A.: Celestial Mechanics and Dynamical Astronomy 59 (3), 253–278 (1994) https://doi.org/10.1007/BF00692875 Wen, T., Zeng, X.: Astron. Journal 166 (5), 194 (2023) https://doi.org/10.3847/ 30 1538-3881/acfc46 Yu, Y., Baoyin, H.: Astrophys. Space Sci/ 355 (1), 43–56 (2015) https://doi.org/10. 1007/s10509-014-2140-3 Zhou, X.: Geophysics 74 (6), 43–53 (2009) https://doi.org/10.1190/1.3239518 
+
+# A Formula for δΨijk 
+
+If we set ∆( a, b ; x) = √(1 + a2)x2 + b2, then 
+
+I(a, b ; h) = 
+
+∫ x
+
+> 0
+
+atanh ax ′
+
+∆( a, b ; x′) dx ′ = x atanh ax 
+
+∆( a, b ; x) (34) 
+
+− b arctan ∆( a, b ; x)
+
+ab + |b| arctan 1
+
+a ,
+
+which is the formula for Eq. (11). If b = 0 , then only the first term in the right-hand-side is present. 
+
+# B Location of vertex A in the reference coordinate system 
+
+Using a Cartesian reference (Ox,O y,O z) with basis (ex, ey , ez ), we have to deter-mine the equation of the triangle’s plane. Note that the transformation matrix 
+
+(ex, ey , ez ) ↔ (eX′ , eY ′ , eZ′ ) is already known as soon as any triangle triangle T iVj Vk
+
+is identified. Let eZ′ = uex + vey + wez and P (x, y, z ) in the same in the reference coordinate system. The coordinates of point A are found by imposing simultaneously 
+
+AP ∝ ez and AV i · ez = 0 . If u̸ = 0 , then we have 
+
+
+
+xA = x + δx, yA = y + vu δx, zA = z + wu δx, 
+
+(35) where δx = −u [( x − xi)u + ( y − yi)v + ( z − zi)w] and (xi, y i, z i) are the Cartesian coordinates of vertex V i. If u = 0 , then another formula must be employed (see the Appendix B). If v̸ = 0 , then 
+
+
+
+xA = x + uv δy, yA = y + δy, zA = z + wv δy, 
+
+(36) 31 where δy = −v [( x − xi)u + ( y − yi)v + ( z − zi)w]. Optionally, if w̸ = 0 , then 
+
+
+
+xA = x + uw δz, yA = y + vw δz, zA = z + δz, 
+
+(37) where δz = −w [( x − xi)u + ( y − yi)v + ( z − zi)w].
+
+# C Comments 
+
+Potential at a vertex . According to Eq. (17), when the point P belongs to the same plane as the triangle Tijk , whatever the distance to it, then Z′ 
+
+> ijk
+
+= 0 . It means that, in such a case, the triangle does not contribute in the summation, i.e., δΨijk = 0 .This is still true if P coincides with one of the 3 vertices. But if P is a vertex for Tijk ,it is also a vertex for a few neighboring triangles, implying that the contribution δΨ
+
+of all triangles sharing the same vertex in question is zero. With a spherical mesh, at the exception of the two poles, each vertex belongs to six triangles, and at least six contributions δΨ are strictly zero in this case. 
+
+Case of a tetrahedron . If the surface S is just a tetrahedron, then there are T = 4 
+
+triangles in total, and four vertices V i(ri) with i ∈ [1 , 4] . Consequently to the point quoted above, the gravitational potential at vertex V 1 of a tetrahedron is given by a single contribution 
+
+Ψ( r1) = δΨ234 (r1). (38) 
+
+Gravitational acceleration . The knowledge of the acceleration g(r) = −∇ Ψ( r) is fundamental for many applications, in particular for dynamical studies. As soon as the individual potentials δΨijk are calculated and stored, no additional effort is needed to compute g. Each contribution δgijk = −∇ δΨijk is colinear with the local normal vector nijk and involves Eq.(15); see the Appendix D for the derivation. It turns out that we get an exact expression for the acceleration (e.g. Holstein and Ketteridge 1996), and we can avoid numerical derivatives which are always sources of errors. 
+
+# D Gravitational acceleration 
+
+The gravitational acceleration is g(r) = −∇ Ψ( r). As we have 
+
+x − x′
+
+|r − r′|3 = ∇ · ex
+
+|r − r′| , (39) we find from Eq. (1). for the first component 
+
+−∂xΨ( r) = −Gρ 
+
+∫ ∫ ex
+
+|r − r′| · n(r′)dS ′ (40) 32 For a triangle Tijk , the contribution is 
+
+−∂xδΨijk (r) = −Gρ 
+
+∫ ∫  
+
+> triangle Tijk
+
+ex
+
+|r − r′| · n(r′)dS ′ (41) where n(r′) is constant for any point P’ inside Tijk . This expression is therefore given by 
+
+−∂xδΨijk (r) = −Gρn x
+
+∫ ∫  
+
+> triangle Tijk
+
+dS ′
+
+|r − r′| (42) where nx = n · ex. We see that this integral as already been calculated, and it can therefore been imployed to deduce the components of the gravitational acceleration with no additional effort, namely 
+
+−∇ δΨijk (r) = −Gρ nijk 
+
+∫ ∫  
+
+> triangle Tijk
+
+dS ′
+
+|r − r′| , (43) 
+
+= −Gρ nijk 
+
+[sij IAV iVj + sjk IAV j Vk + ski IAV k Vi
+
+] (44) By using Eq. (17), we have 
+
+δgijk (r) = −2Gρ nijk 
+
+δΨijk (r)
+
+Z (45) and so 
+
+g(r) = ∑
+
+> all triangles
+
+δgijk (46) 
+
+= −2Gρ ∑
+
+> all triangles
+
+nijk 
+
+δΨijk (r)
+
+Zijk 
+
+.
+
+# E Convergence acceleration by using the Repeated Richardson Extrapolation (RRE) 
+
+Richardson’s Extrapolation (RE) is a standard numerical technique for improving quadratures and derivatives. It uses two evaluations of a given quantity f (supposed regular enough) obtained at two different resolutions h and h′ < h , namely fh and 
+
+fh′ , and assumes that the absolute error has leading term hn, where n is the order of the error. In these conditions, a better estimate f ∗ is given by the formula 
+
+f ∗ ≈ fh′ + fh′ − fh
+
+( hh′
+
+)n − 1 . (47) Usually, the setting is 2h′ = h, which corresponds to two computational grids with same boundaries but with, respectively, 2l + 1 and 2l+1 + 1 equally space nodes, where 33 l ≥ 0 is the discretization level (i.e., the coarser grid is contained in the finer one). In fact, the process can be repeated by considering that the error is a power series in h,which assumes that the function is “regular” enough (e.g., Mathews and Fink 2004). In particular, if the error is second-order in the mesh spacing, then the series contains only odd powers of h. Let Al, 0 ≡ fhl denote a series of approximations for f obtained at various resolutions 2hl+1 = hl, with l ≥ 0. Based upon this series, we then form a triangular table where the elements Al,k are found from the formula 
+
+Al,m = Al,m −1 + Al,m −1 − Al−1,m −1
+
+4m − 1 , (48) for m ∈ [1 , l ] and l ≥ 1. The last element Al,l is the improved value of f . The error is estimated to be of the order of h2( l+1) . This is the technique of Repeated Richardson Extrapolation (RRE). In the present paper, l ≡ ℓ ≥ 3, then m ≥ 3. Accordingly, Eq. (48) is to be used for m ≥ 4, and the denominator 4m −1 must be replaced by 4m−3 −1.
+
+# F Example at the center of the sphere (con’t) 
+
+Table 9 Same caption as for tab. 9 but in quadruple precision. 
+
+ℓ Aℓ, 3 Aℓ, 4 Aℓ, 5 Aℓ, 6
+
+3 −5.2658724606271720 
+
+4 −6.0177824547115461 −6.2684191194063375 
+
+5 −6.2161323588550541 −6.2822489935695567 −6.2831709851804380 
+
+6 −6.2663780221957858 −6.2831265766426963 −6.2831850821809056 −6.2831853059428178 
+
+7 −6.2789807304634097 −6.2831816332192843 −6.2831853036577235 −6.2831853071732286 
+
+8 −6.2821339907449427 −6.2831850775054538 −6.2831853071245317 −6.2831853071795604 
+
+9 −6.2829224673043457 −6.2831852928241466 −6.2831853071787261 −6.2831853071795864 
+
+10 −6.2831195965378556 −6.2831853062823589 −6.2831853071795730 −6.2831853071795865 
+
+ℓ Aℓ, 7 Aℓ, 8 Aℓ, 9 Aℓ, 10 
+
+34567 −6.2831853071780537 
+
+8 −6.2831853071795853 −6.2831853071795868 
+
+9 −6.2831853071795865 −6.2831853071795865 −6.2831853071795865 
+
+10 −6.2831853071795865 −6.2831853071795865 −6.2831853071795865 −6.2831853071795865 
+
+reference (exact) −6.2831853071795864 
+
+34

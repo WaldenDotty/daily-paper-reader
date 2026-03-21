@@ -1,0 +1,770 @@
+Title: H-RINS: Hierarchical Tightly-coupled Radar-Inertial Navigation via Smoothing and Mapping
+
+URL Source: https://arxiv.org/pdf/2603.14109v1
+
+Published Time: Tue, 17 Mar 2026 01:29:41 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+This work has been submitted to the IEEE for possible publication. Copyright may be transferred without notice, after which this version may no longer be accessible. 
+
+# H-RINS: Hierarchical Tightly-coupled Radar-Inertial Navigation via Smoothing and Mapping 
+
+Ali Alridha Abdulkarim, Mikhail Litvinov, Dzmitry Tsetserukou 
+
+Abstract —Millimeter-wave radar provides robust perception in visually degraded environments. However, radar-inertial state estimation is inherently susceptible to drift. Because radar yields only sparse, body-frame velocity measurements, it provides weak constraints on absolute orientation. Consequently, IMU biases remain poorly observable over the short time horizons typical of sliding-window filters. To address this fundamental observability challenge, we propose a tightly coupled, hierarchical radar-inertial factor graph framework. Our architecture decouples the estimation problem into ahigh-rate resetting graph and a persistent global graph. The resetting graph fuses IMU preintegration, radar velocities, and adaptive Zero-Velocity Updates (ZUPT) to generate the smooth, low-latency odometry required for real-time control. Concurrently, the persistent graph is a full-state factor graph maintaining the complete information of poses, velocities, and biases by fusing inertial data with keyframe-based geometric mapping and loop closures. Leveraging Incremental Smoothing and Mapping, the persistent graph can operate without explicit marginalization of variables, preserving their information while ensuring long-term bias observability. The cornerstone of our approach is a probabilistic tight-coupling mechanism: fully observable, optimized biases and their exact covariances are continuously injected from the persistent graph into the resetting graph’s prior, effectively anchoring the high-rate estimator against integration drift. Extensive evaluations demonstrate our system achieves high accuracy with drift-reduced estimation at 
+
+27 × real-time execution speeds. We release the implementation code and datasets upon the acceptance of the paper. 
+
+I. INTRODUCTION Autonomous mobile robots require robust perception and state estimation. While Visual-Inertial Odometry (VIO) and LiDAR-Inertial Odometry (LIO) perform well in structured, clear environments, they degrade significantly under obscurants like fog, dust, or poor lighting. Millimeter-wave (mmWave) radars offer a compelling alternative: their longer wavelengths penetrate visual obstructions and provide both geometry and Doppler velocity natively. However, radar-inertial odometry faces algorithmic hurdles. Radar point clouds are sparse, cluttered, and prone to multipath reflections. While prior work addresses outdoor challenges, indoor environments, such as caves, tunnels, and corridors, remain underexplored. These spaces introduce scale 
+
+The authors are with the Intelligent Space Robotics Laboratory, Skolkovo Institute of Science and Technology Moscow, Bolshoy Boulevard 30, bld. 1, 121205, Moscow, Russia. {ali.abdulkarim, mikhail.litvinov2, d.tsetserukou }@skoltech.ru 
+
+constraints, low-reflectivity materials, repetitive patterns, and sparse geometric features. Fusing IMU data with radar velocities enables high-frequency tracking but introduces observability issues. Radar velocity measurements do not constrain absolute orientation, making gyroscope biases weakly observable without sufficient excitation. Standard sliding-window filters marginalize older states for tractability, truncating the temporal baseline needed for accurate bias estimation and causing drift. To achieve global consistency, hierarchical methods typically add a backend optimization layer. Most frameworks simplify this backend to a pose graph, discarding velocity and bias states. While this corrects the global map, the frontend remains unaware of refined biases, and the root cause of drift remains unaddressed. Full-state backends with explicit marginalization induce dense fill-in, limiting scalability. We present a hierarchical radar-inertial odometry framework with two tightly coupled factor graphs. The frontend is a resetting graph fusing IMU preintegration, radar velocities, and Zero-Velocity Updates (ZUPT) to produce smooth, high-rate odometry for real-time control. The backend is a persistent full-state graph maintaining poses, velocities, and IMU biases over the entire trajectory. It incorporates inertial factors, keyframe registrations, and loop closures via incremental smoothing, optimizing only affected variables without marginalization. Critically, the persistent graph refines IMU biases using long-term geometric constraints and injects these estimates with marginal covariances as priors into the resetting frontend. This feedback ensures the high-rate odometry inherits global observability while remaining computationally light. The primary contributions of this work are:  
+
+> •
+
+Hierarchical Factor Graphs: Resolves the trade-off between low-latency estimation and long-term bias observability, delivering smooth control-oriented states without sacrificing global accuracy.  
+
+> •
+
+Tight-Coupling through Bias Injection: A persistent full-state backend that propagates globally optimized IMU biases and their exact covariances into a high-rate resetting graph, actively suppressing integration drift without marginalization bottlenecks.  
+
+> arXiv:2603.14109v1 [cs.RO] 14 Mar 2026 •
+
+Empirical Validation: We demonstrate through several experiments that the proposed hierarchical tight-coupling yields a robust estimator that overcomes key limitations in existing radar-SLAM systems, advancing radar-inertial fusion for high-performance robotics. II. R ELATED WORK 
+
+A. Backend Formulations 
+
+The choice of estimation backend fundamentally shapes how radar and inertial measurements interact. Within discrete-time paradigms, sliding-window factor graphs have been shown to circumvent iterative closest point computations by constructing radar factors directly from matched 3D points and Doppler velocities [1], while minimal EKF architectures offer a lighter-weight alternative for dense radar-inertial fusion [2]. More recently, continuous-time formulations using Gaussian process motion priors have emerged, treating gyroscope readings as direct state measurements and preintegrating accelerometer data within sliding-window estimators [3]. 
+
+B. Radar SLAM and Multi-Sensor Systems 
+
+Extending odometry to full SLAM has prompted innovations in loop closure and spatial reasoning. Hierarchical systems now combine local IMU-Doppler odometry with global pose optimization, using radar cross-section data for robust loop detection [4]. For 4D radar specifically, graduated non-convexity has replaced RANSAC for ego-velocity extraction, enabling distribution-to-multi-distribution scan matching within Iterated EKF frameworks [5]. When expanding the sensor suite, tightly-coupled LiDAR-radar-inertial factor graphs prove particularly resilient: by preserving geometrically-driven LiDAR features alongside physically-motivated radar velocity factors, these systems maintain observability even when individual modalities degenerate [6], [7]. 
+
+C. Uncertainty Modeling and Adaptive Fusion 
+
+How measurement uncertainty is characterized dictates fusion stability. Polar-coordinate probabilistic models have been embedded throughout the estimation pipeline, from data association to weighted least-squares optimization [8]. Adaptive architectures go further, dynamically recalibrating fusion weights based on real-time sensor states through voting-based pose solvers that quantify uncertainty online [9]. Learning-based approaches now process raw radar signals through neural networks that output both ego-velocity estimates and heteroscedastic uncertainty predictions, enabling EKFs to dynamically scale measurement covariances [10]. 
+
+D. Temporal and Spatial Calibration 
+
+Online calibration maintains consistency across asynchronous sensors. Factor graphs now explicitly estimate temporal delays alongside state variables, decoupling time offset correction from extrinsic calibration [11], while filtering paradigms incorporate temporal offsets directly into ego-velocity measurement models [12]. For spatial alignment, tightly-coupled graph optimizations embed online extrinsic calibration by formulating constraints from Doppler measurements and loop closures [13]. 
+
+E. Learning-Based Representations 
+
+Neural architectures increasingly address radar’s sparsity through both spatial and spectral processing. Point matching has been reformulated as multi-label classification, where transformers compute match likelihood matrices optimized directly on correspondence loss [14]. For 4D radar, graph-based equivariant networks process Doppler velocities into invariant features, explicitly separating geometric from kinematic representations [15]. Self-supervised estimators operating directly on radar spectra inject inertial priors into spectral representations, compensating for limited angular resolution without intermediate point clouds [16]. III. M ETHODOLOGY : H IERARCHICAL 
+
+DOPPLER -I NERTIAL -G EOMETRIC OPTIMIZATION 
+
+A. System Overview 
+
+We define the instantaneous system state Xi for keyframe i
+
+on the composite Lie Group manifold M ≜ SE(3) × R3 × R6.The state vector is given by: 
+
+Xi ≜ {Ti, vi, bi} = {Ri, pi, vi, bωi , bai } (1) where Ti = ( Ri, pi) ∈ SE(3) represents the orientation and position of the IMU body frame B relative to the inertial world frame W . The term vi ∈ R3 denotes the linear velocity expressed in W , and bi = [( bai )⊤, (bωi )⊤]⊤ ∈
+
+R6 encapsulates the slowly time-varying accelerometer and gyroscope biases. The estimation problem is formulated as a Maximum A Posteriori (MAP) inference over a bipartite factor graph G =(V, F). Assuming zero-mean Gaussian noise models, solving for the optimal trajectory X ∗ corresponds to minimizing the nonlinear negative log-likelihood cost function: 
+
+X ∗ = arg min  
+
+> X
+
+∥rprior ∥2 
+
+> Σ0
+
++ X
+
+> k
+
+∥rk(X , Zk)∥2
+
+> Σk
+
+!
+
+(2) 
+
+B. Initialization and Extrinsic Alignment 1) Static Gravity Alignment: Let aj ∈ R3 denote the specific force measured by the accelerometer. During an initial stationary period consisting of N samples, the local vertical is established by computing the mean specific force, ¯a =
+
+> 1
+> N
+
+PNj=1 aj . An intermediate rotation matrix Rgrav ∈ SO(3) 
+
+is subsequently constructed to align ¯a with the global gravity vector g = [0 , 0, g ]⊤. This operation uniquely determines the roll and pitch, establishing an intermediate gravity-aligned frame I that differs from the true world frame W by an unknown yaw rotation ψ about the Z-axis, such that R0 =
+
+Rgrav Rz (ψ).Fig. 1. Hierarchical factor graph architecture of H-RINS. (Top) The persistent graph maintains the full trajectory history, fusing IMU preintegration, radar Doppler velocity, and keyframe-level GICP odometry factors across pose ( P), velocity ( V), and bias ( B) nodes; loop closure factors span distant keyframes to bound long-term drift. (Bottom) The resetting graph operates a sliding window of N nodes and resets when the window is full: state estimates and their marginal covariances collapse into a single prior, discarding graph structure but preserving information. Two reset scenarios are shown: during a stationary period (ZUPT), zero-velocity and zero-motion factors tightly calibrate the bias in-place; during motion, the globally optimized bias and its covariance (blue arrow) are injected into the resetting prior, transferring long-horizon observability to the high-rate estimator. 
+
+2) Kinematic Yaw Alignment: To resolve the unobservable yaw angle ψ, kinematic constraints are exploited between the inertial preintegration and the radar velocity measurements during dynamic excitation. Let vR ∈ R3 be the linear velocity measured in the radar sensor frame R. This velocity is mapped to the instantaneous body frame B by compensating for the spatial lever arm pBR ∈
+
+R3, utilizing the instantaneous angular velocity ω measured by the gyroscope: 
+
+vB = RBR vR − ω × pBR (3) where RBR ∈ SO(3) defines the rotational extrinsic calibration between the radar and the IMU. Consider a sliding window of M dynamic frames originating at time t0. Let v0 ∈ R3 represent the unknown initial velocity in W . Using IMU preintegration from t0 to 
+
+tk, the velocity propagation is given by vk = v0 + g∆tk +
+
+R0∆vk, where ∆vk is the preintegrated velocity change and 
+
+∆Rk is the preintegrated rotation. Concurrently, the world velocity can be derived from the instantaneous body velocity as vk = R0∆RkvB,k . Equating these and multiplying by 
+
+R⊤ 
+
+> grav
+
+projects the constraint into the intermediate frame I:
+
+vI 
+
+> 0
+
++ gI ∆tk + Rz (ψ)∆ vk = Rz (ψ)∆ RkvB,k (4) where vI 
+
+> 0
+
+= R⊤
+
+> grav
+
+v0 and gI = R⊤
+
+> grav
+
+g = [0 , 0, g ]⊤.Rearranging to isolate the unknowns yields: 
+
+vI 
+
+> 0
+
+− Rz (ψ)mk = −gI ∆tk (5) where mk = ∆RkvB,k − ∆vk. To formulate a linear system, we decompose Rz (ψ)mk = Hku + m∗ 
+
+> k,z
+
+, where 
+
+u = [cos ψ, sin ψ]⊤, m∗ 
+
+> k,z
+
+= [0 , 0, m k,z ]⊤, and the mapping matrix Hk ∈ R3×2 is defined as: 
+
+Hk =
+
+
+
+mk,x −mk,y 
+
+mk,y mk,x 
+
+0 0
+
+ (6) Substituting this into the constraint and defining the state vector x = [( vI 
+
+> 0
+
+)⊤, u⊤]⊤ ∈ R5 results in: 
+
+vI 
+
+> 0
+
+− Hku = m∗ 
+
+> k,z
+
+− gI ∆tk (7) For each frame k ∈ { 1, . . . , M }, this yields a linear equation 
+
+Akx = bk, with the block structures: 
+
+Ak = I3×3 −Hk
+
+ ∈ R3×5 (8) 
+
+bk = m∗ 
+
+> k,z
+
+− gI ∆tk ∈ R3 (9) Stacking the matrices Ak and vectors bk over the M -frame window produces an overdetermined linear system Ax = b,which is solved via Singular Value Decomposition (SVD). To ensure mathematical observability which physically necessitates sufficient horizontal acceleration of the platform, the solution undergoes rigorous analytical validation. The alignment is deemed valid if and only if the information matrix 
+
+A⊤A is strictly full-rank, enforced by a minimum singular value threshold ( σmin > ϵ), and demonstrates a bounded condition number (σmax /σ min < κmax ). Upon satisfying these criteria, the yaw angle is uniquely recovered as ψ =atan2( u2, u 1). The preliminary gravity-aligned rotation is subsequently corrected by Rz (ψ), yielding the true orientation in SE(3) and allowing the initialization of the underlying factor graph. 
+
+C. Ego-velocity Estimation 
+
+The imaging radar provides the Doppler velocity of detected points. Assuming that the majority of points in a given frame belong to static objects, we can relate the Doppler radial velocity vdn ∈ R of point n, its 3D position in the sensor frame pn ∈ R3, and the sensor’s linear ego-velocity vR ∈ R3
+
+via: 
+
+−vdn = v⊤
+
+> R
+
+pn
+
+∥pn∥ (10) To obtain an accurate sensor velocity resilient to dynamic outliers, we employ a robust least-squares approach. Let N
+
+be the total number of radar points in the current scan, and let the Doppler measurement noise be modeled by a Gaussian distribution with variance σ2
+
+> d
+
+. The optimal sensor velocity v∗
+
+> R
+
+is found by minimizing: 
+
+v∗ 
+
+> R
+
+= arg min 
+
+> vR
+> N
+
+X
+
+> n=1
+
+ρ 1
+
+σ2
+
+> d
+
+v⊤
+
+> R
+
+pn
+
+∥pn∥ + vdn
+
+> 2
+
+!
+
+(11) where ρ(·) represents a robust error function (e.g., Cauchy or Welsch) to reject moving objects. The marginalized covariance ΣvR ∈ R3×3 of the estimated velocity is derived by inverting the unweighted information matrix: 
+
+ΣvR = σ2
+
+> d
+
+ A⊤A−1 (12) where A ∈ RN ×3 is constructed such that each row is the unit direction vector An, : = p⊤ 
+
+> n
+
+/∥pn∥. Due to typical radar antenna designs, point distributions are often uneven across the azimuth and elevation dimensions, causing the estimated velocity uncertainty to exhibit distinct variations along the local coordinate axes. 
+
+1) Lever-Arm Compensated Velocity Factor: The estimated ego-velocity v∗ 
+
+> R
+
+and its covariance ΣvR provide a direct measurement of the sensor’s linear velocity. Because the radar sensor is extrinsically offset from the IMU center by a rotation 
+
+RBR and translation pBR , the rotational motion of the vehicle induces a tangential lever-arm velocity. First, the measured velocity is transformed to the Body frame B and corrected using the angular rate ˆωi and current gyroscope bias estimate bωi :
+
+vmeas  
+
+> B
+
+= RBR v∗ 
+
+> R
+
+− ( ˆ ωi − bωi ) × pBR (13) This correction creates a direct dependency between the linear velocity measurement and the gyroscope bias, enhancing observability. The residual rD minimizes the difference between this corrected measurement and the estimated world velocity vi,projected back into the body frame via R⊤ 
+
+> i
+
+:
+
+rD (Xi) = vmeas  
+
+> B
+
+− R⊤ 
+
+> i
+
+vi (14) This residual is evaluated using the covariance rotated into the body frame, ΣB = RBR ΣvR (RBR )⊤:
+
+∥rD (Xi)∥2 
+
+> ΣB
+
+= rD (Xi)⊤Σ−1 
+
+> B
+
+rD (Xi) (15) 
+
+D. IMU Preintegration Factor 
+
+The raw measurements of angular velocity ˆωt and linear acceleration ˆat from a 6-DoF IMU, expressed in the local body frame B, are modeled as: 
+
+ˆωt = ωt + bωt + nωt , (16) 
+
+ˆat = R⊤ 
+
+> t
+
+(at − g) + bat + nat . (17) Here, ωt and at represent the true underlying kinematic quantities. The measurements are corrupted by additive white Gaussian noise nωt ∼ N (0, Σω ), nat ∼ N (0, Σa) and slowly time-varying sensor biases bt = [( bat )⊤, (bωt )⊤]⊤. The biases are modeled as random walks driven by white noise processes 
+
+nbω and nba , such that ˙bωt = nbω and ˙bat = nba . The matrix 
+
+Rt ≡ RWB (t) rotates a vector from the body frame B to the inertial world frame W , and g = [0 , 0, g ]⊤ is the gravity vector. The continuous-time kinematics governing the evolution of the system state are: 
+
+˙Rt = Rt ( ˆ ωt − bωt − nωt )∧ , (18) 
+
+˙vt = Rt (ˆ at − bat − nat ) + g, (19) 
+
+˙pt = vt. (20) Integrating these equations directly within an optimization framework is computationally prohibitive, as any update to the initial state Xi would require re-integrating all high-frequency IMU samples up to state Xj . To decouple the integration from the optimization variables at time ti, we employ IMU preintegration on the manifold. Assuming the bias estimate ¯bi remains constant during the integration window [ti, t j ], the pseudo-measurements for relative rotation ∆ ˜Rij , velocity ∆˜ vij , and position ∆˜ pij are computed entirely in the local frame of i:
+
+∆ ˜Rij =
+
+> j−1
+
+Y
+
+> k=i
+
+Exp 
+
+   ˆωk − ¯bωi
+
+ ∆t
+
+
+
+, (21) 
+
+∆˜ vij =
+
+> j−1
+
+X
+
+> k=i
+
+∆ ˜Rik 
+
+ ˆak − ¯bai
+
+ ∆t, (22) 
+
+∆˜ pij =
+
+> j−1
+
+X
+
+> k=i
+
+
+
+∆˜ vik ∆t + 12 ∆ ˜Rik 
+
+ ˆak − ¯bai
+
+ ∆t2
+
+
+
+. (23) 
+
+1) Bias Correction and Taylor Expansion: Because the preintegrated terms (21)–(23) are evaluated at the specific bias ¯bi, a change in the bias estimate δbi = bi − ¯bi
+
+during optimization would normally necessitate re-integration. To avoid this, a first-order Taylor expansion is applied with respect to the bias changes: 
+
+∆ ˜Rij (bi) ≈ ∆ ˜Rij (¯bi) Exp  J∆Rbω δbωi
+
+ (24) 
+
+∆˜ vij (bi) ≈ ∆˜ vij (¯bi) + J∆vba δbai + J∆vbω δbωi (25) 
+
+∆˜ pij (bi) ≈ ∆˜ pij (¯bi) + J∆pba δbai + J∆pbω δbωi (26) where the preintegration Jacobians J(·)(·) map the perturbations in bias to the respective kinematic manifolds and are computed iteratively alongside the preintegration variables. 2) Covariance Propagation: The uncertainty of the preintegrated measurements is governed by the accumulated sensor noise nωt and nat . We define the 15-dimensional error state δzij = [ δθ⊤ 
+
+> ij
+
+, δ v⊤ 
+
+> ij
+
+, δ p⊤ 
+
+> ij
+
+, δ ba⊤ 
+
+> i
+
+, δ bω⊤ 
+
+> i
+
+]⊤. Using linearized continuous-time error-state dynamics, the covariance matrix 
+
+Σij ∈ R15 ×15 is propagated iteratively via a discrete-time state transition matrix Φ and noise covariance matrix Q:
+
+Σk+1 = ΦkΣkΦ⊤ 
+
+> k
+
++ Qk (27) with the initial condition Σi = 0.
+
+3) Factor Graph Residual Formulation: Incorporating the IMU measurements into the factor graph connects the states 
+
+Xi and Xj . The 15-dimensional residual vector rI (Xi, Xj ) is rigorously defined by comparing the state predictions against the bias-corrected preintegrated measurements: 
+
+rI (Xi, Xj ) = 
+
+
+
+r∆R
+
+r∆v
+
+r∆p
+
+r∆b
+
+ =
+
+
+
+Log 
+
+
+
+∆ ˜Rij (bi)⊤R⊤ 
+
+> i
+
+Rj
+
+
+
+R⊤ 
+
+> i
+
+(vj − vi − g∆tij ) − ∆˜ vij (bi)
+
+R⊤
+
+> i
+
+ pj − pi − vi∆tij − 12 g∆t2
+
+> ij
+
+ − ∆˜ pij (bi)
+
+bj − bi
+
+ (28) where Log : SO(3) → R3 denotes the logarithmic mapping on the rotation group. The associated cost minimized during the MAP inference is weighted by the propagated noise covariance: 
+
+EI = ∥rI (Xi, Xj )∥2 
+
+> Σij
+
+= r⊤I Σ−1 
+
+> ij
+
+rI (29) This formulation seamlessly constraints high-frequency inertial dynamics within the sparse graph topology, allowing the biases to be jointly optimized with spatial and velocity variables. 
+
+E. Zero-Velocity Updates 
+
+The local detector continuously evaluates the radar-derived velocity magnitude ∥v∗
+
+> R
+
+∥. A stationary condition is flagged when this magnitude remains below a threshold τv for a duration exceeding τt. This binary flag governs bias selection during graph resets but does not alter the local factor structure. Zero-Velocity Updates (ZUPT) are enforced in the global graph for keyframes marked as stationary. For consecutive keyframes i − 1 and i within a stationary interval, we add: 
+
+ev = vi − 0, eT = Log  T−1
+
+> i−1
+
+Ti
+
+ (30) with noise models Σv = σ2 
+
+> v
+
+I3 and ΣT = diag( σ2 
+
+> θ
+
+I3, σ 2 
+
+> p
+
+I3),where σv , σ θ , σ p ≈ 10 −4–10 −5 and Log : SE(3) →
+
+R6 represents the logarithmic map. Combined with the IMU preintegration factor spanning the same interval, these constraints force any integrated motion to be absorbed directly by the bias states, enabling strong bias observability during stationary periods. 
+
+F. Graph Reset and Marginal Covariance Propagation 
+
+The local estimator operates as a resetting graph that bounds computational complexity by limiting the number of keyframes. Let Kmax denote the maximum number of keyframes permitted before a reset. Upon reaching this limit, we extract the current maximum a posteriori estimates and their marginal covariances from the backend. Let ˆT, ˆv, ˆb
+
+denote the optimized pose, velocity, and bias at the most recent keyframe, with corresponding marginal covariances ΣT , Σv ,
+
+Σb.The graph is cleared and reinitialized with unary priors at a new root node: 
+
+eT = Log 
+
+ ˆT−1T
+
+
+
+, ΣT, prior = ΣT + ϵT I6 (31) 
+
+ev = v − ˆv, Σv, prior = Σv (32) 
+
+eb = b − bprior , Σb, prior = Σb, src (33) where ϵT > 0 is a small regularization term ensuring positive definiteness, and bprior , Σb, src are selected according to the injection policy described below. This reset discards past keyframes while preserving the current state distribution. 
+
+G. Hierarchical Bias Injection 
+
+The core contribution of this work is a conditional mechanism that propagates globally-consistent bias estimates into the local estimator during graph resets. This transfer respects the robot’s kinematic state to prevent discontinuities. 
+
+a) Moving regime (ZUPT = false): When the robot is in motion and a global bias estimate bglobal with covariance 
+
+Σglobal is available from the global optimizer, the reset employs: 
+
+bprior = bglobal , Σb, src = Σglobal (34) This injects globally-optimized information derived from loop closures and long-horizon constraints into the real-time local stream, correcting accumulated drift. 
+
+b) Stationary regime (ZUPT = true): During detected stationary intervals, global injection is blocked. Instead, the local bias estimate propagates forward: 
+
+bprior = ˆb, Σb, src = Σb (35) This prevents discontinuities that would arise if aglobally-corrected bias were introduced while tight zero-motion constraints are active. Upon transition back to motion, the first subsequent reset automatically incorporates the bias refined by the global ZUPT constraints. 
+
+H. Ground Plane Constraints 
+
+Both graphs optionally incorporate prior knowledge of the ground plane to constrain unobservable degrees of freedom. Let n ∈ R3 be the unit normal of the ground plane in the world frame W , and let Ralign be the rotation that aligns nwith the Z-axis. For each keyframe state Xi, we define the residuals: 
+
+eatt = Log  R⊤
+
+> align
+
+Ri
+
+  
+
+> x,y
+
+, Σatt = σ2
+
+> rp
+
+I2 (36) 
+
+epos =  R⊤
+
+> align
+
+pi
+
+ 
+
+> z
+
+− d, Σpos = σ2 
+
+> z
+
+(37) 
+
+evel =  R⊤
+
+> align
+
+vi
+
+ 
+
+> z
+
+, Σvel = σ2 
+
+> vz
+
+(38) where d is the plane distance from the origin, [·]x,y 
+
+extracts the first two vector components, and (·)z extracts the third component. These factors respectively constrain attitude (roll/pitch) relative to the ground normal, position perpendicular to the ground plane, and velocity normal to the ground. 
+
+I. Radar Mapping 
+
+The mapping module bridges per-scan radar observations and the keyframe-level persistent factor graph. It operates a dedicated fixed-lag smoother that refines individual scan poses against a local point cloud, assembles the refined scans into keyframes , and produces geometric constraints between consecutive keyframes via Generalized ICP (GICP) registration. We define a keyframe as the aggregation of all radar scans received between two consecutive keyframe events from the persistent graph, forming a dense local point cloud anchored to a single reference pose. 
+
+1) Scan Registration: Each radar scan Si at time ti
+
+introduces a pose variable into a fixed-lag smoother with temporal horizon τ . Two factors constrain each new scan: an odometry prior that integrates the radar ego-velocity twist between consecutive scan times, with covariance propagated from the per-scan uncertainty (12); and a scan-to-map GICP factor that registers Si against the active local map, formed by transforming all scans within the smoother window by their current pose estimates. When a scan exits the smoother window, its final optimized pose is frozen for keyframe assembly. 
+
+2) Keyframe Assembly: Each keyframe accumulates all scans that arrive between consecutive keyframe events from the persistent graph. Once every scan assigned to keyframe k
+
+has been marginalized from the smoother, they are merged into a single anchor-frame point cloud: 
+
+Ck = [
+
+> i∈k
+
+ T−1 
+
+> k
+
+Tfrz 
+
+> i
+
+ · S i (39) where Tfrz  
+
+> i
+
+is the frozen smoother estimate and Tk ≜ Tfrz 
+
+> a(k)
+
+is the anchor pose of the first scan in keyframe k.
+
+3) Sequential GICP Constraint: To constrain the persistent factor graph, the keyframe cloud Ck is registered against a voxelized multi-keyframe target built from the set N (k) of N
+
+most recently closed keyframes: 
+
+Mk = Voxel 
+
+ [ 
+
+> j∈N (k)
+
+ T−1 
+
+> k
+
+Tj
+
+ · C j
+
+ (40) The initial alignment is the smoother-estimated relative anchor pose T−1
+
+> k−1
+
+Tk. GICP refines this estimate, yielding a relative transform ∆ ˆTk−1,k and information matrix Λgicp .The constraint is accepted when the fitness score, inlier count, and correction magnitude satisfy prescribed thresholds. On acceptance, a between factor is added to the persistent graph: 
+
+emap = Log  ∆ ˆT−1 
+
+> k−1,k
+
+T−1 
+
+> k−1
+
+Tk
+
+, Σmap = Λ−1gicp (41) If registration fails, the smoother-estimated relative pose is used as a fallback to maintain graph connectivity. 120 100 80 60 40 20 0 20 
+
+> X [m]
+> 60
+> 40
+> 20
+> 0
+> 20
+> 40
+> 60
+> 80
+> Y [m]
+> Ground Truth
+> Estimated (SE3 Aligned)
+> Start Pos (GT)
+> Start Pos (Est)
+> End Pos (GT)
+> End Pos (Est)
+> 20
+> 30
+> 40
+> 50
+> 60
+> Intensity
+
+Fig. 2. R3 Ring Sequence 10 0 10 20 30 40 
+
+> X [m]
+> 30
+> 20
+> 10
+> 0
+> 10
+> 20
+> 30
+> 40
+> Y [m]
+> Ground Truth
+> Estimated (SE3 Aligned)
+> Start Pos (GT)
+> Start Pos (Est)
+> End Pos (GT)
+> End Pos (Est)
+> 20
+> 30
+> 40
+> 50
+> 60
+> 70
+> Intensity
+
+Fig. 3. Underground garage sequence TABLE I ABLATION STUDY : I MPACT OF COMPONENT REMOVAL 
+
+w/o Feedback w/o ZUPT w/o GICP w/o LC w/o GC Sequence ATE RPE ATE RPE ATE RPE ATE RPE ATE RPE [m] [m] [deg] [m] [m] [deg] [m] [m] [deg] [m] [m] [deg] [m] [m] [deg] 
+
+CDE 0.93 0.75 2.41 0.89 0.71 2.84 0.80 0.66 2.32 1.02 0.83 3.13 0.78 0.62 2.24 R3 2.41 1.80 0.93 2.30 1.72 1.14 2.06 1.59 0.90 2.62 1.97 1.21 2.01 1.50 0.86 Underground 1.03 5.72 6.05 0.97 5.47 7.25 0.87 4.99 5.72 1.13 6.28 7.98 0.85 4.82 5.52 
+
+Avg. Degradation +24% +25% +16% +19% +20% +30% +8% +11% +6% +35% +37% +41% +6% +5% +4% 10 0 10 20 30 40 
+
+> X [m]
+> 20
+> 0
+> 20
+> 40
+> 60
+> Y [m]
+> Ground Truth
+> Estimated (SE3 Aligned)
+> Start Pos (GT)
+> Start Pos (Est)
+> End Pos (GT)
+> End Pos (Est)
+> 20
+> 30
+> 40
+> 50
+> 60
+> 70
+> Intensity
+
+Fig. 4. CDE office workspace, with glass walls TABLE II FULL H-RIO S YSTEM EVALUATION WITH SEQUENCE CHARACTERISTICS 
+
+Sequence ATE [m] RPE [m] [deg] Handheld 
+
+CDE (825 m, 0.8 m/s) 0.75 0.60 2.19 R3 (690 m, 0.8 m/s) 1.93 1.44 0.85 
+
+Cart 
+
+Underground (520 m, 0.5 m/s) 0.82 4.59 5.41 
+
+IV. E XPERIMENTS 
+
+The implementations of H-RINS factor graphs are in C++ using GTSAM [17] with ISAM2 solver [18], providing 
+
+Fig. 5. Experimental platforms used in this work. It features an Imaging FMCW radar (Integrant HD-Radar), which outputs 4D point clouds at rate of 20Hz, and a commercial-grade Bosch BMI085 IMU (Built-in of RealSense D455 camera), while inside Intel NUC NUC7i7BNH as compute unit. 
+
+efficient performance and scalable graph topology. Ceres solver [19] was used for the compact Nonlinear least squares problem of the instantaneous ego velocity estimation. Setup used for data collection and experiments is show in Fig. 5. 
+
+1) Ground-truth acquisition: We adopt the methodology [20], which integrates FAST-LIO2 [21] for odometry and loop closure with a degeneration-aware map factor built from dense prior maps. The prior maps are acquired using a Livox Mid-360; thanks to its non-repetitive scanning pattern, the map becomes progressively denser as the sensor moves slowly through the environment. While on the platform, the LiDAR sensor used is the Velodyne HDL-32E. This graph-based strategy allows for robust pose estimation under degenerate or static conditions, offering dependable ground truth data for our assessments. Since the ground truth pipeline relies on FAST-LIO2 [21] a tightly coupled LiDAR-inertial odometry system as its front-end, accurate extrinsic calibration between the LiDAR and IMU is critical. To achieve this, we employ the robust calibration technique [22], which utilizes rich rotational excitation around all three axes to gather sufficient motion information. This approach enables precise and efficient estimation of both spatial and temporal parameters without requiring initial guesses, even from unsynchronized sensor data, thereby ensuring the high-quality extrinsics necessary for our ground truth estimation. We evaluate the trajectories according to the standard metrics using [23] 
+
+A. Ablation study 
+
+We disable key components of the framework, while keeping the rest enabled, and we measure the impact on the estimation with the absence of these modules. Notably, disabling feedback from the persistent global graph to the resetting local graph, allowed the biases to grow unobserved for the resetting graph. In turn, disabling the GICP odometry factors did not induce much drift, since the framework does not mainly rely on it for motion estimation. Disabling ground factors(GC), had the minimal impact, since the trajectory in 2D did not deform or drift in the plane. V. C ONCLUSION 
+
+In this work, we addressed the fundamental tension between low-latency tracking and long-term state observability in radar-inertial navigation. Rather than forcing a single estimator to compromise between these conflicting demands, we proposed a structurally decoupled, yet probabilistically bound, dual-graph architecture. By maintaining a persistent, full-state history on a Bayes tree, our backend effortlessly absorbs long-horizon geometric constraints without suffering the matrix fill-in and computational degradation typical of explicit marginalization. By actively channeling globally observable, optimized IMU biases back into the high-rate tracking layer, we created a feedback loop that neutralizes drift at its mathematical source. The result is a paradigm shift for radar-inertial estimation: a framework that delivers the smooth, high-frequency kinematics required for aggressive robotic control, while remaining stubbornly resilient to long-term integration errors. Through experiments, we show that the method offers accuracy, efficiency, and scalability contributing to autonomous navigation in visually degraded environments. REFERENCES [1] J. Michalczyk, J. Quell, F. Steidle, M. G. M¨ uller, and S. Weiss, “Tightly-coupled factor graph formulation for radar-inertial odometry,” in 2024 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , 2024, pp. 3364–3370. [2] N. J. Abu-Alrub and N. A. Rawashdeh, “Fd-rio: Fast dense radar inertial odometry,” 2025. [Online]. Available: https://arxiv.org/abs/2505.07694 [3] K. Burnett, A. P. Schoellig, and T. D. Barfoot, “Continuous-time radar-inertial and lidar-inertial odometry using a gaussian process motion prior,” 2024. [Online]. Available: https://arxiv.org/abs/2402.06174 [4] D. C. Herraez, M. Zeller, D. Wang, J. Behley, M. Heidingsfeld, and C. Stachniss, “Rai-slam: Radar-inertial slam for autonomous vehicles,” 
+
+IEEE Robotics and Automation Letters , vol. 10, no. 6, pp. 5257–5264, 2025. [5] Y. Zhuang, B. Wang, J. Huai, and M. Li, “4d iriom: 4d imaging radar inertial odometry and mapping,” IEEE Robotics and Automation Letters ,vol. 8, no. 6, pp. 3246–3253, 2023. [6] M. Nissov, N. Khedekar, and K. Alexis, “Degradation resilient lidar-radar-inertial odometry,” 2024. [Online]. Available: https://arxiv.org/abs/2403.05332 [7] J. Zhang, H. Zhuge, Z. Wu, G. Peng, M. Wen, Y. Liu, and D. Wang, “4dradarslam: A 4d imaging radar slam system for large-scale environments based on pose graph optimization,” in 2023 IEEE International Conference on Robotics and Automation (ICRA) , 2023, pp. 8333–8340. [8] Y. Xu, Q. Huang, S. Shen, and H. Yin, “Incorporating point uncertainty in radar slam,” 2025. [Online]. Available: https://arxiv.org/abs/2402.16082 [9] S. Yang, Y. Cao, S. Eben Li, J. Wang, and S. Xu, “Rino: Accurate, robust radar-inertial odometry with non-iterative estimation,” IEEE Transactions on Automation Science and Engineering , vol. 22, p. 20420–20434, 2025. [Online]. Available: http://dx.doi.org/10.1109/TASE.2025.3601838 [10] P. K. Rai, E. Kowsari, N. Strokina, and R. Ghabcheloo, “Uncertainty-driven radar-inertial fusion for instantaneous 3d ego-velocity estimation,” 2025. [Online]. Available: https://arxiv.org/abs/2506.14294 [11] V.-J. ˇStironja, L. Petrovi´ c, J. Perˇ si´ c, I. Markovi´ c, and I. Petrovi´ c, “Impact of temporal delay on radar-inertial odometry,” 2025. [Online]. Available: https://arxiv.org/abs/2503.02509 [12] C. Kim, G. Bae, W. Shin, S. Wang, and H. Oh, “Ekf-based radar-inertial odometry with online temporal calibration,” IEEE Robotics and Automation Letters , vol. 10, no. 7, pp. 7230–7237, 2025. [13] D. Wang, H. Haag, D. C. Herraez, S. May, C. Stachniss, and A. N¨ uchter, “Doppler-slam: Doppler-aided radar-inertial and lidar-inertial simultaneous localization and mapping,” IEEE Robotics and Automation Letters , vol. 10, no. 9, p. 9438–9445, Sep. 2025. [Online]. Available: http://dx.doi.org/10.1109/LRA.2025.3595071 [14] J. Michalczyk, S. Weiss, and J. Steinbrener, “Learning point correspondences in radar 3d point clouds for radar-inertial odometry,” 2025. [Online]. Available: https://arxiv.org/abs/2506.18580 [15] Z. Han, S. Yang, M. Zhu, F. Zhang, S. Xu, M. Ghaffari, and J. Wang, “Equi-ro: A 4d mmwave radar odometry via equivariant networks,” 2026. [Online]. Available: https://arxiv.org/abs/2509.20674 [16] S. Wang, Y. Xie, Q. Liao, and W. Wang, “S 3e: Self-supervised state estimation for radar-inertial system,” 2025. [Online]. Available: https://arxiv.org/abs/2509.25984 [17] F. Dellaert and G. Contributors, “borglab/gtsam,” May 2022. [Online]. Available: https://github.com/borglab/gtsam) [18] M. Kaess, H. Johannsson, R. Roberts, V. Ila, J. Leonard, and F. Dellaert, “isam2: Incremental smoothing and mapping with fluid relinearization and incremental variable reordering,” in 2011 IEEE International Conference on Robotics and Automation , 2011, pp. 3281–3288. [19] S. Agarwal, K. Mierle, and T. C. S. Team, “Ceres Solver,” 10 2023. [Online]. Available: https://github.com/ceres-solver/ceres-solver [20] X. Hu, L. Zheng, J. Wu, R. Geng, Y. Yu, H. Wei, X. Tang, L. Wang, J. Jiao, and M. Liu, “Paloc: Advancing slam benchmarking with prior-assisted 6-dof trajectory generation and uncertainty estimation,” IEEE/ASME Transactions on Mechatronics ,vol. 29, no. 6, p. 4297–4308, Dec. 2024. [Online]. Available: http://dx.doi.org/10.1109/TMECH.2024.3362902 [21] W. Xu, Y. Cai, D. He, J. Lin, and F. Zhang, “Fast-lio2: Fast direct lidar-inertial odometry,” 2021. [Online]. Available: https://arxiv.org/abs/2107.06829 [22] F. Zhu, Y. Ren, and F. Zhang, “Robust real-time lidar-inertial initialization,” in 2022 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , 2022, pp. 3948–3955. [23] M. Grupp, “evo: Python package for the evaluation of odometry and slam.” https://github.com/MichaelGrupp/evo, 2017.
