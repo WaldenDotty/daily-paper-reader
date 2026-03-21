@@ -1,0 +1,1188 @@
+Title: Optimization-Based Formation Flight on Libration Point Orbits
+
+URL Source: https://arxiv.org/pdf/2603.09183v1
+
+Published Time: Wed, 11 Mar 2026 00:33:46 GMT
+
+Number of Pages: 37
+
+Markdown Content:
+# Optimization-Based Formation Flight on Libration Point Orbits ∗
+
+Yuri Shimane †
+
+University of California, Irvine, CA 92617 
+
+Purnanand Elango ‡, and Avishai Weiss §
+
+Mitsubishi Electric Research Laboratories, Cambridge, MA 02139 
+
+A model predictive control (MPC) framework is developed for station-keeping in spacecraft formation flight along libration point orbits. At each control period, the MPC policy solves a multi-vehicle optimal control problem (MVOCP) that tracks a reference trajectory, while enforcing path constraints on the relative motion of the formation. The control policy makes use of a limited set of control nodes consistent with operational constraints that allow only a small number of maneuver opportunities per revolution. To promote recursive feasibility, path constraints are progressively tightened across the prediction horizon. An isoperimetric reformulation of the constraints is used to prevent inter-sample violations. The resulting MVOCP is a nonconvex program, which is solved via sequential convex programming. The proposed approach is evaluated in a high-fidelity ephemeris model under realistic uncertainties for a formation along the near-rectilinear halo orbit (NRHO), and subject to path constraints on inter-spacecraft separation and relative Sun phase angle. The results demonstrate maintenance of a spacecraft formation that satisfies the path constraints with cumulative propellant consumption comparable to that of existing methods. 
+
+# Nomenclature 
+
+𝒂 = acceleration vector, m/s2
+
+F = reference frame 
+
+𝒇 = dynamics function 
+
+𝑔 = path constraint function 
+
+˜𝑔 = gradually tightened path constraint function 
+
+ℎ = specific angular momentum, m2/s
+
+ℓ = line of sight vector 
+
+> ∗
+
+A preliminary version of this work was presented as manuscript 25-717 at the AAS/AIAA Astrodynamics Specialist Conference, in Boston, MA, on Aug. 2025. 
+
+> †Assistant Professor, Department of Mechanical and Aerospace Engineering, Member AIAA; yshimane@uci.edu (Corresponding Author).
+> ‡Research Scientist, Member AIAA.
+> §Senior Principal Research Scientist, Member AIAA.
+> arXiv:2603.09183v1 [eess.SY] 10 Mar 2026
+
+𝑀 = number of spacecraft 
+
+𝑁 = number of control nodes 
+
+𝑁 rev = number of revolutions in prediction horizon 
+
+𝒓 = position vector, m
+
+𝑻 𝐴 𝐵 = transformation matrix from frame 𝐴 to frame 𝐵 𝑡 = time, s
+
+𝑼 = concatenated control vector, m/s
+
+𝒖 = impulsive control vector, m/s
+
+𝒗 = velocity vector, m/s
+
+𝑿 = concatenated state vector 
+
+𝒙 = spacecraft state vector 
+
+𝒚 = isoperimetric path constraint slack variable vector 
+
+𝜁 = constraint tightening function 
+
+𝜂 = constraint tightening margin 
+
+𝜃 = osculating true anomaly, rad 
+
+𝜅 = constraint tightening parameter 
+
+𝜇 = gravitational parameter, m3/s2
+
+𝜙 = relative sun phase angle, rad 
+
+R𝑛 = length-𝑛 column vector of real numbers 
+
+R𝑛 ×𝑚 = 𝑛 -by-𝑚 matrix of real numbers 
+
+R+ = positive real number 
+
+# I. Introduction 
+
+Safe guidance schemes for formation flight around libration point orbits (LPOs) are of growing interest due to their relevance to future constellation missions [ 1 , 2] as well as for proximity operations and rendezvous with assets such as the Gateway along its near rectilinear halo orbit (NRHO) [3–6]. Motivated by the success of the relative orbital elements (ROE)-based formulations for formation flight in Earth orbit, several works have developed ROE analogs for the LPO context [ 7 –12 ]. Specifically, the center manifold of the LPO, which corresponds to a non-expanding, oscillatory eigenvector of a periodic trajectory, gives rise to quasi-periodic motions that remain in the vicinity of the LPO, known as quasi-periodic tori (QPT). The natural tendency of QPTs to remain in the vicinity of an LPO has been exploited to provide dynamical insight into relative motion. For example, Calico and Wiesel [ 7 ] characterize Floquet modes to provide insight into relative motion in the vicinity of LPOs. 2Hsiao and Scheeres [ 8] introduced linearized ROE to design control laws that produce oscillatory motions similar to the motion in the center eigenspace in Scheeres et al. [ 9 ]. Recently, local toroidal coordinates (LTCs) [ 10 ] have emerged as a geometric framework for relative motion around LPOs in simplified dynamics models such as the circular restricted three-body problem (CR3BP). LTCs are constructed from the oscillatory Floquet mode associated with the center manifold and are well-suited for studying bounded relative motion and guidance problems. Elliott and Bosanac [ 11 ] developed a targeting-based guidance scheme in the LTC defined in the CR3BP and demonstrated its performance in a high-fidelity ephemeris model (HFEM). Takubo et al. [ 12 ] also adopted the LTC system and developed optimization-based guidance problems in the CR3BP that enforce passive safety through geometric constraints. However, leveraging the favorable properties of QPT for formation flight in the HFEM requires additional care. Because of the time-varying, aperiodic nature of the dynamics in the HFEM, LPO reference trajectories are no longer strictly periodic ∗. Consequently, the center manifold cannot be defined in the strict sense because a monodromy matrix is not well defined. Nevertheless, the local eigenstructure of LPO trajectories in simplified models such as the CR3BP has been shown to closely resemble that observed in HFEM dynamics [ 11 –13 ], and consequently, quasi-periodic motions analogous to QPTs can still be constructed in the HFEM, although typically only over finite durations [ 14 ]. In practice, these finite-duration QPTs can be generated from almost-purely oscillatory modes and used as reference trajectories for spacecraft formations. For example, Foss et al. [ 15 ] construct such finite-duration QPTs in the HFEM to define the desired relative motion within a spacecraft formation. Because of the similarity in eigenstructure, guidance strategies based on LTCs constructed in the CR3BP have been shown empirically to perform adequately for relative motion control in HFEM simulations [ 11 , 12 ]. The eigenmotion controller in [ 13 ] or the Cauchy-Green Tensor-based controller in [ 16 ] and references therein are examples in which non-expanding eigenmodes constructed directly in the HFEM over finite time intervals are utilized for station-keeping of a single spacecraft. While finite-duration QPTs provide a useful structure for designing the relative motion of a spacecraft formation, because these center modes are only approximate in the HFEM, establishing formal guarantees of passive safety remains challenging. To overcome this limitation, the control scheme in [ 15 ] consists of decoupled control blocks that achieve, respectively, absolute station-keeping, i.e., ensuring each spacecraft remains near the reference LPO, 
+
+relative station-keeping, i.e., maintaining the desired formation geometry, and passive safety using a control barrier function (CBF), in case maneuvers generated by either the absolute or relative station-keeping blocks are predicted to violate passive safety constraints. Although this modular architecture facilitates integration with existing absolute station-keeping controllers, the decoupling of these objectives introduces an inherent loss of propellant optimality. The sub-optimality of such a modular framework, along with its need for additional a posteriori check on safety through a CBF, motivate a guidance framework that simultaneously achieves absolute and relative station-keeping while enforcing safety and operational constraints directly within the control formulation, without relying on approximate dynamical  
+
+> ∗We maintain the term “libration point orbit ” to refer to quasi-periodic orbits around libration points in the HFEM.
+
+3structures. In this work, we develop a centralized model predictive control (MPC) framework that simultaneously regulates the absolute and relative motion of all spacecraft in the formation. In the proposed approach, passive safety requirements, together with other mission constraints on the formation geometry, are enforced explicitly as constraints within the optimization problem, thereby removing the need to explicitly rely on dynamic structures such as QPTs. By enforcing mission requirements on the formation directly through the optimization problem, dynamics-agnostic path constraints, such as bounded relative Sun phase angle, can be incorporated in a straightforward and systematic manner. The proposed optimization-based formulation provides a unified mechanism to simultaneously enforce formation safety, operational constraints, and propellant efficiency within a single control framework. The main contributions of this work are summarized as follows: 1) We formulate a multi-vehicle optimal control problem (MVOCP) that simultaneously achieves absolute and relative station-keeping, while enforcing mission requirements as continuous-time (CT) path constraints. The problem is posed with an operationally realistic control cadence of two maneuvers per LPO revolution. 2) The MVOCP is incorporated into an MPC scheme, where the CT path constraints are handled through (a) progressive constraint tightening along the prediction horizon to empirically promote recursive feasibility, and (b) an isoperimetric reformulation to enforce continuous-time constraint satisfaction (CTCS) [17, 18]. 3) The proposed MPC framework is evaluated via Monte Carlo simulations in the HFEM, incorporating initial orbit insertion, dynamics modeling, navigation, and control execution errors. CT path constraints are imposed on inter-spacecraft separation and relative optical visibility. The results demonstrate reliable station-keeping with projected annual propellant costs on the order of a few hundred cm /s per spacecraft, comparable to LTC-based approaches [15]. 
+
+A. Related Literature 
+
+1. Recursive Sequential Convex Programming 
+
+The reformulated MVOCP solved within the MPC framework results in a nonconvex nonlinear program, which we solve using sequential convex programming (SCP). In effect, this work extends the recently developed single-vehicle absolute station-keeping MPC along LPOs [ 19 ] to the multi-vehicle formation setting. SCP algorithms such as the Augmented Lagrangian (AL)-based method [ 20 ] and the prox-linear method [ 21 , 22 ] provide theoretical convergence guarantees to a local feasible minimizer of the original nonconvex problem. These methods have been successfully applied to cislunar trajectory optimization [ 23 – 25 ], making them well-suited for solving the MVOCP. In this work, we adopt the AL-based SCP of [20]. 42. Constraint Tightening 
+
+The constraint tightening scheme employed here is closely related to techniques used in robust MPC. Constraint tightening, together with a terminal constraint defined by a positively invariant set resulting from a linear feedback policy, can ensure recursive feasibility and constraint satisfaction in the presence of persistent, bounded disturbances [ 26 ]. In the context of robust MPC, constraint tightening has been employed in order to retain a margin that can be utilized in the future by a selected feedback policy, originally for linear MPC [ 27 –30 ] and recently for nonlinear MPC [ 31 ]. Tuning the tightening based on a feedback policy is challenging in the formation flight context: station-keeping along LPOs typically involves sparse maneuver opportunities, often limited to one or two control actions per orbit, with free-drift intervals spanning several days. Under such long control cadences, disturbances may perturb the system faster than the feedback compensation can regulate the system back to its desired response. Nevertheless, we show empirically that an appropriately tuned tightening schedule promotes recursive feasibility of the proposed MPC framework. 
+
+3. Continuous-Time Constraint Satisfaction 
+
+CT path constraints are inherently functional inequality constraints that must hold over an infinite set of time instants. To enforce such requirements within a finite-dimensional optimization problem, we adopt an isoperimetric reformulation [ 17 ], which enables continuous-time constraint satisfaction (CTCS) using finitely many constraints. The theoretical properties of incorporating isoperimetric constraints into nonlinear programming formulations are discussed in detail in Elango et al. [ 18 ]. The incorporation of isoperimetric constraints has been applied to the powered descent and landing problem [ 32 ], cislunar spacecraft rendezvous [ 33 ], and for geostationary satellite station-keeping [ 34 ]. Pavlasek et al. [ 34 ] consider an MPC scheme with CT path constraints for station-keeping of geostationary satellites and uses SCP to solve the receding-horizon optimization problems, similarly to the approach adopted in this work. 
+
+B. Paper Organization 
+
+The remainder of this paper is organized as follows: in Section II, we provide an overview of the HFEM dynamics, the NRHO reference trajectory, and the environment uncertainties considered in this study. Section III introduces the CT path constraints and formulates the MVOCP. Section IV presents the gradual constraint tightening and CTCS strategies, along with details of the SCP solution method, as applied to the MVOCP for station-keeping in the formation flight. The proposed method is demonstrated through Monte Carlo experiments presented in Section V. Finally, conclusions are provided in Section VI. 
+
+# II. Background 
+
+We present the background necessary to develop the proposed MVOCP and the corresponding MPC scheme. We begin by introducing the reference frames in II.A, followed by the HFEM dynamics in II.B. Then, we provide a short 5discussion on the NRHO with respect to which the spacecraft formation is studied in II.C. We then introduce the uncertainties that are considered within subsequent numerical experiments in II.D. 
+
+A. Reference Frames 
+
+Several reference frames are used throughout this work to describe spacecraft dynamics, environmental effects, and relative motion within the formation. The dynamics of each spacecraft is propagated in an inertial frame FInr in which Newton’s laws of motion apply, defined by the J2000 convention [ 35 ] and centered at the Moon. The dynamics also include terms related to the local gravitational potential irregularities, which are resolved in the principal axes frame of the Moon FPA [36 ]. The motion of the reference NRHO is often analyzed in the Moon-centered Earth-Moon rotating frame FEM , defined with basis vectors 
+
+𝒆 1 (𝑡 ) = −𝒅 ⊕ (𝑡 )∥ 𝒅 ⊕ (𝑡 )∥ 2
+
+, 𝒆 2 (𝑡 ) = 𝒆 3 (𝑡 ) × 𝒆 1 (𝑡 ), 𝒆 3 (𝑡 ) = 𝒅 ⊕ (𝑡 ) × 𝒗 ⊕ (𝑡 )∥ 𝒅 ⊕ (𝑡 ) × 𝒗 ⊕ (𝑡 )∥ 2
+
+, (1) where 𝒅 ⊕ and 𝒗 ⊕ denote the position and velocity vectors of the Earth relative to the Moon with respect to FInr . To analyze the formation trajectory together with illumination conditions, we also define the Moon-centered Sun–Moon rotating frame FSM ; the basis vectors for this frame are given by 
+
+𝒆 1 (𝑡 ) = −𝒅 ⊙ (𝑡 )∥ 𝒅 ⊙ (𝑡 )∥ 2
+
+, 𝒆 2 (𝑡 ) = 𝒆 3 (𝑡 ) × 𝒆 1 (𝑡 ), 𝒆 3 (𝑡 ) = 𝒅 ⊙ (𝑡 ) × 𝒗 ⊙ (𝑡 )∥ 𝒅 ⊙ (𝑡 ) × 𝒗 ⊙ (𝑡 )∥ 2
+
+, (2) where 𝒅 ⊙ and 𝒗 ⊙ denote the position and velocity vectors of the Sun relative to the Moon with respect to FInr . Frames relative to a reference trajectory provide key insight into formation flight [ 12 ]. Let 𝒓 ref and 𝒗 ref denote the position and velocity vectors of a reference trajectory in FInr . The radial-tangential-normal (RTN) frame FRTN is defined by 
+
+𝒆 1 (𝑡 ) = 𝒓 ref (𝑡 )∥ 𝒓 ref (𝑡 )∥ 2
+
+, 𝒆 2 (𝑡 ) = 𝒆 3 (𝑡 ) × 𝒆 1 (𝑡 ), 𝒆 3 (𝑡 ) = 𝒓 ref (𝑡 ) × 𝒗 ref (𝑡 )∥ 𝒓 ref (𝑡 ) × 𝒗 ref (𝑡 )∥ 2
+
+, (3) and centered at the reference trajectory. Finally, we denote by 𝑻 AB ∈ R3×3 the transformation matrix from FA to FB.
+
+B. High-Fidelity Ephemeris Model Dynamics 
+
+We consider a formation involving 𝑖 ∈ I = {1, . . . , 𝑀 } spacecraft. Let 𝒓 𝑖 ∈ R3 denote the position of the 
+
+𝑖 th spacecraft in FInr , and ¤𝒓 ≜ 𝒗 denote the time derivative of 𝒓 in FInr . The dynamics of the 𝑖 th spacecraft state 
+
+𝒙 𝑖 ≜ [𝒓 𝑇 𝑖 , 𝒗 𝑇 𝑖 ]𝑇 is given by 
+
+¤𝒙 𝑖 = 𝒇 (𝒙 𝑖 , 𝑡 ) = − 𝜇 𝑟 3
+
+> 𝑖
+
+𝒓 𝑖 + 𝒂 SH (𝒙 𝑖 , 𝑡 ) + 𝒂 SRP (𝒙 𝑖 , 𝑡 ) + ∑︁ 
+
+> 𝑏 ∈ {⊕ ,⊙}
+
+𝒂 3bd ,𝑏 (𝒙 𝑖 , 𝑡 ), (4) 6where 𝑟 𝑖 = ∥ 𝒓 𝑖 ∥2, 𝜇 is the gravitational parameter of the Moon, 𝒂 SH is the acceleration due to spherical harmonics terms of the Moon, 𝒂 SRP is the acceleration due to solar radiation pressure (SRP), and 𝒂 3bd ,𝑏 is the third-body acceleration due to body 𝑏 . In this work, we consider spherical harmonics terms up to 𝑛 max = 4th degree, the cannonball model for SRP, and third-body effects due to the Earth, denoted by (·) ⊕ , and the Sun, denoted by (·) ⊙ . Expressions for acceleration terms 𝒂 SH , 𝒂 SRP , and 𝒂 3bd ,𝑏 are provided in Appendix VII.A. We define the concatenated state 𝑿 ∈ R6𝑀 by collecting the states of all 𝑀 spacecraft, 
+
+𝑿 (𝑡 ) =
+
+
+
+𝒙 𝑇  
+
+> 0
+
+(𝑡 ) · · · 𝒙 𝑇 𝑀 −1 (𝑡 )
+
+𝑇 
+
+, (5) with a corresponding concatenated dynamics, 
+
+¤𝑿 (𝑡 ) = 𝒇 concat ( 𝑿 (𝑡 ), 𝑡 ) =
+
+
+
+𝒇 (𝒙 0 (𝑡 ), 𝑡 )
+
+...
+
+𝒇 (𝒙 𝑀 −1 (𝑡 ), 𝑡 )
+
+
+
+. (6) Note that while the dynamics are assumed to be identical for all spacecraft, such an assumption may be removed by defining independent dynamics 𝒇 𝑖 for each spacecraft. Each spacecraft is assumed to have impulsive control capability, resulting in instantaneous velocity changes. This approximation is justified by the typically small magnitude of station-keeping maneuvers required on NRHO, which are typically on the order of a few cm /s per maneuver [ 19 ]. Let 𝒖 𝑖,𝑘 ∈ R3 denote an impulsive control on the 𝑖 th spacecraft at time 𝑡 𝑘 . The state of the spacecraft at time 𝑡 > 𝑡 𝑘 is obtained by 
+
+𝒙 𝑖 (𝑡 ) = 𝒙 𝑖 (𝑡 𝑘 ) + 𝑩 𝑖 𝒖 𝑖 +
+
+∫ 𝑡 𝑡 𝑘 
+
+𝒇 (𝒙 𝑖 (𝜏 ), 𝜏 )d𝜏, (7) where 𝑩 𝑖 =
+
+
+
+03×3 𝑰 3
+
+𝑇 
+
+. For conciseness, we also define the concatenated control 𝑼 𝑘 ∈ R3𝑀 , such that (7) for all 𝑀 
+
+spacecraft is expressed as 
+
+𝑿 (𝑡 ) = 𝑿 (𝑡 𝑘 ) + 𝑩 concat 𝑼 𝑘 +
+
+∫ 𝑡 𝑡 𝑘 
+
+𝒇 concat ( 𝑿 (𝜏 ), 𝜏 )d𝜏, (8) where 𝑼 𝑘 =
+
+
+
+𝒖 𝑇  
+
+> 0,𝑘
+
+· · · 𝒖 𝑇 𝑀 −1,𝑘 
+
+𝑇 
+
+and 𝑩 concat = blkdiag (𝑩 0, . . . , 𝑩 𝑀 −1), where blkdiag (·) returns the block-wise diagonal concatenation of the input matrices. 7(a) J2000 inertial frame (b) Earth-Moon rotating frame (c) Sun-Moon rotating frame 
+
+Fig. 1 Reference Near Rectilinear Halo Orbit over 20 revolutions in Moon-centered frames C. Characteristics along Near Rectilinear Halo Orbit 
+
+We briefly introduce the NRHO and the osculating true anomaly, which is used to parameterize the station-keeping control scheme subsequently. In this work, we adopt the 15-year NRHO baseline originally generated by NASA [ 37 ]for the Gateway as the reference orbit for all spacecraft within the formation. Figure 1 shows the reference NRHO in FInr and the Earth-Moon rotating frame, FEM , over the course of 20 revolutions. In FEM , the NRHO exhibits its well-reported symmetry about the 𝑥𝑧 -plane. A thorough treatment of the dynamical properties of the NRHO is provided in [38] and references therein. 
+
+1. Osculating True Anomaly 
+
+Although motion along the NRHO is strongly influenced by non-Keplerian effects, the osculating true anomaly with respect to the Moon [39], 
+
+𝜃 = atan2 
+
+
+
+ℎ𝑣 𝑟 , ℎ 2/∥ 𝒓 ∥2 − 𝜇 
+
+
+
+, ℎ = ∥ 𝒓 × 𝒗 ∥2, 𝑣 𝑟 = 𝒓 · 𝒗 
+
+𝑟 , (9) provides a convenient angular parametrization of spacecraft position along the NRHO, which is useful for planning operations, such as specifying locations where the spacecraft maneuvers. For example, both CAPSTONE and the planned Gateway operations schedule maneuvers at 𝜃 = 200 ◦.Figure 2 shows the range, mean anomaly [ 39 ], and true anomaly histories over 5 revolutions of the reference NRHO. The true anomaly history illustrates the quick perilune transit at 𝜃 ∼ 0◦, and the much longer dwell near apolune for 
+
+160 ◦ ≤ 𝜃 ≤ 200 ◦. Because of the significant non-Keplerian effects along the NRHO trajectory, the mean anomaly does not evolve linearly with time. 8(a) Range with respect to the Moon (b) Mean and true anomaly with respect to the Moon 
+
+Fig. 2 Range and osculating anomaly history along reference Near Rectilinear Halo Orbit 
+
+2. Relative Motions 
+
+Within the context of this work, we denote the reference-relative state, 𝛿 𝒙 ref  
+
+> 𝑖
+
+, as the state of the 𝑖 th spacecraft, 𝛿 𝒙 ref  
+
+> 𝑖
+
+,relative to the reference NRHO, 
+
+𝛿 𝒙 ref  
+
+> 𝑖
+
+(𝑡 ) =
+
+
+
+𝛿 𝒓 ref  
+
+> 𝑖
+
+(𝑡 )
+
+𝛿 𝒗 ref  
+
+> 𝑖
+
+(𝑡 )
+
+
+
+= 𝒙 𝑖 (𝑡 ) − 𝒙 ref (𝑡 ). (10) The reference-relative state is critical for (1) defining “absolute” station keeping [ 15 , 19 ] with respect to the reference NRHO, and (2) defining the approximate † LTC [ 12 ]. The quantity 𝛿 𝒙 ref  
+
+> 𝑖
+
+is crucial for assessing the dynamical behavior of the formation. A detailed discussion of the dynamics of 𝛿 𝒙 ref  
+
+> 𝑖
+
+can be found in [12]. We also define the formation-relative state 𝛿 𝒙 𝛽 𝛼 between any two spacecraft 𝛼 and 𝛽 as the state of the 𝛼 th spacecraft relative to the 𝛽 th spacecraft, 
+
+𝛿 𝒙 𝛽 𝛼 (𝑡 ) =
+
+
+
+𝛿 𝒓 𝛽 𝛼 (𝑡 )
+
+𝛿 𝒗 𝛽 𝛼 (𝑡 )
+
+
+
+= 𝒙 𝛼 (𝑡 ) − 𝒙 𝛽 (𝑡 ). (11) The formation-relative state is used to enforce desired properties of the inter-spacecraft configuration within the formation, such as bounded separations or relative Sun phase angle. These requirements fall within the scope of “relative” station-keeping. Figure 3 illustrates the reference-relative and formation-relative vectors. There are advantages and disadvantages to using either separate absolute and relative station-keeping schemes, as in [ 15 ], or a unified station-keeping formulation, as adopted in this work. Decoupling the problem into absolute and relative components enables a modular guidance architecture. For example, a flight-proven absolute station-keeping strategy, such as the 𝑥 -axis crossing control scheme deployed on CAPSTONE [ 40 ], may be combined with a separate relative station-keeping controller. Furthermore, developing the relative station-keeping problem in reference-relative dynamics provides analytical insight into bounded motion, improving understanding of the formation’s dynamical 
+
+> †The LTC is only approximate due to the quasi-periodic nature of NRHO in the HFEM.
+
+9Fig. 3 Illustration of reference-relative and formation-relative position vectors 
+
+behavior. However, solving absolute and relative guidance problems separately is inherently suboptimal and typically leads to higher propellant usage. In contrast, a unified station-keeping formulation can simultaneously regulate absolute and relative motion, generally resulting in lower propellant consumption. Finally, in either approach, formation-relative path constraints can be introduced to enforce additional behaviors that may be difficult to capture through the QPT structure alone. 
+
+D. Uncertainties in Station Keeping Problem 
+
+Several sources of error impact both the absolute and relative motion of the spacecraft within the formation. Following previous works on station-keeping along the NRHO [ 41 , 42 ], we incorporate initial orbit insertion error, dynamics modeling error in the SRP term, navigation error, and control execution error. Here, we omit errors due to momentum wheel desaturation maneuvers occurring around perilune considered for the Gateway [ 41 ]. This choice, also used in [ 15 ], is based on the assumption that the spacecraft in the context of this work are smaller uncrewed assets, for which desaturation maneuvers need not happen around perilune, where the dynamics are most sensitive to errors. 
+
+1. Initial Orbit Insertion Error 
+
+We consider variation on the initial “starting state” of a given spacecraft to be perturbed by errors due to an inevitably imperfect execution of the orbit insertion maneuver. At the beginning of the mission 𝑡 0, the initial state for the 𝑖 th 
+
+spacecraft, 𝒙 𝑖 (𝑡 0), is defined by a desired reference-relative state 𝛿 𝒙 ref 
+
+> 𝑖, des
+
+, corrupted by insertion error, 
+
+𝒙 𝑖 (𝑡 0) = 𝒙 ref (𝑡 0) + 𝛿 𝒙 ref  
+
+> 𝑖, des
+
++ 𝛿 𝒙 𝑖, init , 𝛿 𝒙 𝑖, init =
+
+
+
+𝛿 𝒓 𝑖, init 
+
+𝛿 𝒗 𝑖, init 
+
+
+
+, 𝛿 𝒓 𝑖, init ∼ N ( 03×1, 𝝈 2 
+
+> 𝒓 ,init
+
+), 𝛿 𝒗 𝑖, init ∼ N ( 03×1, 𝝈 2
+
+> 𝒗 ,init
+
+),
+
+(12) where 𝝈 𝒓 ,init ∈ R3 and 𝝈 𝒗 ,init ∈ R3 are the initial position and velocity insertion standard deviations, respectively. 10 2. Dynamics Error 
+
+The SRP term causes the most significant modeling error within the HFEM (4) . Following [ 41 ], we consider Gaussian variations on SRP parameters realized between each control maneuver, 
+
+𝐴 /𝑚 = 𝐴 0/𝑚 0 (1 + 𝛿 𝐴 /𝑚 ), 𝛿 𝐴 /𝑚 ∼ N ( 0, 𝜎 2
+
+> 𝐴 /𝑚
+
+) (13a) 
+
+𝐶 𝑟 = 𝐶 𝑟 , 0 (1 + 𝛿𝐶 𝑟 ), 𝛿𝐶 𝑟 ∼ N ( 0, 𝜎 2 
+
+> 𝐶 𝑟
+
+), (13b) where 𝐴 0/𝑚 0 ∈ R and 𝐶 𝑟 , 0 ∈ R are average values, and 𝜎 𝐴 /𝑚 ∈ R and 𝜎 𝐶 𝑟 ∈ R are relative standard deviations. 
+
+3. Navigation Error 
+
+Navigation error is inherent to any space flight problem due to the existence of both modeling error in the dynamics and measurement error. Let ˆ𝑿 denote the estimate of 𝑿 . In this work, we model navigation error in terms of a normal distribution, 
+
+ˆ𝑿 =
+
+
+
+ˆ𝒙 0
+
+...
+
+ˆ𝒙 𝑀 −1
+
+
+
+=
+
+
+
+𝒙 0 + 𝛿 𝒙 𝑖, nav 
+
+...
+
+𝒙 𝑀 −1 + 𝛿 𝒙 𝑖, nav 
+
+
+
+, 𝛿 𝒙 𝑖, nav =
+
+
+
+𝛿 𝒓 𝑖, nav 
+
+𝛿 𝒗 𝑖, nav 
+
+
+
+, 𝛿 𝒓 𝑖, nav ∼ N ( 03×1, 𝝈 2 
+
+> 𝒓 ,nav
+
+), 𝛿 𝒗 𝑖, nav ∼ N ( 03×1, 𝝈 2
+
+> 𝒗 ,nav
+
+),
+
+(14) where 𝝈 𝒓 ,nav ∈ R3 is the position standard deviation and 𝝈 𝒗 ,nav ∈ R3 is the velocity standard deviation of the navigation error, respectively. 
+
+4. Control Execution Error 
+
+Control execution error exists due to the discrepancy between the control model within the control problem and the actual hardware on the spacecraft. Following common practice [ 41 , 42 ], the control execution error is modeled based on the Gates model [ 43 ], which combines absolute magnitude error, a relative magnitude error, and a direction error. Let 𝒖 𝑖,𝑘 ∈ R3 denote the commanded impulse by the controller for spacecraft 𝑖 at 𝑡 𝑘 . The actual executed control, ˜𝒖 𝑖,𝑘 ,is given by 
+
+˜𝒖 𝑖,𝑘 = 𝑻 (𝛿𝜑 )  𝒖 𝑖,𝑘 + 𝛿 𝒖 abs + 𝛿 𝒖 rel 
+
+ , (15) where 𝛿 𝒖 abs is the absolute magnitude error with standard deviation 𝜎 𝑢 abs ,
+
+𝛿 𝒖 abs = 𝛿𝑢 abs 
+
+𝒖 𝑖,𝑘 
+
+∥𝒖 𝑖, 𝑗 ∥2
+
+, 𝛿𝑢 abs ∼ N ( 0, 𝜎 2 
+
+> 𝑢 abs
+
+), (16) 11 𝛿 𝒖 rel is the relative magnitude error with standard deviation 𝜎 𝑢 rel ,
+
+𝛿 𝒖 rel = 𝛿𝑢 rel 𝒖 𝑖,𝑘 , 𝛿𝑢 rel ∼ N ( 0, 𝜎 2 
+
+> 𝑢 rel
+
+), (17) and 𝑻 (𝛿𝜑 ) is the direction error with standard deviation 𝜎 𝛿 𝜑 ,
+
+𝑻 (𝛿𝜑 ) = cos (𝛿𝜑 ) 𝑰 3 + sin (𝛿𝜑 )𝒊 × + [ 1 − cos (𝛿𝜑 )] 𝒊𝒊 𝑇 , 𝛿𝜑 ∼ N ( 0, 𝜎 2 
+
+> 𝛿 𝜑
+
+), (18) where 𝒊 ∈ R3 is a random unit vector, and 𝒊 × ∈ R3×3 is the skew-symmetric form of 𝒊 .
+
+# III. Multi-Vehicle Optimal Control Problem for Formation Flight 
+
+This Section develops the MVOCP. We first introduce the prediction horizon of the OCP. We then define path constraints of interest in III.B. These constraints are incorporated into the full OCP formulation, a nonconvex optimization problem with CT path constraints, developed in III.C. 
+
+A. Prediction Horizon 
+
+A key requirement for operating spacecraft in NRHO is to keep custody of its orbit with a low station-keeping cadence; both the CAPSTONE [ 40 ] maneuvers and Gateway [ 41 ] plans to maneuver once per revolution at 𝜃 ref = 200 ◦.In the context of formation flight, Foss et al. [ 15 ] considers two maneuvers per revolution, at 𝜃 ref = 160 ◦ and 200 ◦. The maneuver times along the NRHO are chosen to be consistent with previous studies [ 15 ] and operationally relevant: the two maneuver times mark the beginning and end of the apolune pass, where the dynamics are less sensitive and payload operations are expected to occur. This cadence still leaves over ∼ 4 days between the two maneuvers around apolune, and allows for higher controllability of the formation introduced by the additional maneuver per revolution. We consider a prediction horizon consisting of 𝑁 rev revolutions, with two maneuvers per revolution, placed at times 
+
+𝑡 when 𝜃 ref (𝑡 ) = 160 ◦ and 200 ◦. Since the MPC is re-instantiated at each maneuver, the initial time of the prediction horizon alternates between 𝑡 s.t. 𝜃 ref = 160 ◦ and 200 ◦. Let (·) 𝑗 | 𝑘 denote the quantity predicted at 𝑗 ∈ J = {0, . . . , 𝑁 −1}
+
+time increments ahead of the current state estimate 𝒙 (𝑡 𝑘 ) at time 𝑡 𝑘 , s.t. 𝑁 = 1 + 2𝑁 rev . The times along the prediction horizon are denoted by 𝑡 0| 𝑘 , . . . , 𝑡 𝑁 −1| 𝑘 . Note that either 𝜃 ref (𝑡 0| 𝑘 ) = 𝜃 ref (𝑡 2| 𝑘 ) = . . . = 𝜃 ref (𝑡 𝑁 −1| 𝑘 ) = 160 ◦ and 
+
+𝜃 ref (𝑡 1| 𝑘 ) = 𝜃 ref (𝑡 3| 𝑘 ) = . . . = 𝜃 ref (𝑡 𝑁 −2| 𝑘 ) = 200 ◦ or vice-versa. 
+
+B. Path Constraints 
+
+We consider two sets of path constraints that are relevant for a formation flight context between multiple spacecraft. The first set consists of lower and upper bounds on the relative separation between the spacecraft; the lower bound ensures the formation is safe from collision, while the upper bound is motivated by operations, ensuring, for example, 12 that the data rate between the spacecraft is above a prescribed level. The second set of constraints ensures the relative Sun phase angle of each spacecraft is bounded; in this way, each spacecraft is optically observable by the other. We enforce the minimum separation constraint throughout the entire prediction due to its direct impact on mission safety. The maximum separation constraint and the bounds on the relative Sun phase angle are enforced continuously during time windows where the true anomaly along the reference NRHO, 𝜃 ref (𝑡 ), is between 160 ◦ and 200 ◦. We hereafter refer to the trajectory portion at 𝑡 where 160 ◦ ≤ 𝜃 ref (𝑡 ) ≤ 200 ◦ as the apolune segment , and the trajectory portion at 𝑡 where −160 ◦ ≤ 𝜃 ref (𝑡 ) ≤ 160 ◦ as the perilune segment . This decision is made based on the assumption that during the rapid perilune transition from 𝑡 where 𝜃 ref (𝑡 ) = 200 ◦ to 𝜃 ref (𝑡 ) = 160 ◦, it is 1) operationally unlikely to require communication between each spacecraft continuously, especially as that would equate to requiring rapid slewing maneuvers, and 2) continuously enforcing would potentially require a third control maneuver to occur near perilune, where the dynamics is most sensitive and erroneous maneuvers may lead to severe deviation of the intended motion. 
+
+1. Bounded Separation 
+
+The bounded separation constraints ensure the distance between any two spacecraft in the formation is bounded from below and above by [Δ𝑟 min , Δ𝑟 max ], where 0 < Δ𝑟 min < 𝛿𝑟 𝛽 𝛼 < Δ𝑟 max for all (𝛼, 𝛽 ) ∈ C , where C is the set of combinations of pairs out of 𝑀 spacecraft. The lower bound ensures any two spacecraft maintain a safe distance from one another and avoid collision. The upper bound ensures any two spacecraft maintain a distance that is suitable for inter-spacecraft communication and/or observation. The bounded separation constraints are 
+
+𝑔 Δ𝑟 min , 𝛼𝛽 := Δ 𝑟 min − ∥ 𝒓 𝛼 (𝑡 ) − 𝒓 𝛽 (𝑡 )∥ 2 ≤ 0 ∀( 𝛼, 𝛽 ) ∈ C , 𝑡 ∈ { 𝑡 0| 𝑘 , 𝑡 𝑁 −1| 𝑘 }, (19a) 
+
+𝑔 Δ𝑟 max , 𝛼𝛽 := ∥ 𝒓 𝛼 (𝑡 ) − 𝒓 𝛽 (𝑡 )∥ 2 − Δ𝑟 max ≤ 0 ∀( 𝛼, 𝛽 ) ∈ C , 𝑡 ∈ { 𝑡 0| 𝑘 ≤ 𝑡 ≤ 𝑡 𝑁 −1| 𝑘 s.t. 160 ◦ ≤ 𝜃 ref (𝑡 ) ≤ 200 ◦ }. (19b) Note that while constraints (19a) is enforced continuously over the entire prediction horizon, (19b) is enforced continuously over apolune segments. 
+
+2. Relative Sun Phase Angle 
+
+We introduce a constraint on the phase angle of a spacecraft as observed by another spacecraft to ensure optical and/or radio frequency communications are not inhibited by the Sun. We define the relative Sun phase angle , 𝜙 𝛼𝛽 , as the phase angle of spacecraft 𝛼 as observed by spacecraft 𝛽 ,
+
+𝜙 𝛼𝛽 (𝑡 ) = cos −1  ℓ𝛼𝛽 (𝑡 ) · ℓ𝛼 ⊙ (𝑡 ) , (20) 13 (a) 𝜙 𝛼𝛽 , formed by spacecraft 𝛼 relative to spacecraft 𝛽 (b) 𝜙 𝛽 𝛼 , formed by spacecraft 𝛽 relative to spacecraft 𝛼 
+
+Fig. 4 Relative Sun phase angles 𝜙 𝛼𝛽 and 𝜙 𝛽 𝛼 
+
+where ℓ𝛼𝛽 and ℓ𝛼 ⊙ are the lines of sight vector from spacecraft 𝛼 to 𝛽 and from spacecraft 𝛼 to the Sun, respectively, 
+
+ℓ𝛼𝛽 (𝑡 ) = 𝒓 𝛽 (𝑡 ) − 𝒓 𝛼 (𝑡 )∥ 𝒓 𝛽 (𝑡 ) − 𝒓 𝛼 (𝑡 )∥ 2
+
+, ℓ𝛼 ⊙ (𝑡 ) = 𝒓 ⊙ (𝑡 ) − 𝒓 𝛼 (𝑡 )∥ 𝒓 ⊙ (𝑡 ) − 𝒓 𝛼 (𝑡 )∥ 2
+
+. (21) Figure 4 illustrates 𝜙 𝛼𝛽 as well as the reciprocal 𝜙 𝛽 𝛼 , the latter being the phase angle of spacecraft 𝛽 as observed by spacecraft 𝛼 . Note that since the distance between the two spacecraft is much smaller than the distance from either spacecraft to the Sun, 𝜙 𝛼𝛽 + 𝜙 𝛽 𝛼 ≈ 180 ◦.To prevent the interference of the Sun with the inter-spacecraft link, we ensure that 𝜙 𝛼𝛽 for each (𝛼, 𝛽 ) pair is bounded from below and above by [𝜙 min , 𝜙 max ], where 0 < 𝜙 min < 𝜙 max < 𝜋 . We thus enforce 
+
+𝑔 𝜙 min , 𝛼𝛽 := 𝜙 min − 𝜙 𝛼𝛽 (𝑡 ) ≤ 0 ∀( 𝛼, 𝛽 ) ∈ C , 𝑡 ∈ { 𝑡 0| 𝑘 ≤ 𝑡 ≤ 𝑡 𝑁 −1| 𝑘 s.t. 160 ◦ ≤ 𝜃 ref (𝑡 ) ≤ 200 ◦ }, (22a) 
+
+𝑔 𝜙 max , 𝛼𝛽 := 𝜙 𝛼𝛽 (𝑡 ) − 𝜙 max ≤ 0 ∀( 𝛼, 𝛽 ) ∈ C , 𝑡 ∈ { 𝑡 0| 𝑘 ≤ 𝑡 ≤ 𝑡 𝑁 −1| 𝑘 s.t. 160 ◦ ≤ 𝜃 ref (𝑡 ) ≤ 200 ◦ }. (22b) For the relative phase angle constraints, both the lower bound (22a) and upper bound (22b) are enforced continuously over apolune segments. 
+
+C. Problem Formulation 
+
+We define the MVOCP, which seeks to find the optimal controls for maintaining the formation in the vicinity of the reference NRHO while enforcing the path constraints from Section III.B within the finite prediction horizon, using the minimum total propellant consumption. Let 𝒖 0| 𝑘 , . . . , 𝒖 𝑁 −1| 𝑘 denote the control vectors at each control node. Based on our choice of prediction horizon with 𝑁 rev revolutions and 2 maneuvers per revolution, 𝑁 = 2𝑁 rev + 1. The 14 finite-horizon MVOCP is 
+
+min        
+
+> 𝑿 0|𝑘 ,..., 𝑿 𝑁 −1|𝑘
+> 𝑼 0|𝑘 ,..., 𝑼 𝑁 −1|𝑘
+> 𝑀 −1
+
+∑︁  
+
+> 𝑖 =0
+> 𝑁 −1
+
+∑︁ 
+
+> 𝑗 =0
+
+∥𝒖 𝑖, 𝑗 | 𝑘 ∥2 (23a) s.t. 𝑿 𝑗 +1| 𝑘 = 𝑿 𝑗 | 𝑘 + 𝑩 concat 𝑼 𝑗 | 𝑘 +
+
+∫ 𝑡 𝑗 +1|𝑘  
+
+> 𝑡 𝑗 |𝑘
+
+𝒇 concat ( 𝑿 𝑗 | 𝑘 (𝑡 ), 𝑡 )d𝑡 ∀ 𝑗 ∈ J \ { 𝑁 − 1} (23b) 
+
+𝑿 0| 𝑘 = ˆ𝑿 (𝑡 𝑘 ) (23c) 
+
+∥ 𝒓 𝑖, 𝑁 −1| 𝑘 − 𝒓 ref ,𝑖 (𝑡 𝑁 −1| 𝑘 )∥ 2 ≤ 𝜖 𝑟 ∀𝑖 ∈ I (23d) 
+
+∥𝒗 𝑖, 𝑁 −1| 𝑘 + 𝒖 𝑖, 𝑁 −1| 𝑘 − 𝒗 ref ,𝑖 (𝑡 𝑁 −1| 𝑘 )∥ 2 ≤ 𝜖 𝑣 ∀𝑖 ∈ I (23e) eqn. (19), (22) The objective (23a) aims to minimize the total propellant used by all spacecraft in the constellation. Constraints (23b) enforce the dynamics via multiple shooting, discretized at each control node; constraint (23c) fixes the initial state to the state estimate at 𝑡 𝑘 ; constraints (23d) and (23e) ensure all spacecraft in the formation track their respective absolute reference trajectories; constraints (19a) , and (19b) bounds the inter-spacecraft separation; finally, constraints (22a) and (22b) bounds the inter-spacecraft relative Sun phase angle. While we enforce no constraint on the maximum control magnitude, a typical station-keeping maneuver on the NRHO is on the order of at most a few cm /s per maneuver [ 19 , 41 ], which can be executed effectively as an impulse by a typical lunar mission spacecraft [40]. Two aspects of problem (23) still require our attention. Firstly, since this OCP is solved as part of an MPC scheme, we must ensure recursive feasibility under uncertainty; specifically, once a solution at 𝑡 𝑘 is obtained, a corrupted control 
+
+𝑼 0| 𝑘 + 𝛿 𝑼 is executed, and the true state 𝑿 (𝑡 𝑘 ) is propagated until 𝑡 𝑘 +1, the instantiated OCP at 𝑡 𝑘 +1 with state estimate 
+
+ˆ𝑿 (𝑡 𝑘 +1) must admit a feasible solution. Second, constraints (19) and (22) are defined in continuous-time, which require either a discrete approximation, which risks inter-sample violation, or an isoperimetric reformulation. These two aspects are treated in Sections IV.A and IV.B, respectively. 
+
+# IV. Solution Approach for Receding Horizon Control 
+
+In this Section, we address issues encountered due to the recursive nature of the station-keeping problem, where the MVOCP must be solved repeatedly in the presence of uncertainty. 
+
+A. Constraints Tightening 
+
+Problem (23) is infeasible if at 𝑡 𝑘 , the state estimate ˆ𝑿 (𝑡 𝑘 ) violates one of the path constraints (19) and (22). Such an infeasibility is prone to occur in the presence of uncertainties. One approach to remedy this infeasibility issue is to reformulate (19) and (22) using chance constraints, incorporating uncertainties due to state estimation error, model 15 mismatch, and control execution error. Chance constraints reformulated in deterministic form have been considered in several past works on spacecraft guidance problems [ 24 , 33 , 44 – 46 ]. In this work, we adopt a gradual constraint tightening scheme, where a heuristic tightening function is introduced to empirically promote recursive feasibility. The advantage of this approach is its practical applicability; with an appropriate choice and tuning of the tightening function, we demonstrate successful recursive station-keeping with uncertainties undergoing nonlinear transformations. An empirical approach also avoids the MPC from being excessively conservative, making it suitable for in-orbit applications where control effort, i.e., the onboard propellant, is a scarce resource. Consider a generic continuous-time state path constraint, 
+
+𝑔 ( 𝑿 (𝑡 ), 𝑡 ) ≤ 0 𝑡 ∈ [ 𝑡 0| 𝑘 , 𝑡 𝑁 −1| 𝑘 ]. (24) We define a gradually tightened constraint ˜𝑔 ( 𝑿 (𝑡 ), 𝑡 ),
+
+˜𝑔 ( 𝑿 (𝑡 ), 𝑡 ) = 𝑔 ( 𝑿 (𝑡 ), 𝑡 ) + 𝜁 (𝑡, 𝑡 0| 𝑘 , 𝑡 𝑁 −1| 𝑘 ) ≤ 0 𝑡 ∈ [ 𝑡 0| 𝑘 , 𝑡 𝑁 −1| 𝑘 ], (25) where 𝜁 is a monotonically increasing tightening function , with 𝜁 (𝑡 0| 𝑘 , 𝑡 0| 𝑘 , 𝑡 𝑁 −1| 𝑘 ) = 0. The rationale behind enforcing (25) in lieu of (24) is that for 𝑡 > 𝑡 0| 𝑘 within the prediction horizon at 𝑡 𝑘 , an extra margin is built in to a feasible solution due to the term 𝜁 . With an appropriately chosen 𝜁 , the solution to the OCP instantiated at 𝑡 𝑘 satisfying (25) includes a margin 𝜁 (𝑡 1| 𝑘 , 𝑡 0| 𝑘 , 𝑡 𝑁 −1| 𝑘 ) > 0 at 𝑡 1| 𝑘 , such that at the next recursion at 𝑡 𝑘 +1, the initial state 𝑿 0| 𝑗 +1 satisfies the original constraint (24) despite the presence of uncertainties. The 𝜁 function is designed to be as intuitive and to use as few parameters as possible, 
+
+𝜁 (𝑡, 𝑡 0| 𝑘 , 𝑡 𝑁 −1| 𝑘 ) = 𝜂 − 1
+
+𝜅𝑡 ratio + 1/𝜂 , 𝑡 ratio = 𝑡 − 𝑡 0| 𝑘 
+
+𝑡 𝑁 −1| 𝑘 − 𝑡 0| 𝑘 
+
+, (26) where 𝜂 is a margin with the same unit as 𝑔 , and 𝜅 is a tightening parameter, where a larger 𝜅 results in faster tightening. To illustrate the impact of gradual constraint tightening, consider the lower-bound inter-spacecraft separation constraint (19a) as an example, with Δ𝑟 min = 10 km and margin 𝜂 Δ𝑟 min = 25 km . Figure 5 shows forbidden inter-spacecraft regions as 𝜅 
+
+is varied from 10 4 to 10 6, where the red-shaded region is restricted by the original path constraint, and the purple-shaded region is restricted by the additional tightening term. 16 (a) 𝜅 = 10 4 (b) 𝜅 = 10 5   
+
+> (c) 𝜅 =10 6
+
+Fig. 5 Gradually tightened minimum separation constraint ( Δ𝑟 min = 10 km , 𝜂 Δ𝑟 min = 25 km )B. Continuous-Time Constraint Satisfaction 
+
+Satisfying path constraints (19) and (22) requires either a discrete-time approximation or an isoperimetric reformulation. The former involves simply enforcing 
+
+𝑔 ( 𝑿 𝑘 , 𝑡 𝑘 ) ≤ 0 𝑗 ∈ J . (27) However, at 𝑡 𝑘 < 𝑡 < 𝑡 𝑘 +1, there are no mechanisms that ensure the path constraints are not violated. Instead, in this work, we employ isoperimetric reformulation to avoid the risk of inter-sample violation altogether. A generic continuous-time state path constraint, 
+
+𝑔 ( 𝑿 (𝑡 ), 𝑡 ) ≤ 0 𝑡 ∈ [ 𝑡 0| 𝑘 , 𝑡 𝑁 −1| 𝑘 ], (28) can be equivalently expressed in isoperimetric form as 
+
+∫ 𝑡 𝑗 +1|𝑘  
+
+> 𝑡 𝑗 |𝑘
+
+max [0, 𝑔 ( 𝑿 (𝑡 ), 𝑡 )] 2d𝑡 = 0 ∀ 𝑗 ∈ J \ { 𝑁 − 1}, (29) where the integrand is made differentiable through the square operator. In the case of OCP (23) , 𝑔 (·) correspond to constraints (19a), (19b), (22a), and (22b). Path constraints reformulated as (29) can be enforced by introducing a slack state variable 𝑦 for each path constraint, with fictitious dynamics 
+
+¤𝑦 = max [0, 𝑔 ( 𝑿 (𝑡 ), 𝑡 )] 2, (30) 17 and boundary conditions 
+
+𝑦 𝑗 +1| 𝑘 = 𝑦 𝑗 | 𝑘 ∀ 𝑗 ∈ J \ { 𝑁 − 1}. (31) Notably, (31) results in linearly dependent gradients with dynamics constraints for 𝑦 , resulting in failure to meet linear independence constraint qualification (LICQ). As a numerical remedy, we introduce a small tolerance 𝜖 LICQ and relax (31) as 
+
+𝑦 𝑗 +1| 𝑘 − 𝑦 𝑗 | 𝑘 ≤ 𝜖 LICQ ∀ 𝑗 ∈ J \ { 𝑁 − 1}. (32) In practice, 𝜖 LICQ can be made arbitrarily small, e.g. 10 −6, such that the physical path constraint violations are negligibly small, while ensuring the OCP is solved with sufficient numerical stability. 
+
+C. Reformulated Optimal Control Problem 
+
+The OCP (23) is reformulated by taking into account the gradual path-constraint tightening from Section IV.A and the isoperimetric path-constraint reformulation from Section IV.B. Let 𝒚 ∈ R𝐿 denote the slack state variables corresponding to 𝐿 continuous-time path constraints, and 𝒁 ∈ R6𝑀 +𝐿 denote the augmented state variables, 
+
+𝒁 (𝑡 ) =
+
+
+
+𝑿 𝑇 (𝑡 ) 𝒚 𝑇 (𝑡 )
+
+𝑇 
+
+, (33) with corresponding augmented dynamics 𝒇 aug , composed of the concatenated dynamics 𝒇 concat from (6) and slack dynamics 𝒇 slack ,
+
+¤𝒁 (𝑡 ) =
+
+
+
+¤𝑿 (𝑡 )¤𝒚 (𝑡 )
+
+
+
+= 𝒇 aug (𝒁 (𝑡 ), 𝑡 ) =
+
+
+
+𝒇 concat ( 𝑿 (𝑡 ), 𝑡 )
+
+𝒇 slack ( 𝑿 (𝑡 ), 𝑡 )
+
+
+
+, 𝒇 slack ( 𝑿 (𝑡 ), 𝑡 ) =
+
+
+
+𝑊 0 max [0, 𝑔 0 ( 𝑿 (𝑡 ), 𝑡 )] 2
+
+...𝑊 𝐿 −1 max [0, 𝑔 𝐿 −1 ( 𝑿 (𝑡 ), 𝑡 )] 2
+
+
+
+, (34) where 𝑊 0, . . . , 𝑊 𝐿 −1 are scaling parameters used to adjust the scale of the state around unity to improve numerical conditions when integrating 𝒇 aug . Note that since derivatives of 𝒚 defined according to (30) do not depend on 𝒚 
+
+themselves, the argument of 𝒇 slack can be reduced to 𝑿 instead of 𝒁 . While, as a consequence, the argument of 𝒇 aug 
+
+should also be 𝑿 instead of 𝒁 , we retain 𝒁 to clarify that 𝒇 aug define the dynamics of 𝒁 . With the bounded separation constraints (19a) and (19b) and the relative phase angle constraints (22a) and (22b) for a problem involving 𝑀 spacecraft, 18 𝐿 = 4 × 𝑀 𝐶 2. The reformulated MVOCP is given by 
+
+min        
+
+> 𝒁 0|𝑘 ,..., 𝒁 𝑁 −1|𝑘
+> 𝑼 0|𝑘 ,..., 𝑼 𝑁 −1|𝑘
+> 𝑀 −1
+
+∑︁  
+
+> 𝑖 =0
+> 𝑁 −1
+
+∑︁ 
+
+> 𝑗 =0
+
+∥𝒖 𝑖, 𝑗 | 𝑘 ∥2 (35a) s.t. 𝒁 𝑗 +1| 𝑘 = 𝒁 𝑗 | 𝑘 +
+
+
+
+𝑩 concat 
+
+0𝑞 ×3𝑀 
+
+
+
+𝑼 𝑗 | 𝑘 +
+
+∫ 𝑡 𝑗 +1|𝑘  
+
+> 𝑡 𝑗 |𝑘
+
+𝒇 aug (𝒁 (𝑡 ), 𝑡 )d𝑡 ∀ 𝑗 ∈ J \ { 𝑁 − 1} (35b) 
+
+𝒚 𝑗 +1| 𝑘 − 𝒚 𝑗 | 𝑘 ≤ 𝜖 LICQ 1𝐿 ×1 ∀ 𝑗 ∈ J \ { 𝑁 − 1} (35c) eqn. (23c), (23d), (23e) 
+
+D. Sequential Convex Programming 
+
+Problem (35) is solved via SCP [ 47 , 48 ]. In an SCP scheme, a convexified subproblem is solved iteratively by linearizing and/or convexifying the original OCP with respect to a reference solution ‡. The reference solution is updated by an appropriate step-acceptance criterion, and subproblems are successively solved until a local optimal solution to the original nonconvex problem is found. In case of (35) , the only nonconvexity occurs on the dynamics constraints (35b) .We adopt the augmented Lagrangian SCP from [ 20 ] due to its successful adoption to cislunar trajectory design problems [ 19 , 23 , 49 ]. Two caveats when implementing an SCP scheme are artificial unboundedness and artificial infeasibility [ 48 ]. To avoid these issues, the augmented Lagrangian SCP incorporates slack variables on the nonconvex constraints, which are penalized in an augmented objective function, and trust-region constraints, which limit the search space of the decision variables to a neighborhood of the reference solution, ensuring the linearization provides a reliable prediction of the nonconvex behavior. Let (·) (𝑙 ) denote quantities within the SCP algorithm during its 𝑙 th iteration, and let ¯(·) (𝑙 ) denote the reference solution at the 𝑙 th iteration. Let 𝝃 𝑗 | 𝑘 ∈ R6𝑀 +𝐿 denote the slack variables associated with the 𝑘 th dynamics constraint (35b) , with corresponding Lagrange multipliers 𝝀 (𝑙 )   
+
+> 𝑗 |𝑘
+
+∈ R6𝑀 +𝐿 , let 𝚫 (𝑙 ) ∈ R6𝑀 +𝐿  
+
+> +
+
+denote the vector of trust-regions on the augmented state vector components, and let 𝑤 (𝑙 ) ∈ R+ denote the penalty weight   
+
+> ‡The reference solution within the SCP is the iteratively updated trajectory of all spacecraft in the formation, and is unrelated to the tracked
+> reference NRHO .
+
+19 parameter. The convex subproblem corresponding to (35) is 
+
+min           
+
+> 𝒁 0|𝑘 ,..., 𝒁 𝑁 −1|𝑘
+> 𝑼 0|𝑘 ,..., 𝑼 𝑁 −1|𝑘
+> 𝝃 0|𝑘 ,..., 𝝃 𝑁 −2|𝑘
+> 𝑀 −1
+
+∑︁  
+
+> 𝑖 =0
+> 𝑁 −1
+
+∑︁ 
+
+> 𝑗 =0
+
+∥𝒖 𝑖, 𝑗 | 𝑘 ∥2 + 
+
+> 𝑁 −2
+
+∑︁ 
+
+> 𝑘 =0
+
+
+
+𝝀 𝑇 𝑗 | 𝑘 𝝃 𝑗 | 𝑘 + 𝑤 (𝑙 )
+
+2 𝝃 𝑇 𝑗 | 𝑘 𝝃 𝑗 | 𝑘 
+
+
+
+(36a) s.t. 𝒁 𝑗 +1| 𝑘 = 𝚿 𝑗 +1, 𝑗 | 𝑘 
+
+©«
+
+𝒁 𝑗 | 𝑘 +
+
+
+
+𝑩 concat 
+
+0𝑞 ×3𝑀 
+
+
+
+𝑼 𝑗 | 𝑘 
+
+ª®®®¬
+
++ 𝑪 𝑗 | 𝑘 + 𝝃 𝑗 | 𝑘 ∀ 𝑗 ∈ J \ { 𝑁 − 1} (36b) 
+
+𝒁 𝑗 | 𝑘 − ¯𝒁 (𝑙 )   
+
+> 𝑗 |𝑘
+
+≤ 𝚫 (𝑙 ) ∀ 𝑗 ∈ J \ { 𝑁 − 1} (36c) eqn. (23c), (23d), (23e), (35c) In the linearized dynamics constraint (36b) , 𝚿 𝑗 +1, 𝑗 | 𝑘 is the state-transition matrix (STM) for the augmented state 𝒁 , and 
+
+𝑪 𝑗 | 𝑘 contains the dynamics terms along the current reference solution, 
+
+𝑪 𝑗 | 𝑘 = ¯𝒁 𝑗 | 𝑘 +
+
+∫ 𝑡 𝑗 +1|𝑘  
+
+> 𝑡 𝑗 |𝑘
+
+𝒇 aug ( ¯𝒁 (𝑡 ), 𝑡 )d𝑡 
+
+!
+
+− 𝚿 𝑗 +1, 𝑗 | 𝑘 
+
+©«
+
+¯𝒁 𝑗 | 𝑘 +
+
+
+
+𝑩 concat 
+
+0𝑞 ×3𝑀 
+
+
+
+¯𝑼 𝑗 | 𝑘 
+
+ª®®®¬
+
+, (37) and constraints (36c) enforce the trust-region, where the inequality is applied element-wise. The STMs 𝚿 𝑗 +1, 𝑗 | 𝑘 are computed by integrating the state 𝒁 along with the STM. Expressions for the Jacobian of the augmented system 𝒇 aug is presented in Appendix VII.B. The convex subproblem (36) is almost exactly an example of the class of problems considered in [ 20 ] with the exception of (36c) , where we impose the element-wise inequality with 𝚫 (𝑙 ) , whereas [ 20 ] uses a scalar Δ and imposes 
+
+∥ 𝒁 𝑗 | 𝑘 − ¯𝒁 (𝑙 )   
+
+> 𝑗 |𝑘
+
+∥∞ ≤ Δ(𝑙 ) instead. At a practical level, we find the definition of trust region for each variable to be particularly useful with problem (36) , where the nonlinearity of slack variables 𝒚 can be largely different from the nonlinearity of the dynamics. An even more sophisticated approach would involve a full state-dependent trust-region, where an independent trust-region vector 𝚫 𝑗 | 𝑘 is defined independently for each time-step (·) 𝑗 | 𝑘 and tuned based on the local nonlinearity, as demonstrated in [50]. We however find defining 𝚫 = 𝚫 0| 𝑘 = . . . = 𝚫 𝑁 −1| 𝑘 to be sufficient for the present application. Between successive steps 𝑙 and 𝑙 + 1, we adopt the step-acceptance, Lagrange multiplier update, and weight update criteria from [20]. 
+
+E. Model Predictive Control Framework 
+
+The proposed MPC framework consists of recursively solving the MVOCP (35) . Figure 6 illustrates the recursive process. The red boxes indicate processes where the errors described in Section II.D enter the system. Based on the prediction horizon from Section III.A with controls located at 𝜃 ref of 160 ◦ and 200 ◦, the initial time of the MPC, 𝑡 0| 𝑘 ,20 Initialize 𝑿 (𝑡 0)
+
+Estimate current state ˆ𝑿 (𝑡 𝑘 )
+
+Solve MVOCP (35) with SCP 
+
+Execute control 𝑼 𝑘 
+
+Propagate until next control node at 𝑡 𝑘 +1
+
+Initial orbit inser-tion error 𝛿 𝒙 𝑖, init ∀𝑖 
+
+Navigation error 𝛿 𝒙 𝑖, nav ∀𝑖 
+
+Control execution error 𝛿 𝑼 
+
+SRP error 𝛿 𝐴 /𝑚 , 𝛿𝐶 𝑟 
+
+𝑘 ← 𝑘 + 1
+
+Fig. 6 Model predictive control framework for recursive station-keeping of spacecraft formation 
+
+alternates between the two true anomaly regions along the NRHO during the recursion. 
+
+# V. Numerical Experiments 
+
+We demonstrate the proposed approach through numerical Monte Carlo experiments for a two-spacecraft formation tracking a common reference NRHO. Each experiment consists of 100 Monte Carlo samples, each lasting 10 revolutions, which corresponds to ∼65 .5 days . This duration ensures that the formation flying spacecraft completes a full quasi-periodic cycle along its 9:2 resonance, which lasts approximately two synodic months. With controls located at 
+
+𝜃 ref (𝑡 ) = 160 ◦ and 200 ◦, there are two MVOCP instances solved per revolution, resulting in 20 instances solved during the 10-revolution experiment. We conduct four Monte Carlo experiments, summarized in Table 2: experiments I and II consider the MVOCP (23) without the relative Sun phase angle constraint (22) , i.e., with only the bounded separation as path constraints; meanwhile, experiments III and IV consider (23) as is, i.e., with both bounded separation and relative Sun phase angle path constraints. Experiments I and III enforce continuous path constraints through the isoperimetric reformulation, while experiments II and IV only enforce the path constraints at the control nodes. With II and IV, the nonconvex path constraints, that is, the lower bounds on separation (19a) as well as the lower and upper bounds on the relative Sun phase angle (22) are linearized and enforced gradually through the augmented Lagrangian scheme from [ 20 ], as is done for the nonconvex dynamics constraints (23b). In all experiments, the reference is tracked at tolerances 𝜖 𝑟 = 20 km and 𝜖 𝑣 = 5 m /s by the end of a prediction horizon of 𝑁 rev = 5 revolutions, as enforced by constraints (23d) and (23e) . The parameters pertaining to the uncertainties, largely based on [ 41 ], are provided in Table 3. Table 4 summarizes the constraint tightening parameters associated with (19) and (22) . As mission requirements, we consider a minimum separation of Δ𝑟 min = 10 km at all times and a 21 Table 2 Summary of Monte Carlo experiments 
+
+Experiment Path constraints Path constraints type I Rel. separation (19) Continuous II Discrete approximation (control nodes only) III Rel. separation (19) & rel. Sun phase angle (22) Continuous IV Discrete approximation (control nodes only) 
+
+Table 3 Uncertainty parameters in Monte Carlo experiments 
+
+Parameter Value Initial orbit insertion position error 3-𝜎 𝒓 0, km 5
+
+Initial orbit insertion velocity error 3-𝜎 𝒗 0, m/s 0.1
+
+SRP 𝐴 /𝑚 relative error 3-𝜎 𝐴 /𝑚 , % 30 
+
+SRP 𝐶 𝑟 relative error 3-𝜎 𝐶 𝑟 , % 15 
+
+Navigation position error 3-𝜎 𝒓 , km 1
+
+Navigation velocity error 3-𝜎 𝒗 , cm /s 0.8
+
+Control absolute error 3-𝜎 𝑢 abs , mm /s 1
+
+Control relative error 3-𝜎 𝑢 rel , % 1.5
+
+Control direction error 3-𝜎 𝛿 𝜑 , deg 0.5
+
+maximum separation of Δ𝑟 max = 150 km in apolune segments; in addition, with experiments III and IV, we consider a phase angle bounded between Δ𝜙 min = 30 ◦ and Δ𝜙 max = 150 ◦ at apolune segments. 
+
+Table 4 Constraint tightening parameters  
+
+> (a) Separation constraints (19)
+
+Parameter Value Scaling weight 𝑊 1
+
+Bounds (Δ𝑟 min , Δ𝑟 max ), km (10 , 150 )
+
+Tightening margins (𝜂 Δ𝑟 min , 𝜂 Δ𝑟 max ), km (25 , 100 )
+
+Tightening parameters (𝜅 Δ𝑟 min , 𝜅 Δ𝑟 max ) (10 5, 10 5) 
+
+> (b) Relative Sun phase angle constraints (22)
+
+Parameter Value Scaling weight 𝑊 10 −4
+
+Bounds (Δ𝜙 min , Δ𝜙 max ), deg (30 ◦, 150 ◦)
+
+Tightening margins (𝜂 Δ𝜙 min , 𝜂 Δ𝜙 max ), deg (30 ◦, 30 ◦)
+
+Tightening parameters (𝜅 Δ𝜙 min , 𝜅 Δ𝜙 max ) (10 5, 10 5)
+
+The dynamics, MPC algorithm, and simulation environment are implemented in Julia. The dynamics are non-dimensionalized by choosing a distance unit of 10 4 km while ensuring non-dimensional 𝜇 = 1 to improve numerical conditions of the MVOCP. The dynamics is numerically integrated with DifferentialEquations.jl [ 51 ], using Verner’s 7/6 and 8/7 Runge-Kutta methods [ 52 ] within the SCP and during the recursion, respectively, with relative and absolute tolerances set to 10 −12 within the SCP, and a relative tolerance of 10 −12 and an absolute tolerance of 10 −14 
+
+during the recursion. Initial value problem solvers of separate order and varying tolerances are used to (i) speed up the computation within the SCP while (ii) maintaining accurate integration between one control action and another for the simulation to be representative of an actual mission. The convex subproblem within the SCP is modeled with JuMP [53 ]22 Table 5 Non-default SCP parameters 
+
+Parameter Value Initial trust-region radius Δ(0) on components of state 𝒙 0.05 
+
+Initial trust-region radius Δ(0) on slack 𝑦 for separation constraints 0.5
+
+Initial trust-region radius Δ(0) on slack 𝑦 for relative Sun phase angle constraints 5
+
+Initial augmented Lagrangian penalty weight 𝑤 (0) 100 
+
+Lower and upper bounds on trust-region radius Δ (10 −8, 10 )
+
+Optimality tolerance 𝜖 opt 10 −3
+
+Feasibility tolerance 𝜖 feas 10 −6
+
+Table 6 Cumulative station-keeping cost statistics over 10 revolutions ( ∼ 65 .5 days ), in cm /s
+
+Experiment Successful cases Spacecraft 1 Spacecraft 2 Total Mean Stdv. 3-𝜎 Mean Stdv. 3-𝜎 Mean Stdv. 3-𝜎 
+
+I 100/100 35.31 13.59 76.07 35.85 11.02 68.91 71.16 21.33 135.15 II 100/100 58.66 11.10 91.96 57.16 10.48 88.62 115.82 11.50 150.32 III 100/100 45.17 10.18 75.70 48.66 11.13 82.03 93.83 17.03 144.93 IV 99/100 104.66 20.30 165.57 94.05 20.46 155.44 198.71 14.31 241.65 and solved using the interior-point conic solver Clarabel [ 54 ], using default parameters. SCP parameters are given in Table 5; the algorithm is ended when both the optimality tolerance 𝜖 opt and the feasibility tolerance 𝜖 feas , as defined in [20], are satisfied. Parameters not reported in Table 5 have been set to their default settings as provided in [20]. The mean, standard deviation (Stdv.), and 3-𝜎 of the cumulative cost of each spacecraft in the formation are summarized in Table 6. Successful cases are counted based on recursive feasibility, i.e., by checking whether the initial conditions ˆ𝑿 (𝑡 𝑘 ) does not violate the path constraints; the cost statistics are computed based on successful cases. The equivalent yearly cost is approximately ×5.6 values reported in this Table. Note that compared to values reported in [ 15 ] of around 20 -50 cm /s per year, our simulation does not incorporate formation-relative navigation, a beneficial information for reliably enforcing formation-relative path constraints, and in the case of experiments III and IV, leading to higher projected costs. An additional difference is in the path constraints, where the formation in [ 15 ] only guarantees a lower-bound on the minimum separation, i.e., only (19a) . Despite the adversarial navigation conditions assumed in our work, we successfully demonstrate station-keeping for the formation with 3-𝜎 cost in the order of 75 × 5.6 ≈ 420 cm /s per spacecraft per year while enforcing path constraints continuously, as demonstrated by experiments I and III. Further comparison of costs between experiments is discussed in subsequent subsections. 
+
+A. Monte Carlo Results with Relative Separation Path Constraints 
+
+We first consider experiments I and II, where the relative separation path constraints (19) are included. Figure 7 and Figure 8 show the time histories of the inter-spacecraft range ∥ 𝒓 1 (𝑡 ) − 𝒓 2 (𝑡 )∥ 2 and relative Sun phase angle 𝜙 12 (𝑡 ) from 23 all Monte Carlo samples in experiments I and II, respectively. The red regions in the Figures indicate inter-spacecraft ranges that should be avoided according to mission requirements. Note that while the minimum separation is enforced at all times, the maximum separation is only enforced at apolune segments, as defined in (19b) . The trace in magenta indicate segments where the path constrained is violated. With experiment I, the isoperimetric reformulation allows for the minimum separation constraint to be enforced continuously at all times, and the maximum separation constraint to be enforced continuously at apolune segments, as dictated by mission requirements. Meanwhile, enforcing the path constraints simply at control nodes alone, as is done in experiment II, results in frequent violation of the minimum separation requirement, both during perilune and apolune segments. Overcoming the inter-sample violation by adding nodes is not obvious, as the exact number and placement of nodes required to ensure continuous satisfaction of path constraints is not obvious ahead of time and cannot be guaranteed. With no relative Sun phase angle constraint in place, 𝜙 12 (𝑡 ) is found to vary freely across the ∼ 65 .5 days period, as shown in Figures 7b and 8b. Across the Monte Carlo samples, we find a common structure on the relative Sun phase angle history, dictated by the geometry of the NRHO in the Sun-Moon rotating frame, as shown in Figure 1c. While the MVOCP from experiment II is a more relaxed problem than that of experiment I, we find the cumulative mean and 3-𝜎 costs of II to be ∼ 15% higher than I. The distribution of the executed control magnitude by each spacecraft across the 20 recursions are shown in Figure 9 and Figure 10 for experiments I and II, respectively; the higher cumulative cost in experiment II is a direct result of higher cost at each recursion as well. Two effects, namely the 1) the nonconvexity and 2) the finite-horizon approximation of the MVOCP, are behind this cost difference; 1) With respect to the nonconvexity, using the same initial guess may lead to convergence to different local minima depending on the formulation; even if the solution of a given MVOCP instance from experiment I results in a lower objective value, the MVOCP instance from experiment II may converge to a separate local minimum solution with a higher objective. Evidently, the inter-spacecraft range resulting from the recursive control in experiment II is tighter than in experiment I, which may well require a higher cumulative cost. 2) The finite-horizon approximation means that while the objective from the formulation in experiment II may be lower than experiment I at some time 𝑡 𝑘 , the resulting trajectory could lead to subsequent MVOCP instances with higher costs at later times 𝑡 𝑘 +1, 𝑡 𝑘 +2, etc., particularly in the presence of uncertainties. While both I and II consider a finite-horizon approximation, enforcing continuous path constraints as in I results in a stronger incentive for steering the spacecraft geometry into a continuously feasible formation orientation (with minimal actuation) that may last for some finite time even beyond the prediction horizon, resulting in reserved control cost at subsequent recursions. Meanwhile, with II, a solution that “just” satisfies the path constraints at the control node may provide insufficient information, and therefore incentive, to steer the spacecraft into such a geometry. 24 (a) Inter-spacecraft range history (b) Relative Sun phase angle history (unconstrained) 
+
+Fig. 7 Experiment I: inter-spacecraft range continuously enforced  
+
+> (a) Inter-spacecraft range history (b) Relative Sun phase angle history (unconstrained)
+
+Fig. 8 Experiment II: inter-spacecraft range enforced at nodes B. Monte Carlo Results with Relative Separation & Sun Phase Angle Path Constraints 
+
+We now consider experiments III and IV, where both the relative separation and Sun phase angle constraints are included. Figure 11 and Figure 12 show the time histories of the two path constraints from all Monte Carlo samples in experiments III and IV, respectively. Here again, the red shaded regions indicate forbidden configurations; while the minimum separation is enforced at all times, the maximum separation as well as the minimum and maximum phase angle are only enforced during apolune segments. The isoperimetric reformulation in experiment III successfully ensures the spacecraft remains outside of forbidden configurations at all times in all samples. Enforcing only at the control nodes, as is done in experiment IV, results in frequent inter-sample violation of the minimum separation as well as the minimum relative Sun phase angle. Note that a violation of the lower bound 𝜙 min by 𝜙 𝛼𝛽 means there is a simultaneous violation of the upper bound 𝜙 max by 𝜙 𝛽 𝛼 .As presented in Table 6, the mean and 3-𝜎 cumulative costs are found to be lower for experiment III than experiment IV, even though the solution to an MVOCP instance in III is always a feasible solution to IV. The distribution of the executed control magnitude by each spacecraft across the 20 recursions is shown in Figure 13 and Figure 14 for experiments III and IV, respectively; similarly to experiments I and II, the lower cumulative cost with III is due to a lower per-recursion cost as well. We also observe the cost from IV is ∼ 53% higher than III, which is a significantly larger discrepancy than the cost 25 (a) Spacecraft 1 (b) Spacecraft 2 
+
+Fig. 9 Experiment I: distribution of control cost per recursion  
+
+> (a) Spacecraft 1 (b) Spacecraft 2
+
+Fig. 10 Experiment II: distribution of control cost per recursion 
+
+difference between I and II. The worst cost in IV is attributed to a more pronounced effect of the nonconvexity and finite-horizon approximation pointed out in Section V.A, as the additional phase angle path constraints are introduced. Our results also demonstrate that in a 2-spacecraft formation, the relative Sun phase angle can be achieved with minimal increase in propellant budget, commonly accounted for based on worst-case values, e.g., 3-𝜎 cost; under the assumed levels of uncertainty and spacecraft control cadence, a formation that satisfies both the bounded separation and relative phase angle constraints, as in III, can be achieved at a ∼ 30% higher mean cumulative cost and ∼ 2.4% higher 3-𝜎 cost than a formation only satisfying bounded separation, as in I. 
+
+C. Sensitivity on Constraint Tightening Parameters 
+
+We now consider the sensitivity of the MPC algorithm to constraint tightening parameters. Specifically, we repeat experiment III using (i) no constraint tightening, and (ii) 𝜂 at 80% of the original values of the original values. With each variant experiment, we conduct Monte Carlo experiments with 100 samples over 10 revolutions, or 20 recursions; at a given recursion, if the MVOCP is infeasible, we prematurely end the simulation. Table 7 summarizes the average number of successful recursions, number of Monte Carlo samples that successfully completed 20 recursions, the mean total cost, and the 3-𝜎 total cost resulting from the three experiment III variants. Constraint tightening effectively acts as a margin at the expense of higher control cost. Figures 15 and 16 show the 26 (a) Inter-spacecraft range history (b) Relative Sun phase angle history 
+
+Fig. 11 Experiment III: inter-spacecraft range and relative Sun phase angle continuously enforced 
+
+(a) Inter-spacecraft range history (b) Relative Sun phase angle history 
+
+Fig. 12 Experiment IV: inter-spacecraft range and relative Sun phase angle enforced at nodes 
+
+time histories of the path constraints for experiments III-(i) and III-(ii). We find that with no constraint tightening, only 50 out of 100 cases are successful over 20 iterations, with a significant number of cases encountering inter-sample violations. With 𝜂 at 80% of experiment (III), the number of successful cases recovers to 99 out of 100, with far fewer segments violating the minimum separation path constraint during the first perilune pass. We also note that the remaining constraint violations in III-(ii) occur at perilune segments, where the dynamics is more sensitive to errors. 
+
+D. Formation Trajectory Satisfying Relative Separation & Sun Phase Constraints 
+
+We provide an analysis of the relative trajectory of the formation from Section V.B, where both bounded relative separation and Sun phase angle constraints are satisfied. Figure 17 shows sample reference-relative trajectories in FRTN 
+
+Table 7 Sensitivity to constraint tightening parameters with variants of experiment III 
+
+Experiment (𝜂 Δ𝑟 min , 𝜂 Δ𝑟 max ),
+
+km 
+
+(𝜂 Δ𝜙 min , 𝜂 Δ𝜙 max ),
+
+deg 
+
+Average number of successful recursions Successful cases Mean total cost 𝑎 , cm /s3-𝜎 total cost 𝑎 , cm /s
+
+III-(i) (0, 0) (0◦, 0◦) 13 .48 /20 50/100 37 .81 64 .08 
+
+III-(ii) (20 , 80 ) (24 ◦, 24 ◦) 19 .88 /20 99/100 62 .69 96 .55 
+
+III (25 , 100 ) (30 ◦, 30 ◦) 20 /20 100/100 93 .83 𝑏 144 .93 𝑏 𝑎 Cost statistics are computed from Monte Carlo samples with 20 successful recursions.  
+
+> 𝑏
+
+Cost statistics on the third row is repeated from Table 6 for comparison. 
+
+27 (a) Spacecraft 1 (b) Spacecraft 2 
+
+Fig. 13 Experiment III: distribution of control cost per recursion  
+
+> (a) Spacecraft 1 (b) Spacecraft 2
+
+Fig. 14 Experiment IV: distribution of control cost per recursion 
+
+from four Monte-Carlo samples in experiment III. Across all relative trajectories, apolune segments are clustered around the origin due to the upper bound constraint on the relative separation, and perilune segments draw loops predominantly lying on the RT-plane, i.e., the 𝛿𝑥 -𝛿𝑦 plane. We find a variety of relative trajectory orientations that are feasible results of recursive station keeping under uncertainty. Notably, along the tangential direction, i.e., the 𝛿𝑦 direction, the relative trajectories in Figures 17a and 17b have perilune segments on either side of the RN-plane, while the ones in Figures 17c and 17d have perilune segments residing on common sides; we also find variable amplitudes of perilune segments. While all four trajectory orientations are feasible for the set of considered constraints, if a certain orientation property, e.g., perilune segments residing on either side of the RN-plane, is desired, then an additional constraint at the perilunes of the reference such as 
+
+
+
+010
+
+
+
+> 𝑇
+
+𝑻 Inr RTN (𝑡 ℓ ) 𝒓 1,ℓ | 𝑘 ≤ 0,
+
+
+
+010
+
+
+
+> 𝑇
+
+𝑻 Inr RTN (𝑡 ℓ ) 𝒓 2,ℓ | 𝑘 ≥ 0, where 𝜃 ref (𝑡 ℓ ) = 0◦, (38) may be incorporated into (35). Reference-relative trajectories in FSM along four consecutive apolune segments from a Monte-Carlo sample are 28 (a) Inter-spacecraft range history (b) Relative Sun phase angle history 
+
+Fig. 15 Experiment III-(i): continuous path constraints enforced with no tightening  
+
+> (a) Inter-spacecraft range history (b) Relative Sun phase angle history
+
+Fig. 16 Experiment III-(ii): continuous path constraints enforced with mild tightening 
+
+shown in Figure 18. In Figure 18, the square and triangle markers respectively indicate initial and final locations during the segment, and black lines indicate lines-of-sight between the two spacecraft. Recalling the frame definition from Section II.A, the −𝑥 direction points to the Sun, as indicated by the orange arrow; the blue and green paths correspond to the motion of each spacecraft, and the black, thin lines are the lines-of-sight between the two spacecraft. Due to the 9:2 resonance of the reference NRHO, the orientation of FRTN with respect to FSM rotates approximately 360 ◦ × 2/9 = 80 ◦
+
+between consecutive apolune segments, completing a full periodic cycle after 9 revolutions. The station-keeping scheme accommodates this apolune-to-apolune variation by exhibiting a variety of relative geometry in FSM , as shown by the four windows in Figure 18, that still satisfy the bounded relative Sun phase angle constraints continuously during each apolune segment. Notably, the reference-relative motion may traverse similar distances, as in Figure 18a, or one spacecraft may traverse a larger distance than the other, as in Figure 18d. 
+
+# VI. Conclusions 
+
+In this work, we developed an optimization-based MPC framework for formation flight on LPOs. The MVOCP is formulated and solved to obtain impulsive control actions for each spacecraft in the formation, with which the spacecraft simultaneously track the reference orbit while also satisfying constraints on their relative motion. A prediction horizon with sparse control nodes is employed to accommodate operational requirements; specifically, taking the 9:2 29 (a) Perilune segments separated by RN-plane, varying ampli-tudes  
+
+> (b) Perilune segments separated by RN-plane, similar ampli-tudes
+> (c) Perilune segments predominantly one of RN-plane (d) Perilune segments residing on both sides of RN-plane
+
+Fig. 17 Sample reference-relative trajectories in RTN frame over 10 revolutions 
+
+resonant NRHO as an example, a two-maneuver per revolution cadence, placed at 𝜃 ref = 160 ◦ and 200 ◦, is considered in accordance with previous work. The optimization-based approach is beneficial for introducing any arbitrary path constraints that may be difficult to achieve through the use of dynamical structures such as QPTs alone; to demonstrate this advantage, we enforce not only bounded separation but also bounded relative Sun phase angle among spacecraft pairs. The path constraints are enforced in continuous-time via isoperimetric reformulation, thereby systematically avoiding inter-sample violations in the optimal solution. To tackle the presence of uncertainties, gradual constraint tightening is introduced through a heuristic tightening function. Through numerical experiments, we demonstrated that our proposed framework provides successful guidance for the formation over an extended duration under the presence of realistic uncertainties. Notably, using the MVOCP with CTCS, we found that a formation satisfying both bounded separation and relative Sun phase angle constraints at apolune segments can be achieved at similar 3-𝜎 cumulative costs as a formation satisfying only bounded separation constraints. We also illustrated the need for isoperimetric reformulation, as naïvely enforcing the path constraints at the discretized control nodes results in frequent inter-sample constraint violations. Finally, we reported the variability on the apolune segments that satisfy the relative Sun phase angle constraints as the relative orientation of FRTN and FSM undergoes its roughly 2-month cycle. 30 (a) Trajectory around 1st apolune (b) Trajectory around 2nd apolune 
+
+(c) Trajectory around 3rd apolune (d) Trajectory around 4th apolune 
+
+Fig. 18 Reference-relative trajectory along apolune segments in Sun-Moon rotating frame 
+
+31 VII. Appendix 
+
+A. Perturbations 
+
+The perturbation acceleration due to spherical harmonics terms is [55] 
+
+𝒂 SH (𝑡 ) = 𝑻 PA Inr (𝑡 )
+
+> 𝑛 max
+
+∑︁ 
+
+> 𝑛 =2
+> 𝑛
+
+∑︁ 
+
+> 𝑚 =0
+
+𝜇 𝑅 2Moon 
+
+
+
+¥𝑥 𝑛𝑚 
+
+¥𝑦 𝑛𝑚 
+
+¥𝑧 𝑛𝑚 
+
+
+
+, (39) 
+
+¥𝑥 𝑛𝑚 =
+
+
+
+−𝐶 𝑛 0𝑉 𝑛 +1,1 𝑚 = 0,
+
+12
+
+ −𝐶 𝑛𝑚 𝑉 𝑛 +1,𝑚 +1 − 𝑆 𝑛𝑚 𝑊 𝑛 +1,𝑚 +1
+
+ + (𝑛 − 𝑚 + 2)!
+
+(𝑛 − 𝑚 )!
+
+ 𝐶 𝑛𝑚 𝑉 𝑛 +1,𝑚 −1 + 𝑆 𝑛𝑚 𝑊 𝑛 +1,𝑚 −1
+
+
+
+𝑚 > 0,
+
+(40) 
+
+¥𝑦 𝑛𝑚 =
+
+
+
+−𝐶 𝑛 0𝑊 𝑛 +1,1 𝑚 = 0,
+
+12
+
+ −𝐶 𝑛𝑚 𝑊 𝑛 +1,𝑚 +1 + 𝑆 𝑛𝑚 𝑉 𝑛 +1,𝑚 +1
+
+ + (𝑛 − 𝑚 + 2)!
+
+(𝑛 − 𝑚 )!
+
+ −𝐶 𝑛𝑚 𝑊 𝑛 +1,𝑚 −1 + 𝑆 𝑛𝑚 𝑉 𝑛 +1,𝑚 −1
+
+
+
+𝑚 > 0,
+
+(41) 
+
+¥𝑧 𝑛𝑚 = (𝑛 − 𝑚 + 1)  −𝐶 𝑛𝑚 𝑉 𝑛 +1,𝑚 − 𝑆 𝑛𝑚 𝑊 𝑛 +1,𝑚 
+
+ , (42) where 𝑆 𝑛𝑚 and 𝐶 𝑛𝑚 are geopotential coefficients of the Moon, 
+
+𝑉 𝑛𝑚 =
+
+ 𝑅 ⊕
+
+𝑟 
+
+𝑛 +1
+
+𝑃 𝑛𝑚 (sin 𝜙 ) cos 𝑚𝜆, 𝑊 𝑛𝑚 =
+
+ 𝑅 ⊕
+
+𝑟 
+
+𝑛 +1
+
+𝑃 𝑛𝑚 (sin 𝜙 ) sin 𝑚𝜆, (43) 
+
+𝑻 PA Inr (𝑡 ) ∈ R3×3 is the transformation matrix from the principal axes frame of the central body to FInr , and 𝑛 max is the maximum order of spherical harmonics perturbations considered, 𝑅 Moon is the reference radius of the Moon, 𝑃 𝑛𝑚 is the Legendre polynomial, 𝜆 is the longitude, and 𝜙 is the latitude. The perturbation acceleration due to SRP is 
+
+𝒂 SRP (𝑡 ) = 𝑃 ⊙
+
+ AU 
+
+∥ 𝒓 (𝑡 ) − 𝒓 ⊙ (𝑡 )∥ 2
+
+2
+
+𝐶 𝑟 
+
+𝐴 𝑚 
+
+𝒓 (𝑡 ) − 𝒓 ⊙ (𝑡 )∥ 𝒓 (𝑡 ) − 𝒓 ⊙ (𝑡 )∥ 2
+
+, (44) where 𝑃 ⊙ is the Sun’s pressure at 1 astronomical unit AU = 149 .6 × 10 6 km , 𝐶 𝑟 is the radiation pressure coefficient, and 
+
+𝐴 /𝑚 is the pressure area-to-mass ratio of the spacecraft. The perturbation acceleration due to the third-body effect is 
+
+𝒂 3bd ,𝑏 (𝑡 ) = −𝜇 𝑏 
+
+𝒓 (𝑡 ) − 𝒓 𝑏 (𝑡 )∥ 𝒓 (𝑡 ) − 𝒓 𝑏 (𝑡 )∥ 32
+
++ 𝒓 𝑏 (𝑡 )∥ 𝒓 𝑏 (𝑡 )∥ 32
+
+!
+
+, 𝑏 ∈ {⊕ , ⊙} , (45) where 𝜇 𝑏 is the gravitational parameter of the perturbing body. All three perturbation accelerations are time-dependent, making the HFEM dynamics non-autonomous. 32 B. Jacobian Expressions 
+
+Computing 𝚿 𝑗 +1, 𝑗 | 𝑘 requires integrating the matrix-valued IVP 
+
+¤𝚿 𝑖 (𝑡, 𝑡 𝑘 ) = 𝜕 𝒇 aug (𝒁 (𝑡 ), 𝑡 )
+
+𝜕 𝒁 ¯𝒁 (𝑡 )
+
+𝚿 (𝑡, 𝑡 𝑘 ),
+
+𝚿 𝑖 (𝑡 𝑘 , 𝑡 𝑘 ) = 𝑰 6𝑀 +𝐿 ,
+
+(46) along with 𝒁 , which necessitates the Jacobian 𝜕 𝒇 aug (𝒁 (𝑡 ), 𝑡 )/ 𝜕 𝒁 ∈ R(6𝑀 +𝐿 ) × ( 6𝑀 +𝐿 ) ,
+
+𝜕 𝒇 aug (𝒁 (𝑡 ), 𝑡 )
+
+𝜕 𝒁 =
+
+
+
+𝜕 𝒇 concat ( 𝑿 (𝑡 ), 𝑡 )
+
+𝜕 𝑿 06𝑀 ×𝐿 
+
+𝜕 𝒇 slack ( 𝑿 (𝑡 ), 𝑡 )
+
+𝜕 𝑿 0𝐿 ×𝐿 
+
+
+
+. (47) The upper-left block is the Jacobian of the concatenated dynamics, 
+
+𝜕 𝒇 concat ( 𝑿 (𝑡 ), 𝑡 )
+
+𝜕 𝑿 = block-diag 
+
+ 𝜕 𝒇 (𝒙 0 (𝑡 ), 𝑡 )
+
+𝜕 𝒙 1
+
+, . . . , 𝜕 𝒇 (𝒙 𝑀 −1 (𝑡 ), 𝑡 )
+
+𝜕 𝒙 𝑀 
+
+
+
+. (48) The ℓth row of the lower-left block 𝜕 𝒇 slack (𝑡 )/ 𝜕 𝑿 ∈ R1×6𝑀 contain the sensitivities of the ℓth path constraint 𝑔 ℓ with respect to 𝑿 ,  𝜕 𝒇 slack (𝑡 )
+
+𝜕 𝑿 
+
+
+
+> [ℓ, :]
+
+= 2𝑊 ℓ max [0, 𝑔 ℓ ( 𝑿 (𝑡 ), 𝑡 )] 𝜕𝑔 ℓ ( 𝑿 (𝑡 ), 𝑡 )
+
+𝜕 𝑿 . (49) When re-initializing the linearized dynamics (36b) with an updated reference solution ¯𝒁 , ¯𝑼 , both the augmented state ¯𝒁 
+
+and STMs 𝚿 are integrated together (applying controls ¯𝑼 along the way), resulting in a set of (6𝑀 + 𝐿 ) + ( 6𝑀 + 𝐿 )2
+
+ordinary differential equations (ODE). The high dimension of the ODE, together with the nonlinearity and time-dependence of the HFEM, makes this process by far the most computationally expensive part of the SCP algorithm. Nevertheless, the integration between each pair of adjacent control times 𝑡 𝑗 | 𝑘 and 𝑡 𝑗 +1| 𝑘 is decoupled and can be embarrassingly parallelized. 
+
+# References 
+
+[1] Sherman, W. A., Lightsey, E. G., and Whorton, M., “Envisioning Cislunar Formation Flight: A Survey and Analysis of Enabling Mission Topologies,” AIAA ASCEND , 2023, pp. 1–16. https://doi.org/10.2514/6.2023-4665. [2] Capannolo, A., Zanotti, G., Lavagna, M., and Cataldo, G., “Model predictive control for formation reconfiguration exploiting quasi-periodic tori in the cislunar environment,” Nonlinear Dynamics , Vol. 111, No. 8, 2023, pp. 6941–6959. https: //doi.org/10.1007/s11071-022-08214-8, URL 10.1007/s11071-022-08214-8. [3] Bucci, L., Colagrossi, A., and Lavagna, M., “Rendezvous in Lunar Near Rectilinear Halo Orbits,” Advances in Astronautics 
+
+33 Science and Technology , Vol. 1, No. 1, 2018, pp. 39–43. https://doi.org/10.1007/s42423-018-0012-6, URL 10.1007/s42423-018-0012-6. [4] Bucchioni, G., and Innocenti, M., “Open Loop Safe Trajectory Design for Cislunar NRHO Rendezvous,” Proceedings of the American Control Conference , Vol. 2020-July, 2020, pp. 4337–4342. https://doi.org/10.23919/ACC45564.2020.9147502. [5] Blazquez, E., Beauregard, L., Lizy-Destrez, S., Ankersen, F., and Capolupo, F., “Rendezvous design in a cislunar near rectilinear Halo orbit,” Aeronautical Journal , Vol. 124, No. 1276, 2020, pp. 821–837. https://doi.org/10.1017/aer.2019.126. [6] Sandel, C., and Sood, R., “Natural and Forced Spacecraft Loitering in a Near Rectilinear Halo Orbit,” Journal of Astronautical Sciences , Vol. 71, No. 3, 2024, pp. 1–25. https://doi.org/10.1007/s40295-024-00446-7. [7] Calico, R. A., and Wiesel, W. E., “Control of time-periodic systems,” Journal of Guidance, Control, and Dynamics , Vol. 7, No. 6, 1984, pp. 671–676. https://doi.org/10.2514/3.19911. [8] Hsiao, F. Y., and Scheeres, D. J., “The Dynamics of Formation Flight About a Stable Trajectory,” The Journal of the Astronautical Sciences , Vol. 50, No. 3, 2002, pp. 269–287. https://doi.org/10.1007/bf03546252. [9] Scheeres, D. J., Hsiao, F.-Y., and Vinh, N. X., “Stabilizing Motion Relative to an Unstable Orbit: Applications to Spacecraft Formation Flight,” Journal of Guidance, Control, and Dynamics , Vol. 26, No. 1, 2003, pp. 62–73. https://doi.org/10.2514/2.5015. [10] Elliott, I., and Bosanac, N., “Describing relative motion near periodic orbits via local toroidal coordinates,” Celestial Mechanics and Dynamical Astronomy , Vol. 134, No. 2, 2022, p. 19. https://doi.org/10.1007/s10569-022-10074-8. [11] Elliott, I., and Bosanac, N., “Designing Impulsive Station-Keeping Maneuvers Near a Sun-Earth L2 Halo Orbit via Reinforcement Learning,” AAS/AIAA Space Flight Mechanics Meeting , 2021. [12] Takubo, Y., Manuel, W., Foss, E., and D’Amico, S., “Safe and optimal N-spacecraft swarm reconfiguration in non-keplerian cislunar orbits,” arXiv [math.OC] , 2025. https://doi.org/10.48550/arXiv.2504.20386. [13] Elango, P., Di Cairano, S., Kalabic, U., and Weiss, A., “Local Eigenmotion Control for Near Rectilinear Halo Orbits,” Proceedings of the American Control Conference , Vol. 2022-June, 2022, pp. 1822–1827. https://doi.org/10.23919/ACC53348.2022.9867672. [14] Howell, K. C., and Marchand, B. G., “Natural and non-natural spacecraft formations near the L1 and L2 libration points in the Sun–Earth/Moon ephemeris system,” Dynamical Systems , Vol. 20, No. 1, 2005, pp. 149–173. https://doi.org/10.1080/ 1468936042000298224. [15] Foss, E., Takubo, Y., and D’Amico, S., “Long-Duration Station-Keeping Strategy for Cislunar Spacecraft Formations,” arXiv [math.OC] , 2025. https://doi.org/https://doi.org/10.48550/arXiv.2507.19620. [16] Williams, D. A. P., Howell, K. C., and Davis, D. C., “A Comparison of Station-Keeping Strategies for Halo Orbits,” AAS/AIAA Astrodynamics Specialist Conference , Vol. 231, 2023, pp. 1–20. 
+
+34 [17] Teo, K., and Goh, C., “A simple computational procedure for optimization problems with functional inequality constraints,” 
+
+IEEE Transactions on Automatic Control , Vol. 32, No. 10, 1987, pp. 940–941. https://doi.org/10.1109/TAC.1987.1104471. [18] Elango, P., Luo, D., Kamath, A. G., Uzun, S., Kim, T., and Açıkmeşe, B., “Continuous-time successive convexification for constrained trajectory optimization,” Automatica , Vol. 180, 2025, p. 112464. https://doi.org/https://doi.org/10.1016/j. automatica.2025.112464, URL https://www.sciencedirect.com/science/article/pii/S0005109825003589. [19] Shimane, Y., Di Cairano, S., Ho, K., and Weiss, A., “Revolution-Spaced Output-Feedback Model Predictive Control for Station Keeping on Near-Rectilinear Halo Orbits,” IEEE Transactions on Control Systems Technology , 2025. https: //doi.org/10.1109/TCST.2025.3614324. [20] Oguri, K., “Successive Convexification with Feasibility Guarantee via Augmented Lagrangian for Non-Convex Optimal Control Problems,” IEEE Conference on Decision and Control , 2023. https://doi.org/10.1109/cdc49753.2023.10383462. [21] Lewis, A. S., and Wright, S. J., “A proximal method for composite minimization,” Mathematical Programming , 2008. https://doi.org/10.1007/s10107-015-0943-9. [22] Drusvyatskiy, D., and Lewis, A. S., “Error Bounds, Quadratic Growth, and Linear Convergence of Proximal Methods,” 
+
+Mathematics of Operations Research , Vol. 43, No. 3, 2018, pp. 919–948. https://doi.org/10.1287/moor.2017.0889. [23] Kumagai, N., and Oguri, K., “Adaptive-Mesh Sequential Convex Programming for Space Trajectory Optimization,” Journal of Guidance, Control, and Dynamics , Vol. 47, 2024, pp. 1–8. https://doi.org/10.2514/1.g008107, URL https://arc.aiaa.org/doi/10. 2514/1.G008107. [24] Kumagai, N., and Oguri, K., “Robust cislunar low-thrust trajectory optimization under uncertainties via sequential covariance steering,” Journal of Guidance, Control, and Dynamics , 2025, pp. 1–19. https://doi.org/10.2514/1.g009092. [25] Spada, F., Elango, P., and Açıkme s, e, B., “Impulsive relative motion control with continuous-time constraint satisfaction for cislunar space missions,” 2025 American Control Conference (ACC) , IEEE, 2025, pp. 1719–1724. https://doi.org/10.23919/ acc63710.2025.11108021. [26] Richards, A. G., “Robust Constrained Model Predictive Control,” Ph.D. thesis, Massachusetts Institute of Technology, 2005. [27] Gossner, J. R., Kouvaritakis, B., and Rossiter, J., “Stable generalized predictive control with constraints and bounded disturbances,” Automatica , Vol. 33, No. 4, 1997, pp. 551–568. https://doi.org/10.1016/S0005-1098(96)00214-2. [28] Chisci, L., Rossiter, J., and Zappa, G., “Systems with persistent disturbances: predictive control with restricted constraints,” 
+
+Automatica , Vol. 37, 2001, pp. 1019–1028. https://doi.org/10.1016/S0005-1098(01)00051-6. [29] Richards, A., and How, J. P., “Robust distributed model predictive control,” International Journal of Control , Vol. 80, No. 9, 2007, pp. 1517–1531. https://doi.org/10.1080/00207170701491070. [30] Kuwata, Y., Richards, A., Schouwenaars, T., and How, J. P., “Distributed Robust Receding Horizon Control for Multivehicle Guidance,” IEEE Transactions on Control Systems Technology , Vol. 15, No. 4, 2007. https://doi.org/10.1109/TCST.2007.899152. 
+
+35 [31] Kohler, J., Soloperto, R., Muller, M. A., and Allgower, F., “A computationally efficient robust model predictive control framework for uncertain nonlinear systems,” IEEE Transactions on Automatic Control , Vol. 66, No. 2, 2021, pp. 794–801. https://doi.org/10.1109/tac.2020.2982585. [32] Elango, P., Vinod, A., Cairano, S. D., and Weiss, A., “Continuous-Time Successive Convexification for Passively-Safe Six-Degree-of-Freedom Powered-Descent Guidance,” AIAA SciTech 2025 Forum , 2025. https://doi.org/10.2514/6.2025-1894. [33] Elango, P., Vinod, A. P., Kitamura, K., Açıkmeşe, B., Di Cairano, S., and Weiss, A., “Successive convexification for passively-safe spacecraft rendezvous on near rectilinear halo orbit,” arXiv [math.OC] , 2025. https://doi.org/10.48550/arXiv.2505.17251. [34] Pavlasek, N., Di Cairano, S., and Weiss, A., “Geostationary Satellite Station Keeping and Collocation under High-Thrust Impulsive Control,” 2025 American Control Conference (ACC) , 2025. https://doi.org/10.23919/ACC63710.2025.11107882. [35] Acton, C., Bachman, N., Semenov, B., and Wright, E., “A look towards the future in the handling of space science mission geometry,” Planetary and Space Science , Vol. 150, No. January 2017, 2018, pp. 9–12. https://doi.org/10.1016/j.pss.2017.02.013. [36] Song, Y.-J., Lee, D., Kim, Y.-R., Bae, J., Park, J.-i., Hong, S., Kim, D.-K., and Lee, S.-R., “Practical Algorithms on Lunar Reference Frame Transformations for Korea Pathfinder Lunar Orbiter Flight Operation,” Journal of Astronomy and Space Sciences , Vol. 38, No. 3, 2021, pp. 185–192. https://doi.org/10.5140/JASS.2021.38.3.185, URL 10.5140/JASS.2021.38.3.185. [37] Lee, D. E., “Gateway Destination Orbit Model: A Continuous 15 Year NRHO Reference Trajectory,” Tech. rep., NASA, 2019. [38] Zimovan-Spreen, E. M., Howell, K. C., and Davis, D. C., “Near rectilinear halo orbits and nearby higher-period dynamical structures: orbital stability and resonance properties,” Celestial Mechanics and Dynamical Astronomy , Vol. 132, No. 5, 2020. https://doi.org/10.1007/s10569-020-09968-2. [39] Vallado, D., and McClain, W., Fundamentals of Astrodynamics and Applications , Space Technology Library, Springer Netherlands, 2001. [40] Cheetham, B., Gardner, T., Forsman, A., Kayser, E., and Clarkson, M., “CAPSTONE: A Unique CubeSat Platform for a Navigation Demonstration in Cislunar Space,” ASCEND 2022 , American Institute of Aeronautics and Astronautics, Reston, Virginia, 2022, pp. 1–10. https://doi.org/10.2514/6.2022-4382. [41] Davis, D. C., Scheuerle, S. T., Williams, D. A., Miguel, F. S., Zimovan-Spreen, E. M., and Howell, K. C., “Orbit Maintenance Burn Details for Spacecraft in a Near Rectilinear Halo Orbit,” AAS/AIAA Astrodynamics Specialists Conference , 2022. [42] Shimane, Y., Ho, K., and Weiss, A., “Optimization-based phase-constrained x-axis crossing control for station-keeping on Libration Point Orbits,” Journal of Astronautical Sciences , Vol. 72, No. 6, 2025. https://doi.org/10.1007/s40295-025-00543-1. [43] Gates, C. R., “A Simplified Model of Midcourse Maneuver Execution Errors,” Tech. rep., Jet Propulsion Laboratory, 1963. [44] Lew, T., Bonalli, R., and Pavone, M., “Chance-Constrained Sequential Convex Programming for Robust Trajectory Optimization,” 
+
+European Control Conference (ECC) , 2020, pp. 1871–1878. https://doi.org/10.23919/ecc51009.2020.9143595. 
+
+36 [45] Takubo, Y., and D’Amico, S., “Multiplicative Approach to Constrained Stochastic Attitude Control with Application to Rendezvous and Proximity Operations,” AAS/AIAA Astrodynamics Specialist Conference , 2024, pp. 1–20. [46] Oguri, K., “Chance-Constrained Control for Safe Spacecraft Autonomy: Convex Programming Approach,” 2024 American Control Conference (ACC) , 2024, pp. 2318–2324. https://doi.org/10.23919/ACC60939.2024.10645008. [47] Mao, Y., Szmuk, M., Xu, X., and Acikmese, B., “Successive Convexification: A Superlinearly Convergent Algorithm for Non-convex Optimal Control Problems,” arXiv [math.OC] , 2019, pp. 1–35. https://doi.org/10.48550/arXiv.1804.06539. [48] Malyuta, D., Reynolds, T. P., Szmuk, M., Lew, T., Bonalli, R., Pavone, M., and Açıkmeşe, B., “Convex Optimization for Trajectory Generation: A Tutorial on Generating Dynamically Feasible Trajectories Reliably and Efficiently,” IEEE Control Systems , Vol. 42, No. 5, 2022, pp. 40–113. https://doi.org/10.1109/MCS.2022.3187542. [49] Oguri, K., “Chance-Constrained Control for Safe Spacecraft Autonomy: Convex Programming Approach,” 2024 American Control Conference (ACC) , 2024, pp. 2318–2324. https://doi.org/10.23919/acc60939.2024.10645008, URL http://arxiv.org/ abs/2403.04062. [50] Bernardini, N., Baresi, N., and Armellin, R., “State-dependent trust region for successive convex programming for autonomous spacecraft,” Astrodynamics , 2024. https://doi.org/10.1007/s42064-024-0200-1. [51] Rackauckas, C., and Nie, Q., “DifferentialEquations.jl–a performant and feature-rich ecosystem for solving differential equations in Julia,” Journal of Open Research Software , Vol. 5, No. 1, 2017. https://doi.org/DOI:10.5334/jors.151. [52] Verner, J. H., “Numerically optimal Runge–Kutta pairs with interpolants,” Numerical algorithms , Vol. 53, No. 2-3, 2010, pp. 383–396. https://doi.org/10.1007/s11075-009-9290-3. [53] Lubin, M., Dowson, O., Dias Garcia, J., Huchette, J., Legat, B., and Vielma, J. P., “JuMP 1.0: Recent improvements to a modeling language for mathematical optimization,” Mathematical Programming Computation , 2023. https://doi.org/10.1007/s12532-023-00239-3. [54] Goulart, P. J., and Chen, Y., “Clarabel : An interior-point solver for conic programs with quadratic objectives,” arxiv , 2024. [55] Montenbruck, O., and Gill, E., Satellite Orbits: Models, Methods, and Applications , Physics and astronomy online library, Springer Berlin Heidelberg, 2000. 
+
+37
