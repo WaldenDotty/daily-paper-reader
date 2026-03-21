@@ -1,0 +1,714 @@
+Title: A Hybrid Neural-Assisted Unscented Kalman Filter for Unmanned Ground Vehicle Navigation
+
+URL Source: https://arxiv.org/pdf/2603.11649v1
+
+Published Time: Fri, 13 Mar 2026 00:37:48 GMT
+
+Number of Pages: 11
+
+Markdown Content:
+> 1
+
+# A Hybrid Neural-Assisted Unscented Kalman Filter for Unmanned Ground Vehicle Navigation 
+
+Gal Versano , and Itzik Klein Senior Member, IEEE 
+
+Abstract —Modern autonomous navigation for unmanned ground vehicles relies on different estimators to fuse inertial sensors and GNSS measurements. However, the constant noise covariance matrices often struggle to account for dynamic real-world conditions. In this work we propose a hybrid estimation framework that bridges classical state estimation foundations with modern deep learning approaches. Instead of altering the fundamental unscented Kalman filter equations, a dedicated deep neural network is developed to predict the process and measurement noise uncertainty directly from raw inertial and GNSS measurements. We present a sim2real approach, with training performed only on simulative data. In this manner, we offer perfect ground truth data and relieves the burden of extensive data recordings. To evaluate our proposed approach and examine its generalization capabilities, we employed a 160-minutes test set from three datasets each with different types of vehicles (off-road vehicle, passenger car, and mobile robot), inertial sensors, road surface, and environmental con-ditions. We demonstrate across the three datasets a position improvement of 12 .7% compared to the adaptive model-based approach. Thus, offering a scalable and a more robust solution for unmanned ground vehicles navigation tasks. 
+
+Index Terms —Unscented Kalman Filter, Vehicle naviga-tion, Inertial Navigation, GNSS, Adaptive filters, Hybrid ap-proaches. 
+
+I. I NTRODUCTION 
+
+The rapid develop of autonomous ground vehicles is primar-ily driven by their potential to revolutionize operational effi-ciency, enhance industrial productivity, and provide flexible solutions for complex tasks [1–3]. Currently, autonomous systems are deployed across diverse sectors, including pre-cision agriculture for automated harvesting, logistics for warehouse management, and high-risk environments such as search-and-rescue operations and underground exploration [4–6]. To successfully complete their tasks, reliable, accurate, and continuous navigation is a fundamental mandatory require-ment for unmanned ground vehicle (UGV) operations. To achieve high-frequency state estimation and improve system responsiveness, most autonomous platforms employ inertial sensors with external updates from different modalities. Common sensors include the global navigation satellite sys-tems (GNSS), vision-based localization, and light detection and ranging (LiDAR) [7–9]. Due to the nonlinear nature of such fusion type, a nonlin-ear filter is required for the fusion process. The extended 
+
+G. Versano and I. Klein, are with the Autonomous Navigation and Sensor Fusion Lab, Hatter Department of Marine Technologies, Charney School of Marine Sciences, University of Haifa, Israel. 
+
+Kalman filter (EKF) has long been the most prevalent extension of the linear Kalman filter [10]. The EKF linearize the nonlinear state and measurement equations using a first-order Taylor expansions. However, local linearization often introduces significant errors in the estimated mean and co-variance, potentially leading to filter instability or divergence in highly nonlinear scenarios [11]. To circumvent these issues, the unscented Kalman filter (UKF) was introduced [12]. Instead of linearizing the functions, the UKF employs the unscented transform to propagate a set of determinis-tically chosen sigma points through the actual nonlinear dynamics. This approach captures the posterior mean and covariance with up to third-order Taylor series accuracy, offering superior performance in nonlinear scenarios such as complex vehicle dynamics and environmental conditions. The performance of any Kalman-based filter is heavily de-pendent on the accurate characterization of the process noise covariance matrix and the measurement noise covariance matrix [13], [14]. However, in real-world conditions, these noise profiles are often time-varying and difficult to model analytically. Poorly tuned covariance matrices can lead to sub-optimal estimation or complete filter failure. Model-based adaptive filtering addresses this by dynamically ad-justing the noise covariance online. A traditional approach is covariance matching, which utilizes innovation-based statistics to estimate noise levels in real time [15]. Building on this, the robust adaptive UKF modifies these matrices only when statistical inconsistencies are detected between the predicted and observed states [16]. Other methods utilize sliding-window evaluations of residuals to refine navigation accuracy, particularly in specialized domains like underwater robotics [17]. Recently, the integration of machine learning and deep learning has emerged as a powerful paradigm for inertial sensing and sensor fusion [18], [19], [20], [21], [22]. Sev-eral studies have proposed neural network architectures to regress the noise covariance parameters within nonlinear frameworks[23]. For instance, hybrid learning-based EKF models have been developed to tune the process noise based solely on raw inertial readings. Specific architectures, such as VIO-DualProNet, have been designed to estimate inertial noise within visual-inertial systems (VINS) by processing accelerometer and gyroscope data through dedicated net-works [24]. Furthermore, transformer-based models, such as the set-transformer, have been employed to learn time-varying process noise for Doppler velocity log (DLV)-aided inertial navigation [25]. Later, a closed-loop training 
+
+> arXiv:2603.11649v1 [cs.RO] 12 Mar 2026 2
+
+approach that estimates the process and measurement noise covariances using the EKF was introduced in [26]. Yet, such approaches require high computational effort in the training phase as the state dimensions increase. Using the UKF, Levy et al. [27] proposed an adaptive method in which the ProcessNet network is used to estimate the process noise covariance parameters for DVL/INS UKF fusion in autonomous underwater vehicle navigation using a real-to-real approach. Such data-driven approaches allow the filter to adapt to complex error characteristics that are often invisible to classical statistical methods. In this work we propose an adaptive process and mea-surement neural network-assisted unscented Kalman filter, ANPMN-UKF, to adaptivity estimate the noise uncertainty for UGV navigation. Our approach offers a hybrid estima-tion framework that connects classical state estimation foun-dations with modern deep learning approaches. Instead of altering the fundamental unscented Kalman filter equations, a dedicated deep neural network is developed to predict the process and measurement noise uncertainty directly from raw inertial and GNSS measurements. In addition, we follow a sim2real approach, with training performed only on simulative data. Our main contributions are: 1) ANPMN-UKF Framework: We propose an adaptive process and measurement neural network-assisted un-scented Kalman filter approach. It offers a learning-assisted UKF framework that adaptively estimates both the process noise covariance matrix and the mea-surement noise covariance matrix for UGV navigation. 2) Deep Learning Noise Estimator: A compact and computationally efficient deep neural network back-bone architecture is designed to enable real-time op-eration and for dual usage. Building upon this back-bone architecture, we offer σQ-Net to adaptively learn the inertial noise uncertainty for the process noise covariance and σR-Net to adaptively learn the GNSS position noise uncertainty for the measurement noise covariance. 3) Sim2Real: Our neural networks is trained exclusively on simulated trajectories with known ground truth, allowing it to capture complex and nonlinear noise patterns in both the process and measurement models. In this manner, we offer perfect ground truth data and relieve the burden of extensive data recordings. 4) Multi Dataset Evaluations: The proposed approach is evaluated on three real-world datasets collected under different operating conditions, road surfaces, platforms (off-road vehicle, passenger car, and mobile robot), and inertial sensor types with a total of 160 minutes of recorded data. Overall, our method achieves consistent positioning accu-racy gains across all evaluated datasets, with an average improvement of 22.70% over the UKF and 12.72% over the model-based adaptive UKF. The rest of the paper is organized as follows: Section II gives the inertial naviga-tion and UKF equations. Section III presents our proposed approach including ANPMN-UKF and our sim2real method. Section IV presents the different datasets and the results of this study, Finally, Section V gives the conclusions. II. P ROBLEM FORMULATION 
+
+A. The UKF Algorithm 
+
+Consider a nonlinear discrete-time system with an unob-served state vector xk governed by 
+
+xk+1 = f (xk, wk) (1) where xk is the state vector, f (·) is the nonlinear state transition function, and wk denotes the process noise. The measurement model is given by 
+
+zk+1 = h(xk+1 , vk+1 ) (2) where h(·) is the nonlinear measurement function, vk+1 is the measurement noise, and zk+1 is the observed measure-ment at time step k + 1 .The UKF is based on the scaled unscented transform (UT) [28], which approximates the statistics of a random variable undergoing a nonlinear transformation by propa-gating a carefully chosen set of sigma points through the nonlinear function. The UKF operates and consists of the following steps [12]: 
+
+1) Initialization 
+
+Consider the initialized state vector x0 with a known mean and covariance: 
+
+ˆx0 = E[x0], (3) 
+
+P0 = E(x0 − ˆx0)( x0 − ˆx0)T . (4) The weights for computing the mean (m upper case) and covariance (c upper case) are defined as: 
+
+w(m)0 = λn + λ , (5) 
+
+w(c)0 = λn + λ + (1 + α2 + β), (6) 
+
+w(m) 
+
+> i
+
+= w(c) 
+
+> i
+
+= 12( n + λ) , i = 1 , . . . , 2n, (7) where n is the dimension of the state vector and λ =
+
+α2(n + κ) − n. The parameters α, β, and κ control the spread and weighting of the sigma points and are addressed as hyperparameters. Typically, α = 10 −3, κ = 0 , and β = 2 
+
+for Gaussian distributions [29]. 
+
+2) Sigma Points 
+
+The sigma points are constructed as 
+
+χ0,k = ˆ xk, i = 0 (8) 
+
+χi,k = ˆ xk +
+
+hp (n + λ)Pk
+
+i
+
+> i
+
+, i = 1 , . . . , n, (9) 
+
+χi,k = ˆ xk −
+
+hp (n + λ)Pk
+
+i
+
+> i−n
+
+, i = n + 1 , . . . , 2n, 
+
+(10) where √Pk denotes the Cholesky decomposition of the covariance matrix. 3
+
+3) Prediction step 
+
+Each sigma point is propagated through the nonlinear model: 
+
+χi,k +1 |k = f (χi,k ), i = 0 , . . . , 2n. (11) The predicted state mean and covariance are then computed as 
+
+ˆx− 
+
+> k+1 |k
+
+=
+
+> 2n
+
+X
+
+> i=0
+
+w(m) 
+
+> i
+
+χi,k +1 |k (12) 
+
+P− 
+
+> k+1 |k
+
+=
+
+> 2n
+
+X
+
+> i=0
+
+w(c) 
+
+> i
+
+(χi,k +1 |k − ˆxk+1 |k)( χi,k +1 |k − ˆxk+1 |k)T
+
++ Qk+1 .
+
+(13) where Qk+1 is the covariance process noise matrix in time stamp k+1. 
+
+4) Update step 
+
+A new set of sigma points is generated from the predicted mean and covariance and propagated through the measure-ment function: 
+
+Zi,k +1 |k = h(χi,k +1 |k), i = 0 , . . . , 2n. (14) The predicted measurement mean and covariance are com-puted as: 
+
+ˆzk+1 |k =
+
+> 2n
+
+X
+
+> i=0
+
+w(m) 
+
+> i
+
+Zi,k +1 |k (15) 
+
+Sk+1 =
+
+> 2n
+
+X
+
+> i=0
+
+w(c)
+
+> i
+
+ Zi,k +1 |k − ˆzk+1 |k
+
+  Zi,k +1 |k − ˆzk+1 |k
+
+T
+
++ Rk+1 . (16) where Rk+1 is the covariance measurement matrix noise in time stamp k+1. The cross-covariance matrix is define by: 
+
+Pxz,k +1 =
+
+> 2n
+
+X
+
+> i=0
+
+w(c) 
+
+> i
+
+(χi,k +1 |k − ˆxk+1 |k)( Zi,k +1 |k −ˆzk+1 |k)T
+
+(17) The Kalman gain is computed by using (16) and (17): 
+
+Kk+1 = Pxz,k +1 S−1 
+
+> k+1
+
+(18) Finally, the state mean and covariance are updated using the measurement zk+1 and the Kalman gain (18): 
+
+ˆx+ 
+
+> k+1
+
+= ˆ x− 
+
+> k+1 |k
+
++ Kk+1 (zk+1 − ˆzk+1 |k) (19) 
+
+P+ 
+
+> k+1
+
+= P− 
+
+> k+1 |k
+
+− Kk+1 Sk+1 KT 
+
+> k+1
+
+(20) 
+
+B. INS/GNSS Fusion 
+
+The INS/GNSS fusion is considered in the error-state imple-mentation. The system state is decomposed into a nominal state propagated by the INS and an error state estimated by the UKF. The 15-dimensional error-state vector is defined as: 
+
+δx = δpn δvn δψn bba bbg
+
+ T ∈ R15 ×1 (21) where δpn ∈ R3 is the position vector error state expressed in the navigation frame, δvn ∈ R3, is the velocity vector error state expressed in the navigation frame, δψn ∈ R3
+
+is the misalignment error expressed in the navigation frame, 
+
+ba ∈ R3 is the residual bias of the accelerometers expressed in the body frame, and bg ∈ R3 is the residual bias of the gyroscopes expressed in the body frame. 
+
+1) Error-State Dynamics 
+
+The UKF continuous-time error-state dynamics are de-scribed by [30]: 
+
+˙δx = F δx + G δw (22) where F is the system matrix derived from the nonlinear INS kinematics, and G is the noise distribution matrix. The pro-cess noise vector includes the inertial sensors measurement noise and the random-walk behavior of the sensor biases: 
+
+δw = nT 
+
+> a
+
+nT 
+
+> g
+
+nT 
+
+> ab
+
+nT
+
+> gb
+
+T ∈ R12 ×1 (23) where na ∈ R3 and ng ∈ R3 are the measurement noise of the accelerometers and gyroscopes, respectively, and nab ∈
+
+R3 and ngb ∈ R3 are the noise terms of the accelerometer and gyroscope bias random-walk models, respectively. The discrete process noise covariance matrix is obtained based on the commonly used approximation [31]: 
+
+Qdk+1 = Gk+1 Qck+1 GTk+1 ∆t ∈ R15 ×15 (24) where the continuous process noise covariance matrix is: 
+
+Qck+1 = diag (δw) ∈ R12 ×12 (25) 
+
+2) Measurement Model 
+
+GNSS position updates in the geodetic frame (ϕ, λ, h ) are used to update the filter. In an UKF framework, the predicted measurement ˆzk+1 |k is computed by propagating sigma points xi,k +1 |k through the observation function h(·):
+
+ˆzk+1 |k =
+
+> 2n
+
+X
+
+> i=0
+
+w(m) 
+
+> i
+
+h(xi,k +1 |k) (26) 
+
+C. Model-Based Adaptive Noise Covariance Estimation 
+
+In UKF formulation, the process noise covariance matrix 
+
+Qdk is assumed to be constant and is tuned offline for an optimal value. While this assumption simplifies filter design, it limits performance in practical navigation scenarios where sensor noise characteristics and environmental conditions vary over time and thus result in a varying process noise covariance. One of the most common approaches to update the discrete process noise covariance matrix Qk during operation is model-based adaptive strategy based on [32] is adopted to update the discrete process noise covariance matrix Qk
+
+during operation. This approach is based on the innovation sequence by calculating the innovation covariance matrix over a sliding window of length η as 
+
+Ck = 1
+
+η
+
+> k
+
+X
+
+> i=k−η+1
+
+νiνT 
+
+> i
+
+, (27) 4
+
+Fig. 1: Our proposed ANPMN-UKF implemented on the GNSS/INS fusion scansion for unmanned ground vehicles. where νi denotes the innovation vector at time step i defined by: 
+
+νk+1 = zk+1 −
+
+> 2n
+
+X
+
+> i=0
+
+w(m) 
+
+> i
+
+Zi,k +1 |k (28) with zk being the measurement vector, and 
+
+P2ni=0 w(m) 
+
+> i
+
+Zi,k +1 |k is the predicted state estimation. The estimated innovation covariance Ck is then utilized to update the process noise covariance according to 
+
+ˆQk = Kk Ck KT 
+
+> k
+
+(29) where Kk is the Kalman gain at time step k.The measurement noise covariance can also be made adap-tive to cope with the external sensor varying conditions. In the UKF, the predicted measurement covariance is computed as 
+
+S− 
+
+> k
+
+=
+
+> 2n
+
+X
+
+> i=0
+
+w(c)
+
+> i
+
+ Zi,k |k−1 − ˆzk|k−1
+
+   Zi,k |k−1 − ˆzk|k−1
+
+T
+
+(30) where Zi,k |k−1 denotes the predicted measurement corre-sponding to the i-th sigma point. Using these quantities, an innovation-based adaptive esti-mate of the measurement noise covariance is obtained as: 
+
+ˆRk = Ck − S− 
+
+> k
+
+(31) III. P ROPOSED APPROACH 
+
+To cope with the varying process and measurement noise covariance values during real world conditions, we offer ANPMN-UKF an adaptive neural process and measurement noise approach to estimate the those covariances and plug them into the well established UKF. We offer the same neu-ral architecture backbone for estimating the inertial uncer-tainty, σQ-Net, and for estimating the position uncertainty, 
+
+σR-Net. We follow a sim2real approach for training on simulative data while testing on real recoded data. To this end, simu-lated trajectories are generated to train the neural networks on different standard deviations of inertial sensor noise em-ulating the varying process noise. Specifically, we consider the noise in the specific force and angular velocity measure-ments, [na, ng ] ∈ R6×1. In the same manner, to cope the varying measurement noise, we focus on GNSS position updates and train a different neural network on different values of the position standard deviation [np] ∈ R3×1. The trained networks are then used in real world implementation to adaptively estimate the process and measurement noise covariances used in the UKF framework. Our proposed approach is illustrated in Figure 1. In the next sections, we elaborate on each component of our proposed approach. 
+
+A. Simulated Data Generation 
+
+Motivated by the success of using simulated data for process noise covariance estimation in quadrotor and autonomous underwater vehicles dynamics [33–35], we adopt a simi-lar approach for unmanned ground vehicles dynamics and elaborate it also for the regression of the measurement noise covariance. The core idea is that the diversity of simulated trajectories allows the neural model to generalize effectively to unseen real-world scenarios. The simulated dataset generation was created by constructing five different baseline trajectories, each with different dynamics including a straight line, rectangular, circle, and a sine wave. An example of 2D-view of the trajectories is shown in Figure 2. The diversity of these trajectories introduces sufficient mo-tion variability, enabling the learned model to generalize to previously unseen trajectories. 
+
+Fig. 2: Examples of different simulated trajectories in 2D-view showing rectangular, sine wave, and circle trajectories. The baseline trajectories’ duration was between 100 and 500 seconds. There, we generated ideal inertial readings (specific force and angular velocity vectors) and ground 5
+
+truth (GT) position vectors at a sampling rate of 100[Hz]. This gives T × 100 samples for each trajectory with T
+
+standing for the duration of the trajectory. Next, zero mean white Gaussian noise was added to the inertial readings and position measurements. For the inertial sensor readings in each of the six axes (three accelerometers and three gyroscopes) zero mean white Gaussian noise with standard deviation values in the range [σa, σg ] ∈ [0 .001 , 0.02] was added in each sample. Starting with the lower value until the maximum value. This procedure was repeated 25 times (equal step size) resulting in T × 100 × 25 samples for each inertial axis. Thus, the measured specific force and angular velocity vectors in sample i of trajectory j with noise level 
+
+k are 
+
+˜f b 
+
+> (j,i )
+
+= f b 
+
+> GT ,(j,i )
+
++ na, (j,i ), na ∼ N (0 , σ2
+
+> a, (j,k )
+
+)(32) 
+
+˜ωb 
+
+> (j,i )
+
+= ωb 
+
+> GT ,(j,i )
+
++ ng, (j,i ), ng ∼ N (0 , σ2
+
+> g, (j,k )
+
+)(33) In the same manner, zero mean white Gaussian noise with standard deviation values in the range [σp] ∈ [1 .5, 3.0] [m] was added in each sample of the position measurements creating T × 100 × 25 measurements for each trajectory. Thus, the measured position in sample i of trajectory j with noise level k is 
+
+˜pn 
+
+> (j,i )
+
+= pn 
+
+> GT ,(j,i )
+
++ np, (j,i ), np ∼ N (0 , σ2
+
+> p, (j,k )
+
+) (34) The entire process of generating the simulated data is illustrated in Algorithm 1. 
+
+B. DNN Architecture 
+
+Our deep dual-usage deep neural network (DNN) back-bone architecture is used for the estimation of the inertial sensor measurement uncertainty, σQ-Net and the position measurement uncertainty σR-Net. For each task the same backbone is used with different input and output. The back-bone architecture is composed of one-dimensional convolu-tional layers, followed by fully connected layers and layer normalization, with the full architecture shown in Fig,3. Our network design leverages convolutional layers’ robust temporal feature extraction capabilities, avoiding excessive sensitivity to sequential orders observed in other time series architectures like recurrent neural networks. This property is useful in addressing the problem of noise covariance, in which dependencies and patterns across data are important factors. Moreover, this architecture offers a simple yet efficient solution to the regression problem at hand. 
+
+C. Training Procedure 
+
+For training, the GT standard deviations are first computed, as described in Section III-A. The networks are trained using sliding windows consisting of sensor data. For σQ-Net, the input consists of six channels (three accelerometer and three gyroscope axes) with a window length of one second consisting of 100 measurements in each channel. For σR-Net, the input consists of three channels (for each position component) with a window length of one second consisting 
+
+Algorithm 1: Simulated Dataset Generation 
+
+Input : Baseline trajectories T = {τj }5
+
+> j=1
+
+Sampling rate fs = 100 [Hz] Trajectory duration range T ∈ [100 , 500] 
+
+[sec] Number of noise levels K = 25 
+
+Inertial noise ranges σa, σ g ∈ [0 .001 , 0.02] 
+
+Position noise range σp ∈ [1 .5, 3.0] 
+
+Output: Dataset D of noisy measurements and noise labels 
+
+Initialize: D ← ∅ 
+
+Construct uniform grids for noise levels: 
+
+{σa,k , σ g,k , σ p,k }Kk=1 
+
+for j = 1 to J do 
+
+Generate ideal sequences at fs:
+
+{f b
+
+> GT ,i
+
+, ωb
+
+> GT ,i
+
+, pn
+
+> GT ,i
+
+}Nj
+
+> i=1
+
+for k = 1 to K do for i = 1 to Nj do 
+
+˜f b 
+
+> (j,i )
+
+← f b 
+
+> GT ,(j,i )
+
++ na, (j,i )
+
+˜ωb 
+
+> (j,i )
+
+← ωb 
+
+> GT ,(j,i )
+
++ ng, (j,i )
+
+˜pn 
+
+> (j,i )
+
+← pn 
+
+> GT ,(j,i )
+
++ np, (j,i )
+
+D ← n˜f b
+
+> (j,i )
+
+, ˜ωb
+
+> (j,i )
+
+, ˜pn
+
+> (j,i )
+
+; σa, (j,k ), σg, (j,k ), σp, (j,k )
+
+o
+
+return D
+
+of 100 measurements in each channel. For both inertial and position networks, a batch size of 64 is used for training. The output of the network is a vector of estimated standard deviations, with dimensionality of six for σQ-Net and three for the σR-Net. The networks are trained using the mean squared error (MSE) loss function, defined as 
+
+MSE( σGT , ˆσ) = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+(σGT ,i − ˆσi)2 , (35) where σGT denotes the GT standard deviation vector, ˆσ is the network output, and N is the number of samples. During inference, the input data are processed through the network layers via forward propagation. The network param-eters are learned using a stochastic gradient descent–based optimization scheme, where the weights and biases are updated according to 
+
+θ = θ − η∇θ J(θ), (36) where θ = [ ω, b]T denotes the vector of all network weights and biases, J(θ) is the loss function, η is the learning rate, and ∇θ is the gradient operator. In the proposed method, the DNN model is trained using the adaptive moment estimation (Adam) optimizer to improve convergence speed and stability. The main hyperparameters used during training are summarized in Table I. 6
+
+Fig. 3: Our dual-usage deep neural network architecture for the estimation of the inertial sensor measurement (input/output in light blue) and position measurement (input/output in pink) standard deviations. TABLE I: Main training hyperparameters values.       
+
+> Learning Rate Batch Size Epochs Window Size 0.001 64 200 Sec window IMU
+
+D. Process and Measurement Noise Covariance 
+
+The trained networks outputs the inertial uncertainty and the position uncertainty used to create the adaptive covariance matrix. The inertial standard deviation from σQ-Net is used to create the process noise covariance matrix QDN N while the position standard deviation from σR-Net is used to create the measurement noise covariance matrix RDN N at each time step. These estimated covariances are then incorporated into the UKF framework is described in Section III. The continuous-time process noise covariance matrix, based on σQ-Net, is defined as 
+
+QANPMN ,k = diag nT 
+
+> aQ−N et
+
+nT 
+
+> gQ−N et
+
+nT 
+
+> ab
+
+nT
+
+> gb
+
+T ∈ R12 ×12 
+
+(37) where naQ−N et , ngQ−N et , correspond to the accelerometer noise, gyroscope noise estimated by σQ-Net, respectively. The remaining terms, nab and ngb , represent the accelerom-eter and gyroscope bias random-walk noises. In this work, they are kept fixed and are not estimated by the network, since these bias processes change slowly and are diffi-cult to identify reliably from the available measurements. Therefore, the network adapts only the fast time-varying inertial noise terms, which have the largest impact on filter performance. The measurement noise covariance matrix at time k is constructed using σR-Net: 
+
+RANPMN ,k = diag σ2 
+
+> N
+
+σ2 
+
+> E
+
+σ2
+
+> D
+
+ ∈ R3×3 (38) where σN , σE , and σD are the regressed noise standard de-viation in the north, east, and down directions, respectively. The continuous-time process noise covariance in (37) is discretized at each UKF prediction step using the method described in (24) to obtain the discrete-time covariance matrix Qd,k .Finally, weighting parameters α and β are introduced to blend the ANPMN-estimated covariance matrices with predefined constant covariance matrices, yielding the final covariances used in our proposed ANPMN-UKF: 
+
+QUKF ,k = αANPMN Qd 
+
+> ANPMN ,k
+
++ (1 − αANPMN ) Qdk (39) 
+
+RU KF,k = βANPMN RANPMN ,k + (1 − βANPMN ) Rk (40) The parameters αANPMN and βANPMN were determined using a grid search to optimize the blending between adaptive neural estimates and covariance matrices. The values are presented in Table II TABLE II: Values of tuning parameters.    
+
+> Parameters Value
+> αANPMN 0.5
+> βANPMN 0.7
+
+IV. A NALYSIS AND RESULTS 
+
+A. Test Datasets 
+
+To evaluate the proposed algorithm, we employed three real-world datasets from different mobile platforms: two are publicly available, while the third was recorded specifically for this research. 1) ROOAD dataset . The ROOAD dataset [36] was col-lected using the Waterhog-UGV platform [37]. The platform is equipped with a VectorNav VN-300 iner-tial navigation system (INS) [38] and an Ardusimple dual-antenna GNSS receiver with RTK capability for accurate position and heading estimation. The total duration of this dataset is approximately 45 minutes. 7
+
+2) Hong Kong dataset . the Hong Kong dataset [39] was collected using a passenger vehicle equipped with an Xsens MTi-10 [40] integrated with an RTK GNSS system. This dataset provides high-accuracy positioning and orientation measurements, with a total duration of approximately 100 minutes. 3) Our Dataset . Our dataset was recorded by us using a Rosbot-XL [41] mobile robot platform. The robot is equipped with an Arazim Exiguo ® EX-300 [42] and a dual-antenna GNSS system, which enables direct estimation of the vehicle heading. The total duration of this dataset is approximately 15 minutes. In total, the three datasets contain 160 minutes of real recorded inertial and GT measurements using three different mobile platforms with three different types of inertial sen-sors. The complete specifications of the IMU sensors used in each dataset are provided in Table III and the carrying mobile platforms are shown in Fig. 4. TABLE III: IMU sensor specifications for each of dataset              
+
+> Gyroscope Accelerometer Type Inertial sensor Bias [deg/h] Noise [deg/s/ √Hz] Bias [mg] Noise [μg/ √Hz] VN-300 (ROOAD) 50.035 0.04 140
+> Arazim EXL-300 (ours) 10 0.01 0.04 300
+> MTi-10 (Honk-Kong) 18 0.03 0.015 60
+
+B. Comparison with Existing Methods 
+
+To evaluate the performance of the proposed approach, we compare it against three different methods:  
+
+> •
+
+UKF : The baseline UKF with GNSS updates, used to estimate the navigation state by fusing inertial measure-ments with GNSS position observations as described in Sections II-B and II-A. In this approach the process and measurement noise covariances are constant throughout out the missions.  
+
+> •
+
+MB-AUKF : A model-based adaptive UKF, in which the process noise covariance matrix ( Q) and the mea-surement noise covariance matrix ( R) are adaptively updated during filtering, as described in Section II-C.  
+
+> •
+
+ANPN-UKF : An adaptive neural process noise UKF, in which the process noise covariance matrix ( Q) is estimated using σQ-Net as presented in Section III-D.  
+
+> •
+
+ANPMN-UKF (Ours) : An adaptive neural UKF, where both the process noise covariance matrix ( Q)and the measurement noise covariance matrix ( R) are estimated using σQ-Net and σR-Net, respectively, as presented in Section III-D. 
+
+C. Performance Metric 
+
+To evaluate the proposed approach we used two performance metrics, as follows: 1) Position root mean square error (PRMSE) : The PRMSE of the 3D position compares the estimated position of the vehicle in the navigation frame with the GNSS-RTK GT: PRMSE (m) =
+
+vuut 1
+
+N
+
+> N
+
+X
+
+> k=1
+
+|| pk − ˆpk|| 2 (41) where ˆpk are the 3D estimated position vector at time k and pk is the GT position vector at time k. 
+
+D. Results 
+
+After training σQ-Net and σR-Net on the simulative data, we used the three datasets for evaluations using the PRMSE metric (41). Table IV presents the PRMSE results for our dataset, which consists of five trajectories with varying lengths ranging from approximately 30 m to 40 m. The trajectories include different motion patterns and durations, providing a representative evaluation of filter robustness under realistic operating conditions. Table IV summarizes the PRMSE performance on the Arazim dataset. Overall, the proposed ANPMN-UKF achieves the lowest error across all five trajectories, reducing the average PRMSE to 2.56m compared to 2.90m (UKF), 2.82m (MB-AUKF), and 2.70m (ANPN-UKF). This corresponds to an average improvement of 11.9%, 9.2%, and 5.3% over UKF, MB-AUKF, and ANPN-UKF, respectively. TABLE IV: Comparison of PRMSE across different trajec-tories in the Arazim dataset.                             
+
+> PRMSE [m] No.Traj UKF MB-AUKF ANPN-UKF ANPMN-UKF (ours) 12.99 2.83 2.62 2.48
+> 23.05 2.91 2.57 2.46
+> 32.80 2.77 2.71 2.51
+> 42.83 2.78 2.80 2.66
+> 52.84 2.80 2.81 2.67
+> Average 2.90 2.82 2.70 2.56
+
+Table V presents the PRMSE results for the ROOAD dataset, which consists of six trajectories with varying lengths ranging from approximately 50 m to 130 m. The trajectories include different motions, up and down, and circle patterns. The ROOAD dataset was recorded in a sandy terrain environment, characterized by loose and deformable ground conditions. Figure 5 qualitatively shows ANPMN-UKF (ours) and the GNSS ground-truth. Table V gives the results, showing our method achieves a PRMSE of 2.94m, improving the UKF (4.69m), MB-AUKF (3.55m), and ANPN-UKF (3.45m). Table VI presents the PRMSE results for the Hong-Kong dataset, which consists of four trajectories with varying lengths ranging from approximately 3Km m to 4 Km. The trajectories include different motions with car in the city of Hong-Kong. The GT and our estimated trajectories are shown in Fig.6. Table VI shows that the ANPMN-UKF (ours) achieves a PRMSE of 3.07m, improving over UKF (3.79m), MB-AUKF (3.48m), and ANPN-UKF (3.21m). The gain is most pronounced in Trajectories 1 and 3, while in 8
+
+Fig. 4: (a) ROOAD dataset [36] with the Waterhod-UGV platform[37], (b) Our recorded dataset using the ROSbot platform [41] and Arazim’s IMU EX-300 [42] , (c) Hong-Kong dataset [39] recorded using a car. 
+
+Fig. 5: (a) 3D plot of Trajectory 1 showing the GT and our estimated trajectories. (b) 2D plot of Trajectory 1 showing the GT and our estimated trajectories. TABLE V: Comparison of PRMSE across different trajec-tories in the ROOAD dataset.                                 
+
+> PRMSE [m] No.Traj UKF MB-AUKF ANPN-UKF ANPMN-UKF (ours) 15.25 4.74 4.69 3.04
+> 25.58 3.73 3.68 2.92
+> 35.25 3.08 3.06 2.97
+> 45.28 3.77 3.33 2.89
+> 53.10 2.98 2.94 2.94
+> 63.66 3.02 2.99 2.91
+> Average 4.69 3.55 3.45 2.94
+
+Trajectory 2 all methods perform similarly. In Trajectory 4 our approach remains close to the adaptive baselines and outperforms UKF. TABLE VI: Comparison of PRMSE across different trajec-tories in the Hong Kong dataset.                         
+
+> PRMSE [m] No.Traj UKF MB-AUKF ANPN-UKF ANPMN-UKF (ours) 15.32 4.45 3.31 3.15
+> 22.99 2.98 3.23 2.98
+> 33.62 3.45 3.17 3.01
+> 43.25 3.06 3.12 3.16
+> Average 3.79 3.48 3.21 3.07
+
+Fig. 6: (a) 3D plot of Trajectory 2 showing the GT and our estimated trajectories. (b) 2D plot of Trajectory 2 showing the GT and our estimated trajectories. 
+
+E. Summary 
+
+Using real-world data, we demonstrate that that our ANPMN-UKF achieves the highest position accuracy, con-sistently surpassing both the UKF, MB-AUKF, and ANPN-UKF. Specifically, the ANPMN-UKF improved the PRMSE estimation by 22.7% relative to the UKF, by 12.72% com-pared to the MB-AUKF, and by 8.03% compared to the ANPN-UKF. Notably, both adaptive variants outperformed the baseline UKF in terms of position. The results are summarized in Table VII showing the average PRMSE across all trajectories and in Table VIII the improvement using our approach over the baseline methods. TABLE VII: Average PRMSE comparison across trajecto-ries for the proposed and baseline methods.                 
+
+> Average PRMSE over all trajectories [m] Dataset UKF MB-AUKF ANPN-UKF ANPMN-UKF (ours) Hong-Kong 3.79 3.48 3.21 3.07
+> ROOAD 4.69 3.55 3.45 2.94
+> Arazim 2.90 2.82 2.70 2.56
+
+F. Computational Time 
+
+Our code was implemented in Python using the PyTorch library. Training was performed on an NVIDIA GeForce RTX 5050 GPU 8GB. For evaluation, we used an Intel Core 9
+
+TABLE VIII: Improvement percentage comparison across different methods compare to our method ANPMN-UKF.                
+
+> ANPMN-UKF (ours) Improvement [%] Dataset UKF MB-AUKF ANPN-UKF Hong-Kong 18.98 11.78 4.15
+> ROOAD 37.20 17.14 14.59
+> Arazim 11.92 9.25 5.35
+> Average 22.70 12.72 8.03
+
+Ultra 7 255Hx CPU with 32 GB RAM. We compare the run-time of our method against all baselines. In Fig. 7 presents the execution time for each approach across all trajectories and datasets; the boxes indicate the average runtime, while the error bars represent the minimum and maximum values. 
+
+Fig. 7: Run-time comparison across all datasets for UKF, MB-AUKF, ANPN-UKF, and ANPMN-UKF. The boxes indicate the average runtime, while the error bars represent the minimum and maximum values. V. C ONCLUSION 
+
+Reliable fusion of inertial and satellite-based navigation systems for ground mobile robots is highly dependent on accurate modeling of both process and measurement noise covariances. In practice, these noise characteristics are difficult to model precisely due to sensor imperfections, environmental effects, and changing motion dynamics. This work proposed a hybrid neural approach, ANPMN, that combines data-driven learning with classical estimation the-ory to improve noise uncertainty modeling within an UKF framework. To this end, we proposed a neural architecture backbone for estimating the inertial uncertainty, σQ-Net, and for estimating the position uncertainty, σR-Net. The neural net-work is introduced to estimate the process noise covariance and measurement noise covariance parameters directly from raw inertial sensor and GNSS measurements. The network operates without requiring external features or handcrafted tuning parameters, enabling end-to-end noise characteriza-tion based solely on sensor data. Using a sim2real approach, we evaluated our ANPMN-UKF methods, on three independent datasets collected using different inertial sensors and platforms which operated in different conditions. Our sim2real approach enables training on large scale data, while reducing the need for costly and time-consuming real-world data collection. Experimental results demonstrate consistent performance improvements across all tested trajectories. On average, our proposed approach improves positioning accuracy in terms of the PRMSE by 22.7% compared to a standard UKF, by 12.72% compared to an MB-AUKF, and by 8.03% compared to an ANPN-UKF, across all datasets. These results indicate that the learned noise model gener-alizes well to unseen datasets, inertial sensors, road sur-faces, and environmental conditions, demonstrating robust-ness beyond the simulative training distribution. Although experimental validation focused on wheeled platforms, the proposed framework is not platform-specific and can be readily applied to any inertial navigation system augmented with external measurements. A main limitation of our approach is that the learned noise model may degrade when real-world conditions deviate significantly from the simulated training setup. In addition, using the deep learning for estimate the noise adaptation increases the per-iteration computational cost compared to a standard UKF. Overall, this study establishes a scalable methodology (sim2real and ANPMN-UKF) for embedding deep learning into adaptive state estimation using the UKF, laying a solid foundation for future research in robust and accurate navigation systems across a wide range of operating scenarios. ACKNOWLEDGMENT 
+
+The authors gratefully acknowledge the support of the Israel Innovation Authority under grant 84330, which partially supported this research. REFERENCES 
+
+[1] V. Basiuk, S. Maksymova, O. Chala, and O. Miliutina, “Mobile robot position determining using odometry method,” Multidisciplinary Journal of Science and Technology , vol. 3, no. 3, pp. 227–234, 2023. [2] R. Raj and A. Kos, “A comprehensive study of mo-bile robot: history, developments, applications, and fu-ture research perspectives,” Applied Sciences , vol. 12, no. 14, p. 6951, 2022. [3] L. Antonyshyn, J. Silveira, S. Givigi, and J. Marshall, “Multiple mobile robot task and motion planning: A survey,” ACM Computing Surveys , vol. 55, no. 10, pp. 1–35, 2023. [4] D. F. Y´ epez-Ponce, J. V. Salcedo, P. D. Rosero-Montalvo, and J. Sanchis, “Mobile robotics in smart farming: current trends and applications,” Frontiers in Artificial Intelligence , vol. 6, p. 1213330, 2023. [5] S. Lin, A. Liu, J. Wang, and X. Kong, “An intelligence-based hybrid PSO-SA for mobile robot path plan-ning in warehouse,” Journal of Computational Science ,vol. 67, p. 101938, 2023. 10 
+
+[6] A. Neaz, S. Lee, and K. Nam, “Design and implemen-tation of an integrated control system for omnidirec-tional mobile robots in industrial logistics,” Sensors ,vol. 23, no. 6, p. 3184, 2023. [7] X. Yue, Y. Zhang, J. Chen, J. Chen, X. Zhou, and M. He, “LiDAR-based SLAM for robotic mapping: state of the art and new frontiers,” Industrial Robot: the international journal of robotics research and ap-plication , vol. 51, no. 2, pp. 196–205, 2024. [8] J. Patoliya, H. Mewada, M. Hassaballah, M. A. Khan, and S. Kadry, “A robust autonomous navigation and mapping system based on GPS and LiDAR data for unconstraint environment,” Earth Science Informatics ,vol. 15, no. 4, pp. 2703–2715, 2022. [9] S. Li, S. Wang, Y. Zhou, Z. Shen, and X. Li, “Tightly coupled integration of GNSS, INS, and LiDAR for ve-hicle navigation in urban environments,” IEEE Internet of Things Journal , vol. 9, no. 24, pp. 24721–24735, 2022. [10] K. Fujii, “Extended kalman filter,” Refernce Manual ,vol. 14, p. 41, 2013. [11] I. Brigadnov, A. Lutonin, and K. Bogdanova, “Er-ror state extended Kalman filter localization for un-derground mining environments,” Symmetry , vol. 15, no. 2, p. 344, 2023. [12] E. A. Wan and R. Van Der Merwe, “The unscented Kalman filter for nonlinear estimation,” in Proceedings of the IEEE 2000 adaptive systems for signal process-ing, communications, and control symposium (Cat. No. 00EX373) , pp. 153–158, Ieee, 2000. [13] A. Gelb et al. , Applied optimal estimation . MIT press, 1974. [14] Y. Bar-Shalom, P. K. Willett, and X. Tian, Tracking and data fusion , vol. 11. YBS publishing Storrs, CT, USA:, 2011. [15] A. Almagbile, J. Wang, and W. Ding, “Evaluating the performances of adaptive Kalman filter methods in GPS/INS integration,” Journal of Global Positioning Systems , vol. 9, no. 1, pp. 33–40, 2010. [16] B. Zheng, P. Fu, B. Li, and X. Yuan, “A robust adaptive unscented Kalman filter for nonlinear estimation with uncertain noise covariance,” Sensors , vol. 18, no. 3, p. 808, 2018. [17] L. Iezzi, C. Petrioli, and S. Basagni, “An adaptive ex-tended Kalman filter for state and parameter estimation in AUV localization,” in ICC 2023-IEEE International Conference on Communications , pp. 3932–3938, IEEE, 2023. [18] N. Cohen and I. Klein, “Inertial navigation meets deep learning: A survey of current trends and future directions,” Results in Engineering , p. 103565, 2024. [19] D. Hurwitz, N. Cohen, and I. Klein, “Deep learning assisted inertial dead reckoning and fusion,” IEEE Transactions on Instrumentation and Measurement ,2024. [20] A. Etzion, N. Cohen, O. Levi, Z. Yampolsky, and I. Klein, “Snake-inspired mobile robot positioning with hybrid learning,” Scientific Reports , vol. 15, no. 1, p. 15602, 2025. [21] A. A. Golroudbari and M. H. Sabour, “Recent ad-vancements in deep learning applications and methods for autonomous navigation: A comprehensive review,” 
+
+arXiv preprint arXiv:2302.11089 , 2023. [22] Q. He, H. Yu, and Y. Fang, “Deep learning-based inertial navigation technology for autonomous under-water vehicle long-distance navigation—a review,” Gy-roscopy and Navigation , vol. 14, no. 3, pp. 267–275, 2023. [23] K. Xiong, C. Wei, and H. Zhang, “Q-learning for noise covariance adaptation in extended Kalman filter,” Asian Journal of Control , vol. 23, no. 4, pp. 1803–1816, 2021. [24] D. Solodar and I. Klein, “VIO-DualPronet: Visual-inertial odometry with learning based process noise covariance,” Engineering Applications of Artificial In-telligence , vol. 133, p. 108466, 2024. [25] N. Cohen and I. Klein, “Adaptive Kalman-informed transformer,” Engineering Applications of Artificial In-telligence , vol. 146, p. 110221, 2025. [26] L. Xu and R. Niu, “EKFnet: Learning system noise covariance parameters for nonlinear tracking,” IEEE Transactions on Signal Processing , vol. 72, pp. 3139– 3152, 2024. [27] A. Levy and I. Klein, “Adaptive neural unscented Kalman filter,” IEEE Transactions on Intelligent Ve-hicles , pp. 1–10, 2026. [28] S. J. Julier, “The scaled unscented transformation,” in 
+
+Proceedings of the 2002 American Control Conference (IEEE Cat. No. CH37301) , vol. 6, pp. 4555–4559, IEEE, 2002. [29] K. Nielsen, C. Svahn, H. Rodriguez-Deniz, and G. Hendeby, “Ukf parameter tuning for local variation smoothing,” in 2021 IEEE International Conference on Multisensor Fusion and Integration for Intelligent Systems (MFI) , pp. 1–8, IEEE, 2021. [30] J. Farrell, Aided navigation: GPS with high rate sen-sors . McGraw-Hill, Inc., 2008. [31] D. Titterton and J. L. Weston, Strapdown inertial navigation technology , vol. 17. IET, 2004. [32] A. Mohamed and K. Schwarz, “Adaptive Kalman fil-tering for INS/GPS,” Journal of geodesy , vol. 73, no. 4, pp. 193–203, 1999. [33] B. Or and I. Klein, “A hybrid adaptive velocity aided navigation filter with application to INS/DVL fusion,” in OCEANS 2022, Hampton Roads , pp. 1–5, IEEE, 2022. [34] B. Or and I. Klein, “A hybrid model and learning-based adaptive navigation filter,” IEEE Transactions on Instrumentation and Measurement , vol. 71, pp. 1–11, 2022. [35] B. Or and I. Klein, “ProNet: Adaptive process noise estimation for INS/DVL fusion,” in 2023 IEEE Un-11 
+
+derwater Technology (UT) , pp. 1–5, IEEE, 2023. [36] G. Chustz and S. Saripalli, “ROOAD: RELLIS off-road Odometry Analysis Dataset,” 2021. [37] Clearpath Robotics, “Warthog Unmanned Ground Vehicle Robot.” https://clearpathrobotics.com/ warthog-unmanned-ground-vehicle-robot/, 2026. Accessed: 2026-01-18. [38] VectorNav Technologies, “VN-300 Dual Antenna GNSS/INS Product Page.” https://www.vectornav.com/ products/detail/vn-300, 2026. Accessed: 2026-01-18. [39] L. Hsu, F. Huang, H. Ng, G. Zhang, Y. Zhong, X. Bai, and W. Wen, “Hong Kong UrbanNav: An Open-Source Multisensory Dataset for Benchmarking Urban Navigation Algorithms,” NAVIGATION , vol. 70, no. 4, 2023. [40] Movella / Xsens, “Migration: Xsens MTi-10 series to Xsens Sirius series.” https: //base.movella.com/s/topic/0TO09000000Y05tGAC/ mti-10?language=en US&tabset-acedd=2, 2025. Accessed: 2026-01-18. [41] Husarion, “ROSbot XL manual.” https://husarion.com/ manuals/rosbot-xl/. Accessed: 2026-01-25. [42] Arazim Ltd., “Exiguo EX-300 Dual-Antenna GNSS/INS System.” https://arazim.com/ exiguo-ex-300/, 2026. Accessed: 2026-01-18.
