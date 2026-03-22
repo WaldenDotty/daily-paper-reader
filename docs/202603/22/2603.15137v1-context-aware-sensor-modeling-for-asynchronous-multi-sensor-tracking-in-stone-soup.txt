@@ -1,0 +1,260 @@
+Title: Context-Aware Sensor Modeling for Asynchronous Multi-Sensor Tracking in Stone Soup
+
+URL Source: https://arxiv.org/pdf/2603.15137v1
+
+Published Time: Tue, 17 Mar 2026 06:34:04 GMT
+
+Number of Pages: 7
+
+Markdown Content:
+# Context-Aware Sensor Modeling for Asynchronous Multi-Sensor Tracking in Stone Soup 
+
+Martin Vonheim Larsen ∗† , Kim Mathiassen ∗† ∗ Norwegian Defence Research Establishment (FFI)  
+
+> †
+
+University of Oslo, Department of Technology Systems 
+
+Abstract —Multi-sensor tracking in the real world involves asynchronous sensors with partial coverage and heterogeneous detection performance. Although probabilistic tracking methods permit detection probability and clutter intensity to depend on state and sensing context, many practical frameworks enforce globally uniform observability assumptions. Under multi-rate and partially overlapping sensing, this simplification causes repeated non-detections from high-rate sensors to erode tracks visible only to low-rate sensors, potentially degrading fusion performance. We introduce DetectorContext , an abstraction for the open-source multi-target tracking framework Stone Soup. 
+
+DetectorContext exposes detection probability and clutter in-tensity as state-dependent functions evaluated during hypothesis formation. The abstraction integrates with existing probabilistic trackers without modifying their update equations. Experiments on asynchronous radar-lidar data demonstrate that context-aware modeling restores stable fusion and significantly improves HOTA and GOSPA performance without increasing false tracks. 
+
+Index Terms —Multi-object tracking, sensor modelling, Stone Soup 
+
+I. I NTRODUCTION 
+
+Real-world multi-sensor tracking operates on data streams that are asynchronous, heterogeneous, and partially overlap-ping [1]. In such environments, the observability of targets varies across the surveillance volume: both detection proba-bility and clutter intensity depend on sensing geometry, scene structure, and sensor characteristics [2]. Although Bayesian tracking theory allows detection probability ( PD ) and clutter intensity ( λ) to depend on state and context [1], [3], many practical tracking frameworks reduce them to global constants. As a result, implementations assume uniform observability across the surveillance volume. This simplification prevents the tracker from representing where detection is likely and where clutter is expected. Globally uniform observability assumptions fail under par-tially overlapping and asynchronous sensing. Consider a long-range radar updating at 0.5 Hz fused with a short-range lidar updating at 10 Hz. Between two radar detections, the fused tracker processes 20 lidar updates. Once a target exits lidar coverage, these updates appear as consecutive missed detections. In probabilistic trackers with a globally constant observability model, each missed detection contributes a factor proportional to (1 − PD ) in the update step [1]. As a result, 
+
+> This work was funded in part by the Situational Awareness programme (P1756) at the Norwegian Defence Research Establishment (FFI), and by Universitetssenteret p˚ a Kjeller (UNIK).
+
+the track existence probability decays multiplicatively across updates. To prevent premature deletion, the tracker must therefore be tuned to tolerate sustained sequences of missed detections. This relaxation in turn allows the survival of short-range clutter tracks, which a dedicated lidar tracker would trivially reject. The fused system consequently performs worse than its parts. This failure mode is particularly acute in rigorous prob-abilistic trackers. These algorithms model track existence continuously [3], [4], allowing biases in detection and clutter modeling to accumulate. Heuristic trackers with hard con-firmation logic can be less sensitive to persistent modeling errors. However, probabilistic methods represent observability explicitly. With an appropriate sensor model, this failure mode can therefore be avoided. Although state-dependent sensor models appear in special-ized implementations, general-purpose tracking frameworks do not expose this flexibility. Stone Soup is an open-source, general-purpose multi-target tracking framework [5]. In the current Stone Soup interfaces, detection probability and clut-ter intensity are defined as constant scalar parameters on the hypothesizer or updater (e.g., in PDAHypothesiser ,
+
+PHDUpdater or BernoulliParticleUpdater ). Detec-tion probability is broadcast uniformly across predicted states, and clutter intensity appears as a fixed normalization term in hypothesis weighting. This design enforces globally uniform observability within existing updater logic; modeling state-dependent PD (x) or λ(z) requires refactoring core update code rather than supplying richer sensor models. This limitation reflects a missing abstraction boundary be-tween sensor modeling and hypothesis evaluation. Although probabilistic trackers already incorporate detection probability and clutter intensity in their update equations, the framework does not expose these quantities as state- or measurement-dependent functions. The required change is therefore archi-tectural rather than mathematical. We introduce DetectorContext , a lightweight interface that provides per-hypothesis access to detection probability and clutter intensity during update. By evaluating observability during hypothesis scoring rather than as global scalars, the abstraction restores state-dependent modeling without altering core tracker equations. In practice, this allows detection prob-ability and clutter intensity to depend on factors such as sensor range, blind sectors, or scene-dependent detector behavior, while leaving the underlying tracker equations unchanged. 
+
+> arXiv:2603.15137v1 [cs.CV] 16 Mar 2026
+
+This paper makes the following contributions:  
+
+> •
+
+Characterization of global observability failure mode: 
+
+We demonstrate how globally uniform detection and clutter assumptions induce structural failure under asyn-chronous and partially overlapping sensing, and explain why this effect accumulates in probabilistic trackers.  
+
+> •
+
+Framework-level abstraction for context-aware ob-servability: We introduce DetectorContext , an ar-chitectural interface for Stone Soup that exposes state-and measurement-dependent detection probability and clutter intensity during hypothesis evaluation without modifying tracker equations.  
+
+> •
+
+Empirical validation on asynchronous radar-lidar fusion: We show that context-aware modeling restores effective fusion performance, improving track establish-ment while maintaining clutter suppression on a real-world maritime dataset. II. T ARGET OBSERVABILITY MODELING IN 
+
+MULTI -T ARGET TRACKING FRAMEWORKS 
+
+This section briefly reviews how sensor observability is treated in probabilistic tracking theory and contrasts this with the abstractions exposed by general-purpose tracking frameworks. 
+
+A. State-Dependent Observability in Tracking Theory 
+
+Probabilistic multi-target tracking formulations include de-tection probability and clutter intensity as fundamental com-ponents of the measurement model. In foundational treat-ments [1], these quantities are typically presented as unspec-ified parameters. While this formulation theoretically permits dependence on target state or sensing geometry, it does not prescribe a specific functional form. In Random Finite Set (RFS) formulations, detection probability and clutter intensity are explicitly defined as state- and measurement-dependent functions, PD (x) and λ(z) [3]. This structure is retained in modern RFS-based filters such as the Labeled Multi-Bernoulli (LMB) filter [6] and the Poisson Multi-Bernoulli Mixture (PMBM) filter [7], where detection probability enters directly into hypothesis weights and existence updates. Explicit modeling of state-dependent observability is rare in general-purpose tracking frameworks, though bespoke systems demonstrate its value. Work in the mid-2000s recognized that constant detection performance is unrealistic in prac-tice [4]. Structured solutions have since emerged in maritime surveillance, where range-dependent clutter and occlusion demand explicit observability modeling [2], [8], [9]. These systems demonstrate that probabilistic trackers can exploit sensor context when available. However, this modeling re-mains tightly coupled to specific implementations rather than exposed through reusable abstractions. Handling asynchronous and multi-rate sensing has also been studied extensively, including out-of-sequence measurement (OOSM) processing and multi-rate update strategies [10]. These works address temporal misalignment and delayed mea-surements, but typically assume globally specified detection characteristics. The interaction between asynchronous sensing and spatially varying observability has received comparatively little attention at the framework abstraction level. 
+
+B. Limitations of General-Purpose Tracking Frameworks 
+
+Despite the theoretical flexibility of probabilistic tracking formulations, this flexibility is not typically exposed at the framework interface level. In contrast to bespoke systems, general-purpose tracking frameworks prioritize modularity and algorithm reuse. Within Stone Soup, detection probability and clutter intensity are specified as global quantities. Currently, conditioning on predicted track state, measurement location, or instantaneous sensor coverage is not supported [5]. This restriction is particularly limiting for probabilistic tracking algorithms, which consume detection probability and clutter intensity directly during hypothesis evaluation and track management. When observability varies across the surveillance volume, a globally uniform model forces trackers to interpret all missed detections equivalently, regardless of whether the target was actually observable. Under partially overlapping and asynchronous sensing, uniform treatment of missed detections induces the systematic failure modes de-scribed in Section I. Importantly, this limitation does not arise from the tracking algorithms themselves, but from the absence of a framework-level mechanism for exposing sensor context during hypoth-esis evaluation. Addressing this gap requires an architectural solution that preserves algorithm modularity while enabling observability to be modeled locally and dynamically. III. T HE DETECTOR CONTEXT ABSTRACTION 
+
+To address the architectural limitation identified in Sec-tion II, we introduce DetectorContext , a framework-level abstraction for context-aware sensor modeling in Stone Soup. This abstraction replaces globally specified detection probability and clutter intensity with locally conditioned eval-uations during hypothesis formation. The structural distinction between the current and proposed architectures is illustrated in Fig. 1. 
+
+A. The DetectorContext Interface 
+
+The DetectorContext interface encapsulates the sen-sor’s instantaneous observability state. At each timestep, the abstraction exposes two callable functions:  
+
+> •
+
+PD (x; S): Returns the detection probability for a pre-dicted track state x. 
+
+> •
+
+λ(z; S): Returns the clutter intensity at a measurement state z.Here, S represents the sensor state for the current timestep, such as platform pose, scanning geometry, coverage maps, blind sectors, or scene-dependent detector characteristics. During hypothesis evaluation, trackers use PD (x; S) and 
+
+λ(z; S) in both detection and missed-detection hypotheses. The interface aligns directly with standard probabilistic up-date equations and replaces globally specified constants with locally conditioned terms. DetectionReader                        
+
+> Detections Tracker
+> PD,λ(const.)
+> Current Architecture
+> Proposed Architecture
+> DetectionReader
+> Detections
+> DetectorContext
+> PD(x;S),λ(z;S)
+> Tracker
+> Fig. 1. Architectural comparison. Left: The tracker is configured with global detection probability PDand clutter intensity λ.Right: The detection reader emits a per-timestep DetectorContext that exposes state and scene dependent functionals PD(x;S)and λ(z;S)queried by the tracker. The key difference is that observability is no longer configured as static tracker parameters but evaluated dynamically via the emitted DetectorContext.
+
+B. Integration with Existing Trackers 
+
+Most probabilistic tracking algorithms in Stone Soup al-ready incorporate detection probability and clutter intensity in likelihood computation and existence updates. By replac-ing globally specified constants with DetectorContext 
+
+queries, these algorithms can operate under locally conditioned observability without structural modification. The abstraction is independent of the specific tracker for-mulation and preserves modular separation between sensor modeling and track management. The DetectorContext 
+
+implementation is being prepared for upstream integration into the Stone Soup project repository and will be made publicly available. IV. E XPERIMENTAL EVALUATION 
+
+We evaluate DetectorContext on a real asynchronous radar-lidar dataset collected from an unmanned surface vessel (USV). The objective is to quantify the impact of globally uniform observability assumptions and to assess whether context-aware modeling restores effective sensor fusion. All experiments are conducted within Stone Soup. 
+
+A. Dataset and Sensor Configuration 
+
+The dataset was recorded using an Odin-class USV equipped with a Simrad HALO-3 X-band pulse-compression radar and an Ouster OS2-128 lidar [11]. A navigation-grade INS ( NavP , developed by FFI) and per-vessel RTK-GNSS loggers provide ground-truth trajectories for the ego vessel and all moving targets. The radar updates at 0.8 Hz and covers 50–1612 m, with a 
+
+65 ◦ rear blind sector. The lidar updates at 10 Hz and provides reliable detections up to 50 m, with degraded coverage out to 80 m. As illustrated in Fig. 2, the sensors exhibit partially overlapping coverage: lidar dominates at close range, while radar covers most of the surveillance volume and serves as the primary sensor. The dataset consists of two representative sequences. 
+
+Scenario 1: Mixed-Range Traffic. Three moving vessels operate alongside static sea markers and islets, illustrated in Fig. 3. Two of the vessels move at medium range ( 1.5 km to            
+
+> Lidar (degraded)
+> 80 m
+> Lidar
+> 50 m
+> 50 m
+> Radar
+> 1612 m
+> 65 ◦blind sector
+> Fig. 2. Effective sensing regions and blind sectors for the radar-lidar configuration.
+
+300 m), while one approaches to ≈ 30 m before departing. This scenario stresses sensor handover across range regimes. 
+
+Scenario 2: Close-Range Formation with Occlusion. The ego vessel sails in close formation ( ≈ 30 m separation) with a cooperating USV, while other vessels maneuver at medium range (Fig. 4). Targets intermittently disappear into the radar blind sector. This scenario stresses association robustness under partial and time-varying observability. 
+
+B. Tracker Configurations 
+
+We evaluate the following configurations:  
+
+> •
+
+JPDA: A standard Joint Probabilistic Data Association (JPDA) filter with heuristic M -of-N track management and globally constant observability parameters.  
+
+> •
+
+GM-PHD (radar-only): A Gaussian-mixture Probability Hypothesis Density (GM-PHD) filter using radar detec-tions only. 200 m Fig. 3. Scenario 1 ground-truth trajectories. Red markers show stationary objects (sea markers and islets). The ego-vessel remains fairly stationary at the position given by the black marker. The yellow target performs a close-range loop around the ego-vessel. 200 m   
+
+> Fig. 4. Scenario 2 ground-truth trajectories. Red markers show stationary objects (sea markers and islets). The ego-vessel follows the black trajectory in formation with a cooperating USV (green trajectory).
+> •
+
+GM-PHD (uniform): A GM-PHD filter using globally constant detection probability and clutter intensity.  
+
+> •
+
+GM-PHD ( PD -aware): A GM-PHD filter with state-dependent detection probability and constant clutter in-tensity.  
+
+> •
+
+GM-PHD (context-aware): A GM-PHD filter with state-dependent detection probability and clutter intensity.                                       
+
+> TABLE I TRACKER PARAMETERS USED IN ALL EXPERIMENTS .
+> Component Setting
+> Motion model Constant velocity, σacc = 0 .8
+> State x= [ x, ˙x, y, ˙y]⊤
+> Track init cov. diag([10 ,15 ,10 ,15]) 2
+> Meas./nav cov. Varying; identical across trackers
+> JPDA
+> Gating χ2gate, PG= 0 .95
+> PD0.4
+> λ10 −3
+> Initiation min. 3 detections Deletion 30 missed updates
+> GM-PHD (common parameters)
+> Gating Mahalanobis dist. <3
+> Birth weight 10 −4
+> Survival prob. 1
+> Prune threshold 10 −6
+> Merging Mahalanobis dist. <4
+> Extraction threshold 0.85
+> GM-PHD (uniform and radar-only)
+> PD0.4
+> λ10 −3
+> GM-PHD ( PD-aware)
+> PDstate-dependent, Eqs. (1) and (3)
+> λ10 −3
+> GM-PHD (context-aware)
+> PDstate-dependent Eqs. (1) and (3)
+> λstate-dependent Eqs. (2) and (4)
+
+Table I summarizes the tracker parameters used in all experiments. All GM-PHD variants share identical motion, birth, survival, pruning, merging, and extraction settings. They differ only in the evaluation of detection probability PD and clutter intensity λ. JPDA track confirmation and deletion were configured with enlarged M -of-N windows to tolerate extended lidar non-detection sequences between radar updates. Specifically, N = 30 was required to preserve medium-range radar-supported tracks. Based on the sensing geometry illustrated in Figure 2, we now specify the state-dependent observability models used in the PD -aware and context-aware configurations. 
+
+a) Lidar detection probability.: The lidar provides reli-able detection within short range but exhibits reduced perfor-mance near its effective boundary and cannot detect targets beyond its configured range. We therefore define the lidar detection probability as a function of range r:
+
+P lidar  
+
+> D
+
+(r) = 
+
+
+
+0.95 , 0 < r < 50 0.2, 50 ≤ r < 80 0, r ≥ 80 .
+
+(1) 
+
+b) Lidar clutter intensity.: Small segmented regions are more likely to correspond to clutter than larger objects. We therefore assign higher clutter intensity to small segmentation areas. 
+
+λlidar =
+
+(
+
+10 −1, area < 10 10 −3, otherwise . (2) c) Radar detection probability.: Radar detection proba-bility is constrained by range and the blind-sector shown in Fig. 2. Within the configured operational range, we assume constant detection probability, and zero otherwise: 
+
+P radar  
+
+> D
+
+(r, θ ) = 
+
+(
+
+0.4, 50 < r < 1612 and in-sector 
+
+0, otherwise . (3) 
+
+d) Radar clutter intensity.: Long-range radar detections are more prone to ambiguity and spurious returns. We there-fore increase clutter intensity beyond 1000 m: 
+
+λradar (r) = 
+
+(
+
+10 −3, r < 1000 10 −2, otherwise . (4) We process measurements at their native sensor update rates and handle each sensor scan as a batch at its associated timestamp. No artificial temporal alignment or interpolation is applied. Trackers therefore operate on naturally asynchronous measurement streams. All trackers are constructed from unmodified Stone Soup components for prediction, update, and hypothesis manage-ment. The underlying probabilistic update equations are un-changed across configurations. 
+
+C. Evaluation Metrics 
+
+Performance is assessed using Higher Order Tracking Ac-curacy (HOTA) [12] and average Generalized Optimal Sub-pattern Assignment (GOSPA) [13]. For HOTA, Euclidean distance is used as the similarity measure. Errors below 5 m are assigned full similarity, and similarity decreases linearly to zero at 30 m. For GOSPA, we use cutoff distance c = 30 m and exponent p = 2 . The cardinality weighting parameter is set to α = 2 .We evaluate all metrics at radar timestamps only. For multi-sensor configurations, we ignore intermediate tracker outputs between radar updates to ensure fair comparison with the radar-only baseline. This avoids inflating performance due to higher update frequency while preserving the temporal structure relevant to radar-supported tracking. V. R ESULTS 
+
+This section quantifies the impact of global observability assumptions and evaluates the effect of context-aware model-ing via DetectorContext . All metrics are averaged over both scenarios unless otherwise stated. 
+
+A. Heuristic JPDA Provides Stable but Suboptimal Fusion 
+
+Fig. 5a shows representative tracking output on Scenario 1 for the baseline JPDA configuration. Despite the need for an enlarged M -of-N confirmation window, the filter maintains coherent medium-range tracks and successfully bridges radar-lidar handover. Although occasional identity switches occur within sustained lidar tracking, at least one consistent track is maintained on each target for most of its lifetime. JPDA faces the tuning trade-off discussed in Section I. If confirmation logic is made too conservative, radar-supported tracks don’t survive the high-rate lidar non-detections between radar updates. If confirmation logic is relaxed to preserve those tracks, short-lived lidar clutter tracks are also allowed to persist. No single confirmation setting simultaneously pre-serves medium-range radar tracks and aggressively suppresses close-range lidar clutter under globally uniform observability assumptions. Quantitatively, JPDA achieves a combined HOTA score of 67.5 and an average GOSPA of 35.2 (Table II). While medium-range tracking remains stable, overall performance is limited by lidar clutter persistence and occasional identity switches. 
+
+B. GM-PHD Fails Under Uniform Observability Assumptions 
+
+The GM-PHD filter relies exclusively on recursive Bayesian weight updates for track maintenance. Under globally uniform detection probability, repeated high-rate lidar non-detections directly suppress the weights of radar-supported tracks be-tween radar updates. In Scenario 1, illustrated in Fig. 5b, the uniform GM-PHD maintains tracks within the lidar-dominated region but fails to sustain radar-supported tracks. This breakdown is reflected quantitatively in a HOTA score of 10.1 for Scenario 1 and 42.0 overall, with an RMS GOSPA of 49.2 (Table II). In contrast, the radar-only GM-PHD achieves 85.6 HOTA on Scenario 1 and 74.3 HOTA combined. Under uniform observability assumptions, multi-sensor fu-sion can become detrimental: the fused GM-PHD configura-tion performs substantially worse than both the heuristic JPDA baseline and the radar-only variant. 
+
+C. Context-Aware Modeling Restores Fusion Performance 
+
+With DetectorContext , the systematic decay of radar-supported tracks under high-rate lidar non-detections disap-pears. By conditioning detection probability on local sensor coverage, radar-supported tracks no longer accumulate spuri-ous lidar non-detections. Track weights remain stable between radar updates, and continuity improves markedly during sensor handover across range regimes, as illustrated in Fig. 5c. As shown in Table II, the context-aware GM-PHD configu-ration substantially outperforms the uniform variant across all metrics. It also surpasses both the heuristic JPDA baseline and the radar-only configuration. Most of the improvement arises from context-aware detection probability modeling, which pre-vents high-rate non-detections from suppressing valid tracks between radar updates. Context-aware clutter modeling pro-vides an additional improvement, increasing HOTA from 80.1 to 81.4. VI. D ISCUSSION 
+
+The results demonstrate that globally uniform observability assumptions induce structural failure under asynchronous and partially overlapping sensing. This failure does not arise from deficiencies in the underlying tracking algorithms, but from applying state-independent detection and clutter models in environments where observability varies spatially and tempo-rally. When high-rate sensors repeatedly assert non-detections TABLE II TRACKING PERFORMANCE ACROSS CONFIGURATIONS . HOTA IS COMPUTED USING TRACK EVAL MULTI -SEQUENCE AGGREGATION . GOSPA IS REPORTED AS RMS OVER ALL EVALUATION TIMESTEPS .Combined Scenario 1 Scenario 2 Method HOTA (%) ↑ GOSPA ↓ HOTA (%) ↑ GOSPA ↓ HOTA (%) ↑ GOSPA ↓
+
+JPDA 67 .5 35 .2 71 .2 29 .6 64 .3 39 .5
+
+GM-PHD (uniform) 42 .0 49 .2 10 .1 61 .4 57 .3 35 .2
+
+GM-PHD (radar-only) 74 .3 32 .7 85 .6 24 .2 63 .0 38 .5
+
+GM-PHD ( PD -aware) 80 .1 29 .4 89 .5 22 .1 71 .4 34 .6
+
+GM-PHD (context-aware) 81 .4 27 .1 89 .7 21 .8 73 .5 31 .050 m 
+
+(a) JPDA 50 m (b) GM-PHD (uniform) 50 m (c) GM-PHD (context-aware) Fig. 5. Representative tracking output for Scenario 1 over a 480 s interval. Ground truth trajectories are shown as dashed gray lines. Inlier target tracks are rendered in shades of blue, while clutter tracks are shown in red. The ego-vessel position and heading are indicated by the black marker. (a) JPDA maintains medium-range tracks but exhibits limited clutter suppression in lidar-dominated regions and fragments a target track within lidar range. (b) GM-PHD with uniform observability loses radar-supported tracks due to accumulated missed detections. (c) Context-aware GM-PHD restores track continuity across sensing regimes while effectively suppressing clutter. 
+
+outside their effective coverage, probabilistic weight updates systematically suppress valid tracks. Heuristic track management, as illustrated by JPDA, can partially mask this effect by relaxing confirmation and deletion logic. However, such compensation introduces its own trade-offs, including reduced selectivity and prolonged clutter per-sistence. Heuristic track management can hide inconsistencies in the observability model. Fully probabilistic trackers expose those inconsistencies. The proposed DetectorContext abstraction does not introduce new tracking theory, nor does it modify existing probabilistic update equations. Rather, it exposes locally con-ditioned observability information at the time of hypothesis formation while preserving modular separation between sen-sor modeling and track management. The abstraction relies on the tracker’s existing formulation to exploit this locally conditioned context. Extensions such as adaptive detection probability esti-mation or survival modeling are complementary but or-thogonal to the architectural contribution presented here. 
+
+DetectorContext enables such methods but does not replace advanced probabilistic track management. The context-aware detection and clutter models used in this study are intentionally simple and reflect known sensing geometry in the evaluated maritime dataset. While the spe-cific parameterization is scenario-dependent, the architectural abstraction itself is agnostic to the functional form of PD and 
+
+λ. Learned, adaptive, or data-driven observability models can be integrated through the same interface without modifying tracker equations. The results therefore demonstrate not a dataset-specific tuning advantage, but the necessity of exposing observability as a first-class architectural concept. Consequently, state-dependent observability modeling is not an optional feature; it is a fundamental architectural require-ment for modern, multi-rate tracking frameworks. VII. C ONCLUSION 
+
+Globally uniform detection probability and clutter intensity assumptions constitute a major source of structural failure in asynchronous, partially overlapping multi-sensor systems. When high-rate sensors assert non-detections outside their effective coverage, principled probabilistic filters suppress valid tracks, rendering fusion ineffective. We introduced DetectorContext , a framework-level abstraction that enables locally conditioned observability mod-eling in Stone Soup without re-deriving or modifying existing tracking algorithms. Experimental results on real radar-lidar data demonstrate that context-aware modeling restores stable fusion and allows probabilistic trackers to outperform heuristic alternatives. Future work will extend DetectorContext with richer environmental constraints, including occlusion reasoning, land masking, and radar shade. Because the abstraction decouples sensor modeling from tracking logic, learned observability parameters, target-dependent detection models, and platform pose uncertainty can be incorporated without modifying the underlying filters. Treating state-dependent observability as a first-class architectural component allows general-purpose frameworks to better align tracking theory with complex operational environments. ACKNOWLEDGMENT 
+
+This work was conducted in part within the NATO Sci-ence and Technology Organization (STO) Task Group SET-322, “Evaluation Framework for Multi-Sensor Tracking and Fusion Algorithms.” The authors thank the group members for technical discussions that informed this research. REFERENCES [1] Y. Bar-Shalom and X.-R. Li, Multitarget-multisensor tracking: princi-ples and techniques . YBS publishing Storrs, CT, 1995, vol. 19. [2] E. F. Wilthil, Y. Bar-Shalom, P. Willett, and E. Brekke, “Estimation of Target Detectability for Maritime Target Tracking in the PDA Framework,” in 2019 22th International Conference on Information Fusion (FUSION) . IEEE, Jul. 2019, pp. 1–8. [Online]. Available: https://ieeexplore.ieee.org/document/9011366/ [3] R. Mahler, Statistical Multisource-Multitarget Information Fusion .Artech, 2007. [4] Y. Bar-Shalom, F. Daum, and J. Huang, “The Probabilistic Data As-sociation Filter: Estimation in the presence of measurement origin uncertainty,” IEEE Control Systems , vol. 29, no. 6, pp. 82–100, 2009. [5] S. Hiscocks, J. Barr, N. Perree, J. Wright, H. Pritchett, O. Rosoman, M. Harris, R. Gorman, S. Pike, P. Carniglia, L. Vladimirov, and B. Oakes, “Stone Soup: No Longer Just an Appetiser,” in 2023 26th International Conference on Information Fusion (FUSION) .Charleston, SC, USA: IEEE, Jun. 2023, pp. 1–8. [Online]. Available: https://ieeexplore.ieee.org/document/10224185/ [6] S. Reuter, B.-T. Vo, B.-N. Vo, and K. Dietmayer, “The Labeled Multi-Bernoulli Filter,” IEEE Transactions on Signal Processing ,vol. 62, no. 12, pp. 3246–3260, Jun. 2014. [Online]. Available: https://ieeexplore.ieee.org/document/6814305/ [7] J. L. Williams, “Marginal multi-bernoulli filters: RFS derivation of MHT, JIPDA, and association-based member,” IEEE Transactions on Aerospace and Electronic Systems , vol. 51, no. 3, pp. 1664–1687, 2015, arXiv: 1203.2995v6. [8] O. K. Helgesen, K. Vasstein, E. F. Brekke, and A. Stahl, “Heterogeneous multi-sensor tracking for an autonomous surface vehicle in a littoral environment,” Ocean Engineering , vol. 252, May 2022. [9] E. F. Brekke, A. G. Hem, and L. C. N. Tokle, “Multitarget Tracking with Multiple Models and Visibility: Derivation and Verification on Maritime Radar Data,” IEEE Journal of Oceanic Engineering , vol. 46, no. 4, pp. 1272–1287, Oct. 2021. [10] Y. Bar-Shalom, X. R. Li, and T. Kirubarajan, Estimation with applica-tions to tracking and navigation: theory algorithms and software . John Wiley & Sons, 2001. [11] M. V. Larsen, R. Smestad, and T. V. Haavardsholm, “Warpath ASV – situational awareness for autonomous surface vessels,” FFI-Rapport ,2024. [Online]. Available: https://www.ffi.no/publikasjoner/arkiv/ warpath-asv-situational-awareness-for-autonomous-surface-vessels [12] J. Luiten, A. Osep, P. Dendorfer, P. Torr, A. Geiger, L. Leal-Taixe, and B. Leibe, “HOTA: A Higher Order Metric for Evaluating Multi-object Tracking,” International Journal of Computer Vision ,vol. 129, no. 2, pp. 548–578, Feb. 2021. [Online]. Available: https://link.springer.com/10.1007/s11263-020-01375-2 [13] A. S. Rahmathullah, A. F. Garcia-Fernandez, and L. Svensson, “Generalized optimal sub-pattern assignment metric,” in 2017 20th International Conference on Information Fusion (Fusion) . IEEE, Jul. 2017, pp. 1–8. [Online]. Available: http://ieeexplore.ieee.org/document/ 8009645/

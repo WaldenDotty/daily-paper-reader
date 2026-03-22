@@ -1,0 +1,610 @@
+Title: Trajectory-Optimized Time Reparameterization for Learning-Compatible Reduced-Order Modeling of Stiff Dynamical Systems
+
+URL Source: https://arxiv.org/pdf/2603.16583v1
+
+Published Time: Wed, 18 Mar 2026 01:21:04 GMT
+
+Number of Pages: 28
+
+Markdown Content:
+# Trajectory-Optimized Time Reparameterization for Learning-Compatible Reduced-Order Modeling of Stiff Dynamical Systems 
+
+Joe Standridge 
+
+Texas A&M University, College Station, Texas 77840 
+
+Daniel Livescu 
+
+Los Alamos National Laboratory, Los Alamos, New Mexico 87545 
+
+Paul G. A. Cizmas 
+
+Texas A&M University, College Station, Texas 77840 
+
+## March 18, 2026 
+
+Abstract 
+
+Stiff dynamical systems present a fundamental challenge for machine-learning reduced-order mod-els (ML-ROMs), as explicit time integration becomes unstable in stiff regimes while implicit integration within learning loops is computationally expensive and often degrades training efficiency. Time repa-rameterization (TR) offers a promising alternative by transforming the independent variable so that rapid physical-time transients are spread over a stretched-time coordinate, enabling stable explicit integra-tion on uniformly sampled grids. Although several TR strategies have been proposed, their effect on learnability in neural ODE–based ROMs remains incompletely understood. This work systematically investigates time reparameterization as a stiffness-mitigation mechanism for neural ODE reduced-order modeling and introduces a trajectory-optimized TR (TOTR) formulation. The proposed approach casts time reparameterization as an optimization problem posed in arc-length coordinates, in which a traversal-speed profile is selected to directly penalize acceleration in stretched time. By targeting the smoothness of the dynamics actually integrated during training, this formulation produces time maps and reparame-terized trajectories that are better conditioned and easier to learn than other TR proposed methods. TOTR is evaluated on three representative stiff benchmark problems: a parameterized stiff linear system, the van der Pol oscillator, and the HIRES chemical kinetics model. Across all cases, the proposed approach consistently yields smoother reparameterizations and improved physical-time predictions under identical training regimens than other recent TR approaches. Quantitative results demonstrate loss reductions of one to two orders of magnitude compared to benchmark algorithms, particularly in regimes with severe or monotone stiffness. These results highlight that effective stiffness mitigation in ML-ROMs depends critically on the regularity and learnability of the time map itself, and that optimization-based TR pro-vides a robust framework for explicit reduced-order modeling of multiscale dynamical systems. 
+
+# 1 Introduction 
+
+Stiff dynamical systems arise throughout science and engineering, from chemical kinetics and incompress-ible flows to control, and remain a core obstacle in high-fidelity simulation due to widely separated time scales. Rapid transients alongside slow modes can make accurate simulation computationally prohibitive, motivating reduced-order models (ROMs) that remain efficient and numerically stable in stiff regimes. 1
+
+> arXiv:2603.16583v1 [cs.LG] 17 Mar 2026
+
+Stiffness has long been tied to stability-driven step-size restrictions: Dahlquist’s foundational work for-malized absolute stability and showed why explicit methods can become impractical for stiff problems [6]. Subsequent developments emphasized identifying stiff regimes and using stable integration strategies to ob-tain tractable simulations [18, 12, 2]. Later analyses clarified that stiffness is diagnosed by excessive com-putational cost and step-size restriction rather than purely spectral criteria [22, 23], and that nonlinearity can create numerical difficulty even when classical indicators appear mild [13]. Modern perspectives therefore view stiffness as a manifestation of multiscale dynamics and fast transients that constrain admissible time steps and solver design [11]. These challenges persist in ROMs: projection-based methods often inherit full-order stiffness, limiting speedups unless additional structure is exploited [3]. In chemical kinetics, stiffness is commonly addressed through explicit time-scale separation (e.g., quasi-steady-state, partial equilibrium, slow manifolds) [17, 20, 16], but such approximations are not generally available. Recently, neural ordinary differential equations (NODEs) [5] have emerged as a flexible data-driven ROM paradigm, yet stiffness can dominate both training and inference, motivating stiffness-aware NODE/ROM design. Recent NODE-ROM work addresses stiffness through several strategies. Some approaches modify training to improve numerical stability, e.g., scaling and stabilized gradient computations for stiff bench-marks [15]. Others incorporate implicit or stiff-stable solvers into the learning loop, including implicit single-step schemes and stiff-stable exponential-integration variants [7, 8]. A third direction seeks repre-sentations in which the learned dynamics are effectively less stiff, for example via autoencoder-based latent coordinates coupled to NODE surrogates [25]. Caldana and Hesthaven [4] showed that time reparameterization (TR)—where the dynamics are trans-formed to a new time coordinate—can substantially reduce stiffness for NODE-based ROMs. Related ideas have also been applied in Gaussian process surrogates for stiff systems by Cotrés García et al. [9], suggesting that stiffness can sometimes be mitigated by transforming the independent variable. Time reparameterization has deep classical roots. In celestial mechanics, Sundman-type transformations rescale time to regularize singular dynamics in the N-body problem [24]. More broadly, reparameterizing time is a standard analytical and geometric tool for studying trajectories and asymptotics without changing phase-space paths [1], and stretched/logarithmic time scalings are common in multiscale and singular pertur-bation analysis [14]. Historically, however, using such transformations in reduced or data-driven modeling was hindered by the need to invert time maps for off-reference data. Within the neural ODE framework, TR becomes practical: transformed-time trajectories can be learned and deployed directly, avoiding explicit inversion while improving numerical tractability. This matters be-cause typical neural ODE pipelines favor explicit integration and uniformly sampled data for efficient batch-ing and gradient computation [5, 21, 19], whereas stiff full-order dynamics often require implicit/adaptive solvers, producing nonuniform sampling and expensive gradients [10, 15]. By representing stiff trajectories in a transformed coordinate τ, TR can enable uniform sampling and stable explicit integration, restoring conditions favorable for efficient training and mitigating stiffness in the learned dynamics. Despite promising results, TR for learning-based ROMs remains only partially understood: existing approaches show that suitable time maps can reduce stiffness and improve learnability, but the formula-tion, optimization, and deployment of time transformations—and their impact on fidelity for full-order dy-namics—have not been systematically studied. This gap motivates the present work. We investigate time reparameterization for mitigating stiffness in neural ODE–based ROMs and propose a formulation that treats stiffness in transformed time as an explicit optimization objective. We evaluate multiple TR strategies across representative stiff dynamical systems. This paper introduces the TR formulation and its effect on stiffness in Section 2, along with two bench-mark TR strategies from the literature. The proposed algorithm is described in Section 3. Section 4 details training procedures and evaluation metrics, and Section 5 presents numerical results and comparisons. Im-plications and limitations are discussed in Section 6, with conclusions in Section 7. 22 Background 
+
+## 2.1 Neural ODE setting 
+
+Consider the full-order dynamical system: dy
+
+dt = f (y,t; μ), y(0; μ) = y0(μ), y(t; μ) ∈ Rd , (1) where μ denotes a set of parameters. In the neural ODE framework, the vector field f is approximated by a neural network fNN and learned from trajectory data by minimizing a loss defined on solution observations. A reduced order model is obtained: dz
+
+dt = fNN (z,t; μ), z(0; μ) = y0(μ), z(t; μ) ∈ Rd , (2) such that z ≈ y after integration. Training and prediction of (2) are performed by integrating the resulting ODE forward in time. For stiff systems, however, direct application of the NODE framework is challenging. Rapid transients in physical time force explicit integrators to take extremely small time steps for stability, while implicit or adaptive solvers introduce nonuniform time grids and complicate gradient computation. These difficulties motivate modifications to the standard NODE formulation that address stiffness at the level of the dynamical representation. 
+
+## 2.2 Time reparameterization 
+
+A strictly increasing map between physical time t and a stretched time coordinate τ is introduced: 
+
+t = t(τ; μ), dt
+
+dτ = α(y, τ, μ) > 0, t(0; μ) = 0, (3) where α(τ, y; μ) is a time dilation function. Defining the reparameterized trajectory as: ˜y(τ; μ) := y(t(τ; μ); μ), (4) the chain rule gives d ˜ y
+
+dτ = α(˜y, τ; μ) f ( ˜y,t(τ; μ); μ). (5) Equivalently, the reparameterized dynamics may be written as the augmented system: d ˜ y
+
+dτ = α(˜y, τ; μ)f ( ˜y,t(τ; μ); μ), ˜y(0) = y0(μ), (6a) dt
+
+dτ = α(˜y, τ; μ), t(0) = 0. (6b) Since α(τ, y; μ) > 0, the mapping t(τ; μ) is invertible and the original physical-time solution is recovered via y(t) = ˜y(τ(t)) .At an intuitive level, stiffness corresponds to rapid changes occurring over short physical-time intervals, which impose severe step-size restrictions on explicit integrators. Time reparameterization mitigates this effect by redistributing temporal resolution: choosing α to be small in stiff regions forces physical time to advance slowly with respect to τ, spreading sharp transients over a larger τ-interval. Conversely, in slowly varying regions, larger values of α permit faster advancement of physical time. In doing so, a proper choice of α can transform a stiff trajectory into a one with more uniform time scales in the stretched time coordinate. This decreases the time scale disparity and, by extension, the stiffness present. 3From a stability perspective, α scales the entire right-hand side of (6a), and therefore scales the eigen-values governing explicit stability. Selecting α ≪ 1 in stiff regions reduces the magnitude of the effective eigenvalues in τ, enlarging the admissible step size for explicit integration in the reparameterized system. This scaling viewpoint motivates the design of α to “flatten” disparate time scales and reduce stiffness in the transformed dynamics. Within the neural ODE framework, time reparameterization may be incorporated directly into the learned dynamical system. Specifically, both the rescaled vector field f and the time dilation function α are approxi-mated using neural networks. Let fNN ( ˜z, τ; μ) denote a neural network approximation of the stretched-time vector field, and let αNN ( ˜z, τ; μ) denote a neural network parameterization of the time dilation function, constrained to be strictly positive. Substituting these approximations into the reparameterized dynamics yields the neural ODE in stretched time: 
+
+d ˜z
+
+dτ = fNN ( ˜z, τ; μ), (7a) 
+
+dt dτ = αNN ( ˜z, τ; μ), (7b) with initial conditions ˜ z(0) = y0(μ) and t(0) = 0. The neural network fNN is trained to represent the system dynamics in the stretched-time coordinate, while αNN learns a time dilation that reconstructs the physical-time evolution induced by the chosen repa-rameterization strategy. To guarantee positivity of the dilation function and preserve monotonicity of the time map, the output of αNN is passed through an exponential activation. Training proceeds by integrating the augmented system (7) forward in τ and minimizing a loss defined on observations of ˜ z(τ; μ) and t(τ; μ). This formulation provides a neural ODE framework in which stiffness is addressed at the level of trajectory parametrization, enabling explicit integration and uniform sampling in 
+
+τ while preserving fidelity to the original physical-time dynamics. 
+
+## 2.3 Solver-directed time reparameterization 
+
+In practice, α is not prescribed a priori . Instead, it can be inferred from full-order simulations by exploiting information already produced by stiff integrators. Caldana and Hesthaven [4] construct τ from the adaptive time grid generated by a stiff-stable implicit solver applied to the full-order system. Let 0 = t0 < t1 < · · · < tN = T
+
+be the adaptive grid produced by the implicit integrator. A normalized stretched time is then defined by 
+
+τn := nN τ f , t(τn) = tn, n = 0, . . . , N, (8) where τ f is the chosen stretched final time. The full-order trajectory is subsequently re-sampled on an uniform τ grid. The implied time-velocity α(˜y, τ; μ) = dt/dτ is then learned as a function of state so that physical time can be recovered during deployment. The algorithm is summarized in Algorithm 1. 
+
+## 2.4 Extrema-based time reparameterization 
+
+An alternative class of time reparameterization strategies is based on geometric properties of the solution trajectory. Given a physical-time trajectory y(t), one may define its arc length: 
+
+s(t) =  
+
+> Zt
+> 0
+
+s
+
+1 + dy
+
+dt′
+
+> 2
+
+dt′, (9) 4Algorithm 1 Solver-Directed Time Reparameterization 
+
+Require: Physical-time trajectory {(tn, yn)}Nn=0, target stretched final time τ f
+
+Ensure: Reparameterized trajectory ˜ y(τ) and time map t(τ) on a uniform τ grid  
+
+> 1:
+
+Compute τ at each point τn := nN τ f , such that t(τn) = tn and ˜ y(τn) = yn. 
+
+> 2:
+
+Interpolate ˜ y(τ) and t(τ) onto uniform grid τ ∈ [0, τ f ].which measures the cumulative variation of the state along the trajectory. Both y and t may be subject to nondimensionalzation prior to computing arc length to ensure each ODE contributes roughly equally to the arc length. Reparameterizing the solution by arc length, ¯y(s) := y(t(s)) , (10) naturally redistributes resolution toward regions of rapid state variation, yielding a trajectory that is more uniformly resolved with respect to s. Arc-length coordinates therefore capture local geometric features of the dynamics and reduce nonuniformity induced by disparate physical time scales. Cortés García et al. [9] observe that although the arc-length–parameterized trajectory ¯ y(s) is smooth, stiffness can persist near the extrema of y. In these regions, the derivative d ¯ y/ds may exhibit rapid variations relative to the rest of the trajectory. To mitigate this effect, the authors propose selecting the reparameteri-zation such that: dτ
+
+ds sext 
+
+= 0, (11) at arc-length locations sext corresponding to the N extrema of y such that 
+
+τ(0) = 0, τ(s1) = s1
+
+S τ f , . . . , τ(sN ) = sN
+
+S τ f , τ(S) = τ f ,
+
+τ′(0) = 0, τ′(s1) = 0, . . . , τ′(sN ) = 0, τ′(S) = 0.
+
+(12) In practice, these conditions are enforced by constructing cubic or quintic splines between sn and sn+1.Such splines preserves monotonicity while spreading stiff regions over a larger τ-interval. The two repa-rameterizations t(s) and τ(s) can be composed to obtain t(τ). The algorithm is summarized in Algorithm 2. 
+
+Algorithm 2 Extrema-Based Time Reparameterization 
+
+Require: Physical-time trajectory {(tn, yn)}Nn=0, target stretched final time τ f
+
+Ensure: Reparameterized trajectory ˜ y(τ) and time map t(τ) on a uniform τ grid  
+
+> 1:
+
+Compute discrete arc-length samples {sn} from y and construct the arc-length trajectory ¯ y(s). 
+
+> 2:
+
+Interpolate ¯ y(s) onto a uniform arc-length grid s ∈ [0, S]. 
+
+> 3:
+
+Identify the extrema of ¯ y(s). 
+
+> 4:
+
+Construct τ using cubic or quintic splines.  
+
+> 5:
+
+Invert τ(s) to find s(τ). 
+
+> 6:
+
+Construct the reparameterized trajectory ˜ y(τ) = ¯y(s(τ)) and the physical-time map t(τ) = t(s(τ)) by composing the two reparameterizations.  
+
+> 7:
+
+Interpolate ˜ y(τ) and t(τ) onto uniform grid τ ∈ [0, τ f ].53 Method 
+
+## 3.1 Proposed time reparameterization algorithm 
+
+Existing time reparameterization strategies reduce stiffness indirectly by redistributing temporal resolution along the trajectory. This redistribution is determined according to solver behavior or geometric heuristics. While these approaches are effective in many settings, they do not explicitly control the smoothness of the reparameterized trajectory with respect to the new independent variable. Consequently, solver-driven reparameterization may become sensitive to numerical noise or parametric variation in certain regimes. Purely heuristic approaches can also fail for important cases. For example, extrema-based methods may fail to detect or adequately resolve isolated stiff events that are not associated with extrema. In contrast, we propose a novel approach that treats time reparameterization itself as an optimization problem, which we call Trajectory Optimized Time Reparameterization (TOTR). We optimize t(τ) posed directly on a fixed y(t) such that the trajectory ˜ y(τ) becomes as smooth as possible in τ. The central observation motivating this formulation is that stiffness appears as rapid variations in velocity and curvature with respect to the independent variable. Minimizing stiffness the stiffness of ˜ y(τ) in stretched time τ
+
+therefore amounts to constructing a reparameterization for which the transformed trajectory ˜ y(τ) evolves as smoothly as possible. To formalize this idea, we introduce the augmented state ˜ φ
+
+˜φ := [ y1, y2, ..., yn,t]⊺, (13) where the time variable t is treated as an additional component. The time map t(τ) can then be interpreted as an ordinary differential equation within this augmented system. When seeking to maximize the smoothness of the trajectory, a natural objective is to minimize the squared acceleration of the reparameterized trajectory 
+
+J [τ] =   
+
+> Zτf
+> 0
+
+d2 ˜φ
+
+dτ2
+
+> 2
+
+dτ. (14) In doing so, rapid variations in the dynamics actually integrated in τ are directly penalized. In this formula-tion, the acceleration of the time map is also considered alongside the nominal state variables. However, direct discretizing (14) in stretched time leads to severe numerical difficulties. A central-difference approximation of the second derivative introduces factors of (∆τ)−2, and squaring the expression produces (∆τ)−4. The resulting optimization problem therefore becomes severely ill-conditioned, partic-ularly in stiff regions where small ∆τ values are unavoidable. This leads to unstable gradients and poor numerical behavior. To avoid these difficulties, the proposed method reformulates the objective (14) in the arc-length domain 
+
+s. Before performing the arc-length reparameterization, each component of ˜ φ may be nondimensionalized so that all components contribute roughly equally to the arc length. In practice, assigning equal weight to the state and time components of ˜ φ was found to distribute stretched-time resolution more uniformly across the trajectory. Let s ∈ [0, S] denote the arc-length coordinate along the trajectory, and let ¯ φ(s) denote the concomitant arc-length parameterization. Rather than optimizing the time map t(τ) directly, we introduce a positive traversal speed profile: 
+
+v(s) := ds
+
+dτ , (15) which fully characterizes the time reparameterization. The arrival-time constraint becomes 
+
+τ f = 
+
+> ZS
+> 0
+
+dsv(s) . (16) 6Using a Frenet–Serret decomposition of the arc-length trajectory, the acceleration of ¯ φ with respect to τ
+
+admits the representation d2 ¯φ
+
+dτ2 = v v s T + κ(s) v2 N,
+
+where T and N are the unit tangent and principal normal vectors, vs = dv/ds, and κ(s) denotes the curvature of the trajectory in state space. Consequently, 
+
+d2 ¯y
+
+dτ2
+
+> 2
+
+= ( v v s)2 +  κ(s) v22 .
+
+Substituting d τ = ds/v(s), the optimization problem can be written entirely in the arc-length coordinate as 
+
+Js[v] =  
+
+> ZS
+> 0
+
+ v(s)vs(s)2 + κ(s)2 v(s)3 ds, subject to  
+
+> ZS
+> 0
+
+dsv(s) = τ f . (17) The two terms in (17) admit clear physical interpretations. The first penalizes rapid variations in traver-sal speed along the curve, corresponding to tangential acceleration, while the second penalizes acceleration induced by geometric curvature through the normal component. By construction, minimizing (17) is equiv-alent to minimizing the original acceleration-based objective (14), but yields a well-conditioned variational problem that is stable under discretization and suitable for gradient-based optimization. This formulation differs fundamentally from existing approaches in that stiffness is optimized explic-itly with respect to the dynamics actually integrated in stretched time, rather than inferred indirectly from solver step sizes or isolated geometric heuristics. As demonstrated in subsequent sections, the resulting time reparameterizations are smoother, less sensitive to parametric variation, and more compatible with learning-based reduced-order modeling frameworks such as neural ordinary differential equations. 
+
+Algorithm 3 Trajectory-Optimized Time Reparameterization 
+
+Require: Physical-time trajectory {(tn, yn)}Nn=0, target stretched final time τ f
+
+Ensure: Reparameterized trajectory ˜ y(τ) and time map t(τ) on a uniform τ grid  
+
+> 1:
+
+Compute discrete arc-length samples {sn} from φ and construct the arc-length trajectory ¯ φ(s). 
+
+> 2:
+
+Interpolate ¯ φ(s) onto a uniform arc-length grid s ∈ [0, S]. 
+
+> 3:
+
+Estimate the curvature κ(s) of the trajectory along the arc-length coordinate.  
+
+> 4:
+
+Initialize an unconstrained speed function v∗(s). 
+
+> 5:
+
+Enforce positivity of the speed via v(s) = exp (a + v∗(s)) , where a is a scalar offset.  
+
+> 6:
+
+Determine a such that the arrival-time constraint R S 
+
+> 0
+
+v(s)−1 ds = τ f is satisfied.  
+
+> 7:
+
+Solve the optimization problem min  
+
+> v∗
+> ZS
+> 0
+
+ v(s)vs(s)2 + κ(s)2 v(s)3 ds,
+
+subject to the arrival-time constraint enforced through a. 
+
+> 8:
+
+Compute the stretched-time map τ(s) = R s 
+
+> 0
+
+v(σ )−1 dσ and numerically invert it to obtain s(τ). 
+
+> 9:
+
+Construct the reparameterized trajectory ˜ y(τ) = ¯y(s(τ)) and the physical-time map t(τ) = t(s(τ)) by composing the two reparameterizations.  
+
+> 10:
+
+Interpolate ˜ y(τ) and t(τ) onto uniform grid τ ∈ [0, τ f ].Algorithm 3 summarizes the proposed time reparameterization procedure. Given a physical-time tra-jectory, the method first constructs an arc-length representation to isolate geometric features of the solu-tion independent of its original temporal parameterization. A smooth traversal speed along the arc-length 7coordinate is then obtained by solving a constrained optimization problem that balances tangential and curvature-induced acceleration while enforcing a prescribed final stretched time. The resulting speed profile defines a monotone time map, which is integrated and inverted to recover the reparameterized trajectory on a uniform stretched-time grid. By optimizing smoothness directly in the dynamics integrated in stretched time, the algorithm produces time reparameterizations that are stable under discretization and well suited for learning-based reduced-order modeling. 
+
+# 4 Experimental Setup 
+
+## 4.1 Training algorithm 
+
+Network architectures are selected via a hyperparameter search based on Latin hypercube sampling (LHS). The sampled parameters include the network architecture, learning rate, the initial prediction horizon, and the interval at which the prediction horizon is increased during training. For each sampled configuration, a neural ODE model is trained. The LHS procedure is seeded to ensure that all three methods considered in this study are evaluated on an identical set of hyperparameter configurations. In total, each method is trained on the same set of 1000 network pairs, with each pair consisting of a state network and a time-scaling network that are trained jointly. The number of hidden layers for each network is sampled uniformly from [1, 10 ], while the number of learnable parameters per network is sampled in the range [100 , 2500 ]. The initial prediction horizon is varied between 2 and 50, and the horizon-increase frequency is sampled in the range [1, 10 ] epochs. Hyperparameter optimization is performed under a fixed computational budget of 1000 network predictions per case per epoch. As a result, early training stages consist of many short predictions, whereas later epochs typically involve only one or two long-time integrations. Empirically, this approach led to improved training stability and enhanced model expressivity. The learning rate is sampled on a logarithmic scale by drawing 
+
+x ∈ [−5, −1] and setting lr = 5 × 10 x; it is subsequently decayed geometrically with epoch to reach 10 −8 at the end of training. All models are pretrained for a fixed 1000 iterations prior to a main training phase of 5000 epochs. The pretraining is done using forward Euler integration on single–time-step batches. This pretraining phase is computationally inexpensive and was found to promote stable optimization. Following pretraining, the networks are trained using the sampled learning rate and prediction horizon, with the horizon increased at intervals determined by the LHS. Forward Euler integration is used throughout the hyperparameter search to enable rapid evaluation of a large number of candidate configurations. Training and backpropagation through the time-integration scheme are performed using the torchdiffeq library [5]. In implementation, both fNN and αNN are represented using a composite network architecture. The right-hand side of the neural ODE is constructed by concatenating the outputs of two subnetworks, each of which receives as input the current system state with the parameter vector μ appended. All inputs are nondimensionalized to the interval [−1, 1] (based on the ranges encountered in the training data set) prior to evaluation. Similarly, the predicted derivatives are subsequently mapped back to physical units using scaling factors again derived from the minimum and maximum values of the derivatives observed in the on-reference data set. This normalization procedure improves training stability and ensures consistent scaling across and within systems. Training is performed in stretched time τ using a mean-squared error objective, 
+
+LMSE = 1
+
+(Nq + 1)Nτ
+
+> Nq
+
+# ∑
+
+> i=1
+> Nt
+
+# ∑
+
+> j=1
+
+ qi, j,pred − qi, j,true 
+
+2 +
+
+> Nτ
+
+# ∑
+
+> j=1
+
+ t j,pred − t j,true 
+
+2
+
+!
+
+, (18) where j indexes the step in τ, and Nq and Nτ are the number of state quantities and the number of steps in τ
+
+respectively. Equation (18) measures accuracy directly in the reparameterized coordinate. Prior to evaluation 8of (18), all state variables are nondimensionalized such that the true data lie in the interval [−1, 1]. The time coordinate is rescaled to the interval [0, 5], ensuring that comparable emphasis is placed on the state and time-scaling networks during training. This loss is used for training the neural ODE models. As such, this loss is reparameterization dependent, and measures only the ability of a given network to produce the reference curves produced by the reparameterization. Model selection and testing are performed using a reparameterization-invariant mean squared integral error, 
+
+LMSIE = 1
+
+NqT
+
+> Nq
+
+# ∑ 
+
+> i=1
+> ZT
+> 0
+
+ qi,pred (t) − qi,true (t)2 dt, (19) where again Nq is the number of state quantities and T is the integration time. Equation (19) is computed by trapezoidal integration in physical time. This metric evaluates all models ability to capture the same physical-time trajectories, independent of the underlying clock, enabling fair comparisons across reparame-terization strategies. 
+
+# 5 Results 
+
+## 5.1 Time Reparameterization of Noisy Data 
+
+Learning reduced-order models of stiff dynamical systems from high-fidelity simulations is fundamentally limited by the quality and structure of the training data. In many applications, full-order model data are gen-erated by adaptive time integrators, and can be contaminated by numerical noise or sampled nonuniformly in ways that can depend on solver tolerances and parameter values. When such data are used directly to train neural ODE–based models, the learning process can become parameterized by these external effects rather than the underlying physics, potentially leading to ineffective distribution of τ resolution and diffi-cult reparameterized ODEs. It therefor becomes important to generate reparameterized trajectories that are smooth in stretched time and stationary in parameter dependence. The ability to recover such smooth and stationary trajectories even from noisy FOM data helps construct robust, data-efficient neural ODE–based reduced-order models that faithfully represent the underlying dynamics. Before assessing how the resulting trajectories impact neural ODE training, we first examine the ability of each reparameterization strategy to recover smooth and stationary clocks from noisy full-order data. To isolate this effect, we deliberately consider FOM trajectories generated using a high-order implicit Radau solver with very loose integration tolerances, resulting in time series that exhibit solver-directed noise and tolerance-dependent irregularity. This setting reflects a realistic scenario in which high-fidelity data might be contaminated by numerical artifacts. The goal of this portion of the study is therefore not to optimize accuracy with respect to a reference solution, but to evaluate how effectively each method extracts a coherent and tolerance-robust temporal structure from imperfect data. Figures 1 and 2 illustrate these issues for the van der Pol oscillator later considered in Section 5.3 over 
+
+μ ∈ [10 3, 10 4], comparing three time reparameterization strategies at integration tolerances of 10 −3 and 10 −6. The solver-directed reparameterization naturally exhibits pronounced sensitivity to the integration tolerance, with substantial changes in the resulting time map as the tolerance is reduced. This behavior arises because the clock is inherited from adaptive solver step-size control and therefore reflects numerical parameters rather than intrinsic properties of the dynamics. As a result, the same set of physical trajectories can yield markedly different stretched-time representations depending solely on solver settings, undermining the consistency required for effective learning. In contrast, both the proposed trajectory-optimized method and the extrema-based method produce sub-stantially more stationary and repeatable reparameterized trajectories across tolerances, yielding far more uniform stretched-time representations. These methods construct clocks that are tied directly to the structure 9(a) Proposed Method (TOTR) (b) Solver Induced Method (c) Extrema Based Method 
+
+Figure 1: Van der Pol oscillator μ ∈ [10 3, 10 4] reparameterization by method for an integration tolerance of 10 −3  
+
+> (a) Proposed Method (TOTR) (b) Solver Induced Method (c) Extrema Based Method
+
+Figure 2: Van der Pol oscillator μ ∈ [10 3, 10 4] reparameterization by method for an integration tolerance of 10 −6
+
+of the trajectory itself rather than to numerical integration details, resulting in time maps that are significantly more robust to solver noise and tolerance variation. It is important to emphasize that the Van der Pol oscillator considered here lies in an asymptotic relax-ation regime for large μ, where the separation between slow and fast dynamics is well established. In this limit, it is possible to extract a stretched-time parametrization that is effectively stationary with respect to μ,as evidenced by the consistent time maps observed across the parameter range shown. This favorable struc-ture should not be interpreted as a generic property of stiff dynamical systems. In many systems of practical interest, the stiffness structure evolves with parameters, and reparameterizations that are both smooth and parameter-independent may not exist. Accordingly, the highly uniform time maps in Figures 1 and 2 should be viewed as an example of achievable regularity rather than a universal outcome. Nevertheless, a key observation is that although the proposed method explicitly optimizes smoothness in stretched time τ, the resulting reparameterizations also exhibit a high degree of smoothness with respect to the parameter μ. This emergent joint smoothness in τ and μ is particularly valuable for neural ODE training, as it promotes coherent trajectories across parameter space, reduces parameter-induced variability, and improves the stability and generalization of learned reduced-order models. 10 5.2 Problem 1: Parameterized Stiff Linear System 
+
+The first problem considered is a parameterized linear system constructed to isolate the effects of stiffness while avoiding nonlinear geometric complexity. The governing equations are dy
+
+dt = A B (μ) A⊤y(t; μ), y(0) = 1 0 0 0 0⊤ , (20) where y(t; μ) ∈ R5 and μ > 0 controls stiffness. The matrix A ∈ R5×5 is an orthogonal mixing matrix obtained via a QR factorization of a fixed dense matrix, 
+
+A = qr 
+
+
+
+5 1 −1 0 0
+
+−1 3 −10 1 22 −1 5 1 −10 1 2 3 −31 12 −1 −2 5
+
+ , (21) which deliberately mixes fast and slow modes across all state components. This ensures that stiffness is not confined to a single coordinate direction but instead appears in each component of y, providing a stringent test for time reparameterization. The parameter-dependent decay rates are contained in 
+
+B(μ) = 
+
+
+
+−0.25 μ 0.97 μ 0 0 0
+
+−0.97 μ −0.25 μ 0 0 00 0 − 10 μμ0.3 + 10 0 00 0 0 − 100 μμ0.6 + 100 00 0 0 0 − μμ + 1
+
+
+
+. (22) The dominant decay rates scale as O(μ), while the slowest mode remains O(1) as μ increases. Conse-quently, the stiffness ratio grows proportionally to μ.Training data were generated for 
+
+μ ∈ { 10 1, 10 1.1, 10 1.2, . . . , 10 3.9, 10 4},
+
+with off-reference testing performed at intermediate parameter values 
+
+μtest ∈ { 10 1.05 , 10 1.65 , 10 2.25 , 10 2.75 , 10 3.35 , 10 3.95 }.
+
+This stiff linear system (SLS) provides a controlled setting in which the effect of time reparameterization can be studied independently of nonlinear dynamics. Because the system contains five state variables, only a representative subset is shown for clarity. The results for ODEs y1 and y4 are presented in the following plots. The variable y1 was selected because it represents the perturbed quantity, while y4 was chosen because it exhibits the largest error across the methods considered. 
+
+Moderate stiffness regime. Figure 3 compares reparameterizations for the off-reference test case μ =
+
+10 1.05 . At this value of μ very little stiffness is present. All three methods capture the trends present with varying degrees of success. The proposed method captures the dynamics with very little error. The extrema-based method captures the general trend of the solution, but introduces spurious oscillations due to the 11 trajectory in the reparameterized coordinate, τ. The solver-directed does poorly here, as the behavior of the problem in the stiff regime inhibits the ability of the networks to learn effectively in this regime. Figure 4 compares the trajectories of the solutions in τ. Though the solution does not exhibit much stiffness, all three methods slow down time in areas of larger gradients. The proposed method is able to match the reference trajectory more accurately than the benchmarks. The extrema-based method is able to predict the the reference solution with reasonable accuracy, but the method’s trajectory in τ is more difficult for the network to approximate.  
+
+> (a) ODE one (b) ODE four
+
+Figure 3: Time reparameterizations for the stiff linear system, off-reference test case μ = 10 1.05 . 
+
+> (a) ODE one (b) ODE four
+
+Figure 4: Trajectories for μ = 10 1.05 in the reparameterized coordinate, τ.
+
+Extreme stiffness regime. As stiffness increases, differences between reparameterization strategies be-come more pronounced. Figures 5 and 6 show two representative views for μ = 10 3.95 . The proposed method maintains a smooth time map that resolves both fast and slow dynamics. In contrast, the solver-directed method under-resolves slow-time recovery, while the extrema-based heuristic fails to adequately 12 resolve the fastest transient scales, as highlighted in the early-time zoom of Figure 6. Figure 7 elucidates the mechanism behind the failure of the solver-directed method. The trajectories produced in τ have introduced a cusp-like behavior at the transition between the two time scales. The neural networks failed to adequately capture this behavior. The difference between the methods becomes clearer when the different reparameterizations are com-pared directly. In Figure 8 the time curves are compared, as well as their derivatives. Even though the solver-directed method introduced stiff behavior in the reparameterized ODEs, the time curve itself is able to be represented with fair accuracy. In contrast, while the extrema-based method produced ODEs that were more easily captured with a neural network, the time curve required to do so was extremely difficult for the network to match. In particular, the neural network αNN ( ˜z, τ; μ) must predict at each step the derivative of time with respect to τ. The time curve constructed for this case varies wildly, and the network fails to cap-ture the quick oscillations present in the first three-quarters of the trajectory. It can be observed that for this case the proposed method results in smoother time curves that are more easily represented by ML-ROMs. Furthermore, the resulting reparameterized ODEs are not only smoother in τ, but by comparing Figures 4 and 7 are more stationary with respect to variations in μ. These together result in a modeling problem that is a much simpler task for the NN-ROM to capture.  
+
+> (a) ODE one (b) ODE four
+
+Figure 5: Time reparameterizations for the stiff linear system, off-reference test case μ = 10 3.95 .
+
+Discussion of problem one results. Because the underlying ODE, integration tolerances, and training pro-cedure are held fixed, all differences observed in Figures 3–8 arise solely from the choice of time reparame-terization. The results indicate that directly optimizing the clock to promote smooth trajectories in stretched time yields more regular time maps, particularly in high-stiffness regimes. This regularity is advantageous for parametric ROM construction: small variations in the state should not induce disproportionately large changes in the inferred clock, and smoother maps are typically easier to learn robustly within a data-driven surrogate. Tables 1 and 2 demonstrate that the proposed time-reparameterization strategy consistently outperforms the comparison methods in both stretched-time accuracy and physical-time trajectory prediction. The pro-posed method achieves reductions of one to two orders of magnitude in τ-MSE across all state components and in the aggregated time and state metrics, for both on- and off-reference evaluations. These improvements indicate that directly optimizing the clock to promote smooth dynamics in stretched time yields substantially more regular and robust time maps that are more easily represented by ML-ROMs. Notably, we see that the 13 Table 1: SLS τ-MSE for all methods (On- vs Off-reference). 
+
+Solver-Directed Extrema-Based Trajectory-Optimized Block Metric ON OFF ON OFF ON OFF 
+
+τ MSE (nondim) 
+
+y1 5.99 × 10 −4 8.65 × 10 −4 2.33 × 10 −4 2.54 × 10 −4 3.74 × 10 −5 4.82 × 10 −5
+
+y2 8.51 × 10 −3 1.23 × 10 −2 5.95 × 10 −4 6.92 × 10 −4 4.00 × 10 −5 5.72 × 10 −5
+
+y3 4.80 × 10 −3 6.62 × 10 −3 2.73 × 10 −4 3.15 × 10 −4 1.40 × 10 −4 1.98 × 10 −4
+
+y4 1.50 × 10 −2 2.07 × 10 −2 5.63 × 10 −4 7.32 × 10 −4 4.44 × 10 −4 6.42 × 10 −4
+
+y5 8.87 × 10 −4 1.37 × 10 −3 3.67 × 10 −4 4.12 × 10 −4 4.38 × 10 −5 6.03 × 10 −5
+
+Time 2.25 × 10 −4 2.83 × 10 −4 1.62 × 10 −4 1.68 × 10 −4 4.41 × 10 −6 8.23 × 10 −6
+
+State 5.96 × 10 −3 8.36 × 10 −3 4.06 × 10 −4 4.81 × 10 −4 1.41 × 10 −4 2.01 × 10 −4
+
+All 5.00 × 10 −3 7.02 × 10 −3 3.65 × 10 −4 4.29 × 10 −4 1.18 × 10 −4 1.69 × 10 −4
+
+Table 2: SLS MSIE (dimensional) for all methods (On- vs Off-reference). 
+
+Solver-Directed Extrema-Based Trajectory-Optimized Block Metric ON OFF ON OFF ON OFF 
+
+MSIE (dim) 
+
+y1 6.70 × 10 −4 9.46 × 10 −4 2.65 × 10 −4 2.96 × 10 −4 1.07 × 10 −4 1.42 × 10 −4
+
+y2 8.49 × 10 −4 1.32 × 10 −3 3.68 × 10 −5 3.75 × 10 −5 5.97 × 10 −6 8.88 × 10 −6
+
+y3 1.65 × 10 −3 2.61 × 10 −3 7.64 × 10 −5 8.12 × 10 −5 8.94 × 10 −5 1.35 × 10 −4
+
+y4 4.00 × 10 −4 6.23 × 10 −4 1.54 × 10 −5 1.78 × 10 −5 2.47 × 10 −5 3.83 × 10 −5
+
+y5 3.38 × 10 −4 6.31 × 10 −4 1.87 × 10 −4 1.85 × 10 −4 1.11 × 10 −5 1.43 × 10 −5
+
+State 7.81 × 10 −4 1.23 × 10 −3 1.16 × 10 −4 1.23 × 10 −4 4.77 × 10 −5 6.77 × 10 −5
+
+14 (a) ODE one (b) ODE four 
+
+Figure 6: Early-time zoom (first ten milliseconds) for μ = 10 3.95 , highlighting resolution of the fastest transient scales.  
+
+> (a) ODE one (b) ODE four
+
+Figure 7: Trajectories for μ = 10 3.95 in the reparameterized coordinate, τ
+
+performance advantage persists under off-reference testing, suggesting that all the learned reparameteriza-tions generalize beyond the training trajectory and are not overfit to a specific reference configuration. Taken together, these results demonstrate that the smoother trajectories of the proposed approach yield time maps that are easier to learn. 
+
+## 5.3 Problem 2: Van der Pol Oscillator 
+
+The second benchmark problem is the Van der Pol oscillator, a classical nonlinear system that exhibits strong stiffness in the relaxation regime. Written as a first-order system, ˙y1 = y2, (23a) ˙y2 = μ2  (1 − y21)y2 − y1
+
+ , (23b) 15 (a) Comparison of time as a function of τ between the three methods  
+
+> (b) Comparison of the derivative of each methods time with respect to τ.
+
+Figure 8: Time curves and their derivatives for μ = 10 3.95 .where μ > 0 controls the stiffness. For μ ≫ 1, solutions alternate between slow evolution along a manifold and rapid transitions across thin boundary layers, yielding an effective stiffness ratio that scales as O(μ).Training data were generated for 
+
+μ ∈ { 10 2, 10 2.04 , 10 2.08 , . . . , 10 3.96 , 10 4},
+
+with off-reference testing performed at 
+
+μtest ∈ { 10 2.01 , 10 2.67 , 10 3.33 , 10 3.99 }.
+
+Moderate stiffness regime. Figure 9 compares time reparameterizations for μ = 10 2.01 . All three ap-proaches spread fast transitions over a wider interval in τ, enabling explicit integration on a uniform stretched-time grid. In this regime, while differences are primarily qualitative, the proposed method not only exhibits improved adherence to the slow manifold over the full cycle, but best captures the behaviour of the boundary layer. Figure 10 provides an alternate visualization of the same case, highlighting differences in the perfor-mance near the boundary layer. All three methods have phase error of the same magnitude. Figure 11 provides the trajectories in τ. The proposed method and the extrema-based method produced similar trajectories. This is anticipated as both methods share the common arc-length trial parametrization, and both methods will stretch time in similar places as the extrema are located near the stiff events of the system. The solver-directed method experiences phase lag in both the state and time predictions. Despite this error, the method produced a solution in time that is still remarkably accurate and, of the three methods tested, produced the least phase error in time. 
+
+Extreme stiffness regime. Figure 12 shows results for μ = 10 3.99 . In this regime the three methods exhibit clearer tradeoffs: all reduce stiffness enough to permit explicit integration, but they differ in how they balance phase accuracy, manifold tracking, and resolution of rapid transitions. In these particular results, the solver-directed strategy tracks the slow manifold most accurately, while the other approaches more faithfully capture the shape of the fast transitions at the cost of increased phase lead. 16 (a) ODE one (b) ODE two 
+
+Figure 9: Van der Pol oscillator, off-reference test case μ = 10 2.01 .
+
+The stiffness enters through the nonlinear reaction term  
+
+> (a) ODE one (b) ODE two
+
+Figure 10: Van der Pol oscillator, off-reference test case μ = 10 2.01 , emphasizing behavior near a boundary layer. To further clarify the extreme-stiffness behavior near fast transitions, Figure 13 shows the evolution of individual components during a boundary layer. These plots suggest that the dominant error mode is a phase lead that manifests differently across methods. The proposed and extrema-based methods better preserve the qualitative transition structure, while the solver-directed method exhibits lower phase error but reduced fidelity in the transition back to the slow manifold, particularly for y2. The proposed method is able to maintain a similar phase error to the solver-directed method while maintaining a fidelity to the slow-time mode present in the trajectory, transitioning between the two with greater accuracy than either other method. 
+
+Discussion of problem two results. The van der Pol oscillator highlights the importance of time repa-rameterizations that accommodate both slow-manifold dynamics and fast transient layers while maintaining a regular and learnable clock. As shown in Table 3, all three approaches reduce stiffness sufficiently to 17 (a) ODE one (b) ODE two (c) Time vs. τ
+
+Figure 11: Van der Pol oscillator, off-reference test case μ = 10 2.01 , trajectories in the reparameterized coordinate.  
+
+> (a) ODE one (b) ODE two
+
+Figure 12: Van der Pol oscillator, off-reference test case μ = 10 3.99 : comparison of time reparameterizations in the extreme stiffness regime. permit stable explicit integration; however, substantial differences emerge in the quality and robustness of the resulting time maps. The solver-directed strategy exhibits significantly larger nondimensional τ-MSE values—on the order of 10 −1 for the state components, despite this, the method has the lowest phase error of the methods considered. In contrast, the extrema-based and proposed methods achieve reductions of more than an order of magnitude, with the proposed approach maintaining consistently low errors across all metrics and only modest degradation off-reference. Although the proposed method exhibits slightly higher 
+
+τ-MSE values than the extrema-based approach in Table 3, it consistently produces more accurate state trajectories in physical time, as reflected by the lower MSIE values in Table 4. This behavior underscores that τ-MSE is not itself a measure of model fidelity, but rather a local metric of discrepancies in the learned time map. A trajectory with small pointwise errors may still allocate stretched-time resolution inefficiently, leading to degraded reconstruction of the physical dynamics. In contrast, the proposed method prioritizes the quality of the resulting trajectory by optimizing the time reparameterization to yield smoother and more uniformly traversed dynamics in stretched time. Consequently, even when the ML-ROM differs locally from the reference, the induced trajectory better captures the dominant dynamical features—particularly across the transitions present in this problem. This resulted in the lower observed error in physical time. 18 (a) ODE one (b) ODE two 
+
+Figure 13: Van der Pol oscillator, off-reference test case μ = 10 3.99 : comparison of time reparameterizations in the extreme stiffness regime, emphasis on boundary layer behaviour. Table 3: Van der Pol τ-MSE (nondimensional) for all methods (On- vs Off-reference). 
+
+Solver-Directed Extrema-Based Trajectory-Optimized Block Metric ON OFF ON OFF ON OFF 
+
+τ MSE (nondim) 
+
+y1 7.49 × 10 −2 9.14 × 10 −2 2.50 × 10 −3 2.24 × 10 −3 5.68 × 10 −3 6.23 × 10 −3
+
+y2 1.05 × 10 −1 1.21 × 10 −1 3.30 × 10 −3 2.98 × 10 −3 6.95 × 10 −3 7.70 × 10 −3
+
+Time 4.68 × 10 −4 5.15 × 10 −4 3.20 × 10 −5 3.17 × 10 −5 3.31 × 10 −5 3.53 × 10 −5
+
+State 9.00 × 10 −2 1.06 × 10 −1 2.90 × 10 −3 2.61 × 10 −3 6.32 × 10 −3 6.96 × 10 −3
+
+All 6.02 × 10 −2 7.10 × 10 −2 1.95 × 10 −3 1.75 × 10 −3 4.22 × 10 −3 4.65 × 10 −3
+
+## 5.4 Problem 3: HIRES Chemical Kinetics System 
+
+The third benchmark is the HIRES system, a stiff nonlinear chemical kinetics model with eight coupled ODEs, ˙y(t; μ) = f (y(t; μ)) , y(0) = y0, y(t) ∈ R8, (24) with dynamics ˙y1 = −1.71 y1 + 0.43 y2 + 8.32 y3 + 0.0007 , (25) ˙y2 = 1.71 y1 − 8.75 y2, (26) ˙y3 = −10 .03 y3 + 0.43 y4 + 0.035 y5, (27) ˙y4 = 8.32 y2 + 1.71 y3 − 1.12 y4, (28) ˙y5 = −1.745 y5 + 0.43 y6 + 0.43 y7, (29) ˙y6 = −μ y6y8 + 0.69 y4 + 1.71 y5 − 0.43 y6 + 0.69 y7, (30) ˙y7 = μ y6y8 − 1.81 y7, (31) ˙y8 = −μ y6y8 + 1.81 y7. (32) The stiffness enters through both the disparity in chemical reaction rates as well as the nonlinear reaction term μy6y8, which most directly affects y6, y7, and y8, while the remaining components are coupled indi-19 Table 4: Van der Pol MSIE (dimensional) for all methods (On- vs Off-reference).                                                                
+
+> Solver-Directed Extrema-Based Trajectory-Optimized Block Metric ON OFF ON OFF ON OFF
+> MSIE (dim)
+> y16.14 ×10 −15.17 ×10 −13.44 ×10 −13.82 ×10 −12.04 ×10 −12.21 ×10 −1
+> y21.96 ×10 −31.27 ×10 −35.79 ×10 −45.41 ×10 −45.22 ×10 −41.78 ×10 −3
+> State 3.08 ×10 −12.59 ×10 −11.72 ×10 −11.91 ×10 −11.02 ×10 −11.11 ×10 −1
+
+rectly through the linear source terms. Training data were generated for 
+
+μ ∈ { 10 2, 10 2.1, . . . , 10 3.9, 10 4},
+
+with off-reference testing at 
+
+μtest ∈ { 10 2.025 , 10 2.675 , 10 3.325 , 10 3.975 }.
+
+A distinctive feature of HIRES is the presence of two separated stiff episodes: an early transient (first O(10 )
+
+seconds) in which the solution rapidly collapses onto a slow manifold, and a late-time event (around 350) seconds) in which depletion the of y5 and y6 precipitates rapid changes in y7 and y8. This strength of this second stiff event increases with μ. Because the system contains eight state variables, only a representative subset is plotted to maintain clarity. The variables y1, y5, and y8 were chosen to highlight distinct dynamical features: y1 captures the dominant response during the initial stiff event, y5 reflects slow-manifold evolution between boundary layers, and y8 exhibits behavior characteristic of both stiff transients. 
+
+Moderate stiffness regime. Figure 14 shows the state trajectories for μ = 10 2.025 , a regime in which the HIRES system exhibits clear but still moderately separated stiffness scales. The late-time stiff event is particularly informative: y7 and y8 undergo rapid, monotone transitions over a short physical-time window. Capturing this behavior requires the inferred clock to allocate sufficient stretched-time resolution despite the absence of extrema. Because this late-time event is monotone, the extrema-based heuristic—which relies the presence of extrema near stiff events—fails to significantly slow down the clock in this region. As a result, fidelity is lost in y7 and y8, as reflected both visually and quantitatively. The mechanism behind this behavior is evident in Figure 15, where the second stiff event evolves much faster in τ than in t. The solver-directed method exhibits a different failure mode: although the reparame-terized state trajectories are relatively smooth and therefore easy for the state network to approximate, the inferred time mapping cuts the simulation significantly short. The resulting physical-time trajectory, shown in Figure 16, contains regions of rapid acceleration that the ML-ROM is unable to reproduce accurately. By contrast, the proposed method produces smoother, more gradually varying time curves while still resolving the late-time stiff event, leading to trajectories that are consistently easier for the ML-ROM to learn and extrapolate. 
+
+Extreme stiffness regime. Figure 17 presents the corresponding results for μ = 10 3.975 , where both stiff-ness mechanisms—the initial collapse onto the slow manifold and the late-time event—become more abrupt in physical time. At this level of stiffness, differences in how the methods allocate stretched-time resolu-tion are strongly amplified. The solver-directed method again struggles to capture the early-time transient and fails to reach the end of the simulation horizon, despite producing relatively smooth state curves. The extrema-based method continues to inadequately resolve the second stiff event; as seen in the reparameter-ized trajectories in Figure 18, the late-time dynamics are effectively compressed, producing a challenging target for the ML-ROM. 20 (a) ODE one (b) ODE five (c) ODE eight 
+
+Figure 14: HIRES system, off-reference test case μ = 10 2.025 .  
+
+> (a) ODE one (b) ODE five (c) ODE eight
+
+Figure 15: HIRES system, off-reference test case μ = 10 2.025 .   
+
+> (a) Time vs. τ(b) Derivative of time with respect to τ
+
+Figure 16: HIRES system, off-reference test case μ = 10 2.025 .The time mappings in Figure 19 further clarify these issues. The solver-directed reference trajectory un-dergoes an extreme acceleration—over two-order-of-magnitude increase in time velocity over the final one percent of the τ-domain—rendering it essentially unlearnable by the ML-ROM. Meanwhile, the extrema-based time curve exhibits rapid oscillations in its derivative, which again degrade the accuracy of the learned model. The proposed method avoids both issues, maintaining smooth derivatives and transitions even in this extreme stiffness regime. 21 (a) ODE one (b) ODE five (c) ODE eight 
+
+Figure 17: HIRES system, off-reference test case μ = 10 3.975 .  
+
+> (a) ODE one (b) ODE five (c) ODE eight
+
+Figure 18: HIRES system, off-reference test case μ = 10 3.975 .   
+
+> (a) Time vs. τ(b) Derivative of time with respect to τ
+
+Figure 19: HIRES system, off-reference test case μ = 10 3.975 .
+
+Discussion of problem three results. The HIRES benchmark combines nonlinear reaction kinetics, strong parameter dependence, and two well-separated stiff episodes, making it a stringent test for learning-compatible time reparameterizations. The quantitative results in Tables 5 and 6 reinforce the qualitative observations from the trajectory plots and that the proposed method consistently outperforms the baselines. Table 5 reports nondimensional τ-MSE values for individual state components, the inferred time map, and aggregate metrics. Across all variables, the proposed method achieves errors that are typically one to 22 two orders of magnitude smaller than those of both the solver-directed and the extrema-based, in both on-and off-reference settings. This improvement is especially pronounced for y7 and y8, which are directly affected by the stiff nonlinear reaction term. For these components, the extrema-based method exhibits τ-MSE values on the order of 10 −3, whereas the proposed method maintains errors near 10 −5, indicating a far more faithful allocation of stretched-time resolution during the late-time stiff event. The reduced time-map error further demonstrates that the proposed approach produces a smoother and more accurate clock, which directly impacts the learnability of the downstream ML-ROM. The dimensional MSIE results in Table 6 provide complementary insight. While the solver-directed method yields large state errors for variables such as y1, y4, and y6—reflecting its difficulty with early-time stiffness and truncated simulations—the proposed method consistently achieves the lowest state-level MSIE across nearly all components. Importantly, these improvements persist in the off-reference setting, demonstrating robustness. The state-aggregated MSIE is reduced by nearly two orders of magnitude relative to the solver-directed results and remains competitive or superior to the extrema-based method, even for variables indirectly affected by stiffness. Taken together, these results highlight a key distinction between methods that merely produce smooth reparameterized state trajectories and those that generate learning-compatible clocks. Irregular or overly aggressive time reparameterizations can produce sharp accelerations in the reparameterized trajectory or in the clock that introduce large gradient magnitudes during training and hinder generalization across μ. By instead optimizing for smoothness in the reparameterized trajectory, the proposed method aligns the time map with the representational capacity of the ML-ROM. This alignment is crucial for complex multiscale systems like HIRES, where accurate state prediction depends heavily on the structure of the learned clock. Table 5: HIRES τ-MSE (nondimensional) for all methods (ON- vs OFF-reference). 
+
+Solver-Directed Extrema-Based Trajectory-Optimized Block Metric ON OFF ON OFF ON OFF 
+
+τ MSE (nondim) 
+
+y1 1.65 × 10 −5 1.68 × 10 −5 6.86 × 10 −5 7.94 × 10 −5 1.11 × 10 −5 1.93 × 10 −5
+
+y2 1.00 × 10 −3 9.87 × 10 −4 3.30 × 10 −4 3.79 × 10 −4 4.52 × 10 −5 4.83 × 10 −5
+
+y3 1.49 × 10 −3 1.51 × 10 −3 4.31 × 10 −4 4.49 × 10 −4 9.62 × 10 −5 1.17 × 10 −4
+
+y4 2.18 × 10 −4 2.10 × 10 −4 2.12 × 10 −4 2.32 × 10 −4 4.81 × 10 −5 4.99 × 10 −5
+
+y5 1.43 × 10 −4 1.84 × 10 −4 2.95 × 10 −4 2.18 × 10 −4 3.70 × 10 −5 4.29 × 10 −5
+
+y6 2.02 × 10 −4 2.51 × 10 −4 2.66 × 10 −4 1.94 × 10 −4 3.30 × 10 −5 3.63 × 10 −5
+
+y7 2.56 × 10 −5 3.06 × 10 −5 4.43 × 10 −3 4.73 × 10 −3 3.48 × 10 −5 2.76 × 10 −5
+
+y8 2.36 × 10 −5 2.92 × 10 −5 4.58 × 10 −3 4.71 × 10 −3 3.46 × 10 −5 2.79 × 10 −5
+
+Time 2.65 × 10 −4 3.52 × 10 −4 2.79 × 10 −4 4.92 × 10 −5 3.18 × 10 −5 3.46 × 10 −5
+
+State 3.91 × 10 −4 4.03 × 10 −4 1.33 × 10 −3 1.37 × 10 −3 4.25 × 10 −5 4.62 × 10 −5
+
+All 3.77 × 10 −4 3.97 × 10 −4 1.21 × 10 −3 1.23 × 10 −3 4.13 × 10 −5 4.49 × 10 −5
+
+# 6 Discussion 
+
+This work studies time reparameterization (TR) as a mechanism for mitigating stiffness in neural ODE– based reduced-order models. The central empirical observation is that the usefulness of a time map is governed by both how much it “slows down” stiff regions and by whether it produces a clock and associated state trajectories that are learnable and smooth across parameters. In particular, clocks with sharp acceler-ations or oscillatory derivatives can reintroduce stiffness-like behavior even when the reparameterized state 23 Table 6: HIRES MSIE (dimensional) for all methods (ON- vs OFF-reference).                                                                                                                                                                            
+
+> Solver-Directed Extrema-Based Trajectory-Optimized Block Metric ON OFF ON OFF ON OFF
+> MSIE (dim)
+> y11.55 ×10 −31.58 ×10 −32.47 ×10 −53.55 ×10 −51.70 ×10 −52.55 ×10 −5
+> y25.54 ×10 −55.54 ×10 −51.80 ×10 −62.38 ×10 −69.74 ×10 −79.43 ×10 −7
+> y33.76 ×10 −63.78 ×10 −61.88 ×10 −71.85 ×10 −71.34 ×10 −81.53 ×10 −8
+> y47.42 ×10 −47.55 ×10 −41.14 ×10 −51.45 ×10 −51.11 ×10 −51.25 ×10 −5
+> y57.69 ×10 −57.89 ×10 −51.99 ×10 −62.56 ×10 −61.02 ×10 −61.29 ×10 −6
+> y61.17 ×10 −31.20 ×10 −32.04 ×10 −52.73 ×10 −58.05 ×10 −69.98 ×10 −6
+> y71.92 ×10 −71.81 ×10 −73.15 ×10 −73.33 ×10 −71.24 ×10 −81.54 ×10 −8
+> y81.93 ×10 −71.81 ×10 −72.57 ×10 −72.90 ×10 −71.24 ×10 −81.54 ×10 −8
+> State 4.49 ×10 −44.60 ×10 −47.62 ×10 −61.04 ×10 −54.77 ×10 −66.29 ×10 −6
+
+trajectory appears smooth. The trajectory-optimized method proposed here is designed to address this fail-ure mode directly: rather than inferring a time map from solver behavior or from a heuristic, it computes a speed profile that minimizes an acceleration-based functional along the trajectory, yielding time maps whose derivatives are smoother and whose parametric dependence is more regular. Figures 1 and 2 demonstrate that solver-directed time reparameterizations are highly sensitive to integra-tion tolerances, producing inconsistent stretched-time representations that can depend on numerical settings rather than the underlying dynamics. In contrast, the trajectory-optimized and extrema-based approaches yield more stationary and repeatable clocks, improving robustness to noise. Notably, although the proposed method targets smoothness in stretched time τ, it also produces smooth dependence on μ, which is beneficial for neural ODE training by promoting coherent trajectories accross parameters. Two complementary evaluation metrics are used throughout: (i) a nondimensional τ-MSE, which mea-sures prediction error in the stretched-time training coordinate, including the learned time map, and (ii) a reparameterization-invariant MSIE in physical time, which measures fidelity to the true trajectory regardless of the chosen clock. Together, these quantify a key distinction: a time reparameterization can be locally ac-curate in τ while still producing a poor or difficult clock for reconstructing dynamics in physical time. This effect is most visible in the Van der Pol benchmark, where the extrema-based method attains smaller τ-MSE than the proposed approach for some metrics (Table 3), yet the proposed approach yields lower physical-time error in the aggregated MSIE (Table 4). This motivates reporting both: τ-MSE measures learnability in stretched time, while MSIE evaluates accuracy in physical time. The SLS benchmark isolates stiffness without nonlinear geometric complexity and therefore highlights how reparameterizations interact with parametric variation. In the extreme stiffness regime, the proposed method produces the lowest errors in both the time map and the state in τ (Table 1), with especially large gains in the learned time component, and achieves the lowest aggregated physical-time error (Table 2). The solver-directed reparameterization may introduce cusp-like transitions in τ, while the extrema-based heuristic can yield highly oscillatory time derivatives. These features make α harder to approximate and produce large variations in the gradient of the reparameterized vector field. The SLS results therefore support the premise that clock smoothness drives learnability, particularly when small changes in μ should not induce large changes in the time map. The van der Pol results demonstrate that time maps must balance phase accuracy with smooth resolution of fast transitions. The solver-directed approach produces comparatively large τ-MSE for the state (Table 3), yet often displays low phase error in physical time. The arc-length-based methods, by concentrating resolu-tion near high-variation segments, better preserve transition shapes but induced more phase lead. The TOTR 24 approach is the best method in MSIE (Table 4) and exhibits consistent behavior off-reference. This case em-phasizes that a “good” clock must both be learnable in stretched time and lead to accurate reconstruction of the physical-time dynamics. HIRES is the most stringent test because it features two separated stiff episodes: an early collapse to a slow manifold and a late-time depletion-driven event whose strength grows with μ. The late-time stiff event in y7 and y8 is monotone and therefore does not affect the time dilation function of the extrema-based construction. The effect of this is clear, as the extrema-based method exhibits τ-MSE on the order of 10 −3 for y7 and y8 (Table 5), whereas the TOTR method remains near 10 −5, indicating that it allocates stretched-time resolution effectively in the components affected by the nonlinear reaction term. Moreover, the approach achieves the smallest aggregated state MSIE (Table 6) and does so robustly off-reference. By contrast, the solver-directed approach suffers from a premature termination due to a failure to capture the extreme acceleration in the time map near the end of the reference trajectory. This leads to a learned clock that fails to capture this aspect of the reference trajectory. The proposed TOTR formulation differs from prior methods in that it treats TR as an optimization prob-lem defined on a fixed geometric curve. In arc-length coordinates, the objective (17) penalizes both (i) rapid variation of traversal speed (tangential acceleration) and (ii) curvature-induced acceleration (normal com-ponent), subject to a fixed stretched-time budget. This construction targets the features that degrade explicit integrator stability and learning dynamics in τ: large local accelerations correspond to rapidly changing derivatives that produce sharp gradients in the ML-ROM training procedure. By optimizing these quantities explicitly, the resulting time maps have smoother α(τ) profiles and avoid the three major failure modes ob-served in the baselines: nonuniformity that can create cusps or late-time blow-up in d t/dτ, rapid variations in the time map, and failure to capture stiff events that are not associated with extrema. The experiments suggest the following practical guidance for TR in ML-ROM pipelines: (i) TR is most beneficial when training relies on explicit integration and uniform sampling, (ii) clocks should be evaluated not only for their ability to reduce stiffness but also for their learnability, smoothness, and robustness across parameter variation, and (iii) models should be selected using reparameterization-invariant physical-time metrics such as MSIE, since low τ-MSE alone does not guarantee accurate recovery of physical trajectories. The results indicate that time map smoothness is crucial for ML-ROM learnability: smooth clocks reduce gradient magnitudes, improve optimization stability, and enhance generalization across parameters. Several limitations of the present study should be noted. First, for the extrema-based baseline only the cubic-spline construction was considered. For the problems considered in this work, there was not a significant difference observed between the reparameterized trajectories of the two spline orders. The quintic-spline variant proposed in the same framework could potentially improve learnability in regimes where the cubic construction produces a difficult time map. A systematic comparison between spline orders is an important direction for future work. Second, the stretched-time horizon and sampling density in τ were fixed for all cases considered. In practice, a tradeoff exists between the number of uniform τ steps, which directly influences training and inference cost, and the achievable learning accuracy. Developing principled guidelines for selecting τ f and the discretization level is beyond the scope of the present work. Fixing the number of τ steps enables a controlled and fair comparison between methods, but does not provide a comprehensive assessment of performance. Evaluating how different reparameterization strategies behave across varying τ resolutions therefore remains an important direction for future study. Finally, all reported results were drawn directly from large, controlled hyperparameter searches in which the same sampling procedure and budget are applied to each method. This ensures fairness but does not represent the best achievable performance for any single method: in all cases, additional gains are almost certainly possible through manual, case-specific tuning of the training procedure. Consequently, the results should be interpreted as comparative performance under a fixed training regimen, rather than as absolute best-case accuracies for each approach. 25 Overall, the results support three main conclusions. First, all three time reparameterization algorithms are effective for enabling explicit, uniformly sampled neural ODE training in stiff regimes. Second, the quality of a TR strategy is not solely governed by its stiffness-reduction capability, but also by the regularity and learnability of the induced clock. Third, the TOTR method provides a robust and accurate alternative to the TR methods in the literature, yielding consistently lower physical-time error across all problems considered. 
+
+# 7 Conclusion 
+
+This work investigated time reparameterization (TR) as a mechanism for mitigating stiffness in neural ODE-based reduced-order models. While prior approaches have demonstrated that appropriate changes of the in-dependent variable can reduce effective stiffness and enable explicit integration, their impact on learnability and parametric robustness has remained unclear. By systematically comparing different time reparameter-izations across multiple stiff benchmark problems, this study clarifies the role of the time map itself as a central component of the learning problem. The main contribution of this paper is the formulation of TOTR: a trajectory optimization TR problem posed in arc-length coordinates. By optimizing a traversal-speed that penalizes acceleration in stretched time, the proposed method constructs clocks and reparameterized trajectories that are smoother, better con-ditioned, and more consistent across parameter variations than those produced by existing methods. Im-portantly, this formulation targets the dynamics actually integrated during neural ODE training, rather than relying on indirect proxies for stiffness such as solver step sizes or the presence of local extrema. Across all three benchmark systems—a parameterized stiff linear system, the Van der Pol oscillator, and the HIRES chemical kinetics model—the proposed method consistently produced time maps that were easier to learn and that yielded lower physical-time prediction error under identical training regimens. Quantitative results typically demonstrated reductions of one to two orders of magnitude in stretched-time prediction er-ror and substantial improvements in the reparameterization-invariant MSIE, particularly in regimes featuring severe stiffness. These gains were most pronounced in problems with multiple stiff episodes or monotone stiff events, where the baseline methods struggle to allocate resolution appropriately. More broadly, the results highlight that effective stiffness mitigation in learning-based ROMs is not achieved solely by slowing down fast transients, but by constructing clocks that are smooth and robust to parametric variation. Irregular time maps can exhibit cusps, large variation in derivatives, or extreme accelerations, reintroducing stiffness-like behavior into the learning problem even when the reparameterized state trajectory appears smooth. By explicitly optimizing for smoothness in the transformed dynamics, the proposed approach aligns the time reparameterization with the representational and optimization properties of neural ODE models. Taken together, these findings suggest that time reparameterization is a powerful tool in ML-ROM con-struction for stiff systems. The time-optimized time reparameterization method provides a principled and flexible framework for constructing clocks that are both numerically stable and learnable by neural ODE models. This offers a promising path toward robust, explicit, and scalable reduced-order modeling of mul-tiscale dynamical systems. 
+
+# Acknowledgments 
+
+This work was supported through the Triad National Security by the Department of Energy - National Nuclear Security Administration program under federal award number 89233218CNA000001, entitled “The Role of Second Law of Thermodynamics in Deriving Turbulence Models and Simplified Reaction Kinetics”. 26 DL acknowledges support from the Laboratory Directed Research and Development - Exploratory Research at Los Alamos National Laboratory, under project number 20220318ER. 
+
+# References 
+
+[1] Vladimir I. Arnold. Mathematical Methods of Classical Mechanics , volume 60 of Graduate Texts in Mathematics . Springer, New York, NY, 2 edition, 1989. [2] Uri M. Ascher and Linda R. Petzold. Computer Methods for Ordinary Differential Equations and Differential-Algebraic Equations . Society for Industrial and Applied Mathematics, Philadelphia, PA, 1998. [3] Peter Benner, Serkan Gugercin, and Karen Willcox. A survey of projection-based model reduction methods for parametric dynamical systems. SIAM Review , 57(4):483–531, 2015. [4] Matteo Caldana and Jan S. Hesthaven. Neural ordinary differential equations for model order reduction of stiff systems. International Journal for Numerical Methods in Engineering , 126(12):e70060, 2025. [5] Ricky T. Q. Chen, Yulia Rubanova, Jesse Bettencourt, and David Duvenaud. Neural ordinary differen-tial equations. In Proceedings of the 32nd International Conference on Neural Information Processing Systems , NIPS’18, page 6572–6583, Red Hook, NY, USA, 2018. Curran Associates Inc. [6] Germund Dahlquist. Stability and error bounds in the numerical integration of ordinary differential equations. Mathematics of Computation , 15:311, 1961. [7] Colby Fronk and Linda Petzold. Training stiff neural ordinary differential equations with implicit single-step methods. Chaos: An Interdisciplinary Journal of Nonlinear Science , 34(12):123147, 12 2024. [8] Colby Fronk and Linda Petzold. Training stiff neural ordinary differential equations with explicit expo-nential integration methods. Chaos: An Interdisciplinary Journal of Nonlinear Science , 35(3):033154, 03 2025. [9] Idoia Cortes Garcia, P. Förster, W. Schilders, and S. Schöps. Learning solutions of parameterized stiff odes using gaussian processes, 2025. [10] Amir Gholami, Kurt Keutzer, and George Biros. Anode: Unconditionally accurate memory-efficient gradients for neural odes, 2019. [11] E. Hairer and G. Wanner. Solving Ordinary Differential Equations II: Stiff and Differential - Algebraic Problems . Springer Series in Computational Mathematics. Springer Berlin Heidelberg, 2013. [12] Ernst Hairer and Gerhard Wanner. Solving Ordinary Differential Equations II: Stiff and Differential-Algebraic Problems , volume 14 of Springer Series in Computational Mathematics . Springer-Verlag, Berlin, 2nd edition, 1996. [13] N. J. Higham and L. N. Trefethen. Stiffness of ordinary differential equations. SIAM Journal on Numerical Analysis , 1993. [14] J. Kevorkian and J.D. Cole. Multiple Scale and Singular Perturbation Methods , volume 114 of Applied Mathematical Sciences . Springer, 1996. 27 [15] Suyong Kim, Weiqi Ji, Sili Deng, Yingbo Ma, and Christopher Rackauckas. Stiff neural ordinary differential equations. Chaos: An Interdisciplinary Journal of Nonlinear Science , 31(9):093122, 09 2021. [16] Chung K. Law. Combustion Physics . 2006. [17] U. Maas and S.B. Pope. Simplifying chemical kinetics: Intrinsic low-dimensional manifolds in com-position space. Combustion and Flame , 88(3):239–264, 1992. [18] Linda Petzold. Automatic selection of methods for solving stiff and nonstiff systems of ordinary differential equations. SIAM Journal on Scientific and Statistical Computing , 4(1):136–148, 1983. [19] Christopher Rackauckas, Yingbo Ma, Julius Martensen, Collin Warner, Kirill Zubov, Rohit Supekar, Dominic Skinner, Ali Ramadhan, and Alan Edelman. Universal differential equations for scientific machine learning, 2021. [20] Z. Ren and S. B. Pope. Entropy production and element conservation in the quasi-steady-state approx-imation. Combustion and Flame , 137:251–254, 2004. [21] Yulia Rubanova, Ricky T. Q. Chen, and David Duvenaud. Latent odes for irregularly-sampled time series, 2019. [22] L. F. Shampine and C. W. Gear. A user’s view of solving stiff ordinary differential equations. SIAM Review , 21(1):1–17, 1979. [23] Gustaf Söderlind, Laurent Jay, and Manuel Calvo. Stiffness 1952–2012: Sixty years in search of a definition. BIT Numerical Mathematics , 55(2):531–558, 2015. [24] Karl F. Sundman. Mémoire sur le problème des trois corps. Acta Mathematica , 36:105–179, 1912. [25] Vijayamanikandan Vijayarangan, Harshavardhana A. Uranakara, Francisco E. Hernández–Pérez, and Hong G. Im. Understanding the role of autoencoders for stiff dynamical systems using information theory. Energy and AI , 21:100567, 2025. 28
