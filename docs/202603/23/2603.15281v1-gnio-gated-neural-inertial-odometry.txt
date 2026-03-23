@@ -1,0 +1,352 @@
+Title: GNIO: Gated Neural Inertial Odometry
+
+URL Source: https://arxiv.org/pdf/2603.15281v1
+
+Published Time: Tue, 17 Mar 2026 05:37:28 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# GNIO: Gated Neural Inertial Odometry 
+
+Dapeng Feng ∗, Yizhen Yin ∗, Zhiqiang Chen, Yuhua Qi, and Hongbo Chen 
+
+Abstract —Inertial navigation using low-cost MEMS sensors is plagued by rapid drift due to sensor noise and bias instability. While recent data-driven approaches have made significant strides, they often struggle with micro-drifts during stationarity and mode fusion during complex motion transitions due to their reliance on fixed-window regression. In this work, we introduce Gated Neural Inertial Odometry (GNIO), a novel learning-based framework that explicitly models motion validity and context. We propose two key architectural innovations: ❶ a learnable Motion Bank that queries a global dictionary of motion patterns to provide semantic context beyond the local receptive field, and ❷ a Gated Prediction Head that decomposes displacement into magnitude and direction. This gating mechanism acts as a soft, differentiable Zero-Velocity Update (ZUPT), dynamically suppressing sensor noise during stationary periods while scaling predictions during dynamic motion. Extensive experiments across four public benchmarks demonstrate that GNIO significantly reduces position drift compared to state-of-the-art CNN and Transformer-based baselines. Notably, GNIO achieves a 60 .21% 
+
+reduction in trajectory error on the OxIOD dataset and exhibits superior generalization in challenging scenarios involving fre-quent stops and irregular motion speeds. 
+
+I. I NTRODUCTION 
+
+Accurate state estimation and localization are fundamental prerequisites for emerging technologies such as autonomous robotics, Virtual Reality (VR), and Augmented Reality (AR). While Visual-Intertial Navigation Systems (VINS) have be-come the de facto standard for high-precision tracking, they face inherent limitations in challenging environments. Visual methods are susceptible to failure in scenarios with extreme lighting, motion blur, or visual occlusion, where conditions frequently encountered in pedestrian navigation or pocket-constrained mobile devices. To address these limitations, there has been a resurgence of interest in Inertial Navigation Sys-tems (INS) that rely solely on strap-down Inertial Measure-ment Units (IMUs). However, low-cost MEMS IMUs suffer from significant sensor noise and bias instability. Traditional kinematic integra-tion of these noisy measurements leads to rapid drift, rendering pure physics-based dead reckoning unusable within seconds. To mitigate sensor errors without relying on external infras-tructure (such as GPS) or additional sensors (such as LiDAR), the research community has pivoted towards data-driven ap-proaches. Early deep learning methods, such as IONet [1] and RoNIN [2], demonstrated that neural networks could effectively learn to regress 2D velocity or displacement from 
+
+> ∗Equal contribution. Corresponding authors: Hongbo Chen. Dapeng Feng, Yizhen Yin, and Hongbo Chen are with Sun Yat-sen Uni-versity, Guangzhou, China. (e-mail: {fengdp5, yinyzh5}@mail2.sysu.edu.cn, {qiyh8, chenhongbo}@mail.sysu.edu.cn) Zhiqiang Chen is with The University of Hong Kong, Hong Kong SAR, China. (e-mail: zhqchen@connect.hku.hk)
+
+windowed IMU data, significantly outperforming traditional step-counting heuristics. Building on this foundation, TLIO [3] represented aparadigm shift by moving from loosely coupled regression to a tightly coupled filter framework. TLIO proposed a network that regresses the estimated 3D displacement and, crucially, its associated uncertainties. By fusing these learned relative state measurements into a Stochastic Cloning Extended Kalman Filter (EKF), TLIO achieved robust 3D tracking that combines the long-term stability of data-driven priors with the short-term precision of kinematic models. Since the introduction of TLIO, the field of Neural Inertial Odometry (NIO) has advanced rapidly. Approaches such as AirIMU [4] and AirIO [5] have further refined uncertainty propagation and feature extraction, enabling networks to learn more distinctive motion representations. Recent works like EqNIO [6] have introduced subequivariant architectures to bet-ter handle the geometric symmetries of inertial data, ensuring that orientation changes do not degrade estimation consistency. As highlighted by TinyIO [7], there is also a growing trend towards lightweight, reparameterized models suitable for edge deployment. The recent IONext [8] framework suggests that we are entering a new era where end-to-end learning can capture increasingly complex motion dynamics. Despite these advancements, a critical challenge remains in the adaptability of the prediction mechanism itself. Most existing methods rely on standard convolutional or recurrent backbones (such as ResNet [9] or GRU [10]) that regress displacement directly from a fixed window of IMU data. These architectures often struggle with two specific issues: ❶ Motion Ambiguity and Mode Confusion: Human motion is highly variable, transitioning abruptly between stationary, walking, and dynamic activities (e.g., running or climbing stairs). A standard sliding window often lacks the memory to distinguish between momentary jitter and the onset of a new motion mode, leading to erroneous velocity updates. ❷ Oversensitive Regression: In scenarios with low-magnitude motion or high sensor noise, standard regression heads tend to output non-zero displacements due to the always-on nature of the network. The existing methods attempt to mitigate this via regressed uncertainty (covariance), but this is a reactive measure rather than a proactive structural constraint. In this paper, we introduce GNIO (Gated Neural Inertial Odometry), an enhanced learning-based framework built upon the robust tight-coupling principles of TLIO [3]. GNIO specif-ically addresses the issues of motion mode confusion and oversensitive regression through two architectural innovations: 1) Motion Bank: Unlike previous methods that treat IMU windows isolation or with a limited recurrent state, 
+
+> arXiv:2603.15281v1 [cs.RO] 16 Mar 2026
+
+GNIO incorporates a motion bank. This mechanism maintains a compressed history of latent motion features, allowing the network to attend to past motion patterns dynamically. This enables the system to differentiate between consistent motion trends and transient sensor artifacts, effectively providing a longer temporal recep-tive field without the computational cost of processing extremely long raw sequences. 2) Gated Prediction Head: We redesign the output layer of the neural network to include a Gating Mechanism. Inspired by the gating units in LSTMs and GRUs, this learnable gate acts as a value for the predicted displacement. It explicitly decomposes the regression task into predicting a magnitude scale (the gate) and a direction vector. When the system detects stationarity or unreliable data, the gate actively suppresses the dis-placement output towards zero, acting as a soft, learnable ZUPT. During high-dynamic motion, the gate opens to allow full displacement prediction. We demonstrate that integrating these mechanisms into the TLIO framework results in superior position estimation ac-curacy and reduced drift, particularly in complex trajectories involving frequent stops and diverse motion speeds. II. R ELATED WORK 
+
+Inertial Odometry (IO) has evolved from classical physical modeling to data-driven approaches that leverage deep learning to correct sensor bias and estimate motion. We categorize re-lated works into pure learning-based methods, hybrid filtering frameworks, and recent advancements in adaptive mechanism design. 
+
+A. Pure Data-Driven Inertial Odometry 
+
+Early data-driven methods established the feasibility of regressing motion directly from IMU measurements. IONet [1] addressed the curse of drift by segmenting inertial data into independent windows and using Recurrent Neural Net-works (RNNs) to estimate latent states. This was followed by RoNIN [2], which introduced a robust benchmark and explored ResNet [9] and TCN [11] backbones for improved generalization. Recent advancements have shifted toward capturing long-range dependencies and fine-grained features. CTIN [12] and iMoT [13] leverage Transformer architectures with self-attention and progressive decouplers to model complex tempo-ral relationships. Further expanding this, IONext [8] employs large-kernel convolutions and adaptive dynamic mixers to balance global perception with local sensitivity. 
+
+B. Hybird Filter-Integrated Frameworks 
+
+A major trend in inertial navigation is the coupling of neural displacement priors with classical state estimation filters. TLIO [3] pioneered this by integrating a deep network within a tightly-coupled Extended Kalman Filter (EKF), using the network’s predicted displacements as measurement updates to constrain the EKF’s state. Building on this, researchers have sought to incorporate physical priors into the learning process. EqNIO [6] and RIO [14] introduce rotation-equivariance and subequivariance, ensuring that the network respects the physical symmetries of IMU data (e.g., gravity-aligned rotation). 
+
+C. Adaptive Motion Modeling and Gating Mechanisms 
+
+RIDI [15] initially identified that human motion consists of discrete repetitive modes. More recently, StarIO [16] used high-dimensional nonlinear features and collaborative atten-tion to model complex motion dynamics, while WDSNet [17] and FTIN [18] utilized wavelet selection and frequency-domain integration to handle multi-scale signal variations. GNIO occupies this space by introducing two critical mod-ifications to the TLIO [3] prediction head: 1) Motion bank: Drawing inspiration from the pattern-recognition capabilities of iMoT [13] and StarIO [16], the motion bank in GNIO specific motion modes from historical features. This enables the model to apply specialized weights tailored to different movement types, effectively curing drift through adaptive prediction. 2) Gated Mechanism: Unlike standard regression heads that output values directly, GNIO employs a gating structure to explicitly modulate the magnitude and direction of the predicted displacement. This allows the network to suppress noise or amplify the signal based on the context of the motion. III. M ETHODS 
+
+A. Overview 
+
+Our proposed GNIO framework builds upon the tightly-coupled archiecture of TLIO [3]. As shown in Figure 1, the system consists of two main components: a Neural Front-End and an Extened Kalman Filter (EKF). The Neural Front-End receives a window of gravity-aligned IMU data and regresses a relative 3D displacement measure-ment ˆdk along with its associated uncertainty covariance ˆΣk.These learned measurements are used to update the EKF state. Unlike TLIO, which uses a standard ResNet [9], GNIO introduces a Motion Bank and a Gated Prediction Head to dyanmically adapt to complex motion modes and explicitly model stationarity. 
+
+B. Network Input and Feature Extraction 
+
+Let the raw IMU measurements at time stemp t be denoted as mt = [ at, ωt] ∈ R6. Following TLIO, we extract a sliding window of N samples. To ensure the network learns motion physics independent of global yaw, we rotate the inputs into a gravity-aligned frame using the current EKF orientation estimate Rwb k :
+
+xi = Rwb k (mi − bk) , i ∈ [t − N, t ] . (1) The input tensor Xk ∈ RN ×6 is fed into a 1D ResNet backbone (similar to ResNet-18) to extract a high-dimensional feature fk ∈ RD :
+
+fk = Encoder (Xk) . (2) Figure 1: System Overview of GNIO. 
+
+C. Motion Bank 
+
+Standard sliding-window approaches often suffer from mode confusion (e.g., distinguishing between standing still and slow walking) due to limited receptive fields. To address this, we introduce a Motion Bank containing global motion patterns. Unlike recurrent architectures that rely on a transient hid-den state, our motion bank is a learnable parameter matrix 
+
+M ∈ Rm×D , where m represents the number of global motion prototypes ( e.g. , static, walking, running, turning) and D is the feature dimension. These patterns are learned end-to-end during training and serve as a static knowledge base. We employ a Multi-Head Attention (MHA) [19] mechanism to contextually query this global knowledge base. The current local feature fk, extracted by the ResNet encoder, acts as the Query( Q), representing the specific kinematic state at the current time step. The global motion patterns in M serve as both the Keys( K) and Values( V). Formally, the query, key, and value projections are computed as: 
+
+Q = fkWQ, (3) 
+
+K = MW K , (4) 
+
+V = MW V , (5) where WQ, WK , WV are learnable projection matrices. This formulation allows the network to compare the transient local features against the stable global prototypes. The relevance of each global motion pattern to the current input is determined by the attention weights, calculated via the scaled dot-product. The context ck is then derived as a weighted sum of the prototypes, effectively reconstructing a denoised or idealized representation of the current motion: 
+
+ck = Softmax (fkWQ) ( MW K )T
+
+√dk
+
+!
+
+(MW V ) . (6) Intuitively, if the input features fk strongly resemble a stationary prototype stored in M, the attention mechanism will retrieve a context ck that emphasizes zero-motion characteris-tics, guiding the downstream components to suppress drift. Finally, the retrieved global context is fused with the original local features to produce the enriched representation hk.We employ a residual connection to preserve high-frequency details from the local window while incorporating the semantic guidance from the global context: 
+
+hk = fk + ck. (7) This fused feature hk serves as the input to the subsequent Gated Prediction Head, ensuring that displacement predictions are informed by both immediate sensor readings and long-term structural motion priors. 
+
+D. Gated Prediction Head 
+
+Standard regression heads in NIO models operate in an always-on manner, continuously mapping features to displace-ment estimates. This architecture often struggles to output true zero values during stationarity, leading to accumulated drift from sensor noise, or micro-movements. Furthermore, a single linear mapping may lack the flexibility to adjust the scale of predictions dynamically across diverse motion intensities. To magnitude these issues, we propose a Gated Prediction Head that explicitly decomposes the regression task into magnitude modulation and directional estimation. We design the motion prediction head as a dual-branch structure operating on the context-enriched feature hk. The first branch focuses solely on the magnitude of displacement. We apply a linear transformation followed by a Softplus activation function to enforce non-negativity, interpreting the output ˜sk ∈ R3 as a scale or speed proposal for each axis: 
+
+˜sk = Softplus (Wshk + bs) . (8) Simultaneously, the second branch computes a directional gate 
+
+gk ∈ R3. We employ the Tanh activation function for this branch, constraining its output to the range [−1, 1] :
+
+gk = Tanh (Wg hk + bg ) . (9) This gate serves a dual purpose: its sign determines the direc-tion of movement along each axis, while its magnitude acts as a confidence score or attenuation factor. During stationary periods, the network learns to drive gk → 0, effectvely suppressing any noise from the magnitude branch. The final predicted 3D displacement ˆdk ∈ R3 is computed as the element-wise product: 
+
+ˆdk = ˜ sk ⊙ gk. (10) 
+
+E. Uncertainty Estimation 
+
+Consistent with the TLIO [3], we must also estimate the reliability of our prediction for the EKF update. We regress the log-variance uk ∈ R3 from the fused features hk:
+
+uk = Wuhk + bu. (11) The convariance matrix ˆΣk is constructed assuming a diagonal distribution: 
+
+ˆΣk = diag (exp (2 uk,x ) , exp (2 uk,y ) , exp (2 uk,z )) . (12) This formulation ensures numerical stability and positivity of the variance. 
+
+F. Loss Function 
+
+To enable stable convergence of the displacement regression while learning the heteroscedastic uncertainty required for the EKF update, we employ a two-stage training strategy using Mean Squared Error (MSE) and Negative Log-Likelihood (NLL). The total loss Ltotal is a weighted sum of the displacement error term and the probabilistic uncertainty term: 
+
+Ltotal = λMSE LMSE + λNLL LNLL , (13) where LMSE = ∥dgt k − ˆdk∥2 stabilizes the initial conver-gence of the displacement branches (Magnitude and Gate), preventing large gradients from the uncertainty estimation early in training. The Gaussian NLL term LNLL ensures the predicted convariance ˆΣk aligns with the actual residual error distribution: 
+
+LNLL = 12 ∥dgt k − ˆdk∥2ˆΣ + 12 log det 
+
+ ˆΣk
+
+
+
+. (14) This simultaneous optimization encourages the network to minimize displacement error while accurately quantifying its confidence, which is critical for the tight fusion mechanism in the EKF. 
+
+G. Stochastic Cloning EKF 
+
+We adopt the Stochastic Cloning EKF from TLIO [3] to tightly fuse the learned relative displacements with high-frequency IMU kinematics. 
+
+1) State Representation: The filter tracks the IMU state (position, velocity, orientation, and sensor biases) along with a sliding window of cloned past poses. 
+
+2) Measurement Update: When the Neural Front-End pre-dicts a 3D displacement ˆdij and its covariance ˆΣij , we apply a measurement update to the filter. The residual r is defined as: 
+
+r = ˆdij − RTγi (pj − pi) , (15) where pi, pj are the cloned positions and Rγi represents the gravity-aligned yaw rotation. IV. E XPERIMENTS 
+
+A. Implementation Details 
+
+The GNIO model is trained with Adam [20] optimizer with 
+
+β1 = 0 .9, β 2 = 0 .999 . The batch size is set to 1024 .
+
+1) Training Strategy: To stabilize the early stages of train-ing and prevent large gradients from the attention mechanism, we employ a Linear Warm-Up phase followed by a Cosine Annealing learning rate schedule. The initial learning rate starts at 1 × 10 −6 and linearly increases to 1 × 10 −4 over the first 5 epochs. Subsequently, it decays to a minimum of 
+
+1 × 10 −6 over the remaining training duration, which is 200 
+
+epochs in total. We employ a composite loss function Ltotal to balance displacement accuaracy and uncertainty consistency. We empirically set the weighting factors to λMSE = 1 × 10 2
+
+and λNLL = 1 × 10 −4.
+
+2) Data Preprocessing: Input IMU sequences are processed using a sliding window approach designed to maintain a consistent temporal receptive field and overlap across varying sensor hardware. We fix the temporal duration of each window to 1.0 second and the stride between consecutive windows to 0.1 seconds. Consequently, the window size N and stride S are dynamically adjusted based on the IMU sampling frequency:  
+
+> •
+
+For 100 Hz IMUs: N = 100 samples, S = 10 samples.  
+
+> •
+
+For 200 Hz IMUs: N = 200 samples, S = 20 samples. This consistency ensures that the Motion Bank and Gated Prediction Head receive a standardized duration of kinematic information to identify motion modes. 
+
+3) Network Configuration: The Motion bank size is set to 
+
+m = 64 (the number of learnable global motion prototypes), which we found provides an optimal balance between expres-sivity and redundancy (see Section §IV-E). The dimension of the high-dimensional latent feature space is D = 512 . The backbone follows a 1D ResNet-18 architecture modified for inertial signal processing. 
+
+B. Datasets 
+
+To evaluate the generalization capability of GNIO across diverse sensor placements and motion behaviors, we utilize five public datasets established in recent literature [2], [3], [15], [21], [22]. These datasets cover a wide spectrum of human activities, ranging from steady walking to complex irregular movements. 
+
+1) OxIOD [21]: A comprehensive dataset capturing ev-eryday activities. The dynamics encompass a mix of slow walking, normal walking, running, and even trolley pushing, providing variations in speed and periodicity crucial for testing the Gated Prediction Head. 
+
+2) RIDI [15]: Features smartphone data captured in aVicon-equipped room. It emphasizes placement diversity (body-attached, bag, hand) and includes complex, erratic movements with frequent directional changes, designed to test robustness against placement shifts. Table I: Comparison of model parameters and computational complexity.                   
+
+> Architecture Model Family Params (M) GFLOPs
+> CNN-based
+> TLIO ResNet-18+EKF 5.42 0.08
+> DeepILS Lightweight ResNet 2.29 0.03
+> GNIO (Ours) Memory + Gated 4.90 0.08
+> Transformer-based
+> CTIN Contextual Transformer 0.56 7.27
+> iMoT Seq-to-Seq Transformer 14 .49 7.79
+
+3) RoNIN [2]: Collected with Android smartphones across three carrying modes (handheld, pocket, bag). The motion dynamics include natural, unconstrained walking and running by 100 distinct subjects, providing a large-scale benchmark for inter-subject generalization. 
+
+4) IDOL [22]: Focuses on challenging orientation estima-tion scenarios. The motion dynamics involve sharp turns, sud-den stops, and burst movements, which test the system’s ability to maintain heading consistency during rapid maneuvers. 
+
+5) TLIO [3]: Acquired using a VR headset in indoor environments. The dynamics are characterized by smooth head motions, coupled with complex 3D trajectories involving stair climbing and multi-floor navigation, challenging the vertical tracking capabilities. 
+
+C. Baselines 
+
+To rigorously evaluate the performance of GNIO, we com-pare it against four state-of-the-art learning-based inertial odometry methods, ranging from foundational CNNs to ad-vanced Transformers and lightweight edge-optimized models. 
+
+1) TLIO [3]: The foundational tightly-coupled framework that uses a ResNet-based regressor within an EKF. As the direct predecessor to GNIO, it serves as the primary baseline to demonstrate the impact of our architectural innovations. 
+
+2) CTIN [12]: A contextual Transformer network that replaces standard convolutions with a transformer architec-ture. It leverages self-attention to capture long-range temporal dependencies, providing a strong baseline for context-aware modeling. 
+
+3) iMoT [13]: The intertial motion transformer is a recent approach using a full encoder-decoder transformer structure. It represents the current state-of-the-art in sequence-to-sequence learning for inertial navigation, offering a rigorous benchmark for complex motion dynamics. 
+
+4) DeepILS [23]: A recently proposed lightweight frame-work designed for efficient edge deployment. DeepILS utilizes a residual network enhanced with channel-wise and spatial attention mechanisms to achieve high accuracy with low computational cost. To contextualize the performance of GNIO within the constraints of real-world robotic and mobile deployment, we provide a quantitative comparison of the computational com-plexity for all evaluated models in Table I. By benchmarking against this diverse set of models, we demonstrate that GNIO achieves a superior balance between the lightweight effi-ciency of traditional CNNs and the high-accuracy contextual reasoning typically reserved for much heavier Transformer architectures. 
+
+D. Comparative Results and Analysis 
+
+We evaluate GNIO against four representative baselines: the foundational TLIO [3], the contextual transformer CTIN [12], the full motion transformer iMoT [13], and the lightweight DeepILS [23]. Table II summarizes the Absolute Trajectory Error (ATE) in meters across four major benchmarks. Bold 
+
+values indicate the overall state-of-the-art (SOTA) performance in each category. The results demonstrate GNIO’s superior generalization and its ability to significantly cure the drift inherent in traditional regression models. 
+
+1) Dominance in Pedestrian Benchmarks: GNIO shows its most significant improvements on the OxIOD [21] and RIDI [15] datasets, which are characterized by diverse pedestrian activities and varied phone placements.  
+
+> •
+
+OxIOD : GNIO achieves an ATE of 0.74 m, surpassing the runner-up (iMoT, 1.86 m) by a massive margin of 
+
+60 .21% . This demonstrates that when the environment and motion types are known, the Gated Prediction Head’s ability to decompose magnitude and direction allows for near-perfect soft-ZUPT execution.  
+
+> •
+
+RIDI : In the more challenging unseen split, GNIO leads the runner-up (DeepILS, 1.48 m) by 19 .59% . This val-idates that the Motion Bank effectively generalizes a dictionary of human motion that remains valid across different subjects and sensor placements. 
+
+2) Robustness vs. Model Capacity: The RoNIN [2] dataset reveals a critical trade-off between raw model capacity and generalization.  
+
+> •
+
+Seen Split : The complex encoder-decoder structure of iMoT maintains the state-of-the-art at 3.78 m, with GNIO trailing by 14 .02% . 
+
+> •
+
+Unseen Split : Crucially, when transitioning to the unseen split, GNIO takes the lead, outperforming iMoT ( 5.31 m)by 5.46% .This reversal suggests that while deep transformers like iMoT can overfit to the specific motion signatures of the training subjects, GNIO’s use of a ResNet-18 backbone coupled with a Motion Bank provides a more stable prior that generalizes better to the wild movements of 100+ distinct subjects. 
+
+3) Performance Gaps in High-Dynamic Scenarios: On the IDOL [22] dataset, which is characterized by sharp turns and rapid orientation changes, GNIO significantly improves upon its direct predecessor TLIO ( 5.34 m unseen to 3.89 m
+
+unseen). However, it currently trails the state-of-the-art iMoT by 29 .66% in the unseen split. While GNIO’s gating mechanism excels at suppressing micro-drift during stationarity, the results in IDOL suggest that full-sequence attention (as seen in iMoT) remains more effec-tive for capturing the aggressive dynamics of burst movements. Nevertheless, GNIO offers a more computationally efficient Table II: Trajectory Prediction Comparision of GNIO and Baseline Models.                                                    
+
+> Methods OxIOD [21] RIDI [15] RoNIN [2] IDOL [22] seen unseen seen unseen seen unseen seen unseen TLIO [3] 2.67 2.54 1.58 1.49 5.95 7.10 5.89 5.34
+> CTIN [12] 2.32 3.34 1.39 1.86 4.62 5.61 2.90 3.69
+> iMoT [13] 1.86 0.90 1.68 1.49 3.78 5.31 2.22 3.00
+> DeepILS [23] ––1.56 1.48 4.80 6.80 ––
+> GNIO (Ours) 0.74 ↑60 .21% 0.71 ↑21 .11% 1.22 ↑12 .23% 1.19 ↑19 .59% 4.31 ↓14 .02% 5.02 ↑5.46% 3.45 ↓55 .45% 3.89 ↓29 .66%
+
+Table III: Component-wise Ablation Analysis on TLIO Dataset.                     
+
+> Configuration Motion Bank Gated Prediction Head RMSE ( m)Gain ( %)
+> Baseline (TLIO) ––2.40 –Context Enriched ✓–1.98 17 .5
+> Structurally Gated –✓1.84 23 .3
+> GNIO (Full) ✓✓1.66 30 .8
+
+middle ground by augmenting a standard ResNet backbone with its targeted architectural innovations. 
+
+E. Ablation Study 
+
+To investigate the individual contributions of the proposed architectural components, we conducted a systematic ablation study on the TLIO dataset. We incrementally integrated the Motion Bank and the Gated Prediction Head into the baseline TLIO architecture to evaluate their impact on the Root Mean Square Error (RMSE) of the estimated trajectory. 
+
+1) Impact of Key Components: Table III presents the per-formance comparison of different model configurations.  
+
+> •
+
+Baseline (TLIO): The standard ResNet-based regressor achieves an RMSE of 2.40 m. 
+
+> •
+
+Effect of Motion Bank: Introducing the Motion Bank reduces the RMSE of 1.98 m. This demonstrates that querying global motion prototypes helps the network resolve ambiguities in local sensor data, providing better semantic context for the regression.  
+
+> •
+
+Effect of Gated Prediction Head: Integrating only the Gated Prediction Head yields an RMSE of 1.84 m, a significant improvement over the baseline. This confirms that the decoupling of magnitude and direction allows for more precise control over displacement, particularly in suppressing drift during stationarity.  
+
+> •
+
+Full GNIO Framework: Combining both components leads to the best performance with an RMSE of 1.66 m,validating that the Motion Bank and Gated Head are com-plementary: one provides the necessary context, while the other enforces structural consistency. 
+
+2) Analysis of Gating Activation Functions: We further investigated the design choices within the Gated Prediction Head, specifically the activation function for the gate ( σ)and the function used for the magnitude scale. As shown in Table IV, we compared the standard Sigmoid activation against Tanh, and different scale functions.  
+
+> •
+
+Sigmoid vs. Tanh: Using Tanh ( gk ∈ [−1, 1] ) outper-forms Sigmoid ( gk ∈ [0 , 1] ), reducing RMSE from 2.05 m
+
+Table IV: Design Ablation of the Gated Prediction Head on the TLIO Dataset. 
+
+Gating σ (·) Scaling ψ (·) Scale Formula RMSE ( m)
+
+Gating Activation Analysis 
+
+Sigmoid Linear x 2.05 
+
+Tanh Linear x 2.00 
+
+Magnitude Mapping Analysis (Fixed Tanh Gating) 
+
+Tanh Exp ex 1.94 
+
+Tanh Abs |x| 1.92 
+
+Tanh PosELU ELU (x) + 1 1.85 
+
+Tanh Softplus ln ( ex + 1) 1.84 16 32 64 128 
+
+> Motion Bank Size
+> 1.90
+> 2.00
+> 2.10
+> RMSE
+> 2.07
+> 2.01
+> 1.98
+> 2.07
+
+Figure 2: Impact of Motion Bank Size on Trajectory Error to 2.00 m. This suggests that the ability to invert the direction of the raw proposal is crucial for correcting sign errors in the feature extraction.  
+
+> •
+
+Scale Function: While the absolute value (abs) and ex-ponential (exp) functions provided significant gains over the baseline, we found that smooth, non-linear mappings yielded the best results. Specifically, the Softplus and 
+
+Positive ELU functions achieved the lowest errors of 
+
+1.84 m and 1.85 m, respectively. These functions pro-vide a more stable gradient flow compared to the non-differentiable abs at zero or the extreme sensitivity of the exp function. 
+
+3) Impact of Motion Bank Size: We investigate the sensi-tivity of the GNIO framework to the size of the Motion Bank (m), which determines the number of learnable global motion prototypes available for the attention mechanism. We varied m
+
+across {16 , 32 , 64 , 128 } while keeping other hyperparameters fixed. As illustrated in Figure 2, the model performance exhibits a clear trade-off between expressivity and redundancy:  
+
+> •
+
+Under-parametrization ( m = 16 ): With a small bank size, the RMSE is relatively high ( 2.07 m). This suggests that 
+
+16 prototypes are insufficient to capture the full diversity (a) OxIOD-SLOW_WALKING (b) OxIOD-HANDBAG (c) RIDI-ZHICHENG_HANDHELD2 (d) RIDI-SHALI_BAG1    
+
+> (e) RoNIN-A016_1 (f) RoNIN-A052_2 (g) IDOL-B1_KNOWN_8 (h) IDOL-B3_UNKNOWN_2
+
+Figure 3: Qualitative comparison of estimated trajectories. of human motion modes (e.g., distinguishing between varying walking speeds, turning, and stair climbing), leading to mode collapse where distinct activities are mapped to the same prototype.  
+
+> •
+
+Optimal Capacity ( m = 64 ): The error decreases signif-icantly as the bank size increases, reaching a minimum RMSE of 1.98 m at m = 64 . At this capacity, the network learns a sufficiently granular dictionary of motion patterns to resolve ambiguities in the local sensor data.  
+
+> •
+
+Over-parametrization ( m = 128 ): Further increasing the bank size leads to performance degradation ( 2.07 m). A distinct diminishing returns effect is observed, likely due to prototype redundancy. When the bank is too large, the attention mechanism suffers from signal dilution, where the query matches multiple similar prototypes with low confidence, introducing noise into the context feature ck.
+
+F. Qualitative Evaluation 
+
+To provide a qualitative assessment of the trajectory es-timation, we visualize the estimated paths of GNIO and the baseline TLIO [3] against the ground truth (GT) across several representative sequences from the four benchmarks. As illustrated in Figure 3, GNIO (shown in green) consistently tracks the ground truth more closely than the baseline (shown in blue), which suffers from noticeable cumulative drift. 
+
+1) Drift Suppression in Pedestrian Motion (Figures 3a and 3b): In the OxIOD sequences, particularly the Slow Walking and Handbag scenarios, the baseline TLIO tends to deviate from the reference loop. In contrast, GNIO maintains a tight trajectory that aligns with the ground truth. This visual evidence supports our claim that the Gated Prediction Head effectively acts as a soft-ZUPT, preventing the velocity leakage that typically occurs during slow or periodic human motion. 
+
+2) Robustness to Placement and Dynamics (Figures 3c, 3d, 3g and 3h): The RIDI and IDOL plots demonstrate GNIO’s robustness in challenging conditions. Even when the IMU is carried in a bag (figure 3d) or subjected to the sharp maneuvers and abrupt direction changes characteristic of the IDOL dataset (figure 3g), GNIO accurately captures the overall shape and orientation of the movement. 
+
+3) Long-Range Generalization (figures 3e and 3f): In the unconstrained RoNIN sequences, GNIO exhibits smoother trajectory reconstruction. By leveraging the Motion Bank to query global motion prototypes, the system successfully disambiguates complex activities, preventing the erratic jumps or scale errors observed in the baseline predictions. Overall, the qualitative results in Figure 3 confirm that our architectural innovations—specifically the decomposition of displacement and the use of global semantic context—lead to statistically consistent and physically plausible trajectory estimates across diverse real-world scenarios. V. L IMITATIONS AND FEATURE WORK 
+
+While GNIO demonstrates robust performance on pedes-trian datasets, its accuracy degrades significantly when applied to vehicle-based datasets such as KITTI [24], GEODE [25]. The primary reason for this degradation lies in the physics of error propagation at high velocities. Inertial odometry essentially performs integration of velocity estimates to obtain position. In pedestrian navigation, typical speeds are low (∼ 1.4m/s ), so a small relative error in velocity prediction (e.g. , 1% ) results in a manageable position drift. However, in automotive scenarios where speeds frequently exceed 10 m/s ,the same relative error magnitude translates into massive abso-lute position drift. Furthermore, unlike pedestrian navigation, where frequent ZUPT help reset drift, continuous high-speed driving lacks such constraints, causing small biases in the predicted velocity to accumulate rapidly into large position errors. To address the challenges of high-speed tracking, we pro-pose three specific directions: 
+
+1) Long-Sequence Modeling: We will replace the sliding-window backbone with State Space Models ( e.g. , Mamba [26]) to capture long-term acceleration dependencies, addressing the observability issue during constant-speed cruising. 
+
+2) Mixture of Experts: To handle the drastic dynamic range between pedestrians and vehicles, we will implement an Mixture of Experts (MoE) architecture with specialized Low-Speed and High-Speed experts, gated by a dynamic router that identifies motion context via vibration analysis. 
+
+3) Kinematic Constraints: We plan to incorporate non-holonomic constraints into the loss function, explicitly penal-izing velocity estimates to reflect the physical limitations, such as Ackerman steering geometry. VI. C ONCLUSION 
+
+In this work, we introduced GNIO, a novel architecture that cures the curse of drift in inertial navigation through two key structural innovations. First, the learnable Motion Bank provides global semantic context by querying a dictionary of motion prototypes, allowing the network to disambiguate complex activities that local windows cannot resolve. Sec-ond, the Gated Prediction Head decomposes displacement into magnitude and direction, acting as a differentiable soft-ZUPT mechanism that proactively suppresses noise during stationarity and scales predictions during dynamic motion. Extensive experiments across four major benchmarks demonstrate that GNIO significantly outperforms state-of-the-art CNN and Transformer-based models, achieving up to a 
+
+60 .21% reduction in trajectory error. By embedding structural motion priors and semantic memory directly into the network, GNIO provides a more robust and generalized solution for precise, long-term stable inertial odometry. REFERENCES [1] C. Chen, X. Lu, A. Markham, and N. Trigoni, “Ionet: Learning to cure the curse of drift in inertial odometry,” in Proceedings of the AAAI conference on artificial intelligence , vol. 32, no. 1, 2018. 1, 2 [2] S. Herath, H. Yan, and Y. Furukawa, “Ronin: Robust neural inertial navigation in the wild: Benchmark, evaluations, & new methods,” in 
+
+2020 IEEE international conference on robotics and automation (ICRA) .IEEE, 2020, pp. 3146–3152. 1, 2, 4, 5, 6 [3] W. Liu, D. Caruso, E. Ilg, J. Dong, A. I. Mourikis, K. Daniilidis, V. Kumar, and J. Engel, “Tlio: Tight learned inertial odometry,” IEEE Robotics and Automation Letters , vol. 5, no. 4, pp. 5653–5660, 2020. 1, 2, 4, 5, 6, 7 [4] Y. Qiu, C. Wang, C. Xu, Y. Chen, X. Zhou, Y. Xia, and S. Scherer, “Airimu: Learning uncertainty propagation for inertial odometry,” arXiv preprint arXiv:2310.04874 , 2023. 1 [5] Y. Qiu, C. Xu, Y. Chen, S. Zhao, J. Geng, and S. Scherer, “Airio: Learning inertial odometry with enhanced imu feature observability,” 
+
+arXiv preprint arXiv:2501.15659 , 2025. 1 [6] R. K. Jayanth, Y. Xu, Z. Wang, E. Chatzipantazis, D. Gehrig, and K. Daniilidis, “Eqnio: Subequivariant neural inertial odometry,” arXiv preprint arXiv:2408.06321 , 2024. 1, 2 [7] S. Zhang, S. Wang, L. Wu, Q. Zhang, T. Wen, Z. Zhou, A. Peng, X. Hong, L. Zheng, and Y. Yang, “Tinyio: Lightweight reparameterized inertial odometry,” arXiv preprint arXiv:2507.15293 , 2025. 1 [8] S. Zhang, Q. Zhang, S. Wang, T. Wen, L. Wu, Z. Zhou, X. Hong, A. Peng, L. Zheng, and Y. Yang, “Ionext: Unlocking the next era of inertial odometry,” arXiv preprint arXiv:2507.17089 , 2025. 1, 2 [9] K. He, X. Zhang, S. Ren, and J. Sun, “Deep residual learning for image recognition,” in Proceedings of the IEEE conference on computer vision and pattern recognition , 2016, pp. 770–778. 1, 2 [10] K. Cho, B. Van Merriënboer, Ç. Gulçehre, D. Bahdanau, F. Bougares, H. Schwenk, and Y. Bengio, “Learning phrase representations using rnn encoder–decoder for statistical machine translation,” in Proceedings of the 2014 conference on empirical methods in natural language processing (EMNLP) , 2014, pp. 1724–1734. 1 [11] C. Lea, M. D. Flynn, R. Vidal, A. Reiter, and G. D. Hager, “Tempo-ral convolutional networks for action segmentation and detection,” in 
+
+proceedings of the IEEE Conference on Computer Vision and Pattern Recognition , 2017, pp. 156–165. 2 [12] B. Rao, E. Kazemi, Y. Ding, D. M. Shila, F. M. Tucker, and L. Wang, “Ctin: Robust contextual transformer network for inertial navigation,” in 
+
+Proceedings of the AAAI Conference on Artificial Intelligence , vol. 36, no. 5, 2022, pp. 5413–5421. 2, 5, 6 [13] S. M. Nguyen, D. V. Le, and P. Havinga, “imot: Inertial motion trans-former for inertial navigation,” in Proceedings of the AAAI Conference on Artificial Intelligence , vol. 39, no. 6, 2025, pp. 6209–6217. 2, 5, 6 [14] X. Cao, C. Zhou, D. Zeng, and Y. Wang, “Rio: Rotation-equivariance supervised learning of robust inertial odometry,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,2022, pp. 6614–6623. 2 [15] H. Yan, Q. Shan, and Y. Furukawa, “Ridi: Robust imu double integra-tion,” in Proceedings of the European conference on computer vision (ECCV) , 2018, pp. 621–636. 2, 4, 5, 6 [16] S. Zhang, S. Wang, Q. Z. L. Wu, T. Wen, Z. Zhou, X. Hong, L. Zheng, and Y. Yang, “Stario: A lightweight inertial odometry for nonlinear motion,” arXiv preprint arXiv:2507.16121 , 2025. 2 [17] Y. Wang and Y. Zhao, “Wavelet dynamic selection network for inertial sensor signal enhancement,” in Proceedings of the AAAI Conference on Artificial Intelligence , vol. 38, no. 14, 2024, pp. 15 680–15 688. 2 [18] S. Zhang, Q. Zhang, S. Wang, L. Wu, T. Wen, Z. Zhou, A. Peng, X. Hong, L. Zheng, and Y. Yang, “Ftin: Frequency-time integration network for inertial odometry,” arXiv preprint arXiv:2507.16120 , 2025. 2[19] A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit, L. Jones, A. N. Gomez, Ł. Kaiser, and I. Polosukhin, “Attention is all you need,” Advances in neural information processing systems , vol. 30, 2017. 3 [20] D. P. Kingma and J. Ba, “Adam: A method for stochastic optimization,” 
+
+arXiv preprint arXiv:1412.6980 , 2014. 4 [21] C. Chen, P. Zhao, C. X. Lu, W. Wang, A. Markham, and N. Trigoni, “Oxiod: The dataset for deep inertial odometry,” arXiv preprint arXiv:1809.07491 , 2018. 4, 5, 6 [22] S. Sun, D. Melamed, and K. Kitani, “Idol: Inertial deep orientation-estimation and localization,” in Proceedings of the AAAI Conference on Artificial Intelligence , vol. 35, no. 7, 2021, pp. 6128–6137. 4, 5, 6 [23] O. Tariq, M. B. A. Dastagir, M. Bilal, and D. Han, “Deepils: Toward ac-curate domain-invariant aiot-enabled inertial localization system,” IEEE Internet of Things Journal , vol. 12, no. 11, pp. 17 153–17 168, 2025. 5, 6[24] A. Geiger, P. Lenz, and R. Urtasun, “Are we ready for autonomous driving? the kitti vision benchmark suite,” in 2012 IEEE conference on computer vision and pattern recognition . IEEE, 2012, pp. 3354–3361. 7[25] Z. Chen, Y. Qi, D. Feng, X. Zhuang, H. Chen, X. Hu, J. Wu, K. Peng, and P. Lu, “Heterogeneous lidar dataset for benchmarking robust local-ization in diverse degenerate scenarios,” The International Journal of Robotics Research , p. 02783649251344967, 2024. 7 [26] A. Gu and T. Dao, “Mamba: Linear-time sequence modeling with selective state spaces,” in First conference on language modeling , 2024. 8

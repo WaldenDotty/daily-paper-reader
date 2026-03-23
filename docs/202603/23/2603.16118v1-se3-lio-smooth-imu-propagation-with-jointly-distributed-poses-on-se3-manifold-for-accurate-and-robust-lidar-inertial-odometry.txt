@@ -1,0 +1,672 @@
+Title: SE(3)-LIO: Smooth IMU Propagation With Jointly Distributed Poses on SE(3) Manifold for Accurate and Robust LiDAR-Inertial Odometry
+
+URL Source: https://arxiv.org/pdf/2603.16118v1
+
+Published Time: Wed, 18 Mar 2026 00:43:46 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# SE(3) -LIO: Smooth IMU Propagation With Jointly Distributed Poses on SE(3) Manifold for Accurate and Robust LiDAR-Inertial Odometry 
+
+Gunhee Shin 1, Seungjae Lee 1, Jei Kong 1, Youngwoo Seo 2 and Hyun Myung 1∗
+
+Abstract — In estimating odometry accurately, an inertial measurement unit (IMU) is widely used owing to its high-rate measurements, which can be utilized to obtain motion information through IMU propagation. In this paper, we address the limitations of existing IMU propagation methods in terms of motion prediction and motion compensation. In motion prediction, the existing methods typically represent a 6-DoF pose by separating rotation and translation and propagate them on their respective manifold, so that the rotational variation is not effectively incorporated into translation propagation. During motion compensation, the relative transformation be-tween predicted poses is used to compensate motion-induced distortion in other measurements, while inherent errors in the predicted poses introduce uncertainty in the relative transfor-mation. To tackle these challenges, we represent and propagate the pose on SE(3) manifold, where propagated translation properly accounts for rotational variation. Furthermore, we precisely characterize the relative transformation uncertainty by considering the correlation between predicted poses, and incorporate this uncertainty into the measurement noise during motion compensation. To this end, we propose a LiDAR-inertial odometry (LIO), referred to as SE(3) -LIO, that integrates the proposed IMU propagation and uncertainty-aware motion compensation (UAMC). We validate the effectiveness of SE(3) -LIO on diverse datasets. Our source code and additional material are available at: https://se3-lio.github.io/ .
+
+I. I NTRODUCTION 
+
+Accurate odometry estimation is essential for autonomous navigation [1], [2]. Among various proprioceptive sensors, inertial measurement unit (IMU) is widely used with other exteroceptive sensors owing to its high-rate measurements. These measurements can be utilized to obtain motion in-formation through IMU propagation, which integrates IMU measurements over time based on a kinematic model [1], [3]. IMU propagation enhances odometry performance in two aspects: motion prediction and motion compensation . Firstly, it enables motion prediction before the measurements from other modalities, such as LiDAR point clouds and camera images, which are highly informative but available at lower frequencies. The predicted motion is used as a prior in-formation for the update step in Kalman filter [3]–[6] or a factor for pose graph optimization [7]–[9]. Secondly, it allows motion compensation for motion-induced distortions in other measurements. Sensors such as LiDAR and event cameras accumulate samples over a certain period of time, 
+
+> ∗
+
+Corresponding author: Hyun Myung 
+
+> 1
+
+School of Electrical Engineering, KAIST (Korea Advanced Institute of Science and Technology), Daejeon, 34141, South Korea, {gunhee shin, sj98lee, kongj0531, hmyung }@kaist.ac.kr 
+
+> 2
+
+Hanwha Aerospace, 6, Pangyo-ro 319 beon-gil, Bundang-gu, Seongnam-si, Gyeonggi-do, South Korea. {youngwoo.seo }@hanwha.com 1. Smooth IMU propagation   
+
+> 2. Uncertainty-aware motion compensation Jointly distributed poses Relative transformation uncertainty Reference pose
+> Uncertainty low high
+> Probabilistic undistorted point cloud Prior dist. Meas. dist.
+> Raw point Undistorted point
+
+Fig. 1. Overview of the proposed IMU propagation and LiDAR–inertial odometry (LIO), referred to as SE(3) -LIO. The IMU propagation is performed on SE(3) manifold to yield a smooth trajectory and accurate prior. The joint distribution of predicted poses is derived to characterize the relative transformation uncertainty by considering their correlation, which is incorporated into the measurement noise during motion compensation to construct a probabilistic undistorted point cloud. Finally, SE(3) -LIO optimizes both the prior and the measurement distribution, improving the performance of odometry estimation. 
+
+during which a robot’s continuous motion would introduce distortions to the measurements [10], [11]. These distortions are typically compensated by transforming the samples into a common reference pose. Such motion compensation is achieved by applying a relative transformation between the reference pose and the pose at each sample time, where both poses are obtained through IMU propagation. While IMU propagation has been extensively studied [1], [5], [10], several challenges remain in motion prediction and motion compensation. For motion prediction, conventional methods typically represent a 6-DoF pose by separating rotation and translation, and propagate them on their re-spective manifolds [1]. Consequently, rotational variation is not effectively incorporated into translation propagation, resulting in inaccurate motion prediction. For motion com-pensation, the predicted poses obtained through IMU prop-agation inherently contain errors due to sensor noise and numerical integration [12], introducing uncertainty in the relative transformation used for motion compensation. This uncertainty should be addressed properly during motion compensation, especially for measurements at distant ranges, such as LiDAR point clouds, where even small rotational changes could introduce substantial perturbations on the measurements [10], [13]. However, characterizing its un-certainty remains challenging, because it cannot be directly measured from IMU propagation [2]. To address these challenges, we propose a smooth IMU 
+
+> arXiv:2603.16118v1 [cs.RO] 17 Mar 2026
+
+propagation with jointly distributed poses on SE(3) manifold. The proposed method represents and propagates the pose on SE(3) manifold, where the propagated translation properly accounts for rotational variation, leading to more accurate motion prediction. Furthermore, we derive the joint distribu-tion of the predicted poses, which enables precise character-ization of relative transformation uncertainty by considering their correlation. This uncertainty is incorporated into the measurement noise during motion compensation to obtain a probabilistic undistorted measurement, and we refer to this process as uncertainty-aware motion compensation (UAMC). To this end, we present an error-state Kalman filter-based Li-DAR–inertial odometry (LIO) framework, termed SE(3)-LIO ,which integrates the proposed IMU propagation and UAMC. It optimizes a prior from the proposed IMU propagation together with a measurement distribution constructed through UAMC. We validate the effectiveness of SE(3) -LIO with data acquired in diverse scenarios, including a drone under aggressive motion and a ground vehicle operating in large-scale rough terrain, and the results demonstrate improved accuracy and robustness of SE(3) -LIO compared with state-of-the-art LIO methods. The main contributions of this study are as follows: 1) We propose a smooth IMU propagation on SE(3) 
+
+manifold that enables accurate motion prediction by incorporating rotational variation into translation prop-agation. 2) We introduce an uncertainty-aware motion compensa-tion (UAMC) approach that constructs a probabilistic undistorted measurement. 3) We present an accurate and robust LiDAR-inertial odometry (LIO) framework, termed SE(3) -LIO, which integrates the proposed IMU propagation and UAMC. 4) Experimental results in diverse scenarios demonstrate improved accuracy and robustness of SE(3) -LIO com-pared with state-of-the-art LIO methods. II. R ELATED WORKS 
+
+A. IMU Propagation 
+
+Extensive IMU propagation methods have been developed based on the preintegration theory [1], which properly ad-dresses a rotational motion on SO(3) manifold. The the-ory introduces a kinematic model [14] that describes the evolution of a 6-DoF by rotation and translation separately. Building upon this theory, LIO-EKF [5] incorporated high-order terms during discretization of the kinematic model to capture the specific robot motion. Brossard et al. [12] fur-ther extended the theory to SE 2(3) manifold, which jointly represents rotation, translation, and velocity in a single Lie group. While these methods attempt to improve motion description, they still have limitations in addressing rotational variations during translation propagation, which results in inaccurate motion prediction under the constant global ac-celeration assumption [1], [12]. In parallel, continuous-time representation approaches have been introduced to overcome the limitations of discrete-time models [11]. Specifically, B-spline interpolation with the predicted poses as control points has been employed to model smooth trajectories, demon-strating improved performance in environments with curved trajectories [13], [15], [16]. Despite these advancements, they introduce additional complexity and computational overhead, limiting their feasibility in real-time applications. Moreover, motion compensation is performed using the relative transformation between a reference pose and the pose at each sample time (sample pose). A large body of works, including LIO-SAM [7] and FAST-LIO [3], esti-mate the sample pose by linearly interpolating between two consecutive predicted poses. While this approach achieves effective and real-time performance, it operates in a discrete-time manner, which introduces errors particularly in highly dynamic environments. To address this limitation, recent works [15], [16] introduced continuous-time models and extracted the sample pose from a smooth trajectory. Further-more, DLIO [10] introduces a coarse-to-fine IMU propaga-tion approach that incorporates linear jerk and angular accel-eration to refine the estimation of the sample pose between predicted poses. Despite these advances, the predicted poses inherently contain errors due to sensor noise and numerical integration [12], which consequently introduce uncertainty in the relative transformation for motion compensation. MA-LIO [13] incorporates such uncertainty into measurement noise during motion compensation. However, it overesti-mates the uncertainty by neglecting the correlation between predicted poses. Accurately characterizing the relative trans-formation uncertainty remains challenging, as it cannot be directly estimated from IMU propagation. 
+
+B. LiDAR-Inertial Odometry 
+
+LiDAR–inertial odometry (LIO) has been widely utilized in various robotic applications due to its accuracy and real-time performance [17]. Among various approaches, Kalman filter methods are preferred for their lightweight formulation and computational efficiency [18], [19]. FAST-LIO [3] and FAST-LIO2 [4] introduced an efficient error-state Kalman filter (ESKF) framework and an incremental kd-tree structure for map management, achieving reliable performance in di-verse scenarios. Building upon this, VoxelMap [20] presents an uncertainty-aware ESKF framework that incorporates the prior uncertainty from IMU propagation into measurement noise, which is subsequently propagated to the residual in the measurement distribution. It also employs an adaptive voxel map that efficiently manages planar features with their asso-ciated uncertainty, organized using a hash table and octree structure. In this work, we build upon the ESKF framework presented in [3], [13] and enhance odometry performance by integrating our proposed smooth IMU propagation and UAMC. III. S MOOTH IMU P ROPAGATION WITH JOINTLY 
+
+DISTRIBUTED POSES ON SE(3) M ANIFOLD 
+
+A. IMU Propagation on SE(3) Manifold 
+
+A typical IMU returns angular velocity ωm and linear acceleration am as measurements, which are affected by biases and noise. The biases, bω and ba, follow a random walk process that varies slowly over time, while the noise, 
+
+nω and na, are modeled as zero-mean white Gaussian distributions [3], [21]. True IMU value, ω and a, can be expressed as: 
+
+ωm = ω + bω + nω , am = a + ba + na. (1) Conventional IMU propagation methods typically define the state vector to include following components: 
+
+x .
+
+= R t W v bω ba ∈ SO(3) × R12 (2) where the 6-DoF pose is represented by separating rotation and translation, R and t, respectively, and W v is the velocity in world frame [1], [5], [10]. The state evolves according to the following continuous-time kinematic model: 
+
+˙R = R(ω)∧, ˙t = W v, W ˙v = Ra + g,
+
+˙bω = nbω , ˙ba = nba
+
+(3) where ˙(·) denotes the time derivative, (·)∧ denotes the skew-symmetric matrix of a vector, and g is the gravity vector. By discretizing (3), we obtain the following model: 
+
+xi+1 = f(xi, ui, w, ∆t) = 
+
+
+
+RiExp( ωi∆t)
+
+ti + W vi∆t 
+
+> W
+
+vi + ( Riai + g)∆ t
+
+bω 
+
+> i
+
++ nbω
+
+ba 
+
+> i
+
++ nba
+
+ (4) where ui = [ω⊤ 
+
+> i
+
+a⊤ 
+
+> i
+
+]⊤ is an IMU input, w =[n⊤ 
+
+> ω
+
+n⊤ 
+
+> a
+
+n⊤ 
+
+> bω
+
+n⊤ 
+
+> ba
+
+]⊤ is a process noise term, and ∆t is the time difference between two consecutive IMU inputs. For simplicity, Ri in the velocity term is assumed constant during ∆t under the constant global acceleration assumption [1], [12]. Notably, rotation and translation are propagated on their respective manifolds, such that rotational variation is not effectively incorporated into translation propagation. As robot motion involves simultaneous rotation and translation, neglecting the rotation variation can significantly contribute to pose error, especially under aggressive motion. The error accumulates through successive IMU propagation, leading to an unreliable prior that degrades the stability of system. To address this issue, we propose a smooth IMU prop-agation method that evolves poses on SE(3) manifold. We first represent the 6-DoF pose on SE(3) manifold using a transformation matrix T and define the state vector as: 
+
+x .
+
+= T B v bω ba ∈ SE(3) × R9 (5) where B v is the velocity in the body frame. Then, we introduce a continuous-time kinematic model with rigid body motion model [14] as: 
+
+˙T = T(ζ)∧, W ˙v = ˙(RB v) = Ra + g (6) where ζ = B v⊤ ω⊤⊤ ∈ R6 is the twist in the body frame and the biases evolve as in (3). By discretizing (6),             
+
+> Fig. 2. Illustration of the difference between the conventional [1] and the proposed IMU propagation method, which are denoted as SO(3) ×R3
+> and SE(3) , respectively. The twist, ζ(t).
+> = [ v(t)ω(t)] , is defined as a variable to simulate aggressive motion [22] and generate the ground-truth trajectory with a sufficiently small time step, ∆tgt = 10 −4(black dashed line). Both methods are performed with 10 IMU inputs, each computed from adjacent twist values, and an interval of ∆t= 10 −2. The outputs of the proposed method (green dots) yield a smoother trajectory and follow the ground truth (black dashed line) more closely compared with the outputs of the conventional method (red crosses). The highlighted box shows that the proposed method properly addresses rotational changes while propagating translation, whereas the conventional method does not.
+
+we obtain: 
+
+xi+1 = f (xi, ui, w, ∆t)=
+
+
+
+TiExp( ζi∆t)Exp( −ωi∆t){B vi + ( ai + R⊤ 
+
+> i
+
+g)∆ t}
+
+bω 
+
+> i
+
++ nbω
+
+ba 
+
+> i
+
++ nba
+
+ . (7) The pose is propagated on SE(3) manifold, where the prop-agated translation properly accounts for rotational variation as: 
+
+Ti+1 = TiExp( ζi∆t)=
+
+Ri ti
+
+0 1
+
+  Exp( ωi∆t) Jl(ωi∆t)B vi∆t
+
+0 1
+
+ (8) where Jl denotes the left Jacobian of the exponential map on SO(3) manifold [1]. The propagated translation can be rewritten as: 
+
+ti+1 = ti + RiJl(ωi∆t)B vi∆t
+
+= ti + Jl(Riωi∆t)W vi∆t (9) where RiJl(ωi)R⊤ 
+
+> i
+
+= Jl(Riωi) and W vi = RiB vi. Com-paring (9) with the conventional method (4) reveals that their discrepancy increases with larger twist (dynamic motion) and longer intervals (low-frequency IMU) as illustrated in Fig. 2. To provide a reliable prior through IMU propagation, both pose and its uncertainty must be propagated accurately [1], [12]. We characterize the state uncertainty using the error state, ˜x, which follows a zero-mean Gaussian distribution as: 
+
+˜x .
+
+= ξ ˜v ˜bω ˜ba ∈ R15 (10) Indep. rel. poses Joint. rel. poses 
+
+> Predicted poses
+
+(a) (b) Fig. 3. Uncertainty characterization of predicted poses from IMU prop-agation and relative transformations for motion compensation. (a) IMU propagation is performed using 100 IMU inputs computed same as Fig. 2, with a process noise covariance Q. Initial pose is set to origin with covariance Σ0. (b) Relative transformation uncertainty is computed with respect to the last predicted pose Tk , either by neglecting cross terms and assuming independence [13] (red ellipses) or by considering the correlation between poses as the proposed method (purple ellipses). The uncertainties are illustrated as 95% confidence regions and validated using Monte Carlo simulation with 100 samples (black dots). The proposed method provides a more accurate characterization, while the independence assumption leads to overestimation. Results are shown every 20 IMU inputs for clarity. 
+
+where ξ is the perturbation represented on the tangent space of SE(3) manifold and the others are additive perturbations on Euclidean space [3]. The true state x is related to the noise-free nominal state ˆx and an error state ˜x as: 
+
+x = ˆ x ⊞ ˜x, ˜x = x ⊟ ˆx (11) where ⊞ and ⊟ are operators that map between a local neigh-borhood on manifold and its tangent space [3]. Accordingly, the error state dynamic model can be formulated as: 
+
+˜xi+1 = xi+1 ⊟ ˆxi+1 = f (xi, ui, w, ∆t) ⊟ f (ˆ xi, ui, 0, ∆t)
+
+≈ F˜xi ˜xi + Fwi w
+
+(12) where F˜xi and Fwi are the Jacobians of ˜xi+1 with respect to ˜xi and w, respectively, evaluated at ˜xi = 0 and w = 0
+
+[3]. Finally, the state covariance is obtained by taking the expectation of the outer product of (12) as follows: 
+
+ˆPi+1 = Exp  ˜xi+1 ˜x⊤
+
+> i+1
+
+ = F˜xi
+
+ˆPiF⊤ 
+
+> ˜xi
+
++ Fwi QwF⊤ 
+
+> wi
+
+(13) where Qw is the covariance of the process noise. 
+
+B. Uncertainty-aware Motion Compensation (UAMC) 
+
+Consider a measurement that accumulates samples over time, such as LiDAR points and event camera data. While the set of samples is treated as a single measurement, each sample is acquired at a different location, resulting in motion-induced distortion. To correct this distortion, we transform all samples into a common reference pose. Let a measurement be obtained at tk, where a sample is observed at ρj ∈ [tk−1, t k]. We transform the sample using the relative transformation as: 
+
+TIk Ij = T−1 
+
+> Ik
+
+TIj . (14) where TIk and TIj denote the IMU poses at times tk and 
+
+ρj , respectively and both poses can be obtained from IMU propagation. Despite advancements in IMU propagation, pre-dicted poses inherently contain errors due to IMU noise and numerical integration, which in turn introduce errors in the   
+
+> (a) Aquisition time (b) Raw noise (c) Undistorted noise
+
+Fig. 4. Resultant noise of the undistorted point cloud after applying uncertainty-aware motion compensation (UAMC). (a) Points are acquired clockwise over time. (b) The noise of raw measurements increases with distance from the center. (c) The point cloud is undistorted through UAMC. As highlighted, points acquired at the beginning exhibit larger noise than those acquired later because earlier points are transformed using relative transformations with higher uncertainty. 
+
+relative transformation. Such errors significantly contribute to sample deviations, particularly for measurements at distant ranges such as LiDAR point clouds. To address this issue, we incorporate the uncertainty of the relative transformation into the sample noise during motion compensation, yielding a probabilistic representation of undistorted measurements. The true relative transformation, TIk Ij , can be expressed using the nominal pose and its perturbation as: 
+
+ˆTIk Ij Exp( ξIk Ij ) = ( ˆTIk Exp( ξIk )) −1 ˆTIj Exp( ξIj )= Exp( −ξIk ) ˆT−1
+
+> Ik
+
+ˆTIj Exp( ξIj ). (15) The perturbations of TIj and TIk follow a joint distribution: 
+
+ξIj
+
+ξIk
+
+
+
+∼ N (0, Σ), Σ =
+
+ ΣIj ΣIj ,Ik
+
+Σ⊤  
+
+> Ij,Ik
+
+ΣIk
+
+
+
+(16) where ΣIj ,Ik is nonzero if the two poses are jointly dis-tributed. Letting ˆTIk Ij = ˆT−1
+
+> Ik
+
+ˆTIj , we can formulate (15) as: 
+
+Exp( ξIk Ij ) = Exp( ξ′ 
+
+> Ik
+
+)Exp( ξIj ) (17) where ξ′ 
+
+> Ik
+
+= −Ad ˆT−1 
+
+> IkIi
+
+ξIk and Ad T denotes the adjoint ma-trix of T [2], [23]. Applying the Baker-Campbell-Hausdorff (BCH) formula, the perturbation in the exponential map is expressed as [23]: 
+
+ξIk Ij = ξ′ 
+
+> Ik
+
++ ξIj + 12 ξ′⋏ 
+
+> Ik
+
+ξIj + 112 ξ′⋏ 
+
+> Ik
+
+ξ′⋏ 
+
+> Ik
+
+ξIj + · · · . (18) By taking the expectation of the outer product of (18), the relative transformation covariance can be computed as 
+
+E[ ξIk Ij ξ⊤  
+
+> IkIj
+
+] ≈ Ad ˆT−1 
+
+> IkIj
+
+ΣIk Ad ⊤ 
+
+> ˆT−1
+> IkIi
+
++ ΣIj
+
+| {z }
+
+> 2nd order diag. terms
+
+−Ad ˆT−1 
+
+> IkIj
+
+Σ⊤  
+
+> Ij,Ik
+
+− ΣIj ,Ik Ad ⊤ 
+
+> ˆT−1
+> IkIj
+
+| {z }
+
+> 2nd order cross terms
+
++ · · · 
+
+(19) where the cross terms are valid when the poses are jointly distributed as described in (16) [2]. In other words, when the predicted poses obtained from IMU propagation are jointly distributed, the cross terms should be considered. Otherwise, they are neglected. In this study, we derive the joint distribution between the predicted poses and demonstrate that they are jointly (a) IMU propagation on SE(3) manifold (b) Relative transformation for motion compensation (c) Uncertainty aware motion compensation (UAMC) Prior Dist. Updated Pose Meas. Dist. (e) State update Voxel map [20] Probabilistic undistorted cloud (d) Residual computation 
+
+> IMU LiDAR
+
+Fig. 5. Pipeline of SE(3) -LIO that integrates the proposed IMU propagation and uncertainty-aware motion compensation (UAMC). Assume the pose at 
+
+tk−1 has been estimated, and a new LiDAR point cloud is acquired at tk . (a) IMU propagation is performed on SE(3) manifold using IMU measurements acquired over [tk−1, t k ], providing a prior distribution for the state update. (b) Relative transformations, along with their uncertainties, are computed from the reference pose at tk to poses at each point acquisition time. (c) These relative transformations are used to compensate for motion distortion in the raw point cloud, while their uncertainties are incorporated into the noise of each point, resulting in a probabilistic undistorted point cloud. (d) The undistorted point cloud is transformed into the world frame and used to construct residuals with the local map, for which we adopt VoxelMap [20] to obtain a measurement distribution. (e) Finally, the prior and measurement distributions are optimized through the update step, yielding an updated pose estimate at tk .
+
+distributed. This property stems from the fact that the IMU propagation is recursively performed, where the current state and an IMU input are used to predict the next state, as (7). Under the recursive structure, each error state can be expressed by an initial error state ˜x0 and IMU noise w as: 
+
+˜xi+1 = F˜x0 ˜xi ˜x0 +
+
+> i
+
+X 
+
+> τ=0
+
+(F˜xτ +1 ˜xi Fwτ w) (20) where the Jacobians are defined as: 
+
+F˜xi ˜xk =
+
+
+
+> k−1
+
+Y
+
+> j=i
+
+F˜xj if k > i 
+
+I if k ≤ i. (21) Stacking the error states over steps, we construct a joint distribution of error states as: 
+
+> 
+
+˜x0
+
+...
+
+˜xi+1 
+
+...
+
+˜xk
+
+> 
+> =
+> 
+
+I 0 · · · 0 · · · 0
+
+... ... . . . ... . . . ...
+
+F˜x0 ˜xi F˜x1 ˜xi · · · I · · · 0
+
+... ... . . . ... . . . ...
+
+F˜x0 ˜xk−1 F˜x1 ˜xk−1 · · · F˜xi+1 ˜xk−1 · · · I
+
+> 
+
+˜x0
+
+w′
+
+> 0
+
+...
+
+w′
+
+> i
+
+...
+
+w′
+
+> k−1
+> 
+> .
+
+(22) where w′ 
+
+> i
+
+= Fwi w. By computing the expectation of outer product of (22), we obtain the joint covariance of error states, which contains the joint covariance of pose described in (16). This enables accurate characterization of the relative transformation covariance using (19) by incorporating the cross terms. To the best of our knowledge, MA-LIO [13] is the first method to incorporate the relative transformation uncertainty into measurement noise during motion compensation. How-ever, it neglects the cross terms in (19) by assuming that the predicted poses are independent [23]. To analyze the effect of considering cross terms in uncertainty characterization, we conducted an experiment similar to the one proposed in [2] as shown in Fig. 3. The results demonstrate that the proposed method characterizes the relative transformation uncertainty more accurately, while the independent assumption leads to overestimation. Additionally, in the proposed method, the uncertainty increases as the target pose lies further in the past with respect to the reference pose. In contrast, the independent assumption exhibits a decreasing trend opposite to the proposed method because the earlier target pose ΣIj
+
+in (19) has a smaller uncertainty. Let’s consider a distorted LiDAR point Lj pj , which is acquired at time ρj and represented in the LiDAR frame. The point is undistorted using the relative transformation as:  
+
+> Ik
+
+ph 
+
+> j
+
+= TIk Ij TIL Lj ph 
+
+> j
+
+, τi ≤ ρj < τ i+1 (23) where TIL is the extrinsic transformation from IMU to LiDAR frame and ph is a point in homogeneous coordinates. The undistorted point is modeled as:  
+
+> Ik
+
+ph 
+
+> j
+
+= Ik ˆph 
+
+> j
+
++ Ik nd 
+
+> pj
+
+= ˆTIk Ij Exp( ξIk Ij )( Ij ˆph 
+
+> j
+
++ Ij nd 
+
+> pj
+
+)
+
+(24) where the true point ph consists of a nominal point ˆph and a noise term nd. The noise is expressed in homogeneous coordinates using a dilation matrix D that maps a 3D vector to a homogeneous form, such that nd = Dn [24]. Letting  
+
+> Ik
+
+ˆph 
+
+> j
+
+= ˆTIk Ij 
+
+> Ij
+
+ˆph 
+
+> j
+
+, and by linearizing (24), the noise term  
+
+> Ik
+
+nd 
+
+> pj
+
+can be approximated as:  
+
+> Ik
+
+nd 
+
+> pj
+
+≈ ˆTIk Ij (Ij ˆph 
+
+> j
+
+)⊙ξIk Ij + ˆTIk Ij 
+
+> Ij
+
+nd 
+
+> pj
+
+. (25) where (·)⊙ denotes an operator that maps a 4 ×1 vector to a 4 ×6 matrix [20], [24]. The resulting noise Ik nd 
+
+> pj
+
+reflects both the uncertainty of the relative transformation and the raw measurement noise, as illustrated in Fig. 4. 
+
+C. Integration with LiDAR-Inertial Odometry 
+
+We propose an error-state Kalman filter-based LiDAR-inertial odometry (LIO) framework, termed SE(3) -LIO, that integrates the proposed smooth IMU propagation method and UAMC. The framework optimizes the prior obtained from the proposed IMU propagation method from Section III. A
+
+and the measurement distribution constructed by a proba-bilistic undistorted point cloud from Section III. B. Pipeline of SE(3) -LIO is illustrated in Fig. 5. IMU propagation is performed until the end of a LiDAR scan at tk, resulting in a prior state as: 
+
+xk = ˆ xk ⊞ ˜xk, ˜xk ∼ N (0, ˆPk). (26) Then the probabilistic undistorted point cloud obtained through UAMC is transformed to the world frame to con-struct residuals with the local map, for which we adopt voxel map [20] as: 
+
+hj (xk, Ik pj ) = ( ud 
+
+> j
+
+)⊤(TIk 
+
+> Ik
+
+ph 
+
+> j
+
+− qd 
+
+> j
+
+) (27) where ud 
+
+> j
+
+, qd 
+
+> j
+
+are the normal vector and the center of the plane, respectively, in homogeneous coordinates. The residual can be linearized as: 
+
+hj (xk, Ik pj ) ≈ hj (ˆ xk, Ik ˆpj ) + Hj ˜xk + Jj Ik nd 
+
+> pj
+
+(28) where Hj and Jj , are the Jacobians of hj with respect to xk
+
+and Ik nd 
+
+> pj
+
+, respectively, evaluated at xk = ˆ xk and Ik pj = 
+
+> Ik
+
+ˆpj as: 
+
+Hj =
+
+h
+
+(ud 
+
+> j
+
+)⊤(Ik ˆph 
+
+> j
+
+)⊙ ˆTIk Ij 01×12 
+
+i
+
+, Jj = ( ud 
+
+> j
+
+)⊤ ˆTIk Ij .
+
+(29) Combining the prior from (26) and the measurement distri-bution from (28) yields the maximum a posteriori (MAP) estimate as: 
+
+min 
+
+> ˜xk
+
+(∥˜xk∥2ˆP−1
+
+> k
+
++
+
+> m
+
+X
+
+> j
+
+∥zj + Hj ˜xk∥2
+
+> R−1
+> j
+
+) (30) where ∥x∥M = x⊤Mx . Standard Kalman filter update step is performed by optimizing the resultant quadratic cost [3], [20]. IV. E XPERIMENTAL RESULTS 
+
+We perform an extensive evaluation on SE(3) -LIO across diverse scenarios. Experiments are conducted to validate the effectiveness of SE(3) -LIO in terms of accuracy and robust-ness in challenging environments, as well as computational efficiency compared with state-of-the-art LIO methods. 
+
+A. Experiment Setup 
+
+We conduct experiments on three datasets, including NTU-VIRAL [25], Newer-College [26], and our own dataset. The NTU-VIRAL and Newer-College datasets are utilized to evaluate performance under challenging conditions, includ-ing aggressive motion and sparse measurements. The NTU-VIRAL dataset was collected using a drone equipped with a low-channel LiDAR (Ouster OS1-16) and features aggres-sive motion with rapid directional changes and high linear acceleration. The Newer-College dataset was collected using a handheld platform, where dynamic motion was induced by human operators shaking it while walking. Finally, our own dataset was collected using a ground vehicle in large-scale rough terrain, featuring wild fluctuations due to uneven (b) (c) (a) (c) (b) 0 0.2km      
+
+> Fig. 6. Description of our dataset, including CW (blue), CCW (gray), and
+> mid (orange) sequences. (a) A ground vehicle equipped with a 128-channel LiDAR (Ouster OS2-128), an IMU (Xsens MTi-300), and a RTK-GNSS receiver (Emlid Reach RS). (b)–(c) Data were collected in large-scale rough terrain, including dense forest and wide open areas.
+
+terrain and degraded measurements due to dense vegetation and extensive open spaces, as shown in Fig. 6. We obtain ground truth poses for our dataset using a RTK-GNSS system (Emlid Reach RS) mounted on the vehicle. 
+
+SE(3) -LIO is compared with state-of-the-art LiDAR-inertial odometry methods, including FAST-LIO2 [4], PV-LIO 1, DLIO [10], LIO-EKF [5], and MA-LIO [13]. PV-LIO is extended from VoxelMap [27] by integrating IMU propagation. For a fair comparison, we adopted the default parameter set provided in the original works for all baseline methods, and we applied an identical parameter set for 
+
+SE(3) -LIO within each dataset. All methods were tested with a 32-core Intel i9-14900K CPU. 
+
+B. Quantitative Results 
+
+In the first experiment, we evaluate the accuracy of SE(3) -LIO on three datasets, as presented in Table I. As a quantita-tive metric, we use root mean square error (RMSE) of abso-lute trajectory error (ATE) using the open-source evaluation toolkit 2. In the NTU-VIRAL dataset, SE(3) -LIO achieves the most accurate results across all sequences. While MA-LIO [13] and DLIO [10], which address aggressive motion through improved IMU propagation, exhibit comparable per-formance in most sequences, both methods still degenerate in spms sequence, where the rotational and translational speeds exceed 1.6 rad /s and 5.0 m/s, respectively. More-over, SE(3) -LIO and DLIO demonstrate small deviations in results across all sequences, indicating robustness against varying dynamic motions. In the Newer-College dataset, we manually downsample the point clouds with a voxel size of 2 m to further increase measurement sparsity, and SE(3) -LIO achieves the best performance across all sequences, except for the quad-H sequence where it exhibits second-best performance. In our dataset, SE(3) -LIO achieves superior performance in large-scale rough terrain, especially in CW and CCW 
+
+sequences, where the robot traveled a total distance of 2.4                                                                                                   
+
+> 1https://github.com/HViktorTsoi/PV-LIO
+> 2https://github.com/MichaelGrupp/evo TABLE I. The root mean square error (RMSE) of absolute trajectory error (ATE) (m) on the NTU, Newer-College, and our datasets. Bold value denotes the best performance, underline value denotes the second-best performance and ‘-’ denotes that the odometry has diverged. Dataset NTU-VIRAL [25] Newer-College [26] Our dataset Sequence eee nya rtp sbs tnp spms quad-D quad-M quad-H math-H CW CCW mid
+> FAST-LIO2 [4] 0.250 0.256 0.276 0.27 0.244 3.12 0.356 0.064 0.084 0.084 14.07 17.08 2.50 PV-LIO 0.579 0.404 1.71 0.753 0.74 -0.135 0.093 0.107 0.082 13.47 21.62 2.00
+> DLIO [10] 0.254 0.269 0.231 0.286 0.258 0.423 0.150 0.076 2.66 0.116 12.34 43.04 3.77 LIO-EKF [5] 0.772 0.479 1.04 0.308 0.365 2.45 2.48 0.314 2.95 1.21 -40.35 -MA-LIO [13] 0.252 0.256 2.32 0.268 0.248 0.464 0.156 0.060 0.307 0.102 76.82 27.77 3.09
+> SE(3) -LIO (ours) 0.246 0.253 0.204 0.268 0.238 0.321 0.128 0.056 0.099 0.082 5.10 15.86 2.29
+
+# (A1) (B1) (C1) (D1) Time low high 
+
+# (A2) (D2) (C2) (B2)        
+
+> 050m 00.3km
+> Fig. 7. Qualitative comparison in spms sequence of the NTU-VIRAL [25] dataset (upper) and CW sequence of our dataset (lower). Baselines including (A) Fast-LIO2 [4], (B) DLIO [10], and (C) MA-LIO [13] are compared with (D) SE(3) -LIO (ours). Point clouds are colored by time, where brown and gray indicate the beginning and the end of the sequence, respectively. Highlighted boxes indicate the top-down view of the corresponding areas, showing the drift in estimated trajectory. Resultant point clouds are captured by identical viewpoints for fair comparison.
+
+and 2.7 km , respectively. Overall errors are lower in CW than in CCW , since CW includes both structured and unstructured environments, whereas CCW mainly consists of unstructured environments. Notably, SE(3) -LIO reduces error in the CW 
+
+sequence by more than half compared with the second-best method, demonstrating accuracy against wild fluctuations and degraded measurements. We also conduct an ablation study to validate the contri-butions of each proposed component, as shown in Table II. Performing IMU propagation on SE(3) manifold instead of SO(3) × R3 yields substantial improvements across all sequences, especially in aggressive motion sequences, such as rtp and spms . Additionally, incorporating UAMC con-sistently improves accuracy, validating its contribution to the overall performance. 
+
+C. Qualitative Results 
+
+We present qualitative comparisons on spms from NTU-VIRAL dataset and CW from our dataset in Fig. 7. Both sequences exhibit loop trajectories in which odometry returns to origin. Point clouds are colored by time, allowing drift in estimated trajectory to be clearly identified. In spms ,FAST-LIO2 [4] exhibits significant drift under aggressive motion, such as rapid rotations and high accelerations. While DLIO [10] and MA-LIO [13] achieve reliable results thanks to their advanced IMU propagation methods, they still suffer from drift due to sparse measurements from low-channel LiDAR. In contrast, SE(3) -LIO exhibits the least drift by                                
+
+> TABLE II. Ablation study on NTU-VIRAL [25] dataset. RMSE of ATE (m) is reported. Bold denotes the best performance.
+> Sequences eee nya rtp sbs tnp spms
+> SO(3) ×R3(baseline) 0.548 0.469 2.64 0.750 0.693 0.638
+> SE(3) w/o UAMC 0.324 0.259 0.268 0.258 0.216 0.241
+> SE(3) w/ UAMC 0.321 0.246 0.269 0.253 0.204 0.238
+
+providing an accurate prior through smooth IMU propa-gation and a measurement distribution via UAMC. In CW ,all methods show noticeable drift, except for SE(3) -LIO. MA-LIO [13] fails to estimate poses in the middle of the trajectory due to degraded measurements in unstructured environments. However, SE(3) -LIO maintains robust and consistent performance throughout the entire trajectory. 
+
+D. Computation Time Evaluation 
+
+We evaluate the average computation time of the baselines and the proposed method in Table III. FAST-LIO2 [4] achieves the lowest computation time owing to its effi-cient framework, whereas DLIO [10] exhibits the highest computation time due to its advanced motion compensation process. SE(3) -LIO is on par with FAST-LIO2 [4], while yielding superior performance. Furthermore, we analyze the computation time of each module in SE(3) -LIO as illustrated in Fig. 8. The proposed IMU propagation and UAMC account for only 9.6% and 8.9% of the total computation time, respectively, indicating that they introduce minimal computational overheads to the overall system. The majority of the computation time is attributed to state and map TABLE III. Comparison of average computation time (ms) of baselines and ours in NTU-VIRAL [25] dataset. Bold denotes the lowest computation time, and underline denotes the second-lowest computation time.                                           
+
+> Sequences eee nya sbs rtp tnp spms avg FAST-LIO2 [4] 16.02 14.15 18.44 14.24 14.80 17.74 15.90
+> PV-LIO [26] 51.84 38.92 46.49 49.79 36.48 44.87 44.73 DLIO [10] 99.08 98.60 100.21 98.89 99.78 100.44 99.50 MA-LIO [13] 23.97 23.77 28.52 23.33 24.22 26.38 25.03
+> SE(3) -LIO (ours) 26.66 13.95 25.03 19.15 11.32 26.66 20.46
+
+Fig. 8. Time usage for each module of the proposed LIO framework in NTU-VIRAL [25] dataset. 
+
+updates, which follow the implementations of FAST-LIO2 and VoxelMap [20]. V. C ONCLUSION 
+
+In this study, we presented a smooth IMU propagation method with jointly distributed poses on SE(3) manifold, addressing the challenges of motion prediction and motion compensation in existing IMU propagation methods. Fur-thermore, we proposed SE(3)-LIO that integrates the pro-posed IMU propagation. Experimental results demonstrate that SE(3)-LIO outperforms state-of-the-art LIO methods in terms of accuracy and robustness. Despite these promising results, there is room for improvements in terms of adapt-ability to different sensor configurations. As future work, we plan to extend the proposed IMU propagation method to other sensor configurations, such as visual-inertial or radar [28] odometry. REFERENCES [1] C. Forster, L. Carlone, F. Dellaert, and D. Scaramuzza, “On-manifold preintegration for real-time visual–inertial odometry,” IEEE Trans. Robot. , vol. 33, no. 1, pp. 1–21, 2017. [2] J. G. Mangelson, M. Ghaffari, R. Vasudevan, and R. M. Eustice, “Characterizing the uncertainty of jointly distributed poses in the Lie algebra,” IEEE Trans. Robot. , vol. 36, no. 5, pp. 1371–1388, 2020. [3] W. Xu and F. Zhang, “FAST-LIO: A fast, robust LiDAR-inertial odometry package by tightly-coupled iterated Kalman filter,” IEEE Robot. Automat. Lett. , vol. 6, no. 2, pp. 3317–3324, 2021. [4] W. Xu, Y. Cai, D. He, J. Lin, and F. Zhang, “FAST-LIO2: Fast direct LiDAR-inertial odometry,” IEEE Trans. Robot. , vol. 38, no. 4, pp. 2053–2073, 2022. [5] Y. Wu, T. Guadagnino, L. Wiesmann, L. Klingbeil, C. Stachniss, and H. Kuhlmann, “LIO-EKF: High frequency LiDAR-inertial odometry using extended Kalman filters,” in Proc. IEEE Int. Conf. Robot. Automat. , 2024, pp. 13 741–13 747. [6] P. Geneva, K. Eckenhoff, W. Lee, Y. Yang, and G. Huang, “OpenVINS: A research platform for visual-inertial estimation,” in Proc. IEEE Int. Conf. Robot. Automat. , 2020, pp. 4666–4672. [7] T. Shan, B. Englot, D. Meyers, W. Wang, C. Ratti, and R. Daniela, “LIO-SAM: Tightly-coupled LiDAR inertial odometry via smoothing and mapping,” in Proc. IEEE/RSJ Int. Conf. Intell. Robot. Syst. , 2020, pp. 5135–5142. [8] T. Qin, P. Li, and S. Shen, “VINS-Mono: A robust and versatile monocular visual-inertial state estimator,” IEEE Trans. Robot. , vol. 34, no. 4, pp. 1004–1020, 2018. [9] H. Lim, J. Jeon, and H. Myung, “UV-SLAM: Unconstrained line-based SLAM using vanishing points for structural mapping,” IEEE Robot. Automat. Lett. , vol. 7, no. 2, pp. 1518–1525, 2022. [10] K. Chen, R. Nemiroff, and B. T. Lopez, “Direct LiDAR-inertial odometry: Lightweight LIO with continuous-time motion correction,” in Proc. IEEE Int. Conf. Robot. Automat. , 2023, pp. 3983–3989. [11] E. Mueggler, G. Gallego, H. Rebecq, and D. Scaramuzza, “Continuous-time visual-inertial odometry for event cameras,” IEEE Trans. Robot. , vol. 34, no. 6, pp. 1425–1440, 2018. [12] M. Brossard, A. Barrau, P. Chauchat, and S. Bonnabel, “Associating uncertainty to extended poses for on Lie group IMU preintegration with rotating earth,” IEEE Trans. Robot. , vol. 38, no. 2, pp. 998–1015, 2022. [13] M. Jung, S. Jung, and A. Kim, “Asynchronous multiple LiDAR-inertial odometry using point-wise inter-LiDAR uncertainty propagation,” 
+
+IEEE Robot. Automat. Lett. , vol. 8, no. 7, pp. 4211–4218, 2023. [14] R. M. Murray, Z. Li, and S. Sastry, A Mathematical Introduction to Robotic Manipulation . Boca Raton, FL, USA: CRC Press, 1994. [15] M. Ramezani, K. Khosoussi, G. Catt, P. Moghadam, J. Williams, P. Borges, F. Pauling, and N. Kottege, “Wildcat: Online continuous-time 3D LiDAR-inertial SLAM,” arXiv preprint arXiv:2205.12595 ,2022. [16] T.-M. Nguyen, X. Xu, T. Jin, Y. Yang, J. Li, S. Yuan, and L. Xie, “Eigen is all you need: Efficient LiDAR-inertial continuous-time odometry with internal association,” IEEE Robot. Automat. Lett. ,vol. 9, no. 6, pp. 5330–5337, 2024. [17] D. Lee, M. Jung, W. Yang, and A. Kim, “LiDAR odometry survey: recent advancements and remaining challenges,” Intell. Serv. Robot. ,vol. 17, no. 2, pp. 95–118, 2024. [18] C. Qin, H. Ye, C. E. Pranata, J. Han, S. Zhang, and M. Liu, “LINS: A LiDAR-inertial state estimator for robust and efficient navigation,” in Proc. IEEE Int. Conf. Robot. Automat. , 2020, pp. 8899–8906. [19] H. Lim, D. Kim, B. Kim, and H. Myung, “AdaLIO: Robust adaptive LiDAR-inertial odometry in degenerate indoor environments,” in Proc. Int. Conf. Ubiquti. Robot. , 2023, pp. 48–53. [20] C. Yuan, W. Xu, X. Liu, X. Hong, and F. Zhang, “Efficient and probabilistic adaptive voxel mapping for accurate online LiDAR odometry,” IEEE Robot. Automat. Lett. , vol. 7, no. 3, pp. 8518–8525, 2022. [21] C. Forster, L. Carlone, F. Dellaert, and D. Scaramuzza, “IMU preinte-gration on manifold for efficient visual-inertial maximum-a-posteriori estimation.” in Robot. Sci. Syst. , 2015. [22] P. Foehn, A. Romero, and D. Scaramuzza, “Time-optimal planning for quadrotor waypoint flight,” Sci. Robot. , vol. 6, no. 56, p. eabh1221, 2021. [23] T. D. Barfoot and P. T. Furgale, “Associating uncertainty with three-dimensional poses for use in estimation problems,” IEEE Trans. Robot. , vol. 30, no. 3, pp. 679–693, 2014. [24] J. Jiao, H. Ye, Y. Zhu, and M. Liu, “Robust odometry and mapping for multi-LiDAR systems with online extrinsic calibration,” IEEE Trans. Robot. , vol. 38, no. 1, pp. 351–371, 2022. [25] T. Nguyen, S. Yuan, M. Cao, Y. Lyu, T. H. Nguyen, and L. Xie, “NTU VIRAL: A visual-inertial-ranging-LiDAR dataset, from an aerial vehicle viewpoint,” Int. J. Robot. Res. , vol. 41, no. 3, pp. 270– 280, 2022. [26] M. Ramezani, Y. Wang, M. Camurri, D. Wisth, M. Mattamala, and M. Fallon, “The newer college dataset: Handheld LiDAR, inertial and vision with ground truth,” in Proc. IEEE/RSJ Int. Conf. Intell. Robot. Syst. , 2020, pp. 4353–4360. [27] C. Yuan, X. Liu, X. Hong, and F. Zhang, “Pixel-level extrinsic self calibration of high resolution LiDAR and camera in targetless environments,” IEEE Robot. Automat. Lett. , vol. 6, no. 4, pp. 7517– 7524, 2021. [28] H. Lim, K. Han, G. Shin, G. Kim, S. Hong, and H. Myung, “ORORA: Outlier-robust radar odometry,” in Proc. IEEE Int. Conf. Robot. Automat. , 2023, pp. 2046–2053.
