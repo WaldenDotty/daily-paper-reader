@@ -6,67 +6,61 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-03-23
-- 运行时间：2026-03-23 20:03:37 UTC
+- 最新运行日期：2026-03-24
+- 运行时间：2026-03-24 20:14:50 UTC
 - 运行状态：成功
-- 本次总论文数：15
-- 精读区：4
+- 本次总论文数：13
+- 精读区：2
 - 速读区：11
 
 ### 今日简报（AI）
-今日深度解析 15 篇前沿文献，聚焦地月空间轨道动力学与复杂环境下的鲁棒规划。
-核心突破在于利用修正广义等分根数优化地月不确定性传播，并实现了受限三体问题中不变层理的精确计算。
-建议关注深空探测中的高精度轨道预报技术，以及极端工况下多模态融合定位的性能基准。
-- 详情：[/202603/23/README](/202603/23/README)
+今日聚焦地月空间态势感知与多智能体数字孪生交会技术，深度解析了 13 篇自动化与状态估计领域的前沿论文。
+重点推荐地月空间轨道-姿态统一估计框架及多视角自主交会系统，展示了高精度传感器调度与数字孪生验证的最新突破。
+建议深入关注深空探测中的自主导航算法与多源传感器融合方案，以应对日益复杂的空间任务需求。
+- 详情：[/202603/24/README](/202603/24/README)
 
 ### 精读区论文标签
-1. [Cislunar State and Uncertainty Propagation via the Modified Generalized Equinoctial Orbital Elements](/202603/23/2603.20110v1-cislunar-state-and-uncertainty-propagation-via-the-modified-generalized-equinoctial-orbital-elements)  
+1. [Unified Orbit-Attitude Estimation and Sensor Tasking Framework for Autonomous Cislunar Space Domain Awareness Using Multiplicative Unscented Kalman Filter](/202603/24/2603.20579v1-unified-orbit-attitude-estimation-and-sensor-tasking-framework-for-autonomous-cislunar-space-domain-awareness-using-multiplicative-unscented-kalman-filter)  
    标签：评分：10.0/10、query:cislunar-dyn-nav
-   evidence：地月空间状态与不确定性传播，用于航天器导航
-2. [Computation of a separatrix map and a normally hyperbolic invariant lamination for the RP3BP](/202603/23/2603.19893v1-computation-of-a-separatrix-map-and-a-normally-hyperbolic-invariant-lamination-for-the-rp3bp)  
-   标签：评分：9.0/10、query:cislunar-dyn-nav
-   evidence：限制性平面椭圆三体问题 (RP3BP)
-3. [Stochastic behavior along mean motion resonances in the restricted planar 3-body problem](/202603/23/2603.19894v1-stochastic-behavior-along-mean-motion-resonances-in-the-restricted-planar-3-body-problem)  
-   标签：评分：9.0/10、query:cislunar-dyn-nav
-   evidence：限制性平面三体问题(RPE3BP)分析
-4. [Halfway between Heaven and Hell](/202603/23/2603.18434v1-halfway-between-heaven-and-hell)  
+   evidence：自主地月空间态势感知与非开普勒动力学
+2. [Current state of the multi-agent multi-view experimental and digital twin rendezvous (MMEDR-Autonomous) framework](/202603/24/2603.20575v1-current-state-of-the-multi-agent-multi-view-experimental-and-digital-twin-rendezvous-mmedr-autonomous-framework)  
    标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：经典N体问题与力学公式
+   evidence：用于交会对接的基于学习的光学导航
 
 ### 速读区论文标签
-1. [Contingency-Aware Planning via Certified Neural Hamilton-Jacobi Reachability](/202603/23/2603.17022v1-contingency-aware-planning-via-certified-neural-hamilton-jacobi-reachability)  
+1. [Radar-Inertial Odometry with Online Spatio-Temporal Calibration via Continuous-Time IMU Modeling](/202603/24/2603.19958v1-radar-inertial-odometry-with-online-spatio-temporal-calibration-via-continuous-time-imu-modeling)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：具有安全保障的动力系统导航框架
-2. [Benchmarking Visual Feature Representations for LiDAR-Inertial-Visual Odometry Under Challenging Conditions](/202603/23/2603.18589v1-benchmarking-visual-feature-representations-for-lidar-inertial-visual-odometry-under-challenging-conditions)  
+   evidence：雷达-惯性传感器融合与时空标定
+2. [Steady State Distributed Kalman Filter](/202603/24/2603.20013v1-steady-state-distributed-kalman-filter)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：用于自主导航的激光雷达-惯性-视觉里程计
-3. [Geometry-Aware Set-Membership Multilateration: Directional Bounds and Anchor Selection](/202603/23/2603.14263v1-geometry-aware-set-membership-multilateration-directional-bounds-and-anchor-selection)  
+   evidence：时变动力学的保证状态估计
+3. [GasNiTROM: Model Reduction via Non-Intrusive Optimization of Oblique Projection Operators and Guaranteed-Stable Latent-Space Dynamics](/202603/24/2603.21254v1-gasnitrom-model-reduction-via-non-intrusive-optimization-of-oblique-projection-operators-and-guaranteed-stable-latent-space-dynamics)  
+   标签：评分：7.0/10、query:cislunar-dyn-nav
+   evidence：哈密顿与拉格朗日动力学的降阶建模
+4. [Experimental Demonstration of Snapshot Differential Positioning with LEO Satellites](/202603/24/2603.15908v1-experimental-demonstration-of-snapshot-differential-positioning-with-leo-satellites)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：基于测距的定位与基站选择技术
-4. [GNIO: Gated Neural Inertial Odometry](/202603/23/2603.15281v1-gnio-gated-neural-inertial-odometry)  
+   evidence：利用低轨卫星星座进行定位以替代GNSS
+5. [Ultrafast Sampling-based Kinodynamic Planning via Differential Flatness](/202603/24/2603.16059v1-ultrafast-sampling-based-kinodynamic-planning-via-differential-flatness)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：用于运动上下文和传感器融合的神经惯性里程计
-5. [Perception-Aware Autonomous Exploration in Feature-Limited Environments](/202603/23/2603.15605v1-perception-aware-autonomous-exploration-in-feature-limited-environments)  
+   evidence：动力学约束下的运动规划与轨迹生成
+6. [Geometric Search for Hawking Radiation from Nearby Primordial Black Holes](/202603/24/2603.16508v1-geometric-search-for-hawking-radiation-from-nearby-primordial-black-holes)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：无人机自主探索与状态估计
-6. [SE(3)-LIO: Smooth IMU Propagation With Jointly Distributed Poses on SE(3) Manifold for Accurate and Robust LiDAR-Inertial Odometry](/202603/23/2603.16118v1-se3-lio-smooth-imu-propagation-with-jointly-distributed-poses-on-se3-manifold-for-accurate-and-robust-lidar-inertial-odometry)  
+   evidence：用于距离测定的多航天器计时
+7. [Trajectory Stability and Signature Diagnostics for Comet-Based Interstellar Navigation](/202603/24/2603.16982v3-trajectory-stability-and-signature-diagnostics-for-comet-based-interstellar-navigation)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：基于SE(3)流形传播的高精度激光雷达惯性里程计
-7. [A Minimal Four-Thruster System for Comet-Based Interstellar Navigation](/202603/23/2603.16981v3-a-minimal-four-thruster-system-for-comet-based-interstellar-navigation)  
+   evidence：深空导航中的轨道稳定性与控制
+8. [Logistic-aided Huber M-estimator for robust GNSS positioning](/202603/24/2603.19640v1-logistic-aided-huber-m-estimator-for-robust-gnss-positioning)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：深空导航与轨道转向控制
-8. [Distributed Unknown Input Observer Design: A Geometric Approach](/202603/23/2603.18335v1-distributed-unknown-input-observer-design-a-geometric-approach)  
+   evidence：测量误差下的鲁棒 GNSS 定位
+9. [Verifiable Error Bounds for Physics-Informed Neural KKL Observers](/202603/24/2603.20434v1-verifiable-error-bounds-for-physics-informed-neural-kkl-observers)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：未知输入系统的分布式状态重构
-9. [Fundamental Limits for Sensor-Based Control via the Gibbs Variational Principle](/202603/23/2603.18454v1-fundamental-limits-for-sensor-based-control-via-the-gibbs-variational-principle)  
+   evidence：非线性观测器的可验证状态估计误差界限
+10. [From Data to Laws: Neural Discovery of Conservation Laws Without False Positives](/202603/24/2603.20474v1-from-data-to-laws-neural-discovery-of-conservation-laws-without-false-positives)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：部分观测下基于传感器的控制性能极限
-10. [ROFT-VINS: Robust Feature Tracking-based Visual-Inertial State Estimation for Harsh Environment](/202603/23/2603.18746v1-roft-vins-robust-feature-tracking-based-visual-inertial-state-estimation-for-harsh-environment)  
+   evidence：哈密顿系统中的守恒定律与不变量发现
+11. [PiLoT: Neural Pixel-to-3D Registration for UAV-based Ego and Target Geo-localization](/202603/24/2603.20778v1-pilot-neural-pixel-to-3d-registration-for-uav-based-ego-and-target-geo-localization)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：恶劣环境下自主导航的视觉惯性状态估计
-11. [Geometric Performance Analysis of Doppler-Based Positioning with a Single LEO Satellite](/202603/23/2603.19499v1-geometric-performance-analysis-of-doppler-based-positioning-with-a-single-leo-satellite)  
-   标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：定位、导航与授时 (PNT) 应用
+   evidence：GNSS受限环境下的无人机地理定位
 
 
 <div class="dpr-home-promo-card">

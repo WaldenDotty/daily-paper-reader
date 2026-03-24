@@ -1,0 +1,1971 @@
+Title: Current state of the multi-agent multi-view experimental and digital twin rendezvous (MMEDR-Autonomous) framework
+
+URL Source: https://arxiv.org/pdf/2603.20575v1
+
+Published Time: Tue, 24 Mar 2026 00:27:22 GMT
+
+Number of Pages: 46
+
+Markdown Content:
+# Current state of the multi-agent multi-view experimental and digital twin rendezvous (MMEDR-Autonomous) framework 
+
+Logan Banker a, , Michael Wozniak b, Mohanad Alameer a, Smriti Nandan Paul a, David Meisinger a, Grant Baer a, Trevor Hunting a, Ryan Dunham a, Jay Kamdar a
+
+> aDepartment of Mechanical and Aerospace Engineering, Missouri University of Science and Technology, Rolla, 65409, MO, United States
+> bPurdue University, 610 Purdue Mall, West Lafayette, 47907, USA
+
+Abstract 
+
+As near-Earth resident space objects proliferate, there is an increasing demand for reli-able technologies in applications of on-orbit servicing, debris removal, and orbit mod-ification. Rendezvous and docking are critical mission phases for such applications and can benefit from greater autonomy to reduce operational complexity and human workload. Machine learning-based methods can be integrated within the guidance, navigation, and control (GNC) architecture to design a robust rendezvous and docking framework. In this work, the Multi-Agent Multi-View Experimental and Digital Twin Rendezvous (MMEDR-Autonomous) is introduced as a unified framework comprising a learning-based optical navigation network, a reinforcement learning-based guidance approach under ongoing development, and a hardware-in-the-loop testbed. Navigation employs a lightweight monocular pose estimation network with multi-scale feature fu-sion, trained on realistic image augmentations to mitigate domain shift. The guidance component is examined with emphasis on learning stability, reward design, and system-atic hyperparameter tuning under mission-relevant constraints. Prior Control Barrier Function results for Clohessy-Wiltshire dynamics are reviewed as a basis for enforcing safety and operational constraints and for guiding future nonlinear controller design within the MMEDR-Autonomous framework. The MMEDR-Autonomous framework is currently progressing toward integrated experimental validation in multi-agent ren-dezvous scenarios. 
+
+Keywords: Guidance, navigation, and control, Multi-agent system, Hardware-in-the-loop, Learning-based networks, Autonomous rendezvous 
+
+1. Introduction 
+
+Spacecraft rendezvous and docking are critical capabilities that enable a broad range of spaceflight missions, including active debris removal (ADR), in-space ser-vicing, assembly, and manufacturing (ISAM), and orbit modification. While previous rendezvous and docking missions relied heavily on human supervision and interven-tion (Zimpfer et al., 2005), such approaches are ultimately unscalable due to safety  
+
+> Preprint submitted to Elsevier March 24, 2026
+> arXiv:2603.20575v1 [cs.RO] 21 Mar 2026
+
+risks, operational complexity, and high costs. This limitation is of growing concern as the number of resident space objects (RSOs) continues to increase and orbital tra ffi cbecomes increasingly di ffi cult to manage. In conjunction with this, the O ffi ce of the Inspector General recognizes that preventive measures alone are no longer su ffi cient to manage the accelerating growth of orbital debris, and that active debris removal technologies must advance to guarantee long-term orbital sustainability (NASA O ffi ce of Inspector General, 2021). Together, the operational, regulatory, and environmental pressures point towards future missions requiring docking technologies that are both autonomous and scalable. In response to these needs, the Multi-Agent Multi-View Experimental and Dig-ital Twin Rendezvous (MMEDR-Autonomous) framework is being developed as an architecture for designing, testing, and validating autonomous guidance, navigation, and control (GNC) solutions. It specifically addresses the GNC requirements of fu-ture ADR and ISAM for multi-agent rendezvous missions. The framework empha-sizes algorithmic robustness, system-level integration, and feasibility of deployment on compact spacecraft. CubeSats, in particular, impose strict limitations on size, power, propulsion capability, and onboard computational resources. Constraints of this nature require GNC subsystems that are computationally e ffi cient and capable of maintaining safe operation under mission conditions such as relative-state uncertainty and velocity limits. Traditionally, spacecraft rendezvous systems are organized around three core func-tions: guidance, navigation, and control. The guidance component generates feasible motion profiles, navigation provides state estimates from onboard sensing, and con-trol executes the commanded motions while enforcing actuator and safety constraints. These systems have historically relied on established techniques such as Clohessy-Wiltshire (CW) relative dynamics, extended Kalman filtering, model-based guidance and control laws, and geometric pose estimation methods based on feature correspon-dences. Although such methods form a reliable foundation, their performance can degrade in the presence of multi-agent interactions, strongly nonlinear dynamics, and adverse sensing conditions. As a result, machine learning approaches, including re-inforcement learning (RL), convolutional neural networks (CNNs), and multi-agent learning frameworks, have increasingly been explored as a means of improving auton-omy and robustness in rendezvous and docking scenarios (Hovell & Ulrich, 2021; Mu-ralidharan et al., 2025; Park & D’Amico, 2024). However, before these methods can be deployed as part of an integrated GNC architecture, their compatibility, computational demands, and stability characteristics must be carefully examined, particularly when operating on resource-constrained platforms such as CubeSats. Within this broader context, this work investigates learning-based methods within the GNC architecture of the MMEDR-Autonomous framework. The first contribution of this work is the study of learning stability in reinforcement learning-based guidance algorithms. Much of the existing literature prioritizes reward shaping as the primary means of influencing learning behavior, often giving limited attention to the e ff ects of hyperparameter selection, state definition, or the staged in-troduction of safety constraints. This work therefore examines reinforcement learn-ing formulations with di ff erent state definitions and reward functions, the incremental introduction of safety constraints, and the configuration of a Bayesian optimization 2framework used for hyperparameter tuning. The second contribution of this work is the development of a neural network archi-tecture for satellite pose estimation using monocular imaging. The architecture com-bines a lightweight backbone (Howard et al., 2019) with a direct regression pose task (Do et al., 2018), allowing 6D pose estimation to be learned alongside complementary tasks within a unified network. Data augmentation methods are incorporated into the training process to better support navigation functions in real testing scenarios, improv-ing the accuracy of the perception module within the autonomous docking pipeline. The third contribution of this work is the design and early development of a hardware-in-the-loop (HIL) facility intended for evaluating autonomous GNC algorithms within a controlled laboratory setting. Although the facility remains under active develop-ment, substantial progress has been made in establishing the requirements necessary for closed-loop validation. The testbed is being configured to accommodate coop-erative multi-agent rendezvous scenarios with large RSOs under space-representative conditions. This capability supports the maturation of learning-based approaches prior to deployment. The remainder of this paper is organized as follows: Section 2 reviews existing literature on guidance, control, and navigation methods for spacecraft rendezvous and docking, as well as prior experimental testbeds used for validation. Section 3 intro-duces the governing dynamics, defines the single-agent docking problem, and then extends the discussion to the multi-agent setting. Section 4 presents the solution meth-ods, including the reinforcement learning-based guidance approach, the optical navi-gation network, and the state-estimation method that accounts for delayed and asyn-chronous measurements. Section 5 describes the laboratory setup and the integration of framework subsystems. Section 6 presents preliminary results from the MMEDR-Autonomous framework and their implications. Finally, Section 7 concludes the paper and outlines future research directions. 
+
+2. Related Work 
+
+2.1. Guidance 
+
+The guidance subsystem is vital to rendezvous and docking missions because it supplies the desired signal (such as ideal position or velocity) to a controller that sub-sequently minimizes the error between the current state and ideal state through con-ventional control methods. Two notable methods of generating a guidance signal are numerical optimization and reinforcement learning. 
+
+2.1.1. Numerical Optimization 
+
+One method of obtaining a guidance signal involves iterative /numerical optimiza-tion methods to minimize a performance index. An example of this application is presented in Ventura et al. (2017), which accomplishes minimum energy maneuvers by minimizing the following performance index J while satisfying terminal constraints: 
+
+J = 12
+
+Z t f
+
+> 0
+
+
+
+FCx
+
+mC
+
+!2
+
++
+
+
+
+FCy
+
+mC
+
+
+
+> 2
+
++ FCz
+
+mC
+
+!2
+
++ TCx
+
+Leq mC
+
+!2
+
++
+
+
+
+TCy
+
+Leq mC
+
+
+
+> 2
+
++ TCz
+
+Leq mC
+
+!2 dt (1) 3where Leq is a length parameter to convert the control torque to an equivalent force, 
+
+FCi and TCi are forces and torques for i = x, y, z, and mC is the mass of the chaser spacecraft. This minimum energy maneuver yields a continuous, quadratic, and di ff er-entiable performance index that can be solved using sequential quadratic programming (SQP) based algorithms. Another optimization objective for minimizing fuel consumption while performing a rendezvous maneuver is formulated in Wang et al. (2020). This work categorizes the phases of rendezvous and docking into a short-range search phase between 10 km and 500 m of relative separation, and a small-thrust final section of the journey from 500 meters relative distance to contact. The algorithm is designed to bring the chaser within 500 m of the target by minimizing the following cost function: 
+
+J = ϕ(x(t f )) + 12
+
+Z t f
+
+> t0
+
+(Q(x(t)) + u(t)T Ru (t)) dt (2) The terminal cost ϕ(x(t f )) penalizes deviations from the desired final position and ve-locity, and is represented as ϕ(x(t f )) = [ px2 + y2 − 500] + p ˙x2 + ˙y2. Minimizing this term encourages || [x y ]T || = 500 and ⃗ v = 0. The terminal cost can be reformu-lated as reaching the target by removing the −500 term, ultimately repurposing from a rendezvous cost function to a docking cost function. The integral term in the ex-pression for J penalizes the control e ff ort while encouraging motion that reduces the time required to reach the target. Note that R is a a diagonal matrix and u(t) is the control variable. Additionally, Q(x(t)) = x ˙x+y˙y
+
+√x2+y2 represents the velocity component in the direction of position. A large negative value implies quickly approaching the tar-get, balanced out by the terminal constraint that incentivizes near-zero velocity. This cost function is formulated in a standard optimal control convention, demonstrating potential for standard optimization methods such as calculus of variations or dynamic programming. However, the optimization goal in Wang et al. (2020) was achieved via the Deep Deterministic Policy Gradient (DDPG) RL algorithm that employed (target) actor /critic networks to learn an ideal guidance signal from experience. 
+
+2.1.2. Reinforcement Learning 
+
+Machine learning methods, such as Reinforcement Learning (RL), o ff er an alterna-tive approach to generating guidance signals and can outperform traditional numerical methods, provided that stable learning is achieved. A chief illustrative example is the application of the distributed distributional deep deterministic policy gradient (D4PG) algorithm for learning a guidance strategy (Hovell & Ulrich, 2021), which was exper-imentally validated via planar rendezvous (Hovell & Ulrich, 2022). The methods in Hovell & Ulrich (2021) demonstrated that learning complex tasks through RL signif-icantly reduces the engineering e ff ort that would otherwise be necessary to handcraft solutions. While the force and torque commands for detumbling spinning space debris can be computed via the Udwadia-Kalaba equation as demonstrated in Pothen et al. (2022), it can be challenging or impossible to formulate for more complex tasks. Multi-Agent Reinforcement Learning (MARL) is an extension of RL in which mul-tiple agents learn simultaneously. Two possible categories of MARL are centralized and decentralized learning. In centralized learning, the agents actively share policy 4and /or gradient information through a coordinating entity which can expedite conver-gence at the trade-o ff of additional communication between agents. Conversely, decen-tralized learning involves each agent independently maintaining its own policy through local observations, mitigating the e ff ects of communication failures but negatively im-pacting the learning potential of each agent due to a non-stationary environment. The use of multiple agents can increase performance and learning e ffi ciency when mul-tiple agents feed into the same replay bu ff er, as demonstrated in Barth-Maron et al. (2018). An example application of multiple learning agents is the use of decentral-ized reinforcement learning which converged to a scalable, cooperative algorithm in a multi-agent system of UAVs (Zhou et al., 2022). In addition to learning a robust docking policy, additional behaviors may be learned via RL if driven by mission requirements. One example is learning collision avoidance, which is an imperative part of spacecraft trajectory planning. A Deep-RL controller is presented in Blaise & Bazzocchi (2023), training a 3-DoF manipulator to reach the grasping location of the target while avoiding collisions with other parts of the satel-lite. This paper demonstrated grasping of a single feature on a satellite while avoiding collision(s) with other parts of the satellite, using known satellite geometry to know whether there was a collision in training. The reward function formulation included a collision penalty term to deter the agent from trajectories resulting in collisions. Suc-cessful training was demonstrated over 3000 episodes using the DDPG algorithm to learn collision-free paths to the target. Another example involves the process of learn-ing to detumble the target pre-capture, where the chaser agent(s) make intermittent con-tact with the tumbling target to reduce its angular velocity prior to the o ffi cial capture as outlined in Liu et al. (2019). This process demands several collision-free trajectories to iteratively contact the target and reduce the target’s angular velocity in the pre-capture phase. While the work in Liu et al. (2019) did not leverage RL to learn pre-capture detumbling, this concept has potential for further study in RL applications. 
+
+2.2. Control 
+
+The controller should enable the agent to reach the desired state while preventing the agent from encountering undesirable states in between the initial and final states. The controller should provide an extra layer of safety to prevent collisions, sensor damage, or loss of target in the visual field. Two candidate architectures for the control system are velocity-based and acceleration-based control; namely, the control scheme may close the loop on velocity or acceleration, minimizing the error between the de-sired and actual state. While PID controllers are popular in many fields, they are not used often in satellite rendezvous due to their sensitivity to noise and limited ability to handle complex non-linear dynamic systems. Linear Quadratic Regulators (LQR) are a class of controllers utilized for rendezvous and docking missions due to the simplicity of application. LQR still requires a linear dynamical system but utilizes a quadratic cost function (Mam-marella, 2016). Although it requires linearization for nonlinear systems, this controller provides increased robustness from the inclusion of the dynamic system into the con-trol law. For noisy, nonlinear dynamical systems, Sliding Mode Control (SMC) can be utilized as an adequate method of control (Utkin, 2008). Since SMC has a low response to disturbances, it is ideal in scenarios where the dynamic model does not accurately 5reflect the real dynamics. Capello et al. (2017) uses two SMCs, one first-order for posi-tion control and one second-order for attitude control. Model Predictive Control (MPC) is a popular form of optimal control used for solving controls problems in complex dy-namic systems (Hartley, 2015). MPC predicts future states and control actions over a given time period to determine the optimal control action for the current time. While this method tends to be computationally expensive, it provides optimal control actions. Due to its ability to account for many complex constraints, MPC is often considered for use in space applications despite the computational cost (Bashnick & Ulrich, 2023; Di Cairano et al., 2012; Goodyear et al., 2015). Control Lyapunov Functions (CLF) and Control Barrier Functions (CBF) are func-tions designed to ensure system stability and safety, respectively. These functions are typically incorporated as constraints within an optimization framework, often with a quadratic cost function to create a controller. The dynamic model must be known as these functions are derived from system dynamics. However, this allows for the in-clusion of many task-specific constraints into the controller design. CBFs have previ-ously been used alongside reinforcement learning-based guidance algorithms, derived from the Clohessy-Wiltshire (CW) equations (Hibbard et al., 2022; Dunlap et al., 2023, 2025). In the discussion to follow, we focus on CBFs for safe reinforcement learning, derived using the CW equations. Consider a quadratic cost function of the following form, where ure f is the signal provided by the guidance algorithm: min  
+
+> u
+
+(u − ure f )T Q(u − ure f ) (3) CBFs are applied as constraints to this equation to account for the safety and sensor requirements of the system. For ease of application, the agent is assumed to be fully actuated, with equal thrust capabilities along the principal axes in both the positive and negative directions and a minimum of 3 reaction wheels for full attitude control. 
+
+2.2.1. Constraints 
+
+To ensure a safe rendezvous and docking mission, agents must satisfy several oper-ational constraints. First, the translational and angular accelerations are limited by the physical capabilities of the provided hardware. This limitation applies to each transla-tional direction, O = {x, y, z}, and is formulated as: 
+
+−Fmax ,O ≤ uO ≤ Fmax ,O (4) Similarly, the angular acceleration is limited in each direction, R = {ϕ, θ, ψ }, by: 
+
+−Tmax ,R ≤ uR ≤ Tmax ,R (5) Following the formulation in Hibbard et al. (2022), additional safety constraints are introduced. To prevent collisions, an agent must never occupy the same space as either the target or any other agent. Consider a set of S agents i = 1, ..., S and i , j,each with some relative position vector ⃗ ρ with respect to the target. Each agent and the target also have collision avoidance spheres with some radius r. With this information, the collision avoidance constraints are written as follows, where ϕ1 defines agent-agent interactions and ϕ2 defines agent-target interactions: 
+
+φ1 = || ⃗ρi −⃗ ρ j|| 2 − (ri + r j) ≥ 0 (6) 6φ2 = || ⃗ρi|| 2 − (ri + rt) ≥ 0 (7) The agent must also not drift so far from the target that the dynamic model representing the relative motion is no longer valid, defined by rm. This value should be relatively small compared to the orbit radius. To ensure that drift is kept to a minimum, the following constraint is formulated: 
+
+φ3 = rm − || ⃗ ρi|| 2 ≥ 0 (8) The agent must also adhere to velocity restrictions. As the agent approaches the target, the agent’s maximum allowable velocity should decrease to improve the chances of a collision-free docking mission. A safe relative velocity constraint that lowers the limit based on distance can be written as: 
+
+φ4 = ν1|| ⃗ρi|| 2 + ν0 − || ˙⃗
+
+> i
+
+ρ|| 2 ≥ 0 (9) Finally, due to the line-of-sight (LOS) requirements of onboard sensors, the agent must avoid configurations where the Sun enters the camera’s FOV to protect the sensor from damage. Consider θs defining a conic exclusion zone and ˆ es as a time-varying unit vector pointing from the Sun to the target. 
+
+φ5 = − ⟨⃗ ρi, ˆes⟩|| ⃗ρi|| 2
+
++ cos θs
+
+2 ≥ 0 (10) 
+
+2.2.2. Clohessy-Wiltshire Control Barrier Functions 
+
+Based on the constraints outlined above, CBFs are derived using the CW equations. To formulate CBFs that contain all possible dynamic scenarios, Hibbard et al. (2022) defines a term am describing the worst possible acceleration of the satellite, given the natural dynamics and the available control on the satellite: 
+
+am = Fmax 
+
+m − 3n2rm − 2nv m (11) where vm is the maximum allowable velocity and n is the mean motion of the target’s orbit. With this acceleration definition, constraints φ1−5 correspond to the following CBFs h1−5:
+
+h1,i j =
+
+q
+
+2( am,i + am, j)( || ∆⃗ρi j || 2 − (ri + r j)) + ∆⃗ ρTi j ∆ ˙⃗ρi j 
+
+|| ∆⃗ ρi j || ≥ 0 (12) 
+
+h2 =
+
+q
+
+am(|| ⃗ρi|| 2 − (ri + rt)) +⃗ ρTi ˙⃗
+
+> i
+
+ρ
+
+|| ⃗ρi|| ≥ 0 (13) 
+
+h3 =
+
+q
+
+am(rm − || ⃗ ρi|| 2) +⃗ ρTi ˙⃗
+
+> i
+
+ρ
+
+|| ⃗ρi|| ≥ 0 (14) 
+
+h4 = ν1|| ⃗ρi|| 2 + ν0 − || ˙⃗
+
+> i
+
+ρ|| 2 ≥ 0 (15) 
+
+h5 =
+
+q
+
+am|| ⃗ρi −⃗ ρpr ,i|| 2 +⃗ ρTi ( ˙⃗ρi − ˙⃗ρpr ,i)
+
+|| ⃗ρi|| ≥ 0 (16) More details on the derivations of these CBFs can be found in Hibbard et al. (2022). 72.3. Navigation 
+
+The goal of the navigation system is to provide su ffi cient and accurate information about the environment for the guidance algorithm to use for maneuvering the satellite towards a desired state. In the case of rendezvous and proximity operations, this goal requires knowing where the target is with respect to the agent. However, in the known but uncooperative case of rendezvous, the agent cannot assume that the target will be able to communicate with other satellites. Therefore, the agent must be capable of mea-suring the target’s state information independently, without relying on devices onboard the target. Monocular navigation has become a popular solution for obtaining target location in rendezvous in recent years due to its low size, weight, power requirements and cost (SWaP-C), making it ideal for small satellite applications. 
+
+2.3.1. Feature Extraction Algorithms 
+
+Processing images taken during flight can be done through traditional feature ex-traction algorithms such as SIFT (Lowe, 2004) and SURF (Bay et al., 2008). Extracted features are combined with a known 3D model to determine the pose of the target. The major downside of these methods is the requirement of a 3D model of the target, which is often not available before flight. However, these methods are lightweight and easily implementable, therefore making them popular in many computer vision applications (O’Mahony et al., 2020). 
+
+2.3.2. Convolutional Neural Networks 
+
+There has been an increase in the use of convolutional neural networks (CNNs) to replace traditional feature extraction algorithms due to their versatility and increased accuracy (O’Mahony et al., 2020). CNNs are particularly popular for image processing due to their superior feature extraction abilities compared to other types of neural net-works (O’Shea & Nash, 2015). To accurately predict relative position and orientation, or pose, most networks used in rendezvous are split into three sections: the "backbone", the "neck", and the task-specific "heads". The backbone is the first section of a model, which is responsible for extracting general features from an image. This can include edges, corners, or other notable geometric or color characteristics. For example, both AlexNet (Krizhevsky et al., 2012) and E ffi cientNet (Tan & Le, 2019) are convolutional backbones that can provide the feature extraction necessary for more in-depth tasks. The neck portion of a model attaches the backbone to the heads, often enhancing the extracted features. Region proposal networks (Ren et al., 2016) are commonly used to propose regions of interest where features are being detected in an image. Fea-ture pyramid networks like FPN (Lin et al., 2017) and BiFPN (Tan et al., 2020) are also common object necks due to their ability to fuse features across di ff erent resolu-tions. The neck provides this additional information that can then be utilized by the heads. Heads are any tasks performed that are specific to the application that utilize the previously extracted feature information. Some of these tasks include bounding box regression, position and orientation (or pose) estimation, keypoint detection, heatmap generation, and semantic or instance segmentation. The pose head is an essential task for finding the position and orientation of a target without communicating with it, and will inform the guidance system about the environment. While other tasks are optional, 8they are sometimes included to increase robustness of a network and prevent overfitting to a specific task at the cost of increased model size and slower inference times (Do et al., 2018; Park & D’Amico, 2024). 
+
+2.3.3. Training Data Generation 
+
+Neural networks require a large amount of training data to su ffi ciently learn the desired target domain. Due to the lack of available real images of satellites for neural network training, data must be made and collected through other means. However, care must be taken to ensure that they are as close to real images as possible, so that the models trained on them remain valid. This is mainly done through two types of images, those being synthetic and simulated images. Synthetic images are labeled images created in a simulation software using a 3D model of the target. Previous works have used Blender (Capuano et al., 2020) or Unreal Engine (Proença & Gao, 2020) for image and label generation. Synthetic images are common since it is easy to generate large quantities of them, but they are often not as good at replicating the real space environment since a computer environment would invariably miss more obscure lighting e ff ects. Simulated images, on the other hand, are images created in a physical laboratory setting, with scaled down models and lighting setups made to simulate real lighting e ff ects that occur in space. These images tend to resemble actual on-orbit imagery more closely but are di ffi cult to produce at scale due to the resource-intensive laboratory setup and the need for accurate labeling. The laboratory setup required for high-quality simulated image generation is discussed in Section 2.4. Since the generation of simulated images is more di ffi cult, a combination of both types is used to create a large and robust dataset. 
+
+2.3.4. Bridging the Space Domain Gap 
+
+Despite e ff orts to create large, robust datasets on the ground, there is still a non-negligible di ff erence between synthetic, simulated, and real images. This di ff erence could cause the navigation network to produce less accurate results during deploy-ment, potentially leading to collisions. One way to bridge the gap between synthetic and real images is to introduce data augmentations to the synthetic image set. Data augmentations are alterations applied to the synthetic images that cause them to have features closer to the desired testing domain. Random brightness, contrast, Gauss or ISO noise, and sun flares have all been previously used to augment synthetic images such that they contain image qualities more similar to the test domain (Black et al., 2021; Park & D’Amico, 2024; Wang et al., 2024). Another way to bridge the gap is to perform online or self training. Online train-ing is an overarching term that refers to methods of training on images taken during a mission, after the initial supervised training period has occurred. This type of train-ing is helpful in scenarios where real data is scarcely available or simulated /synthetic data generation does not accurately recreate the real environment that the network will be used in, despite data augmentation e ff orts. Since the space environment struggles with both of these issues, networks including online training methods can adapt to environmental changes easier than networks that do not include online training dur-ing a real-life mission. One common approach to online training is pseudo-labeling (Zhang et al., 2024; Wang et al., 2024), where the network generates predicted labels, 9or pseudo-labels, for unlabeled images collected during the mission. These pseudo-labeled samples are then used to further fine-tune the network, allowing it to adapt to the real space environment without requiring manually labeled data. Another ap-proach is Shannon entropy minimization (Wang et al., 2021a; Park & D’Amico, 2024). Entropy minimization increases model confidence and reduces error, allowing for the model to better account for discrepancies between training images and real images during deployment. SPEED + is a dataset created by the Stanford Space Rendezvous Laboratory (SLAB), which contains both synthetic and simulated images of the Tango satellite to test a model’s ability to adapt in the presence of a domain gap (Park et al., 2022). This dataset splits the synthetic images into training and validation sets, and the simulated images are used as test sets. Without the availability of real images, the synthetic to simulated gap acts as a replacement for the actual domain gap. Networks often partici-pate or compare themselves to the Satellite Pose Estimation Competition 2021 (SPEC), which tested a variety of models on the SPEED + dataset Park et al. (2023). 
+
+2.3.5. Networks in Rendezvous 
+
+SPN (Sharma & D’Amico, 2019) and SPNv2 (Park & D’Amico, 2024) are two models developed by SLAB. SPN was designed to take a monocular grayscale image as an input and solve for the 2D bounding box and pose of the target. SPN starts by feeding a grayscale image through five convolutional layers. This output is then given to three tasks: 2D bounding box classification and regression, relative attitude clas-sification, and relative attitude regression. The bounding box information is solved through the use of a region proposal network, or RPN (Ren et al., 2016). The atti-tude task combines the convolutional output and the bounding box output to determine the nearest predefined attitude class that satisfies the previously provided information. Then, using the Gauss-Newton algorithm, the pose is solved from the bounding box and attitude class given by the network. SPNv2 di ff ers largely in comparison to SPN, and follows a more traditional outline, like discussed in Section 2.3.2. The backbone of SPNv2 is modeled heavily after E ffi -cientNet (Tan & Le, 2019). The neck, BiFPN (Tan et al., 2020), acts as a feature fusion network that combines multi-scale information from the backbone. Ultimately, these features are received by three di ff erent heads: pose estimation, heatmap prediction, and segmentation. In contrast to SPN, the first head of SPNv2 uses E ffi cientPose (Bukschat & Vetter, 2020) to perform object classification, bounding box prediction, and direct 6D pose regression without the use of predefined attitude classes. The second head, heatmap prediction, provides 2D heatmaps for the predicted locations of predetermined keypoints on the target. These keypoints can be used to solved the Perspective-n-Point problem (Lepetit et al., 2009), providing an additional pose estimate. The last task, segmentation, separates the foreground from the background, allowing for pixel-level identification of the entire object. While not all of these tasks are required to deduce the desired navigation information, having a network train on multiple similar tasks re-duces the chance of overfitting and increases its ability to generalize because multi-task training forces the network to learn shared features rather than task-specific features. This generalization helps the network be more adaptable to variations in future images, meaning that it will not experience as much of a decrease in accuracy during flight due 10 to the domain gap. The tradeo ff of including more tasks is that the network becomes larger and therefore typically takes longer to train and longer to produce results. SPNv2 also includes an online training method called online domain refinement (ODR). ODR updates the model by minimizing the Shannon entropy of the segmentation output only, rather than optimizing the full multi-task loss used during o ffl ine training, following a modified version of Wang et al. (2021a). This self-supervised refinement improves the network’s confidence in its predictions during the deployment phase. One restriction of ODR is that it updates only the normalization layers within the backbone and BiFPN to prevent model forgetting. The network used at the SnT Zero-G Lab solves for pose from a single grayscale image (Muralidharan et al., 2025). This network is inspired by the Mask-RCNN struc-ture (He et al., 2017). The network uses HRNet (Wang et al., 2021b) as the backbone, followed by a Region Proposal Network (RPN) (He et al., 2017) that identifies can-didate regions of interest in the feature space. These regions are then processed by two downstream task heads: a keypoint prediction head and a bounding box regression head. The pose starts with the prediction of 2D keypoints using convolutional layers. Then, these keypoints are used to solve Perspective-n-Point (PnP) and produce a 6D pose vector. AISAT (Hao et al., 2021) uses a pose prediction structure similar to the SnT Zero-G Lab, finding pose through keypoint prediction and PnP. AISAT and Zero-G Lab networks have fewer "non-essential" tasks, allowing them to produce results faster than larger multi-task networks that predict outputs beyond the 6D pose. Black et al. (2021) proposes a lightweight CNN for rendezvous missions. The back-bone used in this network is MobileNetv2 (Sandler et al., 2018), which was designed to run on mobile devices, making it computationally inexpensive in comparison to previ-ously discussed networks. The backbone connects to a keypoint regression head whose outputs are used in EPnP to solve for 6D pose. With only 6.9 million parameters, this network fits well into CubeSats where computational resources are limited. Despite its size, this network’s results were comparable to top submissions for the older SPEC competition which used the SPEED dataset (Kisantal et al., 2020). 
+
+2.4. Hardware-in-the-Loop 
+
+Thorough ground testing of a GNC algorithm is a necessary step towards proving flight-readiness. Developing an on-ground laboratory that accurately represents the space environment will ensure that the GNC algorithm is being tested in an environ-ment most similar to what would be experienced in space. Existing facilities often use 6-DOF robotic arms to simulate rendezvous trajectories and create laboratory en-vironments that mimic space to demonstrate viability of GNC methods. Besides GNC testing, the laboratory can also be used for simulated data generation. One such facility is the Robotic Testbed for Rendezvous and Optical Navigation (TRON), which is managed by SLAB (Park et al., 2021). This facility features two robotic arms that alter the relative pose between the agent and target by moving the two objects. The relative pose between the two objects is determined using either Vicon motion-tracking cameras or a combination of Vicon and KUKA robot telemetry, depending on the dataset generation setup. The latter configuration employs a multi-source calibration process that fuses both measurement systems to achieve millimeter-level position and millidegree-level orientation accuracy. The facility also recreates 11 realistic space illumination conditions using lightboxes to simulate di ff use Earth albedo and a sunlamp to simulate direct sunlight, while blackout curtains provide the proper optical background. These capabilities enable the generation of hardware-in-the-loop (HIL) or simulated images (i.e., real photographs captured under controlled, space-like conditions). These accurately labeled simulated images are used alongside synthetic computer-rendered images to create datasets such as SPEED (Sharma et al., 2019), SPEED + (Park et al., 2022), and SHIRT (Park & D’Amico, 2017). The European Proximity Operations Simulator 2.0 (EPOS) located at the German Space Operations Center (GSOC) is another facility designed for rendezvous and dock-ing simulations (Benningho ff et al., 2017). The facility features two six-degree-of-freedom KUKA robotic arms, one of which is mounted on a 25 m linear rail, allow-ing simulation of the relative motion between the agent and target. EPOS enables hardware-in-the-loop testing of sensors, docking mechanisms, and guidance, naviga-tion, and control (GNC) systems over separations ranging from 25 m to contact. EPOS has cameras that are capable of capturing RGB images as well as depth images from the agent’s perspective, allowing for a larger variety of available data. Alongside black-out curtains, a unique feature of this laboratory is that it can project images of Earth onto the curtains behind the target. Creating an imaging environment with Earth in the background helps test the robustness of the image-processing algorithms to variations in scene backgrounds. GSOC also conducted a review of sunlamps, focusing on match-ing solar irradiance and color temperature to produce a valid imaging environment. Located at the University of Luxembourg, the SnT Zero-G Lab performs simu-lations of on-orbit servicing missions (Muralidharan et al., 2025). The two 6-DOF robotic arms sit on sliding rails, and the poses of the satellite mockups (rigidly attached to the end-e ff ectors) are tracked via OptiTrack cameras for accurate ground-truth in-formation during real-time simulations. Pauly et al. (2023) conducted an extensive market survey and experimental analysis of cameras, lamps, and background materials to select resources that would reflect the desired environment. This thorough analysis provided the Zero-G Lab with an accurate imaging environment for future experiments. The Orbital Robotic Interaction, On-orbit servicing, and Navigation (ORION) lab-oratory located at the Florida Institute of Technology (FIT) features a unique robotic system compared to the previous experimental set ups covered in this section (Wilde et al., 2016). The agent and target each sit on pan-tilt mechanisms providing two ro-tational degrees of freedom (elevation and azimuth) for attitude control. The agent’s pan-tilt mechanism is mounted on a 2-DOF motion table, enabling translational mo-tion in the horizontal plane and creating a 6-DOF relative-motion system between the chaser and target spacecraft. Surrounding the system is an epoxy air-bearing flat floor that allows free-floating targets for contact-dynamics experiments. Similar to other fa-cilities, the ORION laboratory is painted black and features a high-intensity, dimmable LED sunlamp for replicating the imaging environment. The Spacecraft Proximity Operations Testbed (SPOT), located at Carleton Uni-versity, tests reinforcement learning-based guidance algorithms and navigation neural networks (Crain et al., 2025). The facility includes three air-bearing spacecraft plat-forms capable of three-degree-of-freedom motion ( x, y, θ ). The target is outfitted with a docking port. The agent contains a variety of rendezvous sensors, including stereo-vision cameras, infrared cameras, and LiDAR systems. A third RSO is placed in the 12 system to act as an obstacle for the agent to navigate around. Similar to navigation-only laboratories, a set of motion-tracking cameras provide accurate pose readings of the spacecraft to provide ground-truth information. Although a visual navigation sys-tem is used in this laboratory, the model satellites are not made to be visually similar to real satellites and there is no discussion of simulating the imaging environment. 
+
+3. Problem Statement 
+
+There are multiple formulations of the docking problem that can be solved via the solution methods in this paper. The guidance results in this paper are produced from solving the single-agent docking problem, though future work will employ multi-agent reinforcement learning to solve docking problems involving multiple chasers. There are additional assumptions that may be invoked in problem formulation such as the introduction of velocity constraints and the selection of initial separation between the chaser(s) and the target. This is driven by the environment complexity and the need to establish a working solution on simpler problems before applying the solution methods to more complex docking scenarios. 
+
+3.1. Governing Dynamics 
+
+Consider a chaser spacecraft C1 in LEO that seeks to dock with a target space-craft T1 that is also in the same orbit in LEO. The relative translational dynamics of these spacecraft can be formulated via the nonlinear Battin-Giorgi approach with a non-Keplerian reference orbit which is typically written in the Local Vertical Local Hori-zontal (LVLH) frame instead of an inertial frame. To define the relative translational dynamics, first consider an LVLH frame fixed at the center of the target spacecraft T1.Let the inertial position and velocity of the target spacecraft with respect to the central body be defined as ⃗ rT and ⃗ vT respectively. The basis vectors of the LVLH frame are defined as follows: 
+
+• The radial unit vector ˆ r =⃗ rT  
+
+> || ⃗rT||
+
+which is parallel to the position vector of the target spacecraft with respect to the main body 
+
+• The angular momentum unit vector ˆ h =⃗ rT ×⃗vT    
+
+> || ⃗rT×⃗vT||
+
+which is parallel to the angular momentum of the target spacecraft 
+
+• The third unit vector ˆ θ which completes the right-hand rule via ˆ θ = ˆh × ˆr
+
+The target T1 and chaser C1 defined in the LVLH frame are visualized in Fig. 1. Considering the derivation from Sanna et al. (2024) that is also formulated in Ap-pendix A, let μ represent the gravitational parameter of the main body, ⃗ aTp and ⃗ aCp are the perturbing accelerations on the target /chaser, and ⃗ aCt is the thrust acceleration of the chaser. Further, the transport theorem must be used to account for the rotation of the LVLH frame, which brings:  
+
+> N
+
+˙⃗ρ =R ˙⃗ρ +N⃗ ωR ×⃗ ρ (17) where the time derivatives of relative position in inertial and rotating LVLH frames are N ˙⃗ρ and R ˙⃗ρ, respectively. Letting the relative position between the chaser and target 13 Figure 1: Chaser and Target Spacecraft in LVLH Frame, Figure Adapted from Khoury (2020) 
+
+spacecraft be defined as ⃗ ρ =⃗ rC −⃗ rT (and subsequently ¨⃗ρ = ¨⃗rc − ¨⃗rt), the complete equation for relative translational acceleration is provided below:  
+
+> R
+
+¨⃗ρ = −2N⃗ ωR ×R ˙⃗ρ − N ˙⃗ωR ×⃗ ρ − N⃗ ωR × N⃗ ωR ×R⃗ ρ + μ
+
+r3
+
+> t
+
+q h2 + q + (1 + q)1/2i
+
+(1 + q)3/2 (1 + q)1/2 + 1⃗ rT − μ
+
+r3
+
+> c
+
+⃗ ρ +⃗ aCp +⃗ aCt −⃗ aTp
+
+(18) where 
+
+q = ρ2 + 2⃗ ρ ·⃗ rt
+
+r2
+
+> t
+
+(19) This formulation accounts for perturbing forces on the target and chaser, invokes no assumptions on relative distance, and assumes the target has no acceleration due to thrusting but the chaser has an acceleration due to thrust burning. Next, consider the following two spacecraft body frames: Fbs is the body frame of spacecraft S where the single-agent formulation considers S = C1 to denote the single chaser spacecraft that has an inertial angular velocity ⃗ ωbs , and Fbt is the body frame of the target spacecraft T1
+
+that has an inertial angular velocity ⃗ ωbt . Further, let Rs, Rt denote rotation matrices that convert vectors from the frames Fbs , Fbt to the inertial frame. The relative rotational dynamics are fully derived in Appendix A and the resulting transformation from Fbs to 
+
+Fbt is provided below: ¨⃗ρ(bt ) = A ¨⃗ρ(bs ) , A = RTt Rs (20) 14 where the time derivative of the rotation matrix A with respect to the inertial frame can be denoted as ˙A = −[ω(bt ) 
+
+> bt
+
+]x A + A[ω(bs ) 
+
+> bs
+
+]x (21) with the underscored x denoting skew-symmetric matrices [ · ]Tx = −[ · ]Tx .
+
+3.2. Single-Agent Docking Problem 
+
+Under the nonlinear Battin-Giorgi formulation, consider the target T1 and chaser 
+
+C1 in the same Low-Earth Circular Orbit with the chaser starting at an initial distance 
+
+di away from the target in the ˆ h direction of the LVLH frame. The relative norm between the target and chaser must reach a magnitude less than the terminal position constraint represented by the tunable docking tolerance ϵ. The chaser C1 may perform impulsive thrusting and successfully docks if the magnitude of its relative position is less than the position tolerance ϵp. Safety constraints include avoiding collisions with other obstacles on the trajectory towards the target and contacting the target at a relative velocity whose magnitude is less than the maximum acceptable relative contact velocity ϵvel . The contact interface between the chaser and target shall either be a hardware-compatible docking port, or a derived pseudo-docking port as realized from future feature extraction methods. Following a successful dock, the angular momentum of the joint chaser-target system should be stable to prevent post-docking tumbling. 
+
+3.3. Multi-Agent Extension 
+
+A multi-agent extension to the docking problem introduces an additional chaser 
+
+C2 that also seeks to dock with the target T1. The terminal criteria now requires both chasers to have docked, introducing a more rigorous collision avoidance requirement which requires the chasers to not collide with each other. This requires two sepa-rate (pseudo-)docking ports on the target spacecraft that can su ffi ciently be reached on collision-free trajectories. The simultaneous approach of multiple agents may require intermittent contacts to de-tumble the target and reduce its angular velocity prior to final capture. 
+
+4. Algorithms and Solutions 
+
+The rendezvous and docking problem is solved through three major subsystems: guidance, navigation, and controls. State information is obtained from a dynamics-based state estimate combined with navigation measurements within a Kalman filter framework. The state estimate is then used as input to the guidance network to generate the guidance signal. This guidance signal is passed to the controller, which computes the necessary control inputs to drive the current state toward the guidance-commanded state while also ensuring safety. For real-time testing of a GNC solution, a laboratory space must be built to simulate the imaging and dynamic environment of space. 15 4.1. Guidance 
+
+The Deep Deterministic Policy Gradient (DDPG) algorithm is the preliminary method of accomplishing a guidance signal through RL (Lillicrap et al., 2015). This algorithm is used to solve the guidance problem for the single-agent case formulated in 3.2, there-fore all results presented in 6.1 were produced from the DDPG algorithm on the single agent docking scenario. The DDPG variant that employs a distributional Bellman oper-ator within a distributed learning framework is called Distributed Distributional DDPG (D4PG) (Barth-Maron et al., 2018), which will be adapted and applied to the multi-agent problem in future configurations. 
+
+4.1.1. DDPG 
+
+The Deep Deterministic Policy Gradient (DDPG) algorithm is an actor-critic re-inforcement learning framework designed for continuous action spaces. To enhance learning stability, DDPG utilizes target actor /critic networks that lag the original ac-tor /critic networks through soft updates that are quantified by the coe ffi cient τ. During interaction with the environment, transitions consisting of ( st, at, rt, st+1, dt) are stored in a replay bu ff er B where dt ∈ { 0, 1} is a flag that is set to 1 when the docking criteria is met. The critic samples random mini-batches of size M to reduce temporal corre-lations, and these batches are used in computing target values and loss functions to optimize the actor /critic weights. The algorithm forces exploration and avoids overfitting by using an epsilon-greedy explore-exploit strategy and noise added to each action. The exploration noise dA is modeled as an Ornstein-Uhlenbeck (OU) process; given a random or neural network-informed action at,original , the true action taken by the actor is: 
+
+at = at,original + dA (22) 
+
+dA = θOU (μOU − at)dt OU + γOU 
+
+pdt OU N(0 , 1) (23) where θOU = 0.15 is the rate of mean reversion, μOU = 0 is the long-term mean, dt OU =
+
+.01 is the time-step for discretizing the OU process, γOU (t + 1) = max (kγOU (t), . 05) is a discount parameter to gradually reduce noise where k = 0.995, and N(0 , 1) is a sample from a standard normal distribution. The RL algorithm is configured with the following state, action, and reward representations: ⃗
+
+st = [⃗ xt,target −⃗ xt,chaser ,⃗ vt,target −⃗ vt,chaser ]T
+
+at = [athrust ]
+
+rdense ,t = −c1(|| ⃗ st[1 : 3] || − || ⃗ st−1[1 : 3] || )
+
+rsparse ,t = Rdocked , if || ⃗ st[1 : 3] || < ϵ pos & || ⃗ st[4 : 6] || < ϵ vel 
+
+rvel ,t = c2
+
+ϵvel 
+
+|| vt,target − vt,chaser || 
+
+!
+
+if || ⃗ st[1 : 3] || < 3ϵpos 
+
+rt = rdense ,t + rsparse ,t + rvel ,t
+
+where the terms in the state vector ⃗ xt,(target ,chaser ) and ⃗ vt,(target ,chaser ) represent the 3 × 1vectors for relative position and velocity between the target and chaser, the indexing no-tations ⃗ st[1 : 3] and ⃗ st[4 : 6] denote the subsets of ⃗ st that only contain the position and 16 velocity elements of the state vector respectively, and the action term athrust represents the acceleration due to thrust burning and may be parallel or anti-parallel to the direc-tion towards the target ( ±ˆh as visualized in Fig.1). The terms in the reward function include the constant scalars c1, c2 and the sparse reward for successful docking Rdocked 
+
+which are tunable parameters, the dense reward rdense ,t which is given to the agent con-tinuously, the sparse docking reward which is only provided if the docking criteria is met, and the velocity reward which is provided when the chaser is within 3 position tolerances (3 ϵp) of the target. This velocity reward is a unique formulation because it incentivizes slower approaches rather than penalizing faster approaches. Additionally, the docking criteria may either require simultaneously satisfying the position and ve-locity criteria within ϵpos , ϵ vel , or velocity constraints may temporarily be relaxed for the purpose of accomplishing intermediate solutions on simpler problems. Having de-fined the state, action, reward representation, the complete DDPG process is outlined in Algorithm 1. 
+
+Algorithm 1 Deep Deterministic Policy Gradient (DDPG)  
+
+> 1:
+
+Define learning hyperparameters: actor learning rate α0, critic learning rate β0,target update rate τ, discount rate γ, number of episodes N, maximum steps T per episode, initial & final exploration rates in epsilon-greedy ϵ0 & ϵmin  
+
+> 2:
+
+Define state and action sizes st ∈ ℜ 6, at ∈ ℜ 1 
+
+> 3:
+
+Instantiate actor network πθ and critic network Zϕ with weights θ, ϕ respectively  
+
+> 4:
+
+Instantiate target actor network π′ 
+
+> θ′
+
+and target critic network Z′ 
+
+> ϕ′
+
+with weights θ′ ←
+
+θ, ϕ ′ ← ϕ 
+
+> 5:
+
+for N episodes do  
+
+> 6:
+
+Reset environment, step = 1 
+
+> 7:
+
+while docked = False & step < T do  
+
+> 8:
+
+If (rand (0 , 1) < ϵmin + (ϵ0 − ϵmin ) · e−λ∗step ) : at,original =
+
+rand ([ −abound , abound ]) Else at,original = πθ(st) 
+
+> 9:
+
+Actor performs an impulsive thrust burn with OU noise at = at,original + dA  
+
+> 10:
+
+Observe new state st+1 & reward rt+1, sum total rewards, ( docked = True if docking tol met)  
+
+> 11:
+
+Increment step  
+
+> 12:
+
+Store tuple ( st, at, rt, st+1, dt) in replay bu ff er  
+
+> 13:
+
+Critic randomly samples M-sized batch of tuples from bu ff er  
+
+> 14:
+
+Compute TD target yt = rt + γ(1 − dt)Qϕ′ (s′ 
+
+> t
+
+, μ θ′ (s′ 
+
+> t
+
+))  
+
+> 15:
+
+Compute critic loss Lc = 1
+
+> N
+
+Pt(yt − Qϕ(st, at)) 2 
+
+> 16:
+
+Compute actor loss La = − 1
+
+> N
+
+Pt Qϕ(st, μ θ(st)) ∗ (1 − dt) 
+
+> 17:
+
+Optimize actor /critic weights based on θ = arg min θ(La), ϕ = arg min ϕ(Lc) 
+
+> 18:
+
+Soft update target networks θ′ = (1 − τ)θ′ + τθ, ϕ ′ = (1 − τ)ϕ′ + τϕ  
+
+> 19:
+
+end while  
+
+> 20:
+
+end for  
+
+> 21:
+
+return optimal policy The two categories of algorithm development and tuning are manual tuning and automatic tuning. Because DDPG performance is highly sensitive to reward design 17 and hyperparameters, both manual tuning and automatic tuning approaches are inves-tigated. 
+
+4.1.2. Manual Tuning 
+
+One possible method for tuning the learning algorithm involves manually shaping the reward function and other hyperparameters. The manual tuning process involves running a complete RL training, observing the performance via metrics such as the amount of successful docks and trends on final relative positions /velocities, and man-ually adjusting various hyperparameters in response. For example, if the agent contin-ues to collide with the target at a velocity greater than the maximum allowable relative contact velocity, this observation would inspire the developer to introduce a greater collision penalty term in the reward function. This method requires substantial manual eff ort and is sensitive to small changes in the problem configuration, requiring ongoing tuning and retraining. 
+
+4.1.3. Automatic Tuning 
+
+An alternative to manual tuning is automating the tuning process through hyper-parameter tuning methods such as Bayesian optimization. The optimization algorithm first evaluates the objective function at several randomly selected hyperparameter set-tings to build an initial dataset, then constructs a surrogate model of the objective func-tion. Using this surrogate, it takes well-informed steps by optimizing an acquisition function, resulting in rapid convergence that is favorable for optimizing expensive ob-jective functions such as full RL training runs. Each iteration of the Bayesian optimization runs an entire RL training over several thousand episodes to evaluate one hyperparameter configuration. The objective func-tion is either quantified by success during training (such as maximizing the number of successful docks in the entire training or during a subset of episodes), or separate vali-dation testing such as subjecting the agent to a test suite from various starting distances. The optimal designs identified from the Bayesian optimization are subsequently used in longer duration trainings with incrementally increasing complexity such as introducing additional constraints or increasing the initial distance di.
+
+4.2. Optical Navigation Network 
+
+The proposed optical navigation network is a novel integration of MobileNetV3Large, FPN, and Deep-6DPose (Howard et al., 2019; Lin et al., 2017; Do et al., 2018). The full navigation network structure is shown in Fig. 2. MobileNetV3Large is a lightweight backbone, building o ff of previous MobileNet structures (Howard et al., 2017; Sandler et al., 2018). These MobileNets prioritize creating small neural networks, suitable for deployment on mobile devices such as phones. MobileNetV3 is comprised of mostly bottleneck blocks, which are adapted from Sandler et al. (2018). MobileNetV3 adds squeeze and excitation to the residual layer inside the bottleneck and inserts swish ac-tivations to improve accuracy in comparison to previous versions. MobileNetV3Large is only 5.4M parameters, and 2.9M when excluding the ImageNet classification pre-diction layers which are not required for this application. This allows for flexibility in size when investigating potential architectures for the neck and heads. 18 Figure 2: Overall CNN Architecture for Optical Navigation, Based on Combination of MobileNetV3Large, FPN, and Deep-6DPose (Howard et al., 2019; Lin et al., 2017; Do et al., 2018) 
+
+Attached to the backbone is the Feature Pyramid Network (FPN) (Lin et al., 2017). The goal of the FPN is to collect features across multiple resolutions and fuse them to create a feature map containing both high and low level features. Without this portion of the network, the heads would only receive the output from the final stage of the backbone, with a very low resolution. With FPN, the heads can utilize information from any resolution and combine information across resolutions in order to produce more accurate results. In this application, FPN is attached to the last layer of stages 2, 3, 4, and 5. This combines 128x128, 64x64, 32x32, and 16x16 image resolutions. To perform this fusion, each stage output is upsampled to match the next stage size and then added together. For example, the stage 5 output is upsampled from 16x16 to 32x32, and then added to the stage 4 output. Then, the sum of stages 4 and 5 is upsampled again and added to the stage 3 output. This layer style of upsampling followed by addition is shown in orange in Fig. 2. This process is repeated until the final stage is reached. That singular output layer is then fed to the heads. Deep-6DPose (Do et al., 2018) is a multi-head network used for image processing, inspired heavily by Mask R-CNN (He et al., 2017). Generally, training a multi-head network prevents overfitting to a specific task and allows a network to learn more gen-eral features, increasing its accuracy. The network described in Deep-6DPose has four outputs: object classification, bounding box, segmentation mask, and 6D pose. Due to the availability of labels in SPEED + and information about the pictured satellite Tango, the presented work will only include bounding box and pose estimation tasks. The bounding box regression outputs the minimum and maximum pixel coordinates that result in the minimum area bounding box. The pose head is a direct estimator, meaning that PnP is not required to obtain the final pose. This task outputs a prediction for the translation vector x, y, z and a Lie algebra so (3) representation of the rotation. Exponential Rodrigues mapping (Altafini, 2001) is applied to convert the predicted ro-tation from the Lie algebra so(3) representation into the corresponding Lie group SO(3) 
+
+rotation matrix, which is then compared against the ground-truth rotation, typically ex-pressed as quaternions or Euler angles. The MMEDR navigation network does not 19 use the bounding box to calculate the x, y as done in Do et al. (2018), as this method saw slightly poorer performance than regular direct regression for this domain. Addi-tionally, fully connected (or dense) layer sizes are reduced since the network is only learning the pose of one object and not multiple. Finally, the rotation task receives one supplemental dense layer since rotation is more di ffi cult to learn than position in terms of direct regression. 
+
+4.2.1. Data Augmentation 
+
+Data augmentation is an easy way to improve the applicability of synthetic images to the real imaging domain. Augmentations performed follow previous augmentation styles presented in a variety of works (Black et al., 2021; Park & D’Amico, 2024; Park et al., 2023). This includes random brightness and contrast, Gauss or ISO noise, mo-tion blur, and sun flares. Additionally, gamma augmentations have been introduced to simulate the overexposure that occurs in extremely bright lighting conditions. Image augmentations are performed using the Albumentations library (Buslaev et al., 2020). The augmentations are split into two domains: lightbox and sunlamp, inspired by the lightbox winners of SPEC 2021 (Park et al., 2023). Because of the extreme condi-tions and sun flares that can occur in the sunlamp domain, two di ff erent augmentation pipelines are made to allow for mildly augmented and heavily augmented images to be created. The lightbox and sunlamp augmentations share all the same augmentation types, except for sun flares which only occur in the sunlamp domain. The lightbox domain is given smaller ranges for the random application of augments, as it often has softer imaging conditions. Every image is augmented through either the lightbox or sunlamp augmentation steps, and each individual augment is applied with a certain probability, listed in Table 1. Gaussian noise, motion blur, and ISO noise are applied using Albumentations’ OneOf command, picking one of the three types to apply. In addition to probability of application, the sunlamp augmentations are harsher, reflect-ing the di ffi culty of viewing under direct sunlight. Of all the images in the training set, 40% go through the lightbox augmentation and 60% receive the sunlamp augmenta-tion. Although the test set is comprised of more lightbox images than sunlamp images, it is easier to learn the soft lightbox features. Therefore, emphasis is applied to learn-ing scenarios with harsh lighting and occlusion by making the sunlamp augments more than 50% of the total augments. 
+
+> Table 1: List of Augmentations and Probability of Application
+
+Augment Type Probability - Lightbox Probability - Sunlamp Brightness and Contrast 0.8 0.8 Gaussian Noise 0.7 0.8 Motion Blur 0.7 0.8 ISO Noise 0.7 0.8 Gamma 0.6 0.7 Sun Flare - 0.7 20 4.2.2. Losses and Implementation Details 
+
+The total loss across the position, orientation, and bounding box is found as: 
+
+Ltotal = c1Lt + c2Lr + c3Lbox (24) where c1, c2, c3 are scalar weights that determine how much each task’s loss influences the overall loss. This allows for the emphasis of tasks deemed more important, such as pose estimation. The bounding box and rotation losses are defined by a smooth L1 function, similar to He et al. (2017) and Do et al. (2018). The translation loss performs better using an L2-norm. For this application, the weights are chosen to be 
+
+c1 = 2, c2 = 12 , c3 = 0.5. c2 is much larger because the angle loss is smooth L1, meaning the magnitude must be increased to match the other losses. The navigation network is evaluated on the SPEED + dataset (Park et al., 2022) and compared to results reported in the SPEC 2021 competition (Park et al., 2023). The original image size provided in SPEED + is 1920x1200. For application in the proposed model, images are resized using the original aspect ratio to 512x512 with padding. Although performing cropping instead of padding would maintain a higher resolution, there is a chance of cropping out large portions of the satellite, leading to unidentifiable images. The proposed model is built to handle RGB images, but has been adapted to accept grayscale inputs for testing on the SPEED + dataset (Park et al., 2022). The navigation network uses MobileNetV3Large pretrained on the ImageNet dataset. The learning rate schedule is a cosine decay function which has an initial learning rate of 5e-4 and runs for 75 epochs with a linear warmup stage of 5 epochs. The competition compares on three metrics, Et, Eq, and Ep, for position, orien-tation, and total pose error. Listed below are the equations used to calculate these metrics: 
+
+et = || ˆt − t|| 
+
+eq = 2 cos −1(|⟨ ˆq, q⟩)
+
+ep = || ˆt − t|| || t|| + 2 cos −1(|⟨ ˆq, q⟩)(25) where ˆ t, ˆq are the ground truth position and orientation and t, q are the predicted position and orientation. The Eq. 25 values are averaged over a batch size of N to find Et, Eq, and Ep. Additionally, predictions whose accuracy beats the calibration values on the test set are set to zero. More details about the calibration threshold and the general calibration process in the TRON facility can be found in Park et al. (2022, 2021). 
+
+4.2.3. State Filter 
+
+To update the state vector, propagated dynamics and measurements will be com-bined using a sigma-point–based Unscented Kalman Filter (UKF) once the MMEDR-Autonomous experimental setup is fully operational. This work adopts the framework proposed by Frei et al. (2023), which extends the Kalman filtering approach to handle delayed and asynchronous measurements. In our implementation, an unscented variant of this method will be employed to accommodate nonlinear dynamics while preserving 21 the ability to handle non-constant delays. Details of UKF, which is described below in general terms, can be read in Julier & Uhlmann (2004). The UKF for an n-dimensional system starts with some initial mean and covariance of the state, m+ 
+
+> k−1
+
+= m0 and P+ 
+
+> k−1
+
+= P0. Then, the mean and covariance are used to form the sigma points X(i) 
+
+> k−1
+
+which are propagated forward to the next time step through the dynamic model: 
+
+X(0)  
+
+> k−1
+
+= m+
+
+> k−1
+
+, X(i) 
+
+> k−1
+
+= m+ 
+
+> k−1
+
++ √n + λ
+
+ q 
+
+P+
+
+> k−1
+
+
+
+> i
+
+, X(i+n) 
+
+> k−1
+
+= m+ 
+
+> k−1
+
+− √n + λ
+
+ q 
+
+P+
+
+> k−1
+
+
+
+> i
+
+w(m)0 = λ
+
+n + λ , w(m) 
+
+> i
+
+= 12( n + λ) , w(c)0 = λ
+
+n + λ + (1 − α2 + β), w(c) 
+
+> i
+
+= 12( n + λ)
+
+X(i) 
+
+> k
+
+= f (X(i)
+
+> k−1
+
+), i = 1, ..., 2n
+
+(26) where λ = α2(n + κ) − n is the scaling parameter, α and κ determine the spread of sigma points around the mean, and β incorporates prior information. For example, if a distribution is known to be Gaussian, β = 2. If no information needs to be introduced, then β can be set to zero. The predicted mean and covariance for the current time step can then be solved as: 
+
+m− 
+
+> k
+
+=
+
+> 2n
+
+X
+
+> i=0
+
+w(m) 
+
+> i
+
+X(i)
+
+> k
+
+P− 
+
+> k
+
+=
+
+> 2n
+
+X
+
+> i=0
+
+w(c) 
+
+> i
+
+(X(i) 
+
+> k
+
+− m− 
+
+> k
+
+)( X(i) 
+
+> k
+
+− m− 
+
+> k
+
+)T + Qk+1
+
+(27) where Qk+1 is some additive noise. In the event of non-additive noise, the noise can be augmented to the state and additional sigma points can be generated to propagate that noise. For simplicity, this work will cover the additive case. The sigma points will now be resolved, using the predicted mean and covariance, m− 
+
+> k
+
+and P− 
+
+> k
+
+:
+
+X−(0)  
+
+> k
+
+= m− 
+
+> k
+
+, X−(i) 
+
+> k
+
+= m− 
+
+> k
+
++ √n + λ
+
+ q 
+
+P−
+
+> k
+
+
+
+> i
+
+, X−(i+n) 
+
+> k
+
+= m− 
+
+> k
+
+− √n + λ
+
+ q 
+
+P−
+
+> k
+
+
+
+> i
+
+w(m)0 = λ
+
+n + λ , w(m) 
+
+> i
+
+= 12( n + λ) , w(c)0 = λ
+
+n + λ + (1 − α2 + β), w(c) 
+
+> i
+
+= 12( n + λ)(28) These sigma points are then transformed through the measurement model to find the predicted measurement at time tk. The predicted measurement can then be used to 22 solve for the measurement covariance Wk and the cross-covariance Ck:
+
+Z(i) 
+
+> k
+
+= h(X−(i) 
+
+> k
+
+)ˆzk =
+
+> 2n
+
+X
+
+> i=0
+
+w(m) 
+
+> i
+
+Z(i)
+
+> k
+
+Wk =
+
+> 2n
+
+X
+
+> i=0
+
+w(c) 
+
+> i
+
+(Z(i) 
+
+> k
+
+− ˆzk)( Z(i) 
+
+> k
+
+− ˆzk)T
+
+Ck =
+
+> 2n
+
+X
+
+> i=0
+
+w(c) 
+
+> i
+
+(X−(i) 
+
+> k
+
+− m− 
+
+> k
+
+)( Z(i) 
+
+> k
+
+− ˆzk)T
+
+(29) Finally, the Kalman gain can be computed, and the updated mean and covariance are found as: 
+
+Kk = CkWk
+
+m+ 
+
+> k
+
+= m− 
+
+> k
+
++ Kk(zk − ˆzk)
+
+P+ 
+
+> k
+
+= P− 
+
+> k
+
+− Ck KTk − KkCTk + KkWk KTk
+
+(30) Ideally, the full state estimate is a combination of the predicted state from dynamics and the measured state, assuming that there will be a measurement available at time tk.However, due to a variety of delay sources, it is unlikely that there will be measure-ments available at each time step tk. For example, the ML-based algorithms may take a variable amount of time to process an image or output the next ideal control action. In fact, the filter may need to perform multiple updates before the next measurement is available, depending on the ∆t between tk−1 and tk and the total sum of system delays. Consider the scenario where a measurement has not been taken since the previous state update. In this case, only the dynamic propagation is used and the calculation of the predicted measurement is skipped, so the mean and covariance are set as m+ 
+
+> k
+
+= m− 
+
+> k
+
+and 
+
+P+ 
+
+> k
+
+= P− 
+
+> k
+
+. When a measurement becomes available, Frei et al. (2023) discusses how to extrapolate a measurement given at some time tmeas , where tmeas < tk, so that it can be used at the current time step. Adapted to UKF, this extrapolated measurement is written as: 
+
+zextra k = zmeas +
+
+> 2n
+
+X
+
+> i=0
+
+w(m) 
+
+> i
+
+h(X−(i) 
+
+> k
+
+) −
+
+> 2n
+
+X
+
+> i=0
+
+w(m) 
+
+> i
+
+h(X−(i)
+
+> meas
+
+) (31) The first two terms in Eq. 31 are known at time tk. However, since tmeas does not occur on some count of k, the sigma points X−(i) 
+
+> meas
+
+are not immediately available. Frei et al. (2023) presents two cases of measurement collection, which determines whether to use forward or backward propagation to solve for the sigma points at time tmeas from the closest corrected state estimate (a state estimate updated with both the dynamics and measurements). In order to e ff ectively implement forward propagation, some number of previous state estimates must be stored. Take N to be the number of previously stored time steps such that state estimates from tk−N , ..., tk−1, tk are available. N should be chosen such that the time from tk−N to tk is larger than the combination of all potential system delays. 23 The above filter considers a single measurement from one camera only. Since these agents are multi-sensor, data must be combined in such a way that the resulting combi-nation is often more accurate than the individual measurements. Shown in Assa et al. (2010), Ordered Weighted Averaging (OWA) is an e ff ective method of combining sen-sor data such that the weighted state estimate is closer to the true state than the individ-ual state estimates. Consider three UKF results: UKF 1, UKF 2, and UKF fusion . UKF 1
+
+and UKF 2 are the UKF results of analyzing cameras 1 and 2 separately. UKF fusion is an extension on the previously presented work, where the measurement vector length is extended such that it matches the total length of both sensor 1 and sensor 2’s measure-ments. These three UKF results each have a state covariance matrix, which can be used to form weighting terms. Consider the first element in each of the UKF covariances 
+
+s1, s2, s3. Since values with a high covariance should be considered less in the overall estimate, the weights are structured as the inverse of the covariances. The weights must also be normalized, so the final weights are found as (Assa et al., 2010): 
+
+w1 = 
+
+> 1
+> s1
+> 1
+> s1
+
++ 1 
+
+> s2
+
++ 1
+
+> s3
+
+= s2 s3
+
+s1 s2 + s2 s3 + s1 s3
+
+(32) 
+
+w2 = s1 s3
+
+s1 s2 + s2 s3 + s1 s3
+
+(33) 
+
+w3 = s1 s2
+
+s1 s2 + s2 s3 + s1 s3
+
+(34) This process is repeated for each covariance value in the matrix diagonal. The weights are then applied to their associated state estimate terms, and the terms are summed across the three weighted UKF results to produce one fused result, UKF OWA .
+
+5. Experimental Platform and System Integration 
+
+To perform experiments using multiple agents, the DCV-Space group is equipped with two 6-DOF CR20A robotic arms, with each arm carrying one agent. The Aura spacecraft was chosen as the target object due to its size. The large nature of this satellite necessitates the use of multiple agents for either servicing or de-orbiting. The target is a 3D-printed scaled model of the Aura satellite, which is placed on a pan-tilt camera stand. Being able to manually alter the target’s position and attitude using the pan–tilt stand, as well as adjust the agents’ poses via the robotic arms, enables the testing of a variety of initial target–agent relative poses between experiments. Stationed around the testbed are 8 Vicon Vero v2.2 cameras, used for producing accurate ground truth data for the agents and target. This information is vital for ensuring that the navigation network is producing reliable pose estimates. To test on realistic equipment, the on-board computer that will be running the GNC algorithm is an NVIDIA Jetson TX2. Each agent is fitted with two Orbbec FemtoBolt cameras. These cameras contain both RGB and depth imaging capabilities, allowing for the expansion into the depth realm for future research. Completing the imaging environment, blackout curtains cover the walls and windows to block out any external light, and a Godox UL60Bi lamp provides artificial sunlight. A picture of the current state of the laboratory space 24 is shown in Fig. 3. The final connections of software and hardware are still being made at this time. To enable feasible experimentation, the distance and time of a typical rendezvous mission can be appropriately scaled to match the laboratory environment. Adopted from Goodyear et al. (2015), parameters κ and ν are responsible for scaling the time and distance, respectively. These values are chosen based on the size of the laboratory environment and the desired experiment duration. The GNC algorithm first operates entirely in the "full-scale" orbital frame. Then, using ν/κ 2, the resulting accelerations from the GNC algorithm are scaled into the laboratory frame. Once robotic motion has concluded and measurements are taken, those measurements are scaled back into the orbit frame for the process to repeat. As shown in Fig. 3, the model of the Aura spacecraft is scaled down by this same factor so that the imaging environment stays equivalent in the laboratory and orbit frames. 
+
+> Figure 3: Current State of the DCV-Space Testing Facility
+
+5.1. Robot Kinematics 
+
+The robots utilized in the laboratory are the Dobot CR20A robotic arms. A diagram of the robot and dimensions are shown in Fig. 4. These robots feature six Degrees Of Freedom (6-DOF), with joints 1-3 mainly a ff ecting the position of the end-e ff ector and joints 4-6 forming the "wrist" mostly determining the orientation of the end-e ff ector, although some coupling exists. It is necessary to determine the joint angles to achieve a particular end-e ff ector position and orientation. Like in Muralidharan et al. (2025), this is accomplished using the inverse Jacobian method, which relates cartesian velocity to joint angular velocity in Eq. 35, where ˙x is the set of linear and angular velocities of the end-e ff ector, ˙q is the set of joint angular rates, and J is the Jacobian matrix to transform angular rates to cartesian velocities. 
+
+˙x = J ˙ q (35) 25 Figure 4: CR20A Link Dimensions 
+
+To solve for the joint angular velocity, the equation is multiplied by the Jacobian pseudo-inverse, resulting in: 
+
+J+ ˙x = ˙q (36) where J+ represents the Jacobian pseudo-inverse given by: 
+
+J+ = (JT J)−1JT (37) Commonly, for 6-DOF robot arms, the position and orientation of the end-e ff ector may be decoupled into joints 1-3 and 4-6 respectively, and the Jacobian may be found using simple geometry. However, the wrist for the CR20A is not spherical, resulting in cou-pled dynamics. To solve for the Jacobian, the Denavit–Hartenberg (D-H) parameters (Denavit & Hartenberg, 1955) are used to find the joint frame transformations. The table of D-H parameters for the CR20A Dobot are shown in Table 2. 
+
+> Table 2: D-H Parameters for Dobot CR20A Robot
+
+Link θ d (mm) a (mm) α (deg) 1 θ1 230 0 90 2 θ2 0 825.2 03 θ3 0 746 04 θ4 175.6 0 -90 5 θ5 128.8 0 90 6 θ6 136.5 0 0The transformation matrix from a previous link frame to the current link frame is found 26 using the following equation (Denavit & Hartenberg, 1955), which incorporates trans-lational and orientation transformations: 
+
+> i−1
+
+Ti =
+
+
+
+cos (θi) −sin (θi)cos (αi) sin (θi)sin (αi) aicos (θi)
+
+sin (θi) cos (θi)cos (αi) −cos (θi)sin (αi) ai sin (θi)0 sin (αi) cos (αi) di
+
+0 0 0 1
+
+
+
+(38) where, θi, αi, ai, and di represent the joint angle, link twist, link length, and link o ff set, respectively. The complete transformation from the base frame (frame 0) to the 6th link frame (frame 6) can be expressed as: 
+
+> 0
+
+T6 = 0T1 1T2 2T3 3T4 4T5 5T6 (39) Note that each of these transformation matrices are functions of the joint angles. The transform 0T6 can be expressed as a combination of a rotation matrix representing the orientation and the cartesian position vector of the end-e ff ector in the base frame (Denavit & Hartenberg, 1955): 
+
+> 0
+
+T6 =
+
+
+
+R11 R12 R13 px
+
+R21 R22 R23 py
+
+R31 R32 R33 pz
+
+0 0 0 1
+
+
+
+(40) From the rotation matrix and position coordinates, the partial derivatives with re-spect to the joint angles can be computed to find the Jacobian. After the Jacobian is found, the pseudo-inverse can be computed. When the robot approaches singularities (areas of motion where the robot requires extremely large joint motions to produce small end-e ff ector movements), the Jacobian becomes singular, and calculated joint velocities greatly exceed limits of the robot. Following Muralidharan et al. (2025), this issue is resolved by scaling down the robot joint rotation rates by the condition number 
+
+λ of the Jacobian using the following formula: 
+
+˙q =
+
+
+
+˙q λ(J) ≤ λl
+
+˙q
+
+
+
+1 − λ(J)−λl
+
+> λu−λl
+
+
+
+λl < λ (J) < λ u
+
+0 λ(J) ≥ λu
+
+(15) where λl and λu are the lower and upper limits, respectively, for which damping on the joint velocity is required. These values are determined by laboratory-specific require-ments. 
+
+5.2. Lab Calibration and Data Fusion 
+
+To accurately characterize the laboratory geometry, a calibration procedure is re-quired. Performing laboratory calibration enables the generation of ground-truth pose labels by finding the unknown, fixed transformations between various frames (Park et al., 2021). The laboratory contains two sources of measurements, one coming from 27 the Vicon camera system and the other coming from the Dobot telemetry. These mea-surement sources are fused using the MAP estimate method to ensure the highest accu-racy possible when generating pose labels. The laboratory calibration and data fusion procedure will be derived and executed when the laboratory is ready to run simulations. 
+
+5.3. Integration 
+
+The collection of all MMEDR workflows is visually summarized in Fig. 5. During on-ground validation, the process starts with imaging the target spacecraft. Each of the two agents will acquire images using its two onboard cameras and transmit those images to its onboard computer. All four images will be processed by the optical nav-igation network to produce four pose estimates, two per agent. Each of these pose measurements will be fed into a Kalman filter to estimate the state, which consists of the absolute position, velocity, orientation, and angular velocity of the agent as well as the corresponding quantities for relative motion between the agent and the target. For each agent, the state estimates (from the two Kalman filters, each corresponding to an onboard camera as measurement source) will be fused together using ordered weighted averaging (Assa et al., 2010) resulting in a single state estimate per agent. The states of the two agents are stacked together to form the overall state. The overall state sub-sequently informs the guidance algorithm, which returns an acceleration signal. Once the guidance network outputs the desired linear and angular accelerations, a constraint-aware controller computes the corresponding thrust and torque commands, ensuring convergence to the desired relative pose while satisfying system constraints via control barrier functions. Once the actual linear and angular accelerations are available, the information is transferred to the laboratory computer, which controls the robotic arms. This computer will convert the acceleration in the orbit frame to an equivalent robotic command in the laboratory frame. The motion is enacted, and the process is repeated iteratively until the agents reached their desired relative positions and orientations. 
+
+6. Preliminary Results 
+
+6.1. Guidance 
+
+As a preliminary step towards the multi-agent case in Section 3.3, this section con-siders the single-agent rendezvous and docking problem formulated in Section 3.2. A guidance policy is learned to map relative position and velocity states to thrust com-mands that achieve docking within a prescribed tolerance and acceptable contact veloc-ity, with the RL state, action, and reward design defined in Section 4.1.1. This section demonstrates results from learning a guidance policy via manual tuning and automatic tuning. 
+
+6.1.1. Manual Tuning 
+
+The manual tuning process involved applying the process described in 4.1.2 to-wards the tuning and configuration of a 3000-episode DDPG training. This training considered an initial separation of di = 50 m between the target and chaser spacecraft at the start of each episode and the representation of state, action, and reward provided 28 Figure 5: Overview of All MMEDR Subsystems 
+
+in Section 4.1.1 except for the temporary relaxation of the velocity tolerance ϵvel in the docking criteria and a position-only state vector ( ⃗ st = [⃗ xt,target −⃗ xt,chaser ]). This process o ff ered near-term potential as an option for an agent learning to reach the target. The complete DDPG training demonstrated improvement in reaching the target as shown in Fig. 6, with the magnitude of the final relative position decreasing during training and the agent learning to maximize rewards. The main limitation of the manual method is that even subtle modifications to the problem formulation require a high workload that must be repeated with each change. Examples of modifications that necessitate retuning include changes to the initial chaser-target separation, impos-ing terminal velocity constraints, or modifying the neural network architecture. The results in Fig. 6 demonstrate the limitations of manual tuning because the policy of-ten reaches the general vicinity of the target without converging within the prescribed docking tolerance. Driving the relative position norms in Fig. 6a to within the docking tolerance ϵpos demands significant manual shaping that often degrades learning sta-bility; this motivates the use of Bayesian optimization which is an automated tuning method. 
+
+6.1.2. Automatic Tuning 
+
+The automatic tuning process involved Bayesian optimization for hyperparameter tuning is described in 4.1.3. The objective function was formulated as the number of successful docks in the final 50 episodes of training, to be maximized by tuning all hyperparameters including learning rates, exploration rates, neural network architec-ture, and the total number of episodes. Each episode started with an initial separation between the chaser and target of di = 10 m, and similar assumptions to those in Section 29 (a) Norm of Final Relative Positions During Training 
+
+> (b) Reward Function During Training
+> Figure 6: Docking Results from Manual Shaping and a 50m Initial Distance
+
+6.1.1 were invoked. The representation of state, action, and reward are provided in Section 4.1.1, except for the temporary relaxation of the velocity tolerance ϵvel in the docking criteria criteria and a position-only state vector ( ⃗ st = [⃗ xt,target −⃗ xt,chaser ]). When subject to this automatic tuning configuration, the actor /critic networks ex-hibited stable learning and demonstrated successful docking performance. The Bayesian optimization algorithm identified multiple reliable architectures capable of learning to dock at a success rate higher than 95%. The top three RL trainings from a 20-iteration Bayesian optimization run are provided in Fig. 7 where the ratio of successful docks is computed and plotted every ten episodes. The next automatic tuning configuration attempted to consider contact velocity as part of the docking criteria, which motivated the introduction of velocity in the state representation ( ⃗ st = [⃗ xt,target −⃗ xt,chaser ,⃗ vt,target −⃗ vt,chaser ]) and the introduction of a ve-locity tolerance ϵvel in the docking criteria criteria. The velocity term rvel ,t in the reward function as formulated in Section 4.1.1 was included in this automatic tuning configu-ration. The inclusion of this sparse velocity term was a pivotal improvement in docking performance. Many previous attempts involved using sparse penalties if the chaser exceeds the maximum relative contact velocity, which would be formulated in the con-figuration of Section 4.1.1 as: 
+
+rvel ,t = −c3 if || st[1 : 3] || < ϵ pos & || st[4 : 6] || < ϵ vel (41) 30 (a) Iteration 7 (47 Successful Docks out of Final 50 episodes) (b) Iteration 8 (39 Successful Docks out of Final 50 episodes) 
+
+> (c) Iteration 13 (47 Successful Docks out of Final 50 episodes)
+> Figure 7: Successful Iterations of Bayesian optimization
+
+where c3 is a tunable penalty constant. Agents in this formulation struggled to reach the target because the agent receives penalties while in the vicinity of the target, which inhibits the process of learning to approach the target. The convergence challenges that emerged from terminal velocity constraints were overcome by formulating sparse ve-locity rewards instead of sparse velocity penalties, where the learning algorithm incen-tivizes slower approaches rather than penalizing faster approaches. Learning a policy with velocity constraints is substantially more di ffi cult, requiring closer initial separa-tions, with the intent of employing curriculum learning to incrementally extend perfor-mance toward mission-ready initial distances. A complete Bayesian optimization was employed to demonstrate the successful convergence to a policy that satisfies terminal velocity constraints. The optimization scheme evaluates each candidate policy post-training using five docking attempts from an initial distance di = 3m, seeking to maximize the number of successful docks with an objective function in the range [ −5, 0]. As shown in Fig. 8, multiple designs dock successfully all 5 times, exhibiting learned behavior that satisfies the maximum allow-able relative contact velocity ϵvel .
+
+6.2. Navigation 
+
+The navigation network is tested on the SPEED + dataset without and with the aug-mentations described in Section 4.2.1. The comparison shown in Table 3 demonstrates the e ff ect of the inclusion of data augmentations, clearly showing the benefits of in-cluding data augmentation methods for bridging the domain gap. Table 4 shows the 31 Figure 8: Bayesian optimization Trajectory with Velocity Constraints 
+
+performance of SPN (Sharma & D’Amico, 2019), KRN (Park et al., 2019), and the MMEDR navigation network on the SPEED + dataset. Most competitors in the SPEC 2021 competition utilize either adversarial or online training, meaning some amount of unlabeled testing data has been used for model tuning. Since these methods have not yet been implemented into the MMEDR-framework, a comparison to SPN and KRN is shown because these models do not contain online learning methods. This highlights the strengths of what work has been implemented in the navigation network. 
+
+> Table 3: Testing Results for Lightbox and Sunlamp Domains, With and Without Data Augmentation (De-scribed in Section 4.2.1)
+
+Training Lightbox Sunlamp Augments Et (m) Eq (◦) E∗ 
+
+> p
+
+(-) Et (m) Eq (◦) E∗ 
+
+> p
+
+(-) Without 1.95 76.25 1.65 1.93 89.59 1.85 With 0.36 45.65 0.86 0.52 66.74 1.28 
+
+> Table 4: Comparison of Synthetic-Only Training, Tested on Lightbox and Sunlamp Domains
+
+Model Lightbox Sunlamp 
+
+Et (m) Eq (◦) E∗ 
+
+> p
+
+(-) Et (m) Eq (◦) E∗ 
+
+> p
+
+(-) SPN 0.45 65.12 1.21 0.65 92.95 1.73 KRN 2.25 44.53 1.12 14.64 80.95 3.73 Ours 0.36 45.65 0.86 0.52 66.74 1.28 In relation to the SPEC 2021 competition (Park et al., 2023), the MMEDR nav-igation network performs right within the top ten in terms of Et, despite the lack of heatmaps, adversarial training, or online training. However, the rotation prediction 32 lags severely. Direct regression of orientation is di ffi cult, especially for symmetric ob-jects. Many networks in the competition use heatmap prediction for keypoint detection and PnP to gather orientation information, but it was avoided in this case to prioritize limiting model size and storage usage. However, because of these considerations, the average inference time on a single physical core (two threads) of an Intel Xeon w9-3475X Processor at 2.20 GHz (max 4.80 GHz) is 161.8 ms using Tensorflow (Abadi et al., 2016), which results in an inference rate of 6.18 Hz. This network is extremely fast at only 11.2M parameters, showing room for improvement in terms of the base architecture. Additionally, this means that there is room to grow and add new tasks or include online training methods. 
+
+6.2.1. Synthetic Data Generation 
+
+The Aura spacecraft was chosen as the target and placed at a random distance from the surface of a scaled model of Earth; this distance was set to always be representa-tive of an altitude between LEO and geostationary. The deep-space background was modeled as black, with no stars, Sun, or Moon present within the chaser spacecraft’s camera field of view. Blender was chosen for its ability to provide realistic renders with sophisticated lighting e ff ects, along with the ability to script (and therefore automate) the image rendering process easily using Python. Using a script, the position and ori-entation of the camera relative to the target spacecraft can be randomized, as well as the target’s altitude above the Earth and the time of day. This process was iterated to create a large dataset with minimal human intervention. Blender allows for object pose and other image metadata to be saved to a .json file, which is necessary for training any supervised machine learning model. The Earth model, rather than being a simple background image, is a full-scale rep-resentation of Earth, complete with 3D terrain, simulated atmosphere, city lighting at night, and movable clouds. The Earth’s surface texture and cloud layers are rotated randomly for every image, allowing for greater variation. All of these elements com-bine to produce a more realistic Earth background that reflects the di ff erent e ff ects the camera can see at any given point. The preliminary results of this process can be seen in Fig. 9. Although these im-ages were generated prior to completing the full automation pipeline, they employed the desired Earth model, target model, and lighting a ff ects, serving as a proof of con-cept for further data generation. Blender’s in-house Cycles rendering engine was used to generate these images due to its physically-based ray-tracing framework. While this approach significantly increases computational cost and render time, it produces substantially more realistic lighting than Blender’s rasterized (OpenGL-based) EEVEE engine, which is the primary alternative within the software. 
+
+7. Conclusion and Future Work 
+
+The MMEDR-Autonomous framework shows promise for applications of ML-based GNC to the satellite rendezvous and docking problem. Several conclusions can be drawn from the analysis of multiple learned policies from DDPG; i) manual shaping can o ff er short-term results but Bayesian optimization is necessary for accomplishing 33 Figure 9: Synthetic Images of the Aura Spacecraft Generated in Blender 
+
+su ffi cient performance in more complex problems, ii) the introduction of additional constraints substantially complicates the learning process and requires beginning with a simpler problem such as docking from a closer initial position when considering ve-locity constraints, and iii) sparse velocity rewards is a unique and valuable method to learn an acceptable contact velocity in contrast to existing literature that utilizes sparse velocity penalties. Future work on the guidance algorithms will involve the multi-agent problem formulation, the implementation of D4PG, and further unification of RL with optimal control methods. In terms of navigation, the creation of a fast and lightweight network often conflicts with the desire for accuracy in results. The MMEDR navigation network shows that networks using direct regression have the ca-pability to compete with the traditional heatmap /keypoint or predetermined attitude class methods. Although data augmentation does aid in testing performance, other methods such as online or adversarial training are required to reach the accuracy lev-els necessary for deployment in flight. Future work includes investigating a variety of online training methods to improve testing performance without using excessive com-putational power. Additionally, a task specifically to aid in the docking process will be constructed, allowing the navigation network to identify "graspable" features on targets that may not have cooperative docking hardware. The development of the testing facil-ity will serve as a reliable form of GNC ground testing. The current hardware for this laboratory mimics the imaging environment su ffi ciently for optical navigation testing and the robotic arms allow for guidance to move the simulated agent in real time. The continued construction of this facility includes connecting all of the individual com-ponents and calibrating the laboratory space to allow for the simulation of real-time rendezvous and generation of simulated images for navigation training. The GNC ca-pabilities discussed in this work will be further improved and integrated together to create a single, fully autonomous agent that is verifiable in the on-ground DCV-Space laboratory. 
+
+Acknowledgments 
+
+The authors acknowledge the financial support provided by Missouri University of Science and Technology through institutional seed funding for new faculty. This work was also supported in part by the Kummer Missouri S&T Ignition Grant Initiative (IGI). 34 Appendix A. Derivation of Rotational & Translational Relative Dynamics 
+
+First, consider the following definitions: 
+
+• Fbs : Body frame of spacecraft S (frame that is fixed to the body of chaser S )
+
+• Fbt : Body frame of spacecraft T (frame that is fixed to the body of target T )
+
+• ωbs (vector notation dropped for simplicity): angular velocity of S with respect to inertial frame I
+
+• ωbt : angular velocity of T with respect to inertial frame I
+
+• Js, Jt: mass moment of inertia matrices of S and T respectively, written in 3 × 3matrix form with body-fixed axes 
+
+• Ts: external torque acting on S . It includes torque due to natural forces and torque due to its own control input 
+
+• Tt: external torque acting on T . It includes torque due to natural forces (and assumed to be unactuated) 
+
+• qr: relative quaternion expressing the orientation of Fbt with respect to Fbs , i.e., 
+
+qr = qt ⊗ q−1
+
+> s
+
+• qs: relative quaternion expressing the orientation of Fbs with respect to inertial frame I
+
+• qt: relative quaternion expressing the orientation of Fbt with respect to inertial frame I
+
+• ωr: angular velocity of Fbt with respect to Fbs , i.e., ωr = ωbt − ωbs 
+
+• A(qr): Direction Cosine Matrix (DCM) or rotation matrix that converts a vector from Fbs to Fbt 
+
+Recall the following fundamentals of quaternions: 
+
+q =
+
+
+
+q1
+
+q2
+
+q3
+
+q4
+
+
+
+≡
+
+"qV
+
+q4
+
+#
+
+(A.1) where q21 + q22 + q23 + q24 = 1
+
+q−1 =
+
+"−qV
+
+q4
+
+#
+
+(A.2) 
+
+q ⊗ p =
+
+"q4 PV + P4 qV − qV × PV
+
+q4 P4 − qV · PV
+
+#
+
+(A.3) 35 The quaternion can be related to A using the following identity (Markley & Cras-sidis, 2014): 
+
+A(q) = (q24 − qTV qV )I + 2qV qTV − 2q4[qV ]x (A.4) where the skew-symmetric matrix [ ·]x is represented as: [qV ]x =
+
+
+
+q1
+
+q2
+
+q3
+
+x
+
+=
+
+
+
+0 −q3 q2
+
+q3 0 −q1
+
+−q2 q1 0
+
+ (A.5) Having defined the quaternion essentials, we now transition to the Euler’s equation of motion (EOM) for rigid bodies: 
+
+Js ˙ω(bs ) 
+
+> bs
+
++ ω(bs ) 
+
+> bs
+
+× (Js ω(bs ) 
+
+> bs
+
+) = T (bs ) 
+
+> s
+
+(A.6) 
+
+Jt ˙ω(bt ) 
+
+> bt
+
++ ω(bt ) 
+
+> bt
+
+× (Jt ω(bt ) 
+
+> bt
+
+) = T (bt ) 
+
+> t
+
+(A.7) where ( ·)(i j ) denotes the argument quantity being written using unit vectors of the i j 
+
+frame. Recalling that ωr = ωbt − ωbs , when written using unit vectors of the Fbt frame: 
+
+ω(bt ) 
+
+> r
+
+= ω(bt ) 
+
+> bt
+
+− ω(bt ) 
+
+> bs
+
+=⇒ ω(bt ) 
+
+> r
+
+= ω(bt ) 
+
+> bt
+
+− Aω(bs ) 
+
+> bs
+
+(A.8) where A is the simplified notation for A(qr). Taking the time derivative with respect to an inertial frame: ˙ω(bt ) 
+
+> r
+
+= ˙ω(bt ) 
+
+> bt
+
+− ddt [Aω(bs ) 
+
+> bs
+
+] (A.9) ˙ω(bt ) 
+
+> r
+
+= ˙ω(bt ) 
+
+> bt
+
++ ω(bt ) 
+
+> bt
+
+× Aω(bs ) 
+
+> bs
+
+− Aω(bs ) 
+
+> bs
+
+× ω(bs ) 
+
+> bs
+
+− A ˙ω(bs ) 
+
+> bs
+
+(A.10) Now, using the identity ˙ A = −[ω(bt ) 
+
+> bt
+
+]x A + A[ω(bs ) 
+
+> bs
+
+]x:˙ω(bt ) 
+
+> r
+
+= ˙ω(bt ) 
+
+> bt
+
++ [ω(bt ) 
+
+> bt
+
+]x Aω(bs ) 
+
+> bs
+
+− A[ω(bs ) 
+
+> bs
+
+]xω(bs ) 
+
+> bs
+
+− A ˙ω(bs ) 
+
+> bs
+
+(A.11) and since [ ω(bs ) 
+
+> bs
+
+]xω(bs ) 
+
+> bs
+
+= ω(bs ) 
+
+> bs
+
+× ω(bs ) 
+
+> bs
+
+= 0, the following is true: ˙ ω(bt ) 
+
+> r
+
+= ˙ω(bt ) 
+
+> bt
+
+− A ˙ωbs bs +
+
+[ω(bt ) 
+
+> bt
+
+]x Aωbs bs . Next, upon rearrangement of the Euler’s EOM, one obtains: ˙ω(bs ) 
+
+> bs
+
+= J−1 
+
+> s
+
+[T (bs ) 
+
+> s
+
+− ω(bs ) 
+
+> bs
+
+× (Js ω(bs ) 
+
+> bs
+
+)] (A.12) ˙ω(bt ) 
+
+> bt
+
+= J−1 
+
+> t
+
+[T (bt ) 
+
+> t
+
+− ω(bt ) 
+
+> bt
+
+× (Jt ω(bt ) 
+
+> bt
+
+)] (A.13) Therefore, ˙ω(bt ) 
+
+> r
+
+= J−1 
+
+> t
+
+[T (bt ) 
+
+> t
+
+− ω(bt ) 
+
+> bt
+
+× (Jt ω(bt ) 
+
+> bt
+
+)] − AJ −1 
+
+> s
+
+[T (bs ) 
+
+> s
+
+− ω(bs ) 
+
+> bs
+
+× (Js ω(bs ) 
+
+> bs
+
+)] + ω(bt ) 
+
+> bt
+
+× Aω(bs )
+
+> bs
+
+(A.14) Now, upon rearranging ωr = ωbt − ωbs and writing all quantities using unit vectors of the Fbt frame, one obtains: 
+
+ω(bt ) 
+
+> bt
+
+= ω(bt ) 
+
+> r
+
++ ω(bt ) 
+
+> bs
+
+= ω(bt ) 
+
+> r
+
++ Aω(bs ) 
+
+> bs
+
+(A.15) 36 Substituting A.15 in A.14 results in: ˙ω(bt ) 
+
+> r
+
+= J−1 
+
+> t
+
+[T (bt ) 
+
+> t
+
+− (ω(bt ) 
+
+> r
+
++ Aω(bs ) 
+
+> bs
+
+) × Jt(ω(bt ) 
+
+> r
+
++ Aω(bs ) 
+
+> bs
+
+)] − AJ −1 
+
+> s
+
+[T (bs ) 
+
+> s
+
+− ω(bs ) 
+
+> bs
+
+× (Js ω(bs ) 
+
+> bs
+
+)] + ω(bt ) 
+
+> bt
+
+× Aω(bs )
+
+> bs
+
+(A.16) With the expression for ˙ ω(bt ) 
+
+> r
+
+established, the expression for ˙ qr is given by (Zagaris & Romano): ˙qr = 12 Ω(ω(bt ) 
+
+> r
+
+)qr (A.17) (A.18) where: 
+
+Ω(ω) =
+
+
+
+0 ωz −ωy ωx
+
+−ωz 0 ωx ωy
+
+ωy −ωx 0 ωz
+
+−ωx −ωy −ωz 0
+
+
+
+(A.19) Having derived the relative rotational dynamics in spacecraft body frames, the relative translational dynamics can be derived in the LVLH frame. Let L be the target LVLH frame as described in Section 3.1, where ˆ r is the vector from the center of Earth to the center of mass of the target, ˆ h is the specific angular momentum vector for the target, and ˆ θ completes the right-handed triad. ⃗ρ =⃗ rs −⃗ rt (A.20) where ⃗ ρ is the relative position between the chaser and target, ⃗ rs is the inertial position vector of the spacecraft S (chaser spacecraft), and ⃗ rt is the inertial position vector of the target spacecraft. The inertial acceleration of target spacecraft T is given as: ¨⃗rt = 
+
+> I
+
+d2
+
+dt 2 (⃗rt) = − μ
+
+r3
+
+> t
+
+⃗
+
+rt +⃗ ap,t (A.21) where μ is Earth’s gravitational parameter and ⃗ ap,t is the resultant perturbing accelera-tion acting on spacecraft T . Similarly, the inertial acceleration of spacecraft S is: ¨⃗rs = 
+
+> I
+
+d2
+
+dt 2 (⃗ rs) = − μ
+
+r3
+
+> s
+
+⃗ rs +⃗ ap,s +⃗ at,s (A.22) where ⃗ ap,s is the resultant perturbing acceleration acting on spacecraft S and ⃗ at,s is the thrust acceleration of spacecraft S . Taking the double time derivative of ⃗ ρ with respect to an observer fixed in the inertial frame: 37 I d2ρ
+
+dt 2 ≡ ¨⃗ρ = ¨⃗rs − ¨⃗rt (A.23) ¨⃗ρ = − μ
+
+r3
+
+> s
+
+⃗ rs +⃗ ap,s +⃗ at,s + μ
+
+r3
+
+> t
+
+⃗
+
+rt −⃗ ap,t (A.24) ¨⃗ρ = − μ
+
+r3
+
+> s
+
+(⃗ ρ +⃗ rt) +⃗ ap,s +⃗ at,s + μ
+
+r3
+
+> t
+
+⃗
+
+rt −⃗ ap,t (A.25) ¨⃗ρ = μ
+
+r3
+
+> t
+
+⃗
+
+rt 1 − r3
+
+> t
+
+r3
+
+> s
+
+!
+
+− μ
+
+r3
+
+> s
+
+⃗ ρ +⃗ ap,s +⃗ at,s −⃗ ap,t (A.26) ¨⃗ρ = μ
+
+r3
+
+> t
+
+⃗
+
+rt 1 − r3
+
+> t
+
+|⃗ρ +⃗ rt|3
+
+!
+
+− μ
+
+r3
+
+> s
+
+⃗ ρ +⃗ ap,s +⃗ at,s −⃗ ap,t (A.27) ¨⃗ρ = μ
+
+r3
+
+> t
+
+⃗
+
+rt 1 − r3
+
+> t
+
+(ρ2 + r2 
+
+> t
+
++ 2⃗ ρ ·⃗ rt)3/2
+
+!
+
+− μ
+
+r3
+
+> s
+
+⃗ ρ +⃗ ap,s +⃗ at,s −⃗ ap,t (A.28) Let the parameter q be defined as: 
+
+q = ρ2 + 2⃗ ρ ·⃗ rt
+
+r2
+
+> t
+
+(A.29) Now, the term inside parenthesis in Eq. A.28 can be rewritten as: 1 − r3
+
+> t
+
+(ρ2 + r2 
+
+> t
+
++ 2⃗ ρ ·⃗ rt)3/2 = 1 − r3
+
+> t
+
+((1 + q)r2 
+
+> t
+
+)3/2 (A.30) 
+
+= 1 − 1(1 + q)3/2 (A.31) 
+
+= (1 + q)3/2 − 1(1 + q)3/2 (A.32) 
+
+= [(1 + q)3/2 − 1][(1 + q)1/2 + 1] (1 + q)3/2[(1 + q)1/2 + 1] (A.33) 
+
+= (1 + q)2 + (1 + q)3/2 − (1 + q)1/2 − 1(1 + q)3/2[(1 + q)1/2 + 1] (A.34) 
+
+= q2 + 2q + (1 + q)1/2q
+
+(1 + q)3/2[(1 + q)1/2 + 1] (A.35) 
+
+= q(q + 2 + (1 + q)1/2)(1 + q)3/2[(1 + q)1/2 + 1] (A.36) Therefore, A.28 becomes: ¨⃗ρ = μ
+
+r3
+
+> t
+
+q(q + 2 + (1 + q)1/2)(1 + q)3/2[(1 + q)1/2 + 1] ⃗ rt − μ
+
+r3
+
+> s
+
+⃗ ρ +⃗ ap,s +⃗ at,s −⃗ ap,t (A.37) Now, from transport theorem:  
+
+> I
+
+ddt (⃗ ρ) =
+
+> L
+
+ddt (⃗ ρ) +⃗ ωL/I ×⃗ ρ (A.38) 38 where L ddt (⃗ ρ) is the rate of change of ⃗ ρ as seen by an observer fixed in the LVLH frame and ⃗ ωL/I is the angular velocity of LVLH frame with respect to the inertial frame. Now, taking the time derivative of the preceding equation with respect to an observer fixed in the inertial frame:  
+
+> I
+
+¨⃗ρ = 
+
+> I
+
+ddt (L ˙⃗ρ +⃗ ωL/I ×⃗ ρ) (A.39)  
+
+> I
+
+¨⃗ρ =
+
+> L
+
+ddt (L ˙⃗ρ +⃗ ωL/I ×⃗ ρ) +⃗ ωL/I × (L ˙⃗ρ +⃗ ωL/I ×⃗ ρ) (A.40)  
+
+> I
+
+¨⃗ρ = L ¨⃗ρ + L ˙⃗ωL/I ×⃗ ρ +⃗ ωL/I × L ˙⃗ρ +⃗ ωL/I × L ˙⃗ρ +⃗ ωL/I × (⃗ ωL/I ×⃗ ρ) (A.41) where L ¨⃗ρ is the relative acceleration as seen by an observer fixed in the LVLH frame. Rearranging the preceding equation yields:  
+
+> L
+
+¨⃗ρ = I ¨⃗ρ − 2⃗ ωL/I × L ˙⃗ρ − L ˙⃗ωL/I ×⃗ ρ −⃗ ωL/I × (⃗ ωL/I ×⃗ ρ) (A.42)  
+
+> L
+
+¨⃗ρ = μ
+
+r3
+
+> t
+
+q(q + 2 + (1 + q)1/2)(1 + q)3/2[(1 + q)1/2 + 1] ⃗ rt − μ
+
+r3
+
+> s
+
+⃗ ρ +⃗ ap,s +⃗ at,s −⃗ ap,t − 2⃗ ωL/I × L ˙⃗ρ (A.43) 
+
+−L ˙⃗ωL/I ×⃗ ρ −⃗ ωL/I × (⃗ ωL/I ×⃗ ρ)Next, we can find ⃗ ωL/I , ˙⃗ωL/I by propagating the absolute motion of the target using: ¨⃗rt = − μ
+
+r3
+
+> t
+
+⃗
+
+rt +⃗ ap,t (A.44) While propagating the absolute motion of the target, the Cartesian state can be related to the corresponding Keplerian orbital elements through standard orbital mechanics equations. From the Keplerian elements, ⃗ ωL/I can be obtained using: ⃗ωL/I =
+
+
+
+˙Ωsin (i)sin (θt) + ˙icos (θt)˙Ωsin (i)cos (θt) − ˙isin (θt)˙Ωcos (i) + ˙θt
+
+ 
+
+> T
+
+
+
+ˆr
+
+ˆθ
+
+ˆh
+
+ (A.45) where Ω is the right ascension of the ascending node (RAAN), i is the orbital inclina-tion, and the argument of latitude θt is defined as the sum of the argument of perigee and the true anomaly, i.e., θt = ω + ν. Furthermore, as presented in Sanna et al. (2024), the Gauss Variational Equations (GVE), in either their original formulation or modified forms, are expressed as: ˙i = rcos (θt)
+
+h ah (A.46) ˙Ω = rsin (θt)
+
+hsin (i) ah (A.47) ˙θt =
+
+r μ
+
+p3 (1 + ecos (ν)) 2 − rsin (θt)cos (i)
+
+hsin (i) ah (A.48) In the classical formulation of the GVE, ( ar, aθ, ah) denote the components of the per-turbing acceleration resolved along the ˆ r, ˆ θ, and ˆ h directions, respectively. As outlined 39 in Sanna et al. (2024), L ˙⃗ωL/I = I ˙⃗ωL/I is determined numerically by propagating the target’s absolute orbital dynamics over the time span of interest. From Cartesian co-ordinates, ⃗ ωL/I can be calculated for a large number of time steps over the interval of interest, then a cubic spline (or any other higher order curve) can be fitted through each of ⃗ ωL/I |x,⃗ ω L/I |y,⃗ ω L/I |z, and the fitted curve will e ff ectively be a closed-form formula which can be di ff erentiated with respect to time to find ˙⃗ωL/I
+
+To summarize, the rotational kinematics and dynamics are described by the follow-ing 14-dimensional state: Rotational State → { qs, ω (bs ) 
+
+> bs
+
+, qr, ω (bt ) 
+
+> r
+
+}
+
+where qs is the quaternion representing the orientation of Fbs with respect to the inertial frame, ω(bs ) 
+
+> bs
+
+is the angular velocity of S with respect to inertial frame I and expressed in the S body frame unit vectors, qr is the relative quaternion used to represent orientation of Fbt with respect to Fbs , and ω(bt ) 
+
+> r
+
+is the angular velocity of Fbt with respect to Fbs 
+
+and expressed using unit vectors of the Fbt frame. The rotational state derivatives are given by: ˙qs = 12 Ω(ω(bs ) 
+
+> bs
+
+)qs (A.49) ˙ω(bs ) 
+
+> bs
+
+= J−1 
+
+> s
+
+[T (bs ) 
+
+> s
+
+− ω(bs ) 
+
+> bs
+
+× (Jsω(bs ) 
+
+> bs
+
+)] (A.50) ˙qr = 12 Ω(ω(bt ) 
+
+> r
+
+)qr (A.51) ˙ω(bt ) 
+
+> r
+
+= J−1 
+
+> t
+
+[T (bt ) 
+
+> t
+
+− (ω(bt ) 
+
+> r
+
++ Aω(bs ) 
+
+> bs
+
+) × Jt(ω(bt ) 
+
+> r
+
++ Aω(bs ) 
+
+> bs
+
+)] (A.52) 
+
+−AJ −1 
+
+> s
+
+[T (bs ) 
+
+> s
+
+− ω(bs ) 
+
+> bs
+
+× (Js ω(bs ) 
+
+> bs
+
+)] + (ω(bt ) 
+
+> r
+
++ Aω(bs ) 
+
+> bs
+
+) × Aω(bs )
+
+> bs
+
+The derived translational kinematics and dynamics are described by the following 12-dimensional state: Translational State → { ⃗ ρ, L ˙⃗ρ,⃗ rt, ˙⃗rt}
+
+where ⃗ ρ is the relative position of S with respect to T and expressed in target LVLH unit vectors, L ˙⃗ρ is the rate of change of ⃗ ρ as seen by an observer fixed in the LVLH frame and expressed using LVLH unit vectors, ⃗ rt is the inertial position of the target spacecraft, and ˙⃗rt is the inertial velocity of the target spacecraft. The corresponding time derivatives are: 
+
+> L
+
+d⃗ ρ
+
+dt = L ˙⃗ρ (A.53)  
+
+> L
+
+¨⃗ρ = μ
+
+r3
+
+> t
+
+q(q + 2 + (1 + q)1/2)(1 + q)3/2[(1 + q)1/2 + 1] ⃗ rt − μ
+
+r3
+
+> s
+
+⃗ ρ +⃗ ap,s +⃗ at,s −⃗ ap,t − 2⃗ ωL/I × L ˙⃗ρ (A.54) 
+
+−L ˙⃗ωL/I ×⃗ ρ −⃗ ωL/I × (⃗ ωL/I ×⃗ ρ) 
+
+> I
+
+d⃗ rt
+
+dt = ˙⃗rt (A.55)  
+
+> I
+
+¨⃗rt = − μ
+
+r3
+
+> t
+
+⃗
+
+rt +⃗ ap,t (A.56) 40 References 
+
+Abadi, M., Barham, P., Chen, J. et al. (2016). TensorFlow: A system for large-scale machine learning. In 12th USENIX Symposium on Operating Systems Design and Implementation (OSDI) (pp. 265–283). USENIX Association. Altafini, C. (2001). The de casteljau algorithm on SE(3). In Nonlinear Control in the Year 2000 (pp. 23–34). Springer London. doi: 10.1007 /BFb0110205. Assa, A., Janabi-Sharifi, F., Moshiri, B. et al. (2010). A data fusion approach for multi-camera based visual servoing. In 2010 International Symposium on Optomecha-tronic Technologies (pp. 1–7). doi: 10.1109 /ISOT.2010.5687312. Barth-Maron, G., Ho ff man, M. W., Budden, D. et al. (2018). Distributed distributional deterministic policy gradients. In International Conference on Learning Represen-tations . URL: https://openreview.net/forum?id=SyZipzbCb .Bashnick, C., & Ulrich, S. (2023). Fast model predictive control for spacecraft ren-dezvous and docking with obstacle avoidance. J. Guid. Control Dyn. , 46 (5), 998– 1007. doi: 10.2514 /1.G007314. Bay, H., Ess, A., Tuytelaars, T. et al. (2008). Speeded-up robust features (SURF). 
+
+Comput. Vis. Image Underst. , 110 (3), 346–359. doi: 10.1016 /j.cviu.2007.09.014. Benningho ff , H., Rems, F., Risse, E.-A. et al. (2017). European proximity operations simulator 2.0 (EPOS) - a robotic-based rendezvous and docking simulator. J. Large-Scale Res. Facil. , 3, 107. doi: 10.17815 /jlsrf-3-155. Black, K., Shankar, S. S. A., Fonseka, D. et al. (2021). Real-time, flight-ready, non-cooperative spacecraft pose estimation using monocular imagery. URL: https: //arxiv.org/abs/2101.09553 . arXiv:2101.09553 .Blaise, J., & Bazzocchi, M. C. F. (2023). Space manipulator collision avoid-ance using a deep reinforcement learning control. Aerospace , 10 (9). doi: 10.3390 /aerospace10090778. Bukschat, Y., & Vetter, M. (2020). E ffi cientPose: An e ffi cient, accurate and scalable end-to-end 6D multi object pose estimation approach. URL: https://arxiv.org/ abs/2011.04307 . arXiv:2011.04307 .Buslaev, A., Iglovikov, V. I., Khvedchenya, E. et al. (2020). Albumentations: Fast and flexible image augmentations. Information , 11 (2), 125. doi: 10.3390 /info11020125. Capello, E., Punta, E., Dabbene, F. et al. (2017). Sliding-mode control strategies for rendezvous and docking maneuvers. J. Guid. Control Dyn. , 40 (6), 1481–1487. doi: 10.2514 /1.G001882. Capuano, V., Kim, K., Harvard, A. et al. (2020). Monocular-based pose deter-mination of uncooperative space objects. Acta Astronaut. , 166 , 493–506. doi: 10.1016 /j.actaastro.2019.09.027. 41 Crain, A., Hovell, K., Savytska, C. et al. (2025). Optimal capture of spinning spacecraft via deep learning vision and guidance. J. Spacecr. Rockets , 62 (5), 1727–1739. doi: 10.2514 /1.A36277. Denavit, J., & Hartenberg, R. S. (1955). A Kinematic Notation for Lower-Pair Mecha-nisms Based on Matrices. J. Appl. Mech , 22 (2), 215–221. doi: 10.1115 /1.4011045. Di Cairano, S., Park, H., & Kolmanovsky, I. (2012). Model predictive control approach for guidance of spacecraft rendezvous and proximity maneuvering. Int. J. Robust Nonlinear Control , 22 (12), 1398–1427. doi: 10.1002 /rnc.2827. Do, T.-T., Cai, M., Pham, T. et al. (2018). Deep-6DPose: Recovering 6D object pose from a single RGB image. URL: https://arxiv.org/abs/1802.10367 .
+
+arXiv:1802.10367 .Dunlap, K., Hamilton, N. P., Lippay, Z. et al. (2025). Demonstrating reinforcement learning and run time assurance for spacecraft inspection using unmanned aerial vehicles. In AIAA SciTech 2025 Forum . American Institute of Aeronautics and Astronautics. doi: 10.2514 /6.2025-0756. Dunlap, K., van Wijk, D., & Hobbs, K. L. (2023). Run Time Assurance for Au-tonomous Spacecraft Inspection. URL: https://arxiv.org/abs/2302.02885 .
+
+arXiv:2302.02885 .Frei, H., Burri, M., Rems, F. et al. (2023). A robust navigation filter fusing delayed measurements from multiple sensors and its application to spacecraft rendezvous. 
+
+Adv. Space Res. , 72 (7), 2874–2900. doi: 10.1016 /j.asr.2022.10.025. Goodyear, A., Petersen, C., Pierre, J. et al. (2015). Hardware implementation of model predictive control for relative motion maneuvering. In 2015 American Control Con-ference (ACC) (pp. 2311–2316). IEEE. doi: 10.1109 /ACC.2015.7171077. Hao, Z., Shyam, R. A., Rathinam, A. et al. (2021). Intelligent spacecraft visual GNC ar-chitecture with the state-of-the-art AI components for on-orbit manipulation. Front. Robot. AI , 8, 639327. doi: 10.3389 /frobt.2021.639327. Hartley, E. N. (2015). A tutorial on model predictive control for spacecraft ren-dezvous. In 2015 European Control Conference (ECC) (pp. 1355–1361). IEEE. doi: 10.1109 /ECC.2015.7330727. He, K., Gkioxari, G., Dollár, P. et al. (2017). Mask R-CNN. In Proceedings of the IEEE International Conference on Computer Vision (pp. 2961–2969). IEEE. doi: 10.1109 /ICCV.2017.322. Hibbard, M., Topcu, U., & Hobbs, K. L. (2022). Guaranteeing safety via active-set invariance filters for multi-agent space systems with coupled dynam-ics. In 2022 American Control Conference (ACC) (pp. 430–436). IEEE. doi: 10.23919 /ACC53348.2022.9867343. 42 Hovell, K., & Ulrich, S. (2021). Deep reinforcement learning for spacecraft proximity operations guidance. J. Spacecr. Rockets , 58 (2), 254–264. doi: 10.2514 /1.A34838. Hovell, K., & Ulrich, S. (2022). Laboratory experimentation of spacecraft robotic capture using deep-reinforcement-learning–based guidance. J. Guid. Control Dyn. ,
+
+45 (11), 2138–2146. doi: 10.2514 /1.G006656. Howard, A., Sandler, M., Chen, B. et al. (2019). Searching for MobileNetV3. In 2019 IEEE /CVF International Conference on Computer Vision (ICCV) (pp. 1314–1324). IEEE. doi: 10.1109 /ICCV.2019.00140. Howard, A. G., Zhu, M., Chen, B. et al. (2017). MobileNets: E ffi cient convolutional neural networks for mobile vision applications. URL: https://arxiv.org/abs/ 1704.04861 . arXiv:1704.04861 .Julier, S., & Uhlmann, J. (2004). Unscented filtering and nonlinear estimation. Proc. IEEE , 92 (3), 401–422. doi: 10.1109 /JPROC.2003.823141. Khoury, F. (2020). Orbital rendezvous and spacecraft loitering in the Earth–Moon system . Master’s thesis Purdue University. URL: https: //engineering.purdue.edu/people/kathleen.howell.1/Publications/ Masters/2020_Khoury.pdf .Kisantal, M., Sharma, S., Park, T. H. et al. (2020). Satellite Pose Estimation Challenge: Dataset, Competition Design, and Results. IEEE Transactions on Aerospace and Electronic Systems , 56 (5), 4083–4098. doi: 10.1109 /TAES.2020.2989063. Krizhevsky, A., Sutskever, I., & Hinton, G. (2012). ImageNet classification with deep convolutional neural networks. Commun. ACM , 60 , 84–90. doi: 10.1145 /3065386. Lepetit, V., Moreno-Noguer, F., & Fua, P. (2009). EPnP: An accurate O(n) solution to the PnP problem. Int. J. Comput. Vision , 81 (2), 155—-166. doi: 10.1007 /s11263-008-0152-6. Lillicrap, T. P., Hunt, J. J., Pritzel, A. et al. (2015). Continuous control with deep reinforcement learning. URL: https://arxiv.org/abs/1509.02971 .
+
+arXiv:1509.02971 .Lin, T.-Y., Dollár, P., Girshick, R. et al. (2017). Feature pyramid networks for object detection. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (pp. 2117–2125). IEEE. doi: 10.1109 /CVPR.2017.106. Liu, Y., Yu, Z., Liu, X. et al. (2019). Active detumbling technology for high dy-namic non-cooperative space targets. Multibody System Dynamics , 47 (1), 21–41. doi: 10.1007 /s11044-019-09675-3. Lowe, D. G. (2004). Distinctive image features from scale-invariant keypoints. Int. J. Comput. Vis. , 60 (2), 91–110. doi: 10.1023 /b:visi.0000029664.99615.94. 43 Mammarella, M. (2016). Guidance and control algorithms for space rendezvous and docking maneuvers. In Pegasus–AIAA Student Conference . URL: https: //www.researchgate.net/publication/309013027_Guidance_and_ Control_Algorithms_for_Space_Rendezvous_and_Docking_Maneuvers .Markley, F. L., & Crassidis, J. L. (2014). Fundamentals of Spacecraft Attitude Deter-mination and Control volume 33 of Space Technology Library . Springer New York, NY. doi: 10.1007 /978-1-4939-0802-8 edition 1. Muralidharan, V., Makhdoomi, M., Žinys, A. et al. (2025). On-ground validation of orbital GNC: Visual navigation assessment in robotic testbed facility. Astrodyn. ,
+
+9(3), 343–367. doi: 10.1007 /s42064-024-0198-4. NASA O ffi ce of Inspector General (2021). NASA’s e ff orts to mitigate the risks posed by orbital debris . Technical Report IG-21-011 National Aeronautics and Space Ad-ministration. URL: https://oig.nasa.gov/docs/IG-21-011.pdf .O’Mahony, N., Campbell, S., Carvalho, A. et al. (2020). Deep learning vs. traditional computer vision. In Advances in Intelligent Systems and Computing . Springer Inter-national Publishing. doi: 10.1007 /978-3-030-17795-9. O’Shea, K., & Nash, R. (2015). An introduction to convolutional neural networks. 
+
+arXiv:1511.08458 .Park, T., Bosse, J., & D’Amico, S. (2021). Robotic testbed for rendezvous and optical navigation: multi-source calibration and machine learning use cases. 
+
+arXiv:2108.05529 .Park, T., & D’Amico, S. (2024). Robust multi-task learning and online refinement for spacecraft pose estimation across domain gap. Adv. Space Res. , 73 (11), 5726–5740. doi: 10.1016 /j.asr.2023.03.036. Park, T., Märtens, M., Jawaid, M. et al. (2023). Satellite pose estimation com-petition 2021: results and analyses. Acta Astronaut. , 204 , 640–665. doi: 10.1016 /j.actaastro.2023.01.002. Park, T. H., & D’Amico, S. (2017). Adaptive neural network-based Unscented Kalman filter for robust pose tracking of noncooperative spacecraft. J. Guid. Control Dyn. ,
+
+46 (9), 1671–1688. doi: 10.2514 /1.g007387. Park, T. H., Märtens, M., Lecuyer, G. et al. (2022). SPEED +: Next-Generation Dataset for Spacecraft Pose Estimation across Domain Gap. IEEE Aerospace Conference , . URL: https://doi.org/10.25740/wv398fc4383 .Park, T. H., Sharma, S., & D’Amico, S. (2019). Towards robust learning-based pose estimation of noncooperative spacecraft. URL: https://arxiv.org/abs/1909. 00392 . arXiv:1909.00392 .Pauly, L., Jamrozik, M. L., del Castillo, M. O. et al. (2023). Lessons from a space lab: an image acquisition perspective. Int. J. Aerosp. Eng. , 2023 (1), 9944614. doi: 10.1155 /2023 /9944614. 44 Pothen, A., Crain, A., & Ulrich, S. (2022). Pose tracking control for spacecraft proxim-ity operations using the Udwadia–Kalaba framework. J. Guid. Control Dyn. , 45 (2), 296–309. doi: 10.2514 /1.G005169. Proença, P. F., & Gao, Y. (2020). Deep learning for spacecraft pose estima-tion from photorealistic rendering. In 2020 IEEE International Conference on Robotics and Automation (ICRA) (pp. 6007–6013). IEEE. doi: 10.1109 /I-CRA40945.2020.9197244. Ren, S., He, K., Girshick, R. et al. (2016). Faster R-CNN: Towards real-time object detection with region proposal networks. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (pp. 91–99). doi: 10.1109 /CVPR.2016.91. Sandler, M., Howard, A., Zhu, M. et al. (2018). MobileNetV2: Inverted residuals and linear bottlenecks. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (pp. 4510–4520). IEEE. doi: 10.1109 /CVPR.2018.00474. Sanna, D., Madonna, D., Pontani, M. et al. (2024). Orbit rendezvous maneuvers in cislunar space via nonlinear hybrid predictive control. Dynamics , 4(3), 609–642. doi: 10.3390 /dynamics4030032. Sharma, S., & D’Amico, S. (2019). Pose estimation for non-cooperative rendezvous using neural networks. arXiv:1906.09868 .Sharma, S., Park, T., & D’Amico, S. (2019). Spacecraft pose estimation dataset (SPEED). doi: 10.25740 /dz692fn7184. Tan, M., & Le, Q. (2019). E ffi cientNet: Rethinking model scaling for convolutional neural networks. In Proceedings of the 36th International Conference on Machine Learning (pp. 6105–6114). PMLR volume 97 of Proceedings of Machine Learning Research .Tan, M., Pang, R., & Le, Q. (2020). E ffi cientDet: Scalable and e ffi cient object detec-tion. In Proceedings of the IEEE /CVF Conference on Computer Vision and Pattern Recognition (pp. 10781–10790). IEEE. doi: 10.1109 /CVPR42600.2020.01079. Utkin, V. I. (2008). Sliding mode control: Mathematical tools, design and applications. In P. Nistri, & G. Stefani (Eds.), Nonlinear and Optimal Control Theory: Lectures given at the C.I.M.E. Summer School held in Cetraro, Italy June 19–29, 2004 (pp. 289–347). Berlin, Heidelberg: Springer Berlin Heidelberg. doi: 10.1007 /978-3-540-77653-6. Ventura, J., Ciarcià, M., Romano, M. et al. (2017). Fast and near-optimal guidance for docking to uncontrolled spacecraft. J. Guid. Control Dyn. , 40 (12), 3138–3154. doi: 10.2514 /1.G001843. Wang, D., Shelhamer, E., Liu, S. et al. (2021a). Tent: Fully test-time adaptation by entropy minimization. In International Conference on Learning Representations .URL: https://openreview.net/forum?id=uXl3bZLkr3c .45 Wang, J., Sun, K., Cheng, T. et al. (2021b). Deep high-resolution representation learn-ing for visual recognition. IEEE Trans. Pattern Anal. Mach. Intell. , 43 (10), 3349– 3364. doi: 10.1109 /TPAMI.2020.2983686. Wang, X., Wang, G., Chen, Y. et al. (2020). Autonomous rendezvous guidance via deep reinforcement learning. In 2020 Chinese Control and Decision Conference (CCDC) 
+
+(pp. 1848–1853). IEEE. doi: 10.1109 /CCDC49329.2020.9163988. Wang, Z., Liu, Y., & Zhang, E. (2024). Pose estimation for cross-domain non-cooperative spacecraft based on spatial-aware keypoints regression. Aerospace ,
+
+11 (11), 948. doi: 10.3390 /aerospace11110948. Wilde, M., Kaplinger, B., Go, T. et al. (2016). ORION: A simulation environment for spacecraft formation flight, capture, and orbital robotics. In 2016 IEEE Aerospace Conference (pp. 1–14). doi: 10.1109 /AERO.2016.7500575. Zagaris, C., & Romano, M. (). Applied reachability analysis for space-craft rendezvous and docking with a tumbling object. In 2018 Space Flight Mechanics Meeting (p. 5). URL: https://arc.aiaa. org/doi/abs/10.2514/6.2018-2220 . doi: 10.2514 /6.2018-2220. 
+
+arXiv:https://arc.aiaa.org/doi/pdf/10.2514/6.2018-2220 .Zhang, Y., You, L., Yang, L. et al. (2024). Monocular 6-DoF pose estimation of spacecrafts utilizing self-iterative optimization and motion consistency. In 2024 IEEE /CVF Conference on Computer Vision and Pattern Recognition Workshops (CVPRW) (pp. 6847–6856). IEEE. doi: 10.1109 /CVPRW63382.2024.00678. Zhou, W., Li, J., Liu, Z. et al. (2022). Improving multi-target cooperative tracking guid-ance for UAV swarms using multi-agent reinforcement learning. Chin. J. Aeronaut. ,
+
+35 (7), 100–112. doi: 10.1016 /j.cja.2021.09.008. Zimpfer, D., Kachmar, P., & Tuohy, S. (2005). Autonomous rendezvous, capture and in-space assembly: past, present and future. In 1st Space Exploration Conference: Continuing the Voyage of Discovery . American Institute of Aeronautics and Astro-nautics. doi: 10.2514 /6.2005-2523. 46
