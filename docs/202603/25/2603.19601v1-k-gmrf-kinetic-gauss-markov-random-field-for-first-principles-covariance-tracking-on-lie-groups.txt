@@ -1,0 +1,2595 @@
+Title: K-GMRF: Kinetic Gauss-Markov Random Field for First-Principles Covariance Tracking on Lie Groups
+
+URL Source: https://arxiv.org/pdf/2603.19601v1
+
+Published Time: Mon, 23 Mar 2026 00:26:29 GMT
+
+Number of Pages: 33
+
+Markdown Content:
+# K-GMRF: Kinetic Gauss-Markov Random Field for First-Principles Covariance Tracking on Lie Groups 
+
+## ZhiMing Li School of Computer Science and Technology, Tianjin University 
+
+3022206093@tju.edu.cn 
+
+Figure 1. K-GMRF: Second-order tracking on Lie groups via symplectic integration. Left: Method Overview. Observations generate whitened commutator torques (derived from Thm 1), driving the covariance dynamics on the manifold. Unlike first-order updates, this preserves momentum to enable coasting. Right: Hierarchical Validation. Top (Synthetic): Ellipse tracking under 30-frame occlusion. K-GMRF (red) maintains inertial coasting, whereas EMA (blue) freezes immediately. Middle (Real-world): OTB sequences with severe motion blur (e.g., BlurCar2 ). Our method (red) accurately predicts trajectory curvature, eliminating the lag seen in EMA (blue). Bottom (Quantitative): Validation of the zero-lag property (left) and steady-state error analysis (right). K-GMRF achieves 30 × error reduction 
+
+on noiseless synthetic baselines and improves IoU from 0.55 to 0.74 on challenging non-stationary sequences. 
+
+## Abstract 
+
+Tracking non-stationary covariance matrices is fundamen-tal to vision yet hindered by existing estimators that ei-ther neglect manifold constraints or rely on first-order up-dates, incurring inevitable phase lag during rapid evo-lution. We propose K-GMRF, an online, training-free framework for covariance tracking that reformulates the problem as forced rigid-body motion on Lie groups. De-rived from the Euler–Poincar´ e equations, our method in-terprets observations as torques driving a latent angular velocity, propagated via a structure-preserving symplectic integrator. We theoretically prove that this second-order dy-namics achieves zero steady-state error under constant ro-tation, strictly superior to the proportional lag of first-order baselines. Validation across three domains demonstrates 
+
+1
+
+> arXiv:2603.19601v1 [cs.CV] 20 Mar 2026
+
+robust tracking fidelity: (i) on synthetic ellipses, K-GMRF reduces angular error by 30 × (15 .6◦ → 0.51 ◦) compared to Riemannian EMA while maintaining stability at high speeds; (ii) on SO(3) stabilization with 20% dropout, it de-creases geodesic error from 29 .4◦ to 9.9◦; and (iii) on OTB motion-blur sequences, it improves IoU from 0.55 to 0.74 on BlurCar2 with a 96% success rate. As a fully differ-entiable symplectic module, K-GMRF provides a plug-and-play geometric prior for data-constrained scenarios and an interpretable layer within modern deep architectures. 
+
+## 1. Introduction 
+
+Covariance matrices encode second-order statistics fun-damental to computer vision: region covariance descrip-tors [30] capture joint feature distributions for detection and tracking; diffusion tensors model anisotropic tissue structure in medical imaging [22]; and sample covariances underpin texture classification, action recognition, and vi-sual attention [17]. A recurring challenge is tracking non-stationary covariances —estimating how the underly-ing positive-definite matrix evolves over time from noisy observations. The symmetric positive-definite (SPD) constraint pre-cludes naive Euclidean operations. Linearly averaging SPD matrices produces the “swelling effect” [22], motivating Riemannian approaches [6, 10, 16]. Yet most methods rely on first-order updates (EMA or gradient descent) that suffer inherent phase lag when the target rotates at constant angu-lar velocity—a structural limitation of overdamped dynam-ics. Kalman filtering on Lie groups [5, 7, 27] introduces second-order dynamics via a velocity state, enabling predic-tion during dropout. However, these approaches linearize the manifold and apply standard Kalman updates, sacrific-ing intrinsic geometry. The connection to the underlying likelihood remains implicit. We propose the Kinetic Gauss-Markov Random Field 
+
+(K-GMRF), reformulating covariance tracking as forced rigid-body motion on the isospectral manifold OΛ. We derive the update equations from the Euler–Poincar´ e for-malism [14, 19], proving that observations act as natural-gradient torques [1] on the Lie algebra. The resulting sym-plectic integrator [12] preserves manifold structure while enabling zero-lag tracking and inertial coasting through oc-clusions. 
+
+Contributions. 
+
+• Mechanics-based formulation. We derive K-GMRF from Euler–Poincar´ e equations, proving the whitened commutator torque τ = S−1[C, M ]S−1 equals the nat-ural gradient of the Wishart likelihood on so (d) (Theo-rem 1). • Zero-lag with quantified bounds. We prove K-GMRF achieves zero steady-state error in the stability domain 
+
+D = {(η, γ ) : 0 < γ < 2, η < 2(2 − γ)/κ max }
+
+(Theorem 2), while any first-order method incurs lag ≥|Ω∗|/4 (Theorem 3). The Lyapunov energy contracts as 
+
+E[Et+1 ] ≤ (1 − κ)Et + σ2eff with σ2eff = O(σ2/(m∆2wh )) .• Rate-optimal tracking bound. The time-averaged risk satisfies RT ≤ C1σ2/(m∆2wh )+ C2VΩ/(γT )+ C3d20(1 −
+
+κ)T /T (Theorem 5), matching the minimax lower bound in leading terms (Theorem 6). The phase transition occurs at ∆wh → 0.• Empirical validation. We validate on synthetic and real benchmarks: 30 × error reduction on SPD(2) ellipse tracking, 3× improvement on SO(3) stabilization with 20% dropout, and 0.74 IoU (vs. 0.55) on OTB motion-blur sequences. 
+
+Positioning. Rather than competing with deep trackers in rich-data regimes, K-GMRF targets data-constrained 
+
+and interpretability-critical applications—medical imag-ing, scientific discovery, or online adaptation without pre-training. Its derivation from first principles yields a differen-tiable symplectic layer that injects physical consistency into deep networks: the Kick-Drift-Measure integrator can be unrolled as a recurrent module, enabling end-to-end train-ing while preserving manifold structure by construction. 
+
+## 2. Related Work 
+
+Covariance descriptors in visual tracking. The seminal work of Tuzel et al . [30] introduced region covariance de-scriptors for object detection and tracking, encoding spatial and photometric statistics in a compact SPD matrix. Subse-quent extensions integrated covariance descriptors with par-ticle filtering [25] and clustering-based model update [24]. Porikli et al . [23] pioneered the use of Lie algebra for in-cremental covariance updates, establishing an early connec-tion between Riemannian geometry and tracking. However, these methods rely on first-order averaging that ignores the curvature of the SPD manifold and lacks predictive capabil-ity during occlusions. 
+
+Riemannian geometry on SPD manifolds. Pennec et al . [22] established the foundational Riemannian frame-work for tensor computing, demonstrating the “swelling effect” of Euclidean averaging on SPD matrices. This motivated a rich body of work on Riemannian operations for SPD matrices, including Fr´ echet means [22], Log-Euclidean mappings [22], and affine-invariant metrics [17]. Recent advances have embedded Riemannian geometry into deep networks: SPDNet [16] introduced bilinear mappings and eigenvalue rectification; Brooks et al . [6] developed Riemannian batch normalization; and U-SPDNet [31] ad-dressed information degradation through skip connections. Chen et al . [8] further proposed local geometric mecha-2nisms for SPD networks. These methods achieve impres-sive results in classification but do not address the temporal dynamics required for online tracking of non-stationary co-variances. 
+
+Filtering on Lie groups. State estimation on Lie groups has received significant attention in robotics. Sol` a et al . [28] provided a comprehensive tutorial on Lie theory for state es-timation, while Bourmaud et al . [5] developed discrete ex-tended Kalman filters on Lie groups. Brossard et al . [7] ex-tended the unscented Kalman filter to Lie groups with appli-cations to visual-inertial odometry. The invariant extended Kalman filter (IEKF) [3] exploits symmetry to achieve im-proved convergence guarantees. Sjøberg and Egeland [27] proposed Lie algebraic UKF for pose estimation. These methods maintain velocity/acceleration states, enabling pre-diction during sensor dropout. However, they typically lin-earize the manifold into tangent space and apply standard Kalman updates, sacrificing the intrinsic Riemannian struc-ture. Furthermore, the innovation term lacks a principled connection to the likelihood function on the manifold. 
+
+Hamiltonian mechanics and symplectic integration. Ge-ometric numerical integration [12] has demonstrated the superiority of structure-preserving algorithms for long-horizon simulation of Hamiltonian systems. Marsden and West [20] established variational integrators that exactly preserve symplectic structure. In machine learning, Grey-danus et al . [11] introduced Hamiltonian neural networks that learn the Hamiltonian from data; SympNets [18] ar-chitecturally encode symplecticity for improved general-ization. For rigid body control, the Euler–Poincar´ e re-duction [14, 19] provides a principled framework to de-rive equations of motion on Lie groups. Wi´ sniewski and Kulczycki [32] applied this framework to externally forced rigid body motion. Our work bridges this mechanical for-malism to statistical estimation, deriving the observation-induced torque from the Wishart likelihood’s natural gradi-ent. 
+
+Natural gradient and information geometry. Amari [1] introduced the natural gradient, which preconditions gradi-ent descent with the Fisher information matrix to achieve reparametrization invariance. Martens [21] provided mod-ern perspectives connecting natural gradient to second-order optimization. In our framework, the “whitened com-mutator torque” arising from the Euler–Poincar´ e equations is shown to be precisely the natural gradient of the Wishart log-likelihood projected onto the Lie algebra (Theorem 1). This establishes a principled bridge between information geometry and Hamiltonian mechanics for covariance track-ing. 
+
+EMA-based model update in tracking. Exponential mov-ing average (EMA) remains the dominant paradigm for tem-plate update in visual tracking. Huang and Zhou [15] an-alyzed EMA from an optimization perspective, proposing regularization and reinitialization to mitigate drift. How-ever, EMA is fundamentally a first-order method: it can-not anticipate target motion and exhibits inherent phase lag when tracking rotating targets (Theorem 3). Our K-GMRF addresses this by introducing momentum on the Lie algebra, enabling zero-lag tracking (Theorem 2) and inertial coast-ing during observation dropout. 
+
+## 3. Kinetic Gauss-Markov Random Field 
+
+3.1. Geometric Setup and Observation Model 
+
+Definition 1 (Isospectral Orbit) . Given Λ =diag( λ1, . . . , λ d) ∈ Sd 
+
+> ++
+
+with λ1 > · · · > λd > 0,the isospectral orbit is 
+
+OΛ := {QΛQ⊤ : Q ∈ SO( d)} ⊂ Sd
+
+> ++
+
+. (1) The tangent space at M ∈ O Λ is TM OΛ = {[Ω , M ] : Ω ∈
+
+so (d)}, where [·, ·] denotes the matrix commutator. 
+
+Definition 2 (Whitened Spectral Gap) . The identifiability parameter for rotation recovery under observation noise σ2
+
+is 
+
+∆wh := min 
+
+> i̸=j
+
+λi
+
+λi + σ2 − λj
+
+λj + σ2 . (2) 
+
+Definition 3 (Whitened Commutator Torque) . For state 
+
+M ∈ O Λ, observation C ∈ Sd
+
+> +
+
+, and whitened covariance 
+
+S := M + σ2I:
+
+τ (M, C ) := S−1[C, M ]S−1 ∈ so (d). (3) 
+
+Assumption 1 (Wishart Observation Model [2]) . The ob-servation Ct is generated by mC t ∼ W d(m, M ∗ 
+
+> t
+
++ σ2I),where M ∗ 
+
+> t
+
+is the latent state. Thus E[Ct | M ∗ 
+
+> t
+
+] = M ∗ 
+
+> t
+
++
+
+σ2I.
+
+3.2. Symplectic Kick-Drift-Measure Integrator 
+
+The K-GMRF update [12, 20] maintains state (Mt, Ωt) ∈OΛ × so (d). The complete algorithm is given in Algo-rithm 1. 
+
+Remark 1 (Why Gauss-Markov Random Field?) . In Lie algebra coordinates (ξt, ω t) ∈ so (d) × so (d), where ξt =log M ∗ (Mt) is the configuration and ωt is angular velocity, the constant-velocity prior 
+
+Eprior = P 
+
+> t
+
+∥ξt − ωt∥2 + ∥ωt+1 − ωt∥2 (4) induces a block-tridiagonal precision matrix —the hallmark of a Gauss-Markov Random Field [26]. K-GMRF thus gen-eralizes classical first-order GMRF (random walk prior on position) to a second-order (constant-velocity prior) 3Algorithm 1 K-GMRF: Kinetic Gauss-Markov Random Field Tracker 
+
+Require: Initial state M0 ∈ O Λ, Ω0 = 0 ∈ so (d)
+
+Require: Noise scale σ2 > 0, η > 0, damping γ ∈ (0 , 1) 
+
+Ensure: Sequence of estimates {Mt}Tt=1  
+
+> 1:
+
+for t = 0 , 1, . . . , T − 1 do  
+
+> 2:
+
+St ← Mt + σ2I ▷ Whitened covariance  
+
+> 3:
+
+if observation Ct is available then  
+
+> 4:
+
+τt ← S−1 
+
+> t
+
+(CtMt − MtCt)S−1 
+
+> t
+
+▷ Measure :Compute torque  
+
+> 5:
+
+else  
+
+> 6:
+
+τt ← 0 ▷ Coast : No observation (occlusion)  
+
+> 7:
+
+end if  
+
+> 8:
+
+∆Ω ← I −1 
+
+> Mt
+
+(τt) ▷ Apply inertia inverse (Eq. 5)  
+
+> 9:
+
+Ωt+1 ← (1 − γ)Ω t + η · ∆Ω ▷ Kick : Update velocity  
+
+> 10:
+
+R ← exp(Ω t+1 ) ▷ Matrix exponential  
+
+> 11:
+
+Mt+1 ← R M t R⊤ ▷ Drift : Rotate on manifold  
+
+> 12:
+
+end for  
+
+> 13:
+
+return {Mt}Tt=1 
+
+Inertia inverse operator. Given eigendecomposition 
+
+M = U ΛU ⊤, define di := λi + σ2. For torque τ ∈ so (d),let ˜τ := U ⊤τ U . The inertia inverse is computed element-wise: 
+
+I−1 
+
+> M
+
+(τ ) 
+
+> ij
+
+= didj
+
+(λi − λj )2 + ϵ · ˜τij , i̸ = j, (5) where ϵ > 0 is a regularization term preventing singularity when eigenvalues coincide. 
+
+Computational complexity. Each iteration requires 
+
+O(d3) for the eigen decomposition yet Cayley–Neumann integration reduces this to O(Kd 2) cost per frame 
+
+3.3. Torque as Natural Gradient Projection 
+
+Theorem 1 (Geometric Consistency [1, 22]) . Under the affine-invariant Riemannian metric (AIRM) on OΛ, the torque (3) equals the natural gradient of the Wishart neg-ative log-likelihood projected onto so (d):
+
+grad O V (M ; C) = I−1
+
+> M
+
+  m 
+
+> 2
+
+τ (M, C ) , M  , (6) 
+
+where V (M ; C) = m 
+
+> 2
+
+(log det S + tr( S−1C)) and IM :
+
+so (d) → so (d) is the inertia operator defined by 
+
+⟨I M (Ω 1), Ω2⟩F = gO 
+
+> M
+
+([Ω 1, M ], [Ω 2, M ]) .Proof. See Supplementary Material A.3. □
+
+Lemma 1 (Unbiasedness and Concentration) . Under As-sumption 1, the torque satisfies: (i) Conditional unbiasedness : E[τ (M, C t) | M ∗ 
+
+> t
+
+] =
+
+τ (M, M ∗ 
+
+> t
+
++ σ2I), with τ (M ∗, S ∗) = 0 .(ii) Variance bound : E[∥τ − E[τ ]∥2 
+
+> F
+
+] ≤ Kτ (Λ , σ 2)/m ,where Kτ depends only on the spectral structure. Proof. See Supplementary Material A.4. □
+
+Lemma 2 (Local Strong Convexity [22]) . On orbit neigh-borhoods, the Hessian of expected negative log-likelihood satisfies 
+
+Hess O ¯V (M ∗) ⪰ μ(∆ wh )·I, where μ(∆ wh ) > 0 ⇐⇒ ∆wh > 0.
+
+(7) 
+
+The curvature μ(∆ wh ) → 0 as ∆wh → 0, characterizing the phase transition boundary. Proof. See Supplementary Material A.5. □
+
+Proposition 1 (Structure Preservation [12, 20]) . The un-damped K-GMRF ( γ = 0 ) is a first-order Lie group varia-tional integrator: (i) Orbit invariance : M0 ∈ O Λ ⇒ Mt ∈ O Λ for all t ≥ 0.(ii) Symplecticity : The update preserves a discrete sym-plectic form consistent with Euler–Poincar´ e dynamics, with local truncation error O(η2).Proof. See Supplementary Material A.6. □
+
+3.4. Zero Steady-State Error under Constant Rota-tion 
+
+The central theoretical contribution establishes zero steady-state error for the second-order K-GMRF dynamics, in con-trast to the inevitable lag of first-order methods. 
+
+Theorem 2 (Zero-Lag Tracking) . Consider noiseless ob-servations Ct = M ∗ 
+
+> t
+
+and constant angular velocity Ω∗ 
+
+> t
+
+≡
+
+Ω∗. Define the stability domain 
+
+D := 
+
+
+
+(η, γ ) : 0 < γ < 2, 0 < η < 2(2 − γ)
+
+κmax 
+
+
+
+, (8) 
+
+where κmax = max eig( I−1K) and K is the stiffness oper-ator from Lemma 2. Then for (η, γ ) ∈ D :
+
+lim  
+
+> t→∞
+
+dO (Mt, M ∗ 
+
+> t
+
+) = 0 (zero steady-state error) . (9) 
+
+Convergence is locally exponential with rate determined by the spectral radius of the linearized error dynamics. Proof. The proof proceeds by linearizing the error dy-namics around the equilibrium trajectory (M ∗ 
+
+> t
+
+, Ω∗). The characteristic polynomial of the resulting discrete damped harmonic oscillator yields the Schur stability conditions defining D. See Supplementary Material B.1 for complete details. □
+
+Theorem 3 (Inevitable Lag of First-Order Methods) . Con-sider any first-order method (exponential moving aver-age, Riemannian gradient descent) without explicit veloc-ity state, evolving as Mt+1 = exp( −ηA−1τt)Mt exp( ·)⊤.
+
+4Under the same constant-rotation setting as Theorem 2, the steady-state error satisfies 
+
+lim inf  
+
+> t→∞
+
+dO (Mt, M ∗ 
+
+> t
+
+) ≥ |Ω∗|F
+
+2η¯κ , (10) 
+
+where ¯κ = max eig( A) and stability requires η¯κ < 2.Combining these constraints: 
+
+lim inf  
+
+> t→∞
+
+dO (Mt, M ∗ 
+
+> t
+
+) ≥ |Ω∗|F
+
+4 . (11) 
+
+Zero steady-state error is structurally unachievable for any stable first-order method. Proof. The first-order dynamics require nonzero posi-tion error to generate corrective torque. Balancing the driv-ing term against stability constraints yields the stated lower bound. See Supplementary Material B.2. □
+
+3.5. Stochastic Stability and Tracking Error Bound 
+
+Theorem 4 (Energy Contraction to Noise Ball [9]) . Define the Lyapunov energy Et := T (ut) + 12 |ξt|2 
+
+> F
+
+, where ut := Ωt − Ω∗ is the velocity error and ξt := log M ∗ (Mt) is the configuration error. Under (η, γ ) ∈ D and Assumption 1, there exist constants κ ∈ (0 , 1) and 
+
+σ2eff := C0σ2
+
+m∆2wh 
+
+(12) 
+
+such that the conditional expectation satisfies 
+
+E[Et+1 | F t] ≤ (1 − κ)Et + σ2eff . (13) 
+
+Iterating yields sup t E[Et] ≤ σ2eff /κ (convergence to noise ball). Proof. The proof combines Lemmas 1–2 with a discrete Lyapunov argument. The contraction rate κ depends on 
+
+(η, γ, ∆wh ). See Supplementary Material B.3. □
+
+Theorem 5 (Master Theorem: Time-Averaged Tracking Risk) . Let VΩ := PT −1 
+
+> t=1
+
+|Ω∗ 
+
+> t+1
+
+− Ω∗ 
+
+> t
+
+|F denote the total variation of target angular velocity. Under Assumption 1 and (η, γ ) ∈ D , the time-averaged risk 
+
+RT := 1
+
+T
+
+> T
+
+X
+
+> t=1
+
+EdO (Mt, M ∗ 
+
+> t
+
+)2 (14) 
+
+satisfies the following bound: 
+
+RT ≤ C1σ2
+
+m∆2wh 
+
+| {z }
+
+> statistical
+
++ C2VΩ
+
+γT 
+
+| {z } 
+
+> nonstationarity
+
++ C3d20(1 − κ)T
+
+T| {z }
+
+> transient
+
+(15) 
+
+where C1, C 2, C 3 depend on (Λ , σ 2, η, γ ) but not on 
+
+(m, T, V Ω).
+
+Phase transition. When ∆wh → 0, the statistical er-ror diverges. When (η, γ ) /∈ D , the transient term fails to decay. Proof. The bound combines Theorem 4 with a perturba-tion analysis for time-varying Ω∗ 
+
+> t
+
+. The nonstationarity term arises from Lemma C (target variation perturbation) in the Supplementary Material. See Supplementary Material B.4. 
+
+□
+
+3.6. Generalization to Noncommutative Rotations and Optimality 
+
+Corollary 1 (Extension to d ≥ 3: Noncommutative Lie Algebra) . For d ≥ 3, the Lie algebra so (d) is noncommu-tative, introducing Baker–Campbell–Hausdorff (BCH) [13] remainder terms in the error dynamics. Theorems 2–5 re-main valid with the following modifications: 1. The energy contraction (13) acquires an additional term: 
+
+E[Et+1 | F t] ≤ (1 − κ′)Et + σ2eff + CBCH |Ω∗|2Et, (16) 
+
+where CBCH = O(1) is a universal constant from the BCH expansion. 2. The stability domain D contracts by a factor depending on |Ω∗| to absorb the BCH perturbation. 3. The master bound (15) holds with modified constants 
+
+C′ 
+
+> 1
+
+= C1(1 + O(d|Ω∗|2)) .Critically, the phase transition is still governed by ∆wh ;noncommutativity affects only the constants. Proof. The proof uses Lemma 9.1 (BCH remainder bound O(r3)), Lemma 9.2 (adjoint Lipschitz), and Lemma 9.3 (multi-plane rotation decomposition) to control higher-order terms. See Supplementary Material C.1. □
+
+Theorem 6 (Minimax Lower Bound and Rate Optimal-ity [29]) . Consider the class of fixed-gain online filters {ϕt}
+
+over the problem family P(Λ , σ 2, m, V Ω). The minimax risk satisfies 
+
+inf  
+
+> {ϕt}
+
+sup 
+
+> P
+
+RT ≥ c1
+
+σ2
+
+m∆2wh 
+
++ c2
+
+VΩ
+
+T (17) 
+
+for universal constants c1, c 2 > 0. Comparing with Theo-rem 5, K-GMRF achieves the minimax rate in both the sta-tistical ( 1/m ) and nonstationarity ( VΩ/T ) terms. Proof. The lower bound follows from a two-point test-ing argument combined with Fano’s inequality applied to the orbit distance. The 1/m term arises from Fisher infor-mation of the Wishart model; the VΩ/T term from a random walk adversary. See Supplementary Material C.2. □
+
+## 4. Experiments 
+
+We validate K-GMRF on three tasks: (A) synthetic ellipse tracking on SPD(2) , (B) camera stabilization on SO(3) ,and (C) real-world OTB tracking. All experiments use seed separation: hyperparameters tuned on 5 seeds, evaluated on 5 independent seeds. 5Table 1. Second-order dynamics + manifold structure = robustness. We compare methods along two axes: filter order (1st vs. 2nd) and geometry (Euclidean vs. Riemannian). The “Gain” column reports improvement over Riemannian EMA. 
+
+Setting K-GMRF (Ours) Riem. EMA Eucl. EMA Tangent KF Alpha-Beta Gain (A) Rotating Ellipse on SPD(2): Synthetic covariance tracking, ω=0 .08 rad/step, 400 frames. Angular Error (deg) ↓
+
+Normal 0.51 ±0.03 15 .62 ±0.06 15 .62 ±0.06 0.84 ±0.02 2.41 ±0.06 30 ×
+
+20% Dropout 12 .07 ±0.26 25 .29 ±0.04 25 .29 ±0.04 11 .97 ±0.34 16 .58 ±0.06 2.1 ×
+
+(B) Camera Stabilization on SO(3): Coupled oscillations with observation dropout, 200 frames. Geodesic Error (deg) ↓
+
+0% Dropout 4.4±0.2 7.2±0.2 7.3±0.2 8.1±0.6 4.4±0.2 1.7 ×
+
+10% Dropout 5.8±0.4 18 .7±2.3 19 .0±2.5 16 .2±3.4 5.8±0.3 3.2 ×
+
+20% Dropout 6.5±0.6 29 .2±4.1 30 .2±4.5 22 .5±4.7 6.6±1.2 4.5 ×
+
+30% Dropout 8.0±1.1 41 .0±2.1 43 .5±2.4 32 .1±7.2 8.1±1.6 5.1 ×
+
+40% Dropout 14 .3±3.2 56 .5±10 .3 63 .3±13 .3 38 .0±8.6 14 .9±5.1 4.0 ×
+
+(C) OTB Motion-Blur Sequences: Real video tracking with 7×7 region covariance descriptors. IoU ↑
+
+BlurBody 0.65 0.64 0.62 0.35 0.40 +2% BlurCar1 0.42 0.40 0.41 0.26 0.40 +5% BlurCar2 0.74 0.55 0.66 0.45 0.50 +35% 
+
+BlurFace 0.84 0.86 0.84 0.63 0.68 –CarScale 0.65 0.56 0.66 0.09 0.55 +16% Jogging 0.48 0.49 0.50 0.45 0.33 –
+
+4.1. Setup 
+
+Baselines. We compare four methods spanning the design space of filter order and geometry: Riemannian EMA (1st-order, manifold), Euclidean EMA (1st-order, Euclidean), 
+
+Tangent KF (2nd-order, tangent space linearization), Alpha-Beta [4] (2nd-order, Euclidean). This design isolates the effect of momentum (1st vs. 2nd order) from the effect of geometry (Euclidean vs. Riemannian). 
+
+Data. (A) Rotating ellipse: covariance M ∗(t) =
+
+Q(t)Λ Q(t)⊤ with Wishart-distributed observations. (B) Camera stabilization: rotation matrices on SO(3) with coupled oscillations and random dropout. (C) OTB se-quences [33]: 6 motion-blur videos (BlurBody, BlurCar1/2, BlurFace, CarScale, Jogging) using 7×7 region covariance descriptors [30]. 
+
+Metrics. Angular error (degrees) for synthetic; IoU for OTB. 
+
+4.2. Results and Analysis 
+
+Table 1 summarizes all results. Three patterns emerge: 
+
+(1) Second-order ≫ first-order. On SPD(2), K-GMRF achieves 0.51 ◦ error versus 15 .62 ◦ for Riemannian EMA (30 × reduction), confirming Theorem 2. On SO(3) with 20% dropout, both K-GMRF ( 6.5◦) and Alpha-Beta ( 6.6◦)outperform first-order methods by 4–5 ×. The gap widens under higher dropout: at 40%, second-order methods re-main stable while EMA variants degrade rapidly. 
+
+(2) Manifold geometry matters on SPD. Among second-order methods, K-GMRF ( 0.51 ◦) outperforms Tangent KF 0.03 0.05 0.08 0.10 0.15 0.20  
+
+> Angular Velocity (rad/step)
+> 0
+> 5
+> 10
+> 15
+> 20
+> 25
+> Angular Error (deg)
+> K-GMRF: near-zero lag
+> (Theorem 1)
+> EMA: lag
+> (Theorem 2)
+> K-GMRF
+> Riemannian EMA
+> Alpha-Beta
+> Tangent KF
+
+Figure 2. Angular velocity sweep validating Theorems 2 and 3. As target speed ω increases, EMA error grows linearly (lag ∝ ω), while K-GMRF maintains < 0.4◦ error across all speeds. Alpha-Beta also degrades at high ω.
+
+(0.84 ◦) and Alpha-Beta ( 2.41 ◦) on SPD(2). The advantage persists on OTB: K-GMRF achieves 0.74 IoU on BlurCar2 versus 0.45 for Tangent KF. Tangent space linearization ac-cumulates error over long sequences. 
+
+(3) On SO(3), momentum dominates. K-GMRF and Alpha-Beta perform similarly across all dropout rates. Both are second-order; the difference is that K-GMRF oper-ates natively on SO(3) (outputs are valid rotation matrices), while Alpha-Beta requires post-hoc projection. 61                               
+
+> BlurCar1: Motion Blur
+> 25 50 75 100
+> 020 40 60 80
+> Frame
+> 0.0
+> 0.5
+> 1.0
+> IoU
+> 1
+> BlurCar2: Fast Turn (+35%)
+> 25 50 75 100
+> 020 40 60 80
+> Frame
+> 0.0
+> 0.5
+> 1.0
+> IoU
+> 1
+> BlurBody: Camera Shake
+> 25 50 75 100
+> 020 40 60 80
+> Frame
+> 0.0
+> 0.5
+> 1.0
+> IoU
+> 1
+> CarScale: Scale Change
+> 25 50 75 100
+> 020 40 60 80
+> Frame
+> 0.0
+> 0.5
+> 1.0
+> IoU
+> GT K-GMRF (Ours) R-EMA Alpha-Beta
+
+Figure 3. Qualitative results on OTB motion-blur sequences. Each panel shows 5 key frames with bounding boxes (GT: white, K-GMRF: red, R-EMA: blue, Alpha-Beta: purple) and the corresponding per-frame IoU curve. K-GMRF consistently maintains higher IoU throughout the sequences, especially during severe motion blur (BlurCar1/2) and camera shake (BlurBody). 
+
+4.3. Ablation Study 
+
+Effect of momentum. Removing momentum ( γ=0 , η =0 )increases error from 0.03 ◦ to 15 .6◦—a 520 × degradation. This confirms that second-order dynamics are essential for zero-lag tracking. 
+
+Effect of manifold structure. Removing intrinsic SPD op-erations (Alpha-Beta) increases normal error from 0.03 ◦
+
+to 2.09 ◦ (70 × degradation). Under dropout, Alpha-Beta achieves 18 .6◦ versus 19 .6◦ for K-GMRF—comparable performance. This confirms that momentum is the domi-nant factor for occlusion robustness , while manifold struc-ture primarily benefits zero-lag tracking. 
+
+Table 2. Ablation study on SPD(2) ellipse tracking (5 seeds, 
+
+ω=0 .08 ). Angular error in degrees. 
+
+Variant Normal 20% Dropout 
+
+K-GMRF (full) 0.03 ±0.00 19 .6±0.01 
+
+− momentum (γ=0 , η =0 ) 15 .6±0.00 27 .5±0.00 
+
+− manifold (Alpha-Beta) 2.09 ±0.00 18 .6±0.00 
+
+− both (Eucl. EMA) 15 .6±0.00 27 .5±0.00 
+
+Summary. Second-order methods consistently outperform first-order methods, especially under dropout. On SPD manifolds, K-GMRF additionally benefits from intrinsic ge-ometry. On SO(3), K-GMRF matches Euclidean second-order filters while preserving manifold structure. These re-sults support our claim: second-order dynamics + mani-fold structure = robust filtering . Detailed theory valida-tion experiments are in Appendix G. 
+
+## 5. Conclusion 
+
+We presented K-GMRF, a framework for tracking non-stationary covariance matrices via forced rigid-body dy-namics on Lie groups. The Kick-Drift-Measure integrator maintains angular velocity state, enabling zero-lag track-ing and inertial coasting through occlusions. Theoretically, we proved first-order EMA suffers phase lag ∝ ω while K-GMRF achieves zero steady-state error. Empirically, K-GMRF achieves 30 × error reduction on SPD(2), 4.5 × on SO(3) with dropout, and +35% IoU on OTB BlurCar2. 
+
+Limitations. We do not claim SOTA against deep trackers—our focus is optimal geometric priors in online, training-free settings. Cayley–Neumann integration adds 
+
+O(Kd 2) cost per frame ( < 0.5ms for d=7 ) and requires tuning (η, γ ) within the stability domain. 
+
+Future work. Learning the inertia tensor from data; ex-tending to product manifolds for joint appearance-position tracking; and deploying K-GMRF as a differentiable structure-preserving layer within Transformer-based back-bones to enforce geometric constraints during end-to-end training. 7References 
+
+[1] Shun-ichi Amari. Natural gradient works efficiently in learn-ing. Neural Computation , 10(2):251–276, 1998. 2, 3, 4 [2] Imen Ayadi, Florent Bouchard, and Fr´ ed´ eric Pascal. El-liptical Wishart distributions: information geometry, maxi-mum likelihood estimator, performance analysis and statisti-cal learning. arXiv preprint arXiv:2411.02726 , 2024. 3 [3] Axel Barrau and Silv` ere Bonnabel. The invariant extended Kalman filter as a stable observer. pages 1797–1812, 2017. 3[4] Thomas R Benedict and Gerald W Bordner. Synthesis of an optimal set of radar track-while-scan smoothing equations. 
+
+IRE Trans. Automat. Control , 7(4):27–32, 1962. 6 [5] Guillaume Bourmaud, R´ emi M´ egret, Audrey Giremus, and Yannick Berthoumieu. Discrete extended Kalman filter on Lie groups. In European Signal Process. Conf. , pages 1–5, 2013. 2, 3 [6] Daniel A Brooks, Olivier Schwander, Fr´ ed´ eric Barbaresco, Jean-Yves Schneider, and Matthieu Cord. Riemannian batch normalization for SPD neural networks. In Adv. Neural In-form. Process. Syst. , pages 15463–15474, 2019. 2 [7] Martin Brossard, Silv` ere Bonnabel, and Axel Barrau. Un-scented Kalman filtering on Lie groups for fusion of IMU and monocular vision. arXiv preprint arXiv:1712.00221 ,2017. 2, 3 [8] Ziheng Chen, Tianyang Xu, Xiao-Jun Wu, Rui Wang, Zhiwu Huang, and Josef Kittler. Riemannian local mechanism for SPD neural networks. In AAAI Conf. Artif. Intell. , pages 7104–7112, 2023. 2 [9] Hua Deng, Miroslav Krsti´ c, and Ruth J Williams. Stabi-lization of stochastic nonlinear systems driven by noise of unknown covariance. IEEE Trans. Automat. Contr. , 46(8): 1237–1253, 2001. 5 [10] Zhi Gao, Yuwei Wu, Yunde Jia, and Mehrtash Harandi. Learning to optimize on SPD manifolds. In IEEE Conf. Com-put. Vis. Pattern Recog. , pages 7700–7709, 2020. 2 [11] Samuel Greydanus, Misko Dzamba, and Jason Yosinski. Hamiltonian neural networks. In Adv. Neural Inform. Pro-cess. Syst. , pages 15379–15389, 2019. 3 [12] Ernst Hairer, Christian Lubich, and Gerhard Wanner. Ge-ometric numerical integration: structure-preserving algo-rithms for ordinary differential equations. Springer Series in Computational Mathematics , 31, 2006. 2, 3, 4 [13] Brian C Hall. Lie Groups, Lie Algebras, and Representa-tions: An Elementary Introduction . Springer, 2nd edition, 2015. 5 [14] Darryl D Holm, Jerrold E Marsden, and Tudor S Ratiu. The Euler–Poincar´ e equations and semidirect products with ap-plications to continuum theories. Advances in Mathematics ,137(1):1–81, 1998. 2, 3 [15] Jianglei Huang and Wengang Zhou. Re 2EMA: Regular-ized and reinitialized exponential moving average for target model update in object tracking. In AAAI Conf. Artif. Intell. ,pages 8457–8464, 2019. 3 [16] Zhiwu Huang and Luc Van Gool. A Riemannian network for SPD matrix learning. In AAAI Conf. Artif. Intell. , pages 2036–2042, 2017. 2 [17] Zhiwu Huang, Ruiping Wang, Xianqiu Li, Wenxian Liu, Shiguang Shan, Luc Van Gool, and Xilin Chen. Geometry-aware similarity learning on SPD manifolds for visual recog-nition. IEEE Trans. Circuits Syst. Video Technol. , 28(10): 2513–2523, 2018. 2 [18] Pengzhan Jin, Zhen Zhang, Aiqing Zhu, Yifa Tang, and George Em Karniadakis. SympNets: Intrinsic structure-preserving symplectic networks for identifying Hamiltonian systems. Neural Networks , 132:166–179, 2020. 3 [19] Jerrold E Marsden and Tudor S Ratiu. Introduction to Me-chanics and Symmetry . Springer, 2nd edition, 1999. 2, 3 [20] Jerrold E Marsden and Matthew West. Discrete mechan-ics and variational integrators. Acta Numerica , 10:357–514, 2001. 3, 4 [21] James Martens. New insights and perspectives on the natural gradient method. J. Mach. Learn. Res. , 21(146):1–76, 2020. 3[22] Xavier Pennec, Pierre Fillard, and Nicholas Ayache. A Rie-mannian framework for tensor computing. Int. J. Comput. Vis. , 66(1):41–66, 2006. DOI: 10.1007/s11263-005-3222-z. 2, 4 [23] Fatih Porikli, Oncel Tuzel, and Peter Meer. Covariance track-ing using model update based on Lie algebra. In IEEE Conf. Comput. Vis. Pattern Recog. , pages 728–735, 2006. 2 [24] Lei Qin and Hichem Snoussi. Object tracking using adap-tive covariance descriptor and clustering-based model updat-ing for visual surveillance. Sensors , 14(6):9380–9407, 2014. DOI: 10.3390/s140609380. 2 [25] Andr´ es Romero, Mich` ele Gouiff` es, and Lionel Lacas-sagne. Covariance descriptor multiple object tracking and re-identification with colorspace evaluation. In Asian Conf. Comput. Vis. , pages 657–670, 2012. 2 [26] H˚ avard Rue and Leonhard Held. Gaussian Markov Random Fields: Theory and Applications . Chapman & Hall/CRC, 2005. 3 [27] Alexander Meyer Sjøberg and Olav Egeland. Lie alge-braic unscented Kalman filter for pose estimation. IEEE Trans. Automat. Contr. , 67(8):4300–4307, 2022. DOI: 10.1109/TAC.2021.3121247. 2, 3 [28] Joan Sol` a, Jeremie Deray, and Dinesh Atchuthan. A micro Lie theory for state estimation in robotics. arXiv preprint arXiv:1812.01537 , 2018. 3 [29] Alexandre B Tsybakov. Introduction to Nonparametric Esti-mation . Springer, 2009. 5 [30] Oncel Tuzel, Fatih Porikli, and Peter Meer. Region co-variance: A fast descriptor for detection and classification. In Eur. Conf. Comput. Vis. , pages 589–600, 2006. DOI: 10.1007/11744047 45. 2, 6, 25 [31] Rui Wang, Xiao-Jun Wu, Tianyang Xu, Cong Hu, and Josef Kittler. U-SPDNet: An SPD manifold learning-based neural network for visual classification. Neural Networks , 161:382– 396, 2023. 2 [32] Rafał Wi´ sniewski and Piotr Kulczycki. Euler-Poincar´ e re-duction of externally forced rigid body motion. Control and Cybernetics , 34(2):523–551, 2004. 3 [33] Yi Wu, Jongwoo Lim, and Ming-Hsuan Yang. Online object tracking: A benchmark. In IEEE Conf. Comput. Vis. Pattern Recog. , pages 2411–2418, 2013. 6, 25, 32 
+
+8A. Geometry and Statistical Setup 
+
+This section establishes the geometric framework and observation model for analyzing statistical tracking on rotation groups. We fix the state space dimension d ≥ 2 and denote by Sd 
+
+> ++
+
+the manifold of d × d symmetric positive definite matrices. The Lie algebra of skew-symmetric matrices is denoted so (d) := {Ω ∈ Rd×d : Ω ⊤ = −Ω}, and the commutator is written as 
+
+[A, B ] := AB − BA .
+
+A.1. Conjugate Orbit Manifold and Tangent Space Geometry 
+
+The state evolution is constrained to an isospectral manifold with fixed eigenvalues. 
+
+Definition 4 (Conjugate Orbit Manifold) . Given a strictly ordered eigenvalue matrix Λ = diag( λ1, . . . , λ d) ∈ Sd 
+
+> ++
+
+with 
+
+λ1 > · · · > λ d > 0, we define the conjugate orbit as 
+
+OΛ := {M = QΛQ⊤ : Q ∈ SO (d)} ⊂ Sd
+
+> ++
+
+. (18) Its homogeneous space representation is OΛ ≃ SO (d)/Stab(Λ) , where the stabilizer subgroup is 
+
+Stab(Λ) := {Q ∈ SO (d) : QΛQ⊤ = Λ }. (19) Due to the non-degeneracy of the spectrum, Stab(Λ) is the finite group of diagonal sign matrices. 
+
+Lemma 3 (Tangent Space via Commutator) . For any M ∈ O Λ, the tangent space admits the representation 
+
+TM OΛ = {[Ω , M ] : Ω ∈ so (d)} ⊂ Sd, (20) 
+
+and the map ad ∗ 
+
+> M
+
+: so (d) → TM OΛ, Ω 7 → [Ω , M ], is a linear isomorphism when Λ has simple spectrum. Proof. Consider a curve M (t) = Q(t)Λ Q(t)⊤ on OΛ. Differentiating yields 
+
+˙M = ˙QΛQ⊤ + QΛ ˙Q⊤. (21) Define Ω := ˙QQ ⊤ ∈ so (d). Then 
+
+˙M = Ω( QΛQ⊤) − (QΛQ⊤)Ω = [Ω , M ]. (22) Thus every tangent vector can be written as [Ω , M ]. The reverse inclusion follows directly from the above construction. 
+
+A.2. Whitening Matrix and Whitened Torque 
+
+To introduce a metric adapted to the noise structure, we first define whitened quantities. 
+
+Definition 5 (Whitening Matrix and Torque) . Given observation noise variance σ2 > 0:1. For any state M ∈ O Λ, define the whitening matrix as S := M + σ2I ∈ Sd
+
+> ++
+
+. Note that S and M share eigenvectors, so [M, S ] = 0 .2. For any observation matrix C ∈ Sd
+
+> +
+
+, define the whitened torque as 
+
+τ (M, C ) := S−1[C, M ]S−1 ∈ so (d). (23) Since S−1 commutes with M , the torque can equivalently be written as τ = [ S−1CS −1, M ].
+
+Definition 6 (Noise-Adapted Riemannian Metric) . We equip OΛ with the affine-invariant Riemannian metric (AIRM) in-duced by the whitening matrix S. For M ∈ O Λ and tangent vectors U, V ∈ TM OΛ:
+
+gO 
+
+> M
+
+(U, V ) := tr( S−1U S −1V ). (24) This metric is the restriction of the AIRM on Sd 
+
+> ++
+
+(with base point S) to the orbit. This geometric choice is essential for canceling the covariance structure of observation noise. 9A.3. Statistical Observation Model 
+
+We adopt a rank-m Wishart observation model that encompasses both single-sample ( m = 1 ) and mini-batch ( m > 1)covariance estimation. 
+
+Assumption 2 (Rank-m Wishart Observation) . Let the true state be M ⋆ ∈ O Λ and define the true whitened covariance 
+
+S⋆ := M ⋆ + σ2I. At each time step, we observe m independent samples vj ∼ N (0 , S ⋆). The sample covariance matrix is 
+
+C := 1
+
+m
+
+> m
+
+X
+
+> j=1
+
+vj v⊤ 
+
+> j
+
+. (25) This is equivalent to mC ∼ W d(m, S ⋆), a Wishart distribution with m degrees of freedom and scale matrix S⋆. The first moment satisfies E[C | M ⋆] = S⋆.
+
+Definition 7 (Negative Log-Likelihood) . Omitting terms independent of M , the negative log-likelihood (NLL) of observation 
+
+C given state M is 
+
+V (M ; C) := m
+
+2
+
+ log det S + tr( S−1C) , where S = M + σ2I. (26) 
+
+Definition 8 (Whitened Spectral Gap) . Define the whitened spectral gap ∆wh as the minimum distance between reciprocals of whitened eigenvalues: 
+
+∆wh := min 
+
+> i̸=j
+
+λi
+
+λi + σ2 − λj
+
+λj + σ2 = min 
+
+> i̸=j
+
+σ2|λi − λj |
+
+(λi + σ2)( λj + σ2) . (27) This quantity controls the identifiability of the rotation direction from noisy observations. 
+
+## B. Proof of Theorem 1 (Geometric Consistency) 
+
+This section proves that the algebraic torque τ defined in Definition 5 is precisely the dual representation of the natural gradient of the negative log-likelihood V (M ; C) on the orbit OΛ with respect to the metric gO .
+
+Lemma 4 (Commutator-Trace Adjoint Identity) . For any A, M ∈ Sd and Ω ∈ so (d), the following identity holds: 
+
+⟨A, [Ω , M ]⟩F = ⟨[M, A ], Ω⟩F , (28) 
+
+where ⟨X, Y ⟩F = tr( X⊤Y ) denotes the Frobenius inner product. Proof. By the cyclic property of the trace, 
+
+⟨A, [Ω , M ]⟩F = tr( A(Ω M − M Ω)) (29) 
+
+= tr( AΩM ) − tr( AM Ω) (30) 
+
+= tr( M A Ω) − tr( AM Ω) (31) 
+
+= tr(( M A − AM )Ω) = ⟨[M, A ], Ω⟩F . (32) 
+
+Theorem 7 (Geometric Consistency) . Let JM : so (d) → so (d) be the inertia operator induced by the metric gO 
+
+> M
+
+, defined via 
+
+⟨JM (Ω 1), Ω2⟩F := gO 
+
+> M
+
+([Ω 1, M ], [Ω 2, M ]) . (33) 
+
+Then the Riemannian gradient of V (M ; C) on OΛ satisfies 
+
+grad O V (M ; C) = 
+
+h
+
+J−1
+
+> M
+
+ m
+
+2 τ (M, C )
+
+
+
+, M 
+
+i
+
+. (34) 
+
+In other words, in the sense of Lie algebra duality, the whitened torque τ is the projection of the natural gradient. 
+
+10 Proof. The proof proceeds in four steps. 
+
+Step 1: Compute the Euclidean gradient. We first compute the unconstrained matrix gradient of V with respect to 
+
+M . Using the differential identities d(log det S) = tr( S−1dS ) and d(tr( S−1C)) = −tr( S−1(dS )S−1C), together with 
+
+dS = dM , we obtain 
+
+dV = m
+
+2 tr  (S−1 − S−1CS −1)dM  . (35) Thus the Euclidean gradient is ∇M V = m 
+
+> 2
+
+(S−1 − S−1CS −1) ∈ Sd.
+
+Step 2: Restrict to the tangent space. Consider the directional derivative along a tangent vector δM = [Ω , M ] ∈ TM OΛ.By Lemma 4, 
+
+dV ([Ω , M ]) = ⟨∇ M V, [Ω , M ]⟩F = ⟨[M, ∇M V ], Ω⟩F . (36) 
+
+Step 3: Compute the commutator [M, ∇M V ]. We have 
+
+[M, ∇M V ] = m
+
+2
+
+ [M, S −1] − [M, S −1CS −1] . (37) Since S is a polynomial function of M (namely S = M + σ2I), they commute, hence [M, S −1] = 0 . For the second term, using the commutativity of S−1 and M :
+
+−[M, S −1CS −1] = −S−1[M, C ]S−1 = S−1[C, M ]S−1 = τ (M, C ). (38) Therefore the directional derivative becomes 
+
+dV ([Ω , M ]) = 
+
+D m
+
+2 τ (M, C ), Ω
+
+E
+
+> F
+
+. (39) 
+
+Step 4: Identify the Riemannian gradient. By definition, the Riemannian gradient grad O V is the unique tangent vector satisfying 
+
+gO 
+
+> M
+
+(grad O V, [Ω , M ]) = dV ([Ω , M ]) , ∀Ω ∈ so (d). (40) Write grad O V = [Ω ♯, M ]. Substituting into the definition of gO 
+
+> M
+
+and JM :
+
+⟨JM (Ω ♯), Ω⟩F =
+
+D m
+
+2 τ (M, C ), Ω
+
+E
+
+> F
+
+. (41) Since this holds for all Ω, we have JM (Ω ♯) = m 
+
+> 2
+
+τ (M, C ), which gives Ω♯ = J−1 
+
+> M
+
+( m 
+
+> 2
+
+τ ). Substituting back yields the stated result. 
+
+## C. Statistical Concentration (Lemma 1) 
+
+This section establishes the statistical properties of the whitened torque τ (M, C ), proving that it is an unbiased estimator of the latent geometric deviation with variance converging at rate O(1 /m ).
+
+Lemma 5 (Wishart Second Moment Bound) . If C satisfies Assumption 2, then for any deterministic matrices A, B :
+
+E∥A(C − S⋆)B∥2 
+
+> F
+
+≤ 1
+
+m ∥A∥2op ∥B∥2op 
+
+ (tr S⋆)2 + ∥S⋆∥2
+
+> F
+
+ . (42) 
+
+Proof. Let W := Pmj=1 vj v⊤ 
+
+> j
+
+, so W ∼ W d(m, S ⋆) and C = W/m . The Wishart covariance identity gives 
+
+Cov( Wij , W kl ) = m(S⋆ik S⋆jl + S⋆il S⋆jk ), (43) hence 
+
+Cov( Cij , C kl ) = 1
+
+m (S⋆ik S⋆jl + S⋆il S⋆jk ). (44) Thus 
+
+E∥C − S⋆∥2 
+
+> F
+
+= X
+
+> i,j
+
+Var( Cij ) = 1
+
+m
+
+X
+
+> i,j
+
+(S⋆ii S⋆jj + ( S⋆ij )2) = 1
+
+m ((tr S⋆)2 + ∥S⋆∥2 
+
+> F
+
+). (45) The stated bound follows from sub-multiplicativity of norms. 11 Theorem 8 (Statistical Concentration) . Under Assumption 2, for any fixed M ∈ O Λ:
+
+(1) Conditional unbiasedness: 
+
+E[τ (M, C ) | M ⋆] = S−1[S⋆, M ]S−1. (46) 
+
+In particular, when M = M ⋆, we have E[τ (M ⋆, C )] = 0 .
+
+(2) Variance bound: There exists a constant K(Λ , σ 2) such that 
+
+E
+
+h
+
+∥τ (M, C ) − E[τ ]∥2 
+
+> F
+
+| M ⋆i
+
+≤ K(Λ , σ 2)
+
+m . (47) 
+
+The explicit constant is K = 4 ∥S−1∥4op ∥M ∥2op (∥S⋆∥2 
+
+> F
+
++ (tr S⋆)2).Proof. (1) Unbiasedness: By linearity of expectation and E[C | M ⋆] = S⋆:
+
+E[τ ] = E[S−1[C, M ]S−1] = [ S−1S⋆S−1, M ] = S−1[S⋆, M ]S−1, (48) where we used [S−1, M ] = 0 to factor out S−1. When M = M ⋆, we have S = S⋆. Since S⋆ = M ⋆ + σ2I, clearly 
+
+[S⋆, M ⋆] = 0 , so the expectation vanishes. 
+
+(2) Variance bound: Let ¯τ = E[τ ]. The deviation is 
+
+τ − ¯τ = S−1[C − S⋆, M ]S−1. (49) We need to bound ∥τ − ¯τ ∥2 
+
+> F
+
+. Using the commutator norm inequality ∥[X, Y ]∥F ≤ 2∥X∥F ∥Y ∥op :
+
+∥τ − ¯τ ∥F = ∥S−1(C − S⋆)M S −1 − S−1M (C − S⋆)S−1∥F (50) 
+
+≤ ∥ S−1∥2op ∥[C − S⋆, M ]∥F (51) 
+
+≤ 2∥S−1∥2op ∥M ∥op ∥C − S⋆∥F . (52) Squaring and taking expectation, using Lemma 5 with A = B = I:
+
+E∥τ − ¯τ ∥2 
+
+> F
+
+≤ 4∥S−1∥4op ∥M ∥2op E∥C − S⋆∥2 
+
+> F
+
+= 4∥S−1∥4op ∥M ∥2op 
+
+m ((tr S⋆)2 + ∥S⋆∥2 
+
+> F
+
+). (53) On the fixed orbit OΛ, we have ∥M ∥op = λ1 and ∥S−1∥op = ( λd + σ2)−1, which are constants. Thus the bound is 
+
+O(1 /m ).
+
+## D. Identifiability and Spectral Gap (Lemma 2) 
+
+This section analyzes the curvature of the objective function, establishing the quantitative connection between identifiability and the spectral gap. 
+
+Definition 9 (Population Risk) . Given true state M ⋆, define the population risk as 
+
+V (M ) := E[V (M ; C) | M ⋆] = m
+
+2
+
+ log det S + tr( S−1S⋆) + const , (54) where S = M + σ2I and S⋆ = M ⋆ + σ2I. On OΛ, log det S is constant, so the directional curvature of V is entirely determined by tr( S−1S⋆).
+
+Theorem 9 (Local Identifiability and Strong Convexity) . If Λ has simple spectrum (all λi distinct), then V (M ) is locally strongly convex at M ⋆. Specifically, along any geodesic M (t) = etΩM ⋆e−tΩ for Ω ∈ so (d), the second derivative satisfies 
+
+d2
+
+dt 2 V (M (t)) t=0 
+
+≥ μid ∥Ω∥2 
+
+> F
+
+, (55) 
+
+where the strong convexity constant is controlled by the whitened spectral gap: 
+
+μid ≥ m
+
+4 · (λd + σ2)2
+
+σ4 ∆2wh . (56) 
+
+Thus the problem is locally identifiable if and only if ∆wh > 0.
+
+12 Proof. Step 1: Simplify the population risk. Since E[C] = S⋆, omitting constants: 
+
+V (M ) = m
+
+2 tr( S−1S⋆). (57) Without loss of generality, assume M ⋆ = Λ , so S⋆ = D := Λ + σ2I is diagonal. Consider the perturbation M (t) = 
+
+etΩΛe−tΩ, which gives S(t) = etΩDe −tΩ and S(t)−1 = etΩD−1e−tΩ.
+
+Step 2: Second-order variation. Substituting into V :
+
+V (t) = m
+
+2 tr( etΩD−1e−tΩD). (58) Using the expansion etΩ = I + tΩ + t2 
+
+> 2
+
+Ω2 + O(t3):
+
+etΩD−1e−tΩ = D−1 + t[Ω , D −1] + t2
+
+2 [Ω , [Ω , D −1]] + O(t3). (59) Since tr([Ω , D −1]D) = tr(Ω D−1D − D−1ΩD) = tr(Ω) − tr( D−1ΩD) = 0 by cyclicity and the fact that D is diagonal, the first-order term vanishes (confirming M ⋆ is a critical point). The second-order coefficient is 
+
+d2Vdt 2 t=0 
+
+= m
+
+4 tr  [Ω , [Ω , D −1]] D . (60) 
+
+Step 3: Hessian eigenvalue analysis. Using the identity tr([Ω , X ]Y ) = −tr( X[Ω , Y ]) with X = [Ω , D −1] and Y = D:
+
+tr  [Ω , [Ω , D −1]] D = −tr  [Ω , D −1][Ω , D ] . (61) For diagonal D = diag( dk) where dk = λk + σ2, we have [Ω , D ]ij = Ω ij (dj − di). Similarly, [Ω , D −1]ij = Ω ij (d−1 
+
+> j
+
+−
+
+d−1 
+
+> i
+
+) = Ω ij di−dj 
+
+> didj
+
+. Computing the trace: 
+
+− X
+
+> i,j
+
+[Ω , D −1]ji [Ω , D ]ij = − X
+
+> i,j
+
+
+
+Ωji 
+
+dj − di
+
+didj
+
+
+
+(Ω ij (dj − di)) (62) 
+
+= X
+
+> i,j
+
+Ω2
+
+> ij
+
+(di − dj )2
+
+didj
+
+, (63) where we used Ωji = −Ωij and thus Ωji Ωij = −Ω2 
+
+> ij
+
+. The sum is nonzero only for i̸ = j:
+
+d2Vdt 2 = m
+
+4
+
+X
+
+> i̸=j
+
+Ω2
+
+> ij
+
+(λi − λj )2
+
+(λi + σ2)( λj + σ2) . (64) 
+
+Step 4: Lower bound. Define wij := (λi−λj )2  
+
+> (λi+σ2)( λj+σ2)
+
+. We seek wmin = min i̸=j wij . From the definition of ∆wh :
+
+∆2wh ≤
+
+ σ2|λi − λj |
+
+(λi + σ2)( λj + σ2)
+
+2
+
+= σ4
+
+(λi + σ2)( λj + σ2) · wij . (65) Therefore, 
+
+wij ≥ (λi + σ2)( λj + σ2)
+
+σ4 ∆2wh ≥ (λd + σ2)2
+
+σ4 ∆2wh . (66) Since ∥Ω∥2 
+
+> F
+
+= P 
+
+> i̸=j
+
+Ω2 
+
+> ij
+
+, we obtain 
+
+d2Vdt 2 ≥ m
+
+4
+
+ (λd + σ2)2
+
+σ4 ∆2wh 
+
+
+
+∥Ω∥2 
+
+> F
+
+. (67) 
+
+Corollary 2 (Degenerate Spectral Gap) . If there exist i̸ = j such that λi = λj , then wmin = 0 , and there exists Ω̸ = 0 such that M (t) = etΩM ⋆etΩ⊤
+
+≡ M ⋆. Thus V has zero curvature in that direction, and local strong convexity fails. 
+
+13 E. Deterministic Skeleton Analysis 
+
+This appendix analyzes the noiseless setting σ = 0 with perfect observations Ct ≡ M ⋆t . The true target rotates at constant angular velocity Ω⋆ ∈ so (d):
+
+M ⋆t+1 = exp(Ω ⋆)M ⋆t exp(Ω ⋆)⊤. (68) We compare two classes of deterministic dynamics: the second-order K-GMRF (Kick-Drift) which maintains angular veloc-ity state, and the first-order overdamped methods (EMA/gradient flow) which lack explicit velocity state. 
+
+E.1. Notation and Linearization Setup 
+
+Let Λ be the fixed spectrum and OΛ = {QΛQ⊤ : Q ∈ SO (d)}. Write Mt = QtΛQ⊤ 
+
+> t
+
+and M ⋆t = Q⋆t ΛQ⋆⊤ 
+
+> t
+
+. Define the relative rotation and its logarithm: 
+
+Rt := QtQ⋆⊤ 
+
+> t
+
+∈ SO (d), ξt := log( Rt) ∈ so (d). (69) This is equivalent to ξt = log M ⋆t (Mt) (uniqueness guaranteed by simple spectrum in a local neighborhood). For small |ξt|F :
+
+Mt = exp( ξt)M ⋆t exp( ξt)⊤, dO (Mt, M ⋆t ) = |ξt|F + o(|ξt|F ). (70) 
+
+First-order expansion of torque and stiffness operator. In the noiseless case σ = 0 , the deterministic torque takes the unwhitened form τt = [ Ct, M t] = [ M ⋆t , M t] ∈ so (d). Substituting Mt = exp( ξt)M ⋆t exp( ξt)⊤ and expanding to first order in ξt:
+
+Mt = M ⋆t + [ ξt, M ⋆t ] + O(|ξt|2 
+
+> F
+
+), (71) hence 
+
+τt = [ M ⋆t , M t] = [ M ⋆t , [ξt, M ⋆t ]] + O(|ξt|2 
+
+> F
+
+). (72) Define the linear stiffness operator Kt : so (d) → so (d) by 
+
+Ktξ := −[M ⋆t , [ξ, M ⋆t ]] . (73) Then the first-order approximation reads τt = −K tξt + O(|ξt|2 
+
+> F
+
+).The operator Kt is positive semi-definite and satisfies 
+
+⟨K tξ, ξ ⟩F = |[ξ, M ⋆t ]|2 
+
+> F
+
+≥ 0. (74) Under the whitened spectral gap condition ∆wh > 0, Theorem 9 implies the existence of μ(∆ wh ) > 0 such that 
+
+⟨K tξ, ξ ⟩F ≥ μ(∆ wh )|ξ|2 
+
+> F
+
+(75) for sufficiently small |ξ|F , with μ(∆ wh ) → 0 if and only if ∆wh → 0.
+
+E.2. Proof of Proposition 1 (Structure Preservation) 
+
+Theorem 10 (Structure Preservation: Symplecticity and Orbit Invariance) . Let γ = 0 and consider deterministic torque τt
+
+with the discrete update 
+
+Ωt+1 = Ω t + ηI−1τt, Mt+1 = exp(Ω t+1 )Mt exp(Ω t+1 )⊤. (76) 
+
+Then: 
+
+(1) Orbit invariance: If M0 ∈ O Λ, then Mt ∈ O Λ for all t ≥ 0.
+
+(2) Symplecticity: On the phase space T ∗SO (d) (or its equivalent left-trivialized representation), the Kick-Drift map is symplectic. Equivalently, it is a first-order instance of a Lie group variational integrator consistent with undamped Euler-Poincar´ e/rigid body Hamiltonian dynamics, with local truncation error O(η2).Proof. (1) Orbit invariance. Since Ωt+1 ∈ so (d), we have At+1 := exp(Ω t+1 ) ∈ SO (d). If Mt = QtΛQ⊤ 
+
+> t
+
+, then 
+
+Mt+1 = At+1 QtΛQ⊤ 
+
+> t
+
+A⊤ 
+
+> t+1
+
+= ( At+1 Qt)Λ( At+1 Qt)⊤ ∈ O Λ. (77) The result follows by induction. 14 (2) Symplecticity. On SO (d), introduce the momentum variable Π = IΩ ∈ so (d)∗ ≃ so (d) (identified via the Frobenius pairing). Consider the Hamiltonian 
+
+Ht(Q, Π) := T (Π) + Vt(QΛQ⊤), T (Π) = 12 ⟨Π, I−1Π⟩F , (78) where Vt is the observation potential (negative log-likelihood or its noiseless limit). By Theorem 7, the orbit gradient satisfies 
+
+grad O Vt(M ) = 
+
+h
+
+I−1
+
+> M
+
+ m
+
+2 τ (M, C t)
+
+
+
+, M 
+
+i
+
+, (79) showing that τ is precisely the dual representation of the potential energy’s variation with respect to Lie algebra directions (i.e., the “generalized torque”). Split the Hamiltonian as Ht = T + Vt. Under the canonical symplectic form ωcan on T ∗SO (d), the following sub-flows are both symplectic: 
+
+Kick sub-flow (potential only): Fix Q and update momentum: 
+
+Πt+1 = Π t + ητ t. (80) This is the time-η map of Hamiltonian HV = Vt. Since HV contains no momentum, Q remains fixed while Π translates by 
+
+−∂QVt; the translation amount is given by τt. Hamiltonian flow preserves ωcan , so Kick is symplectic. 
+
+Drift sub-flow (kinetic only): Fix Π and advance configuration by group exponential: 
+
+Qt+1 = exp( ηI−1Πt+1 )Qt. (81) This is the time-η map of Hamiltonian HT = T . Since HT contains no Q, Π remains constant while Q advances along the left-trivialized geodesic. Drift is therefore symplectic. Since both Kick and Drift are symplectic, their composition F = FDrift ◦ FKick is also symplectic: 
+
+F ∗ωcan = ωcan . (82) Furthermore, Kick-Drift is a first-order splitting (symplectic Euler) discretization, yielding local truncation error O(η2).
+
+E.3. Proof of Theorem 2 (Zero-Lag Tracking) 
+
+Theorem 11 (Zero-Lag Tracking: Linearization to Damped Harmonic Oscillator) . Under noiseless observations Ct = M ⋆t
+
+with constant angular velocity Ω⋆ satisfying M ⋆t+1 = exp(Ω ⋆)M ⋆t exp(Ω ⋆)⊤, there exists a nonempty parameter domain 
+
+D ⊂ (η, γ ) such that the error dynamics of the second-order K-GMRF is Lyapunov stable at the equilibrium trajectory 
+
+(Mt, Ωt) = ( M ⋆t , Ω⋆). For sufficiently small initial error, local exponential convergence holds with zero steady-state error: 
+
+dO (Mt, M ⋆t ) → 0.Proof. For (M ⋆t , Ω⋆) to be an equilibrium trajectory, the damping term must act on the velocity error rather than the absolute velocity. Define the velocity error ut := Ω t − Ω⋆ and consider the second-order discrete skeleton (Kick-Drift): 
+
+ut+1 = (1 − γ)ut + ηI−1τt, Mt+1 = exp(Ω ⋆ + ut+1 )Mt exp(Ω ⋆ + ut+1 )⊤. (83) Under this formulation, u ≡ 0 and ξ ≡ 0 correspond to Ω ≡ Ω⋆ and M ≡ M ⋆, which is indeed a fixed trajectory. 
+
+Step 1: First-order form of error kinematics. From 
+
+Rt+1 = Qt+1 Q⋆⊤ 
+
+> t+1
+
+= exp(Ω ⋆ + ut+1 )QtQ⋆⊤ 
+
+> t
+
+exp( −Ω⋆) = exp(Ω ⋆ + ut+1 )Rt exp( −Ω⋆), (84) with ξt = log( Rt) small, the Baker-Campbell-Hausdorff (BCH) formula gives the first-order approximation: 
+
+ξt+1 = ξt + ut+1 + O(|ξt|F |ut+1 |F ). (85) 
+
+Step 2: Torque linearization. From Section E.1: 
+
+τt = [ M ⋆t , M t] = −K tξt + O(|ξt|2 
+
+> F
+
+), Ktξ := −[M ⋆t , [ξ, M ⋆t ]] , (86) and under the spectral gap condition, there exists μ(∆ wh ) > 0 such that ⟨K tξ, ξ ⟩F ≥ μ(∆ wh )|ξ|2 
+
+> F
+
+.15 Step 3: Damped harmonic oscillator difference equation. Substituting the linearization into the Kick update: 
+
+ut+1 = (1 − γ)ut − ηI−1Ktξt + O(|ξt|2 
+
+> F
+
+). (87) Using the kinematics ut = ξt − ξt−1 + o(|ξ|) (from ξt = ξt−1 + ut + o(|ξ|)), eliminating u yields the leading-order difference equation: 
+
+ξt+1 − ξt = (1 − γ)( ξt − ξt−1) − ηI−1Ktξt + O(|ξt|2 
+
+> F
+
+). (88) Ignoring higher-order terms and treating I−1Kt as a positive-definite operator with time-invariant spectrum under the conju-gate equivariance of M ⋆t , the scalar eigenmode et satisfies: 
+
+et+1 − et = (1 − γ)( et − et−1) − ηκe t, (89) where κ > 0 is an eigenvalue of I−1K. This is a discrete damped harmonic oscillator with characteristic polynomial: 
+
+r2 − (2 − γ − ηκ )r + (1 − γ) = 0 . (90) 
+
+Step 4: Stability domain and exponential convergence. The Schur stability criterion for this second-order polynomial gives the necessary and sufficient conditions: both roots lie inside the unit circle if and only if 
+
+0 < γ < 2, 0 < ηκ < 2(2 − γ). (91) Let κmax be the largest eigenvalue of I−1K (bounded above by the local Lipschitz constant from Theorem 9). Define 
+
+D := 
+
+
+
+(η, γ ) : 0 < γ < 2, 0 < η < 2(2 − γ)
+
+κmax 
+
+
+
+. (92) This ensures simultaneous stability of all modes. For sufficiently small initial error (ensuring linearization validity): 
+
+ξt → 0, ut = ξt − ξt−1 → 0, (93) hence 
+
+dO (Mt, M ⋆t ) = |ξt|F + o(|ξt|F ) → 0, (94) and Ωt = Ω ⋆ + ut → Ω⋆. Zero-lag tracking is achieved. 
+
+Remark 2 (On the damping formulation) . If damping were applied directly as Rayleigh-type −γIΩ (contracting absolute angular velocity), then for Ω⋆̸ = 0 , the pair (Mt, Ωt) = ( M ⋆t , Ω⋆) would not satisfy the equilibrium condition: at M = M ⋆
+
+the torque vanishes, but the damping term is nonzero, causing Ω to decay. Maintaining nonzero angular velocity would require persistent external torque, hence nonzero configuration error. This scenario leads to inevitable phase error, contradicting the zero steady-state error claim. 
+
+E.4. Proof of Theorem 3 (Inevitable Lag of First-Order Methods) 
+
+Theorem 12 (Inevitable Lag of EMA: Structural Limitation of First-Order Methods) . Consider any first-order (overdamped) orbit gradient flow or equivalent EMA-type update without explicit velocity state. Under constant angular velocity rotation, the steady-state error satisfies 
+
+lim inf  
+
+> t→∞
+
+dO (Mt, M ⋆t ) ≥ c · | Ω⋆|F , (95) 
+
+where c > 0 depends on the step size and smoothing strength. Zero steady-state error is unachievable while maintaining stability. Proof. Consider the typical first-order overdamped form: update M along the negative orbit gradient (a geometric version of EMA): 
+
+Mt+1 = exp( −ηG (Mt, C t)) Mt exp( −ηG (Mt, C t)) ⊤, (96) where G(Mt, C t) ∈ so (d) is the gradient direction generator. By Theorem 7, G is linearly related to τ (Mt, C t) (via the inertia operator I−1 
+
+> Mt
+
+), hence in a neighborhood of Mt ≈ M ⋆t , its first-order approximation is of the same order as τt.16 Define the error ξt = log M ⋆t (Mt). Since the target rotates by Ω⋆ each step while the algorithm carries no velocity state, the error must include a “target drift” term at first order. Ignoring noncommutative higher-order terms: 
+
+ξt+1 = ξt + Ω ⋆ − ηAtξt + O(|ξt|2 
+
+> F
+
+), (97) where the linear operator At ≃ I −1Kt satisfies At ⪰ κI (for κ > 0) and ∥A t∥op ≤ ¯κ under the spectral gap condition. Ignoring higher-order terms and taking the time-invariant approximation At ≡ A , we obtain the linear system: 
+
+ξt+1 = ( I − ηA)ξt + Ω ⋆. (98) For stability, we require ρ(I − ηA) < 1; in particular, along the largest eigenvalue direction: 
+
+0 < η ¯κ < 2. (99) When stable, the steady-state solution exists and is unique: 
+
+ξ∞ = ( ηA)−1Ω⋆. (100) When Ω⋆̸ = 0 , we have ξ∞̸ = 0 , so the steady-state error is strictly nonzero. Furthermore, using ∥A∥ op ≤ ¯κ:
+
+|ξ∞|F = |(ηA)−1Ω⋆|F ≥ |Ω⋆|F
+
+η∥A∥ op 
+
+≥ |Ω⋆|F
+
+η¯κ . (101) Combining with the stability constraint η¯κ < 2:
+
+|ξ∞|F ≥ |Ω⋆|F
+
+2 . (102) Since dO (Mt, M ⋆t ) = |ξt|F + o(|ξt|F ), there exists a constant c > 0 (taking c = 1 /2 in normalized units) such that 
+
+lim inf  
+
+> t→∞
+
+dO (Mt, M ⋆t ) ≥ c|Ω⋆|F . (103) This shows that first-order overdamped/EMA methods must maintain nonzero phase error to generate gradient “driving force” that counteracts the constant angular velocity input. Zero steady-state error is structurally unachievable under stability constraints. 
+
+## F. Stochastic Stability Analysis 
+
+This section establishes stochastic stability bounds by combining the deterministic skeleton analysis with statistical concen-tration properties of the torque. 
+
+F.1. Auxiliary Lemmas 
+
+We first establish three auxiliary lemmas that bridge the geometric, statistical, and nonstationarity aspects into a unified energy framework. 
+
+Lemma 6 (Energy Equivalence) . Suppose ∆wh > 0 (simple spectrum, whitened identifiability) and consider a neighborhood 
+
+Br (M ⋆t ) = {M ∈ O Λ : dO (M, M ⋆t ) ≤ r} where the logarithmic map ξ = log M ⋆t (M ) is unique and smooth. Define 
+
+ut := Ω t − Ω⋆t , ξt := log M ⋆t (Mt). (104) 
+
+For any positive-definite inertia operator I ≻ 0 on so (d), let 
+
+T (u) = 12 ⟨u, Iu⟩F , eV (Mt, M ⋆t ) := 12 |ξt|2 
+
+> F
+
+. (105) 
+
+Then there exist constants c1, c 2 > 0 depending only on (Λ , σ 2, I, r ) such that for all Mt ∈ B r (M ⋆t ):
+
+c1(|ut|2 
+
+> F
+
++ |ξt|2 
+
+> F
+
+) ≤ E t := T (ut) + eV (Mt, M ⋆t ) ≤ c2(|ut|2 
+
+> F
+
++ |ξt|2 
+
+> F
+
+). (106) 17 Proof. Since I ≻ 0, there exist spectral bounds λmin (I) ≤ λmax (I) such that 
+
+λmin (I)2 |u|2 
+
+> F
+
+≤ T (u) ≤ λmax (I)2 |u|2 
+
+> F
+
+. (107) In the neighborhood where r is small enough for the logarithmic map to be unique, eV = 12 |ξ|2 is locally equivalent to d2
+
+> O
+
+(since ξ is the group logarithm coordinate and dO (M, M ⋆) = |ξ|F in this representation). Combining these bounds yields the result. 
+
+Lemma 7 (Lipschitz Continuity of Torque) . Fix C and σ2 > 0. For any M1, M 2 ∈ O Λ:
+
+|τ (M1, C ) − τ (M2, C )|F ≤ Lτ (C) · dO (M1, M 2), (108) 
+
+where 
+
+Lτ (C) ≲ ∥C∥F ∥S−1∥3op ≲ ∥C∥F (λd + σ2)−3. (109) 
+
+Proof. Recall S(M ) = M + σ2I and τ (M, C ) = S(M )−1[C, M ]S(M )−1. Expand the difference: 
+
+τ (M1, C ) − τ (M2, C ) = ( S−11 − S−12 )[ C, M 1]S−11 + S−12 ([ C, M 1] − [C, M 2]) S−11 (110) 
+
++ S−12 [C, M 2]( S−11 − S−12 ). (111) Using the identity S−11 − S−12 = S−11 (S2 − S1)S−12 = S−11 (M2 − M1)S−12 , and noting that 
+
+|[C, M 1] − [C, M 2]|F = |[C, M 1 − M2]|F ≤ 2∥C∥op |M1 − M2|F , (112) combined with ∥S−1∥op ≤ (λd +σ2)−1 and the local equivalence |M1 −M2|F ≲ dO (M1, M 2) on the compact homogeneous manifold, we obtain the stated Lipschitz form. 
+
+Lemma 8 (Target Variation Energy Perturbation) . Let the energy be Et = T (ut) + 12 |ξt|2 as in Lemma 6. When the reference point changes from (M ⋆t , Ω⋆t ) to (M ⋆t+1 , Ω⋆t+1 ) (with the same estimate (Mt, Ωt) fixed), there exists a constant C such that 
+
+E(t+1)  
+
+> t
+
+− E (t) 
+
+> t
+
+≤ C|Ω⋆t+1 − Ω⋆t |F
+
+q
+
+E(t) 
+
+> t
+
+, (113) 
+
+where E(t) 
+
+> t
+
+denotes the energy defined with respect to (M ⋆t , Ω⋆t ), and E(t+1)  
+
+> t
+
+similarly. Proof. Velocity error term: ut = Ω t − Ω⋆t changes to u′ 
+
+> t
+
+= Ω t − Ω⋆t+1 = ut − (Ω ⋆t+1 − Ω⋆t ), hence 
+
+|T (u′
+
+> t
+
+) − T (ut)| ≤ ∥I∥ op |ut|| ∆Ω ⋆t | + ∥I∥ op 
+
+2 |∆Ω ⋆t |2 ≲ |∆Ω ⋆t |pT (ut) + |∆Ω ⋆t |2. (114) 
+
+Configuration error term: The change M ⋆t 7 → M ⋆t+1 is a small rotation exp(Ω ⋆t ). In the small neighborhood, the logarithmic map is Lipschitz with respect to the base point, so |ξ′ 
+
+> t
+
+− ξt| ≲ |∆Ω ⋆t |, and thus 
+
+12 |ξ′
+
+> t
+
+|2 − 12 |ξt|2 ≲ |∆Ω ⋆t || ξt| + |∆Ω ⋆t |2. (115) Combining and using |ξt| + |ut| ≲ √Et (from Lemma 6) yields the perturbation bound of the form C|∆Ω ⋆|√Et.
+
+F.2. Proof of Theorem 4 (Energy Contraction to Noise Ball) 
+
+Theorem 13 (Stochastic Stability: Expected Energy Contraction to Noise Ball) . Under the following assumptions: (1) Observation: mC t ∼ W d(m, S ⋆) with S⋆ = M ⋆ + σ2I, and {Ct} conditionally independent. (2) Identifiability: Λ has simple spectrum, ∆wh > 0.(3) Locality: Initial condition M0 satisfies dO (M0, M ⋆) ≤ r where ξ = log M ⋆ (M ) is unique; parameter choices ensure iterates remain in this neighborhood. (4) Algorithm: K-GMRF with 
+
+τt = S−1 
+
+> t
+
+[Ct, M t]S−1 
+
+> t
+
+, ut+1 = (1 − γ)ut + ηI−1 
+
+> Mt
+
+(τt), Mt+1 = exp(Ω t+1 )Mt exp(Ω t+1 )⊤, (116) 18 where ut = Ω t − Ω⋆ and the “frozen target” setting means Ω⋆t ≡ Ω⋆.(5) Stability domain: There exists LH < ∞ (local Jacobian/effective stiffness upper bound) such that 
+
+0 < γ < 2, 0 < η < 2(2 − γ)
+
+LH
+
+. (117) 
+
+Define 
+
+ξt := log M ⋆ (Mt), Et := T (ut) + eV (Mt, M ⋆) = 12 ⟨ut, Iut⟩F + 12 |ξt|2 
+
+> F
+
+. (118) 
+
+Then there exist constants κ = κ(η, γ, L H ) ∈ (0 , 1) and 
+
+σ2eff = η2
+
+m Cnoise (Λ , σ 2) (119) 
+
+such that for all t:
+
+E[Et+1 | F t] ≤ (1 − κ)Et + σ2eff . (120) 
+
+Consequently, lim sup T →∞ 1
+
+> T
+
+PTt=1 E[Et] ≤ σ2eff /κ .Proof. The proof proceeds in four steps. 
+
+Step 1: Decompose torque into mean force and martingale noise. Let 
+
+gt := I−1 
+
+> Mt
+
+(τt), ¯τt := E[τt | F t] = τ (Mt, S ⋆), ˜τt := τt − ¯τt. (121) By Theorem 8 (unbiasedness), E[˜ τt | F t] = 0 , and (variance bound): 
+
+E[|˜τt|2 
+
+> F
+
+| F t] ≤ Kτ (Λ , σ 2)
+
+m . (122) Thus gt = ¯ gt + ˜ gt where ¯gt := I−1 
+
+> Mt
+
+(¯ τt) and ˜gt := I−1 
+
+> Mt
+
+(˜ τt), with 
+
+E[˜ gt | F t] = 0 , E[|˜gt|2 
+
+> F
+
+| F t] ≤ ∥I −1 
+
+> Mt
+
+∥2op 
+
+Kτ
+
+m . (123) 
+
+Step 2: Local error dynamics (first-order recursion for ξ). By Proposition 1 (structure preservation), Mt ∈ O Λ, so in the small neighborhood: 
+
+Mt = exp( ξt)M ⋆ exp( ξt)⊤. (124) Since Mt+1 = exp(Ω t+1 )Mt exp(Ω t+1 )⊤ = exp(Ω t+1 ) exp( ξt)M ⋆ exp( ξt)⊤ exp(Ω t+1 )⊤, with |ξt|, |Ωt+1 | small, BCH expansion gives (for some constant cBCH ): 
+
+ξt+1 = ξt + ut+1 + r(1) 
+
+> t+1
+
+, |r(1) 
+
+> t+1
+
+| ≤ cBCH (|ξt|F |ut+1 |F + |ut+1 |2). (125) 
+
+Step 3: Deterministic part gives contraction (strong convexity/effective stiffness). Consider the “mean system” (noise removed): ut+1 = (1 − γ)ut + η¯gt. By Theorem 7, ¯gt is the normalized natural gradient generator on the orbit; near M ⋆,Theorem 9 gives orbit-direction strong convexity, so the local linearization is equivalent to a “stiffness” operator H ≻ 0:
+
+¯gt = −Hξ t + r(2)  
+
+> t
+
+, ⟨ξt, Hξ t⟩ ≥ μ|ξt|2, ∥H∥op ≤ LH , (126) with |r(2)  
+
+> t
+
+| ≤ c|ξt|2 (second-order remainder). Combining, in the small neighborhood the system is approximately (linear dominant): 
+
+ξt+1 
+
+ut+1 
+
+
+
+= A
+
+ξt
+
+ut
+
+
+
++ ηB ˜gt + (higher order) , (127) where 
+
+A =
+
+I − ηH (1 − γ)I
+
+−ηH (1 − γ)I
+
+
+
+, B =
+
+II
+
+
+
+. (128) 19 Stability domain role: For each eigenvalue κi ∈ (0 , L H ] of H, the scalar mode satisfies the characteristic polynomial from Section E.3: 
+
+r2 − (2 − γ − ηκ i)r + (1 − γ) = 0 . (129) Under 0 < γ < 2 and 0 < ηκ i < 2(2 − γ), roots lie inside the unit circle, so A is Schur stable. This condition for all 
+
+κi ≤ LH is equivalent to 0 < η < 2(2 − γ)/L H .
+
+Step 4: Construct discrete Lyapunov and obtain expected contraction plus noise term. Since A is Schur stable, there exists a unique symmetric positive-definite matrix P ≻ 0 solving the discrete Lyapunov equation: 
+
+P − A⊤P A = I. (130) Define the quadratic Lyapunov function Lt := z⊤ 
+
+> t
+
+P z t where zt = ( ξt, u t)⊤. Ignoring higher-order terms (or absorbing them into smaller η, r ) and using E[˜ gt | F t] = 0 :
+
+E[Lt+1 | F t] = z⊤ 
+
+> t
+
+A⊤P Az t + η2E[˜ g⊤ 
+
+> t
+
+B⊤P B ˜gt | F t] + (higher order) . (131) By the Lyapunov equation, z⊤ 
+
+> t
+
+A⊤P Az t = z⊤ 
+
+> t
+
+(P − I)zt = Lt − | zt|2. Thus: 
+
+E[Lt+1 | F t] ≤ L t − | zt|2 + η2λmax (B⊤P B )E[|˜gt|2 | F t] + (higher order) . (132) Using the variance bound from Step 1: 
+
+E[Lt+1 | F t] ≤ L t − | zt|2 + η2λmax (B⊤P B )∥I −1∥2op 
+
+Kτ
+
+m + (higher order) . (133) Finally, using the spectral bounds λmin (P )|zt|2 ≤ L t ≤ λmax (P )|zt|2 to convert −| zt|2 to −κLt:
+
+−| zt|2 ≤ − 1
+
+λmax (P ) Lt. (134) Setting 
+
+κ := 1
+
+λmax (P ) ∈ (0 , 1) , σ2eff := η2λmax (B⊤P B )∥I −1∥2op 
+
+Kτ
+
+m , (135) we obtain E[Lt+1 | F t] ≤ (1 −κ)Lt +σ2eff . By Lemma 6 ( Lt equivalent to Et), the result follows with constants absorbed. 
+
+F.3. Proof of Theorem 5 (Master Theorem: Time-Averaged Tracking Risk) 
+
+Theorem 14 (Tracking Error Upper Bound: Three-Term Decomposition with Phase Transition) . Under the following as-sumptions: (1) The true angular velocity satisfies the bounded total variation condition: 
+
+VΩ :=  
+
+> T−1
+
+X
+
+> t=0
+
+|Ω⋆t+1 − Ω⋆t |F ≤ Vmax . (136) 
+
+(2) Observations are rank-m Wishart satisfying Theorem 8. (3) Damped K-GMRF with (η, γ ) ∈ D (stability domain of Theorem 13), and initial conditions in a local neighborhood where ξt = log M ⋆t (Mt) is defined throughout. (4) Define the time-averaged risk: 
+
+RT := 1
+
+T
+
+> T
+
+X
+
+> t=1
+
+E[dO (Mt, M ⋆t )2]. (137) 
+
+Then there exist explicit functions Φ (constants depending on d, Λ, σ 2, η, γ ) such that: 
+
+RT ≤ C3d20(1 − κ)T
+
+T| {z }
+
+> Φtrans
+
++ C1σ2
+
+m∆2wh 
+
+| {z }
+
+> Φstat
+
++ C2VΩ
+
+γT 
+
+| {z } 
+
+> Φns
+
+(138) 
+
+with phase transition boundaries: 
+
+• If ∆wh ↓ 0, then C1 diverges (loss of identifiability). 
+
+• If (η, γ ) /∈ D , then κ ≤ 0 (contraction failure/divergence). The order estimates are: C1 = Θ(1 /κ ) · poly( d, Λ, σ 2), C2 = Θ(1 /κ ) · poly( d, Λ, σ 2), C3 = Θ(1) .
+
+20 Proof. Step 1: Write Theorem 13 as “moving reference + external perturbation” version. Let 
+
+ut = Ω t − Ω⋆t , ξt = log M ⋆t (Mt), Et = T (ut) + 12 |ξt|2. (139) When Ω⋆t is no longer constant, the ut+1 recursion acquires an additional term (“acceleration perturbation”). In the analysis framework where damping acts on velocity error (consistent with Section E.3): 
+
+ut+1 = (1 − γ)ut + ηI−1 
+
+> Mt
+
+(τt) − (Ω ⋆t+1 − Ω⋆t ). (140) The first-order contraction inequality of Theorem 13 is interrupted by a “perturbation term.” Using Lemma 8 (reference change energy perturbation): 
+
+E[Et+1 | F t] ≤ (1 − κ)Et + σ2eff + CΩ|Ω⋆t+1 − Ω⋆t |F
+
+pEt, (141) where κ, σ 2eff are of the same order as in Theorem 13, and CΩ depends only on (Λ , σ 2, I, r ).
+
+Step 2: Establish linear recursion for √Et (to obtain linear VΩ). Let et := √Et ≥ 0. Using the inequality 
+
+q
+
+(1 − κ)e2 
+
+> t
+
++ atet + b ≤ √1 − κ e t + at
+
+2√1 − κ + √b (at ≥ 0, b ≥ 0) , (142) with at = CΩ|∆Ω ⋆t | and b = σ2eff :
+
+E[et+1 | F t] ≤ q e t + α|∆Ω ⋆t | + β, (143) where 
+
+q := √1 − κ ∈ (0 , 1) , α := CΩ
+
+2√1 − κ , β := 
+
+q
+
+σ2eff . (144) Iterating and taking full expectation: 
+
+E[et] ≤ qte0 +
+
+> t−1
+
+X
+
+> s=0
+
+qt−1−s(α|∆Ω ⋆s | + β). (145) Summing over t = 1 , . . . , T and exchanging summation order: 
+
+> T
+
+X
+
+> t=1
+
+E[et] ≤ e0
+
+> T
+
+X
+
+> t=1
+
+qt + α 
+
+> T−1
+
+X
+
+> s=0
+
+|∆Ω ⋆s |
+
+> T
+
+X
+
+> t=s+1
+
+qt−1−s + β
+
+> T
+
+X
+
+> t=1
+> t−1
+
+X
+
+> s=0
+
+qt−1−s. (146) Using geometric series bounds: 
+
+> T
+
+X
+
+> t=s+1
+
+qt−1−s ≤ 11 − q ,
+
+> T
+
+X
+
+> t=1
+> t−1
+
+X
+
+> s=0
+
+qt−1−s ≤ T
+
+1 − q . (147) Thus: 
+
+1
+
+T
+
+> T
+
+X
+
+> t=1
+
+E[et] ≤ q(1 − qT )
+
+T (1 − q) e0
+
+| {z }
+
+> transient
+
++ αT (1 − q) 
+
+> T−1
+
+X
+
+> s=0
+
+|∆Ω ⋆s |
+
+| {z }
+
+> nonstationarity
+
++ β
+
+1 − q
+
+| {z } 
+
+> statistical noise
+
+. (148) Since 1 − q = 1 − √1 − κ ≍ κ, the second term gives 
+
+αT (1 − q) VΩ = O
+
+ VΩ
+
+κT 
+
+
+
+. (149) In damped systems, κ is typically of order γ (especially away from stability boundary, κ ≳ cγ ), so this can be written as 
+
+O(VΩ/(γT )) .21 Step 3: Return from et to E[Et] and squared distance. By Jensen’s inequality and (a + b + c)2 ≤ 3( a2 + b2 + c2):
+
+1
+
+T
+
+> T
+
+X
+
+> t=1
+
+E[Et] = 1
+
+T
+
+> T
+
+X
+
+> t=1
+
+E[e2 
+
+> t
+
+] ≲ e20q2T
+
+T| {z } 
+
+> transient
+
++ β2
+
+(1 − q)2
+
+| {z }
+
+> statistical
+
++ VΩ
+
+T · 1(1 − q)2
+
+| {z } 
+
+> nonstationarity (linear VΩ)
+
+, (150) where β2 = σ2eff and (1 − q)2 ≍ κ2. Absorbing constants into C1, C 2, C 3 yields the three-term form. Finally, using Lemma 6 ( Et ≳ |ξt|2) and |ξt| = dO (Mt, M ⋆t ) (in local logarithm coordinates): 
+
+RT = 1
+
+T
+
+> T
+
+X
+
+> t=1
+
+E[dO (Mt, M ⋆t )2] ≲ 1
+
+T
+
+> T
+
+X
+
+> t=1
+
+E[Et], (151) yielding the stated upper bound. 
+
+Remark 3 (Why the statistical term diverges as ∆−2wh ). The ∆−2wh divergence arises from two facts in the established proof chain: (1) Identifiability degradation: Theorem 9 shows that as ∆wh → 0, the orbit-direction strong convexity constant μ(∆ wh ) →
+
+0. This means the potential energy/score information about the rotation direction weakens. (2) Noise amplification through preconditioning: The algorithm drive is I−1 
+
+> M
+
+(τt). When the spectral gap shrinks, IM becomes “soft” in the corresponding mode, and its inverse amplifies random torque noise. This amplification rate is related to the difference of (λi + σ2)−1, i.e., ∆wh . Thus σ2eff necessarily contains a negative power of ∆wh , causing the steady-state error to diverge. Whether ∆wh enters through the contraction constant κ (via μ) or the noise term σ2eff (via ∥I −1∥), the final result exhibits the “phase transition explosion” ∝ ∆−2wh .
+
+F.4. Proof of Theorem 6 (Minimax Lower Bound) 
+
+We establish the information-theoretic lower bound via two constructions: a static subfamily (Le Cam two-point method) for the statistical term, and a change-point subfamily for the nonstationarity term. 
+
+Theorem 15 (Minimax Lower Bound) . Consider the class of fixed-gain online filters {ϕθ } with time-invariant parameters 
+
+θ, operating over the problem family P(Λ , σ 2, m, V Ω). The minimax risk satisfies 
+
+inf   
+
+> {ϕθ}
+
+sup 
+
+> P
+
+RT ≥ c1
+
+σ2
+
+m∆2wh 
+
++ c2
+
+VΩ
+
+T (152) 
+
+for universal constants c1, c 2 > 0 depending only on (Λ , σ 2).Proof. Part I: Statistical lower bound via Le Cam’s method. We construct a two-point testing problem on the static subfamily where M ⋆t ≡ M ⋆ for all t.Fix M0 = Λ and select the “softest” direction (i, j ) that minimizes 
+
+wij := (λi − λj )2
+
+(λi + σ2)( λj + σ2) . (153) Define M1 = R(ε)Λ R(ε)⊤ where R(ε) = exp( εE ij ) with Eij the canonical skew-symmetric basis element satisfying 
+
+|Eij |F = √2.Under a single rank-m Wishart observation C ∼ W d(M + σ2I, m ), the KL divergence between the two hypotheses satisfies 
+
+DKL (PM0 ∥PM1 ) ≍ mε 2 · (λi − λj )2
+
+(λi + σ2)( λj + σ2) = mε 2wij . (154) Since wij ≍ ∆2wh · poly(Λ , σ 2), we have DKL ≍ mε 2∆2wh .Applying Le Cam’s lemma with Pinsker’s inequality: for any estimator ˆM ,
+
+inf 
+
+> ˆM
+
+sup 
+
+> k∈{ 0,1}
+
+Ek[dO ( ˆM , M k)2] ≳ dO (M0, M 1)2(1 − TV( P0, P 1)) . (155) 22 Choosing ε such that DKL ≤ c0 (constant) ensures TV ≤ 1/2. Since dO (M0, M 1)2 ≍ ε2 in the local logarithm coordinates, we obtain 
+
+inf 
+
+> ˆM
+
+sup 
+
+> k
+
+Ek[dO ( ˆM , M k)2] ≳ 1
+
+m∆2wh 
+
+· poly(Λ , σ 2). (156) 
+
+Part II: Nonstationarity lower bound via change-point detection. We construct two trajectory sequences that differ only at one time point. Fix t0 ∈ { 1, . . . , T − 1}. Define: • Sequence A: Apply rotation exp( δE ij ) at time t0, identity otherwise. • Sequence B: Apply rotation exp( δE ij ) at time t0 + 1 , identity otherwise. Both sequences have total variation VΩ = δ√2.The observation distributions differ only at one time step, so DKL (PA∥PB ) = O(mδ 2∆2wh ). By the same Le Cam argument, any estimator incurs error ≳ δ2 with constant probability when DKL ≤ c0.Averaging over the unknown change-point location t0 (uniform prior on {1, . . . , T − 1}), the time-averaged risk satisfies 
+
+RT ≳ 1
+
+T · δ2 = V 2Ω
+
+2T . (157) In the regime where VΩ is small (the tracking-relevant regime), this gives the VΩ/T scaling. 
+
+Combining both bounds. Taking the supremum over both subfamilies yields the stated lower bound. Comparing with Theorem 5, K-GMRF achieves the minimax rate in both the statistical ( 1/m ) and nonstationarity ( VΩ/T ) terms. 
+
+Remark 4 (Restriction to fixed-gain filters) . The lower bound applies to fixed-gain online filters where the update rule 
+
+ˆMt = ϕθ ( ˆMt−1, C t) uses time-invariant parameters θ. This class includes K-GMRF, Riemannian EMA, Kalman filters, and other practical tracking algorithms. If full-history batch estimators ˆMt = ϕt(C1: t) were permitted, the static term could be improved to O(1 /(mT )) by temporal aggregation, but this violates the online/causal constraint central to tracking applications. 
+
+## G. Numerical Validation of Theorem 5 
+
+We empirically verify the three terms in the Master Theorem bound. Figure 4 visualizes the scaling behavior. 10 0 10 1 
+
+> Batch Size m
+> 10 0
+> 10 1
+> Error (deg)
+
+(a) Statistical: 2/m      
+
+> K-GMRF
+> R-EMA
+> m0.50 (R2=0.996)
+> 010 20 30
+> Total Variation V
+> 5
+> 10
+> 15
+> 20
+> 25
+> Error (deg)
+
+(b) Nonstationarity: V /T      
+
+> K-GMRF
+> R-EMA
+> 020 40
+> Time Step t
+> 10 3
+> 10 2
+> 10 1
+> 10 0
+> 10 1
+> Error (deg)
+
+(c) Transient: (1 )T, =0.19 
+
+> Noise floor
+
+Figure 4. Validation of Master Theorem (Theorem 5). (a) Statistical term: error scales as m−0.50 (R2 = 0 .996 ), matching the O(1 /m )
+
+prediction. (b) Nonstationarity term: error increases linearly with VΩ. (c) Transient term: initial error decays exponentially with κ ≈ 0.19 .
+
+Statistical term (σ2/m ): Varying batch size m ∈ { 1, 2, 4, 8, 16 , 32 , 64 }, K-GMRF error scales as m−0.50 (R2 = 0 .996 ), matching the O(1 /m ) prediction. 
+
+Nonstationarity term (VΩ/T ): Under time-varying angular velocity with total variation VΩ, error increases linearly with VΩ
+
+(R2 = 0 .961 ). 
+
+Transient term ((1 − κ)T ): Initial error decays exponentially with estimated rate κ ≈ 0.19 (R2 = 0 .904 ). These results confirm that K-GMRF’s risk decomposes according to the Master Theorem bound. 23 H. Experimental Details 
+
+This section provides complete experimental protocols, hyperparameter configurations, and additional results to enable re-producibility. 
+
+H.1. Data Generation Protocols 
+
+H.1.1. SPD(2) Ellipse Tracking 
+
+We generate synthetic covariance trajectories on the 2-dimensional SPD manifold. The ground truth M ∗ 
+
+> t
+
+∈ SPD(2) evolves as: 
+
+M ∗ 
+
+> t
+
+= QtΛQ⊤ 
+
+> t
+
+, Qt+1 = Qt exp(Ω ∗∆t), (158) where Λ = diag(2 .0, 0.5) defines the ellipse shape (aspect ratio 4:1), Ω∗ ∈ so (2) is the constant angular velocity, and ∆t = 1 
+
+(discrete time). Observations follow the Wishart model: 
+
+Ct ∼ W 2(M ∗ 
+
+> t
+
++ σ2I, m ), σ2 = 0 .1, m = 8 . (159) Frame 66 Frame 133 Frame 200 Frame 266 Frame 333 
+
+> SPD(2) Ellipse Tracking: K-GMRF vs Baselines
+
+Figure 5. SPD(2) ellipse tracking visualization. Five key frames showing a rotating ellipse (ground truth: white) tracked by K-GMRF (red), Riemannian EMA (blue), and Alpha-Beta (green). K-GMRF maintains accurate orientation throughout, while EMA variants exhibit phase lag. 
+
+Dropout simulation. At each frame, observations are dropped with probability pdrop ∈ { 0, 0.2}. During dropout, trackers receive no observation and must coast on momentum. 
+
+Angular velocity sweep. We vary ω = |Ω∗| ∈ { 0.03 , 0.05 , 0.08 , 0.10 , 0.15 , 0.20 } rad/step to validate zero-lag (Theorem 2) and EMA lag (Theorem 3). 
+
+H.1.2. SO(3) Camera Stabilization Frame 0 Frame 75 Frame 150 Frame 225 Frame 299 
+
+> SO(3) Camera Stabilization: Tracking Through Dropout
+
+Figure 6. SO(3) camera stabilization frames. Five key frames from the stabilization demo. The checkerboard pattern shows camera orientation; K-GMRF maintains stable tracking through dropout periods. 
+
+We simulate camera orientation tracking with coupled oscillations. The ground truth rotation R∗ 
+
+> t
+
+∈ SO(3) follows: 
+
+R∗ 
+
+> t+1
+
+= R∗ 
+
+> t
+
+exp(Ω ∗ 
+
+> t
+
+), Ω∗ 
+
+> t
+
+=
+
+> 3
+
+X
+
+> k=1
+
+ak sin(2 πf kt + ϕk)Ek, (160) where Ek are the canonical so (3) basis elements, ak ∈ [0 .05 , 0.15] are amplitudes, fk ∈ [0 .01 , 0.05] are frequencies, and ϕk
+
+are random phases. This generates realistic camera shake with multiple frequency components. 
+
+Observation model. Noisy rotation observations: ˜Rt = R∗ 
+
+> t
+
+exp( ϵt), ϵt ∼ N (0 , σ 2
+
+> R
+
+I3) with σR = 0 .05 rad. 
+
+Dropout sweep. We evaluate performance degradation under pdrop ∈ { 0, 0.1, 0.2, 0.3, 0.4, 0.5}.24 Figure 7. SO(3) camera stabilization trajectories. Roll, pitch, and yaw angles over 400 frames. Red regions indicate observation dropouts. K-GMRF (red) tracks the ground truth (black) through dropout periods via momentum, while Standard EMA (blue) freezes and accumulates error. 
+
+H.1.3. OTB Benchmark Preprocessing 
+
+We use 6 sequences from the OTB-100 benchmark [33] featuring motion blur: BlurBody, BlurCar1, BlurCar2, BlurFace, CarScale, and Jogging. For each frame: 1. Extract the bounding box region from the ground truth annotation. 2. Compute the 7 × 7 region covariance descriptor [30] using features [x, y, R, G, B, |Ix|, |Iy |].3. The resulting Ct ∈ SPD(7) serves as the observation. 
+
+Search window. Trackers predict the next bounding box center; a 2× search window around the prediction is used to compute the observation covariance. 
+
+H.2. Implementation Details 
+
+H.2.1. Algorithm Pseudocode 
+
+All five methods share the same interface: update(observation) → estimate . Key differences: 25 Figure 8. SO(3) tracking error over time. Geodesic error (degrees) with dropout events marked. K-GMRF and Alpha-Beta recover quickly after dropouts; EMA error accumulates. BlurBody BlurCar1 BlurCar2 
+
+> BlurFace
+> CarScale
+> Jogging
+> OTB Motion-Blur Sequences: Mid-Sequence Snapshots
+
+Figure 9. OTB motion-blur sequences: mid-sequence snapshots. All six sequences at frame 51/100. Bounding boxes: K-GMRF (red), Riemannian EMA (blue), Euclidean EMA (cyan), Tangent KF (green), Alpha-Beta (magenta), Ground Truth (white). K-GMRF maintains accurate localization under motion blur. 
+
+• K-GMRF : Maintains (Mt, Ωt) state; uses Kick-Drift-Measure integrator (Algorithm 1 in main text). 26 • Riemannian EMA : Mt+1 = exp M (β log M (Ct)) , geodesic interpolation on SPD( d).• Euclidean EMA : Mt+1 = βC t + (1 − β)Mt, linear interpolation (may violate SPD). • Tangent KF : Linearized Kalman filter in tangent space TMt SPD( d); requires retraction. • Alpha-Beta : ˆxt+1 = ˆ xt + α(zt − ˆxt) + ˆ vt, ˆvt+1 = ˆ vt + β(zt − ˆxt); operates on vectorized matrices. 
+
+H.2.2. Computational Complexity               
+
+> Table 3. Per-frame computational complexity. d: matrix dimension; K: Cayley-Neumann iterations.
+> Method Time Complexity Space Complexity
+> K-GMRF O(Kd 3)O(d2)
+> Riemannian EMA O(d3)O(d2)
+> Euclidean EMA O(d2)O(d2)
+> Tangent KF O(d6)O(d4)
+> Alpha-Beta O(d2)O(d2)
+
+For d = 7 (OTB) and K = 3 Cayley-Neumann iterations, K-GMRF runs at < 0.5ms per frame on a single CPU core (Intel i7-12700K). 
+
+H.3. Hyperparameter Tuning Protocol 
+
+H.3.1. Seed Separation 
+
+To prevent overfitting to specific random seeds, we use seed separation :• Tuning seeds : {0, 1, 2, 3, 4} for hyperparameter selection via grid search. • Testing seeds : {5, 6, 7, 8, 9} for final evaluation (reported in all tables). This ensures reported results generalize beyond the tuning distribution. 
+
+H.3.2. Grid Search Ranges                                      
+
+> Table 4. Hyperparameter search ranges for each method.
+> Method Search Grid
+> K-GMRF η∈ { 0.01 ,0.05 ,0.1},γ∈ { 0.9,0.95 ,0.98 ,1.0}
+> Riemannian EMA β∈ { 0.6,0.7,0.8,0.9}
+> Euclidean EMA β∈ { 0.6,0.7,0.8,0.9}
+> Tangent KF Q∈ { 0.001 ,0.005 ,0.01 },R∈ { 0.05 ,0.1,0.2}
+> Alpha-Beta α∈ { 0.3,0.4,0.5,0.6},β∈ { 0.05 ,0.1,0.15 }
+
+H.3.3. Best Parameters by Task 
+
+H.4. Complete Experimental Results 
+
+H.4.1. SPD(2) Angular Velocity Sweep 
+
+Table 6 shows complete results across all angular velocities. 
+
+Key observations: 
+
+• K-GMRF maintains < 0.4◦ error across all ω, confirming zero-lag (Theorem 2). • Riemannian/Euclidean EMA error scales linearly with ω: from 6.7◦ at ω=0 .03 to 24 .9◦ at ω=0 .20 (3.7× increase), matching the O(ω) prediction of Theorem 3. • Alpha-Beta degrades faster than linear: 0.34 ◦ → 16 .65 ◦ (49 ×), indicating Euclidean geometry fails at high curvature. 
+
+H.4.2. SO(3) Dropout Sweep Key observations: 
+
+• Second-order methods (K-GMRF, Alpha-Beta) degrade gracefully: 4.4◦ → 25 ◦ at 50% dropout. • First-order methods collapse: EMA variants reach > 80 ◦ error (near-random). 27 Table 5. Optimal hyperparameters selected on tuning seeds. 
+
+Task Method Parameters 
+
+SPD(2) K-GMRF η=0 .05 , γ=0 .95 , β=0 .9
+
+Riemannian EMA β=0 .8
+
+Euclidean EMA β=0 .8
+
+Tangent KF Q=0 .005 , R=0 .1
+
+Alpha-Beta α=0 .4, β=0 .1
+
+SO(3) K-GMRF α=0 .5, β=0 .05 , γ=0 .98 
+
+Riemannian EMA β=0 .8
+
+Euclidean EMA β=0 .8
+
+Tangent KF Q=0 .005 , R=0 .1
+
+Alpha-Beta α=0 .5, β=0 .05 
+
+Table 6. Angular error (degrees) on SPD(2) ellipse tracking across angular velocities ω (rad/step). Mean ± std over 5 testing seeds. 
+
+ω K-GMRF R-EMA E-EMA T-KF A-B 0.03 0.29 ±0.02 6.66 ±0.04 6.66 ±0.04 0.47 ±0.01 0.34 ±0.02 
+
+0.05 0.30 ±0.02 10 .72 ±0.06 10 .72 ±0.06 0.48 ±0.02 0.70 ±0.05 
+
+0.08 0.29 ±0.03 15 .61 ±0.04 15 .61 ±0.04 0.48 ±0.02 2.40 ±0.04 
+
+0.10 0.31 ±0.02 18 .18 ±0.03 18 .18 ±0.03 0.54 ±0.01 4.30 ±0.04 
+
+0.15 0.32 ±0.02 22 .54 ±0.08 22 .54 ±0.08 1.02 ±0.06 10 .61 ±0.08 
+
+0.20 0.38 ±0.03 24 .91 ±0.04 24 .91 ±0.05 2.17 ±0.04 16 .65 ±0.04 
+
+Table 7. Geodesic error (degrees) on SO(3) camera stabilization across dropout rates. Mean ± std over 5 testing seeds. Dropout K-GMRF R-EMA E-EMA T-KF A-B 0% 4.4±0.1 7.2±0.2 7.3±0.2 8.1±0.6 4.4±0.1
+
+10% 5.8±0.3 18 .7±2.3 19 .0±2.5 16 .2±3.4 5.8±0.3
+
+20% 6.5±1.1 29 .2±4.1 30 .2±4.5 22 .5±4.7 6.6±1.0
+
+30% 8.0±1.4 41 .0±2.1 43 .5±2.4 32 .1±7.2 8.1±1.4
+
+40% 14 .3±7.2 56 .5±10 .3 63 .3±13 .3 38 .0±8.6 14 .9±7.8
+
+50% 25 .0±9.4 81 .2±15 .1 91 .9±12 .1 48 .5±11 .4 25 .7±7.4
+
+• On SO(3), momentum is the dominant factor; manifold geometry provides marginal benefit (K-GMRF ≈ Alpha-Beta). 
+
+H.4.3. OTB Complete Results 
+
+Table 8. OTB tracking results: IoU and Success Rate (SR, IoU >0.5). K-GMRF uses calibrated thresholds per sequence. 
+
+Mean IoU ↑ Success Rate ↑
+
+Sequence K-GMRF R-EMA E-EMA T-KF K-GMRF R-EMA E-EMA T-KF BlurBody 0.68 0.69 0.69 0.56 0.96 0.96 0.96 0.67 
+
+BlurCar1 0.55 0.54 0.53 0.39 0.55 0.47 0.51 0.22 
+
+BlurCar2 0.80 0.73 0.76 0.53 1.00 1.00 1.00 0.41 
+
+BlurFace 0.86 0.85 0.86 0.71 1.00 1.00 1.00 1.00 
+
+CarScale 0.67 0.67 0.66 0.19 0.96 1.00 0.96 0.14 
+
+Jogging 0.71 0.68 0.69 0.63 1.00 0.94 0.96 0.82 
+
+Average 0.71 0.69 0.70 0.50 0.91 0.90 0.90 0.54 
+
+28 0 10 20 30 40 50 
+
+# Dropout Rate (%) 
+
+# 0
+
+# 20 
+
+# 40 
+
+# 60 
+
+# 80 
+
+# 100 
+
+> Geodesic Error (deg)
+
+# SO(3) Camera Stabilization 
+
+# K-GMRF 
+
+# Riemannian EMA 
+
+# Euclidean EMA 
+
+# Tangent KF 
+
+# Alpha-Beta Figure 10. SO(3) dropout sweep. Geodesic error vs. dropout rate. Second-order methods (K-GMRF, Alpha-Beta) degrade gracefully, while first-order methods (EMA variants) collapse beyond 30% dropout. Shaded regions: ±1 std over 5 seeds. Table 9. Per-sequence runtime (seconds) on OTB. CPU: Intel i7-12700K. All methods are single-threaded. Sequence K-GMRF R-EMA E-EMA T-KF BlurBody 33.6 32.4 30.5 27.0 BlurCar1 11.9 12.3 12.9 11.4 BlurCar2 12.0 12.0 11.9 11.9 BlurFace 10.6 10.6 10.6 10.7 CarScale 1.4 1.4 1.4 1.0 Jogging 3.4 3.1 3.2 3.2 
+
+H.4.4. Runtime Comparison 
+
+K-GMRF incurs < 5% overhead compared to Riemannian EMA due to the Cayley-Neumann iterations. 
+
+H.5. Practical Tuning Guidelines 
+
+This section provides practitioners with heuristics for selecting K-GMRF hyperparameters (η, γ ).
+
+H.5.1. Stability Domain 
+
+From Theorem 4, the stability domain is: 
+
+D = {(η, γ ) : 0 < γ < 2, η < 2(2 − γ)/κ max }, (161) where κmax = ∥I −1∥op · Lτ depends on the inertia tensor and torque Lipschitz constant. 
+
+Practical rule of thumb: 
+
+1. Start with γ = 0 .95 (high damping, conservative). 2. Set η = 0 .05 (small step size). 29 Frame 0 Frame 20 Frame 40   
+
+> Frame 60 Frame 80 Frame 99
+
+BlurCar2: K-GMRF Tracking Progression (IoU: 0.74 vs 0.55) Figure 11. BlurCar2 tracking progression. Six key frames showing K-GMRF’s best performance (IoU: 0.74 vs. 0.55 for R-EMA). K-GMRF (red) maintains accurate localization through severe motion blur, while baselines diverge. 
+
+Figure 12. BlurCar2 per-frame IoU. K-GMRF (red) maintains higher IoU than Standard EMA (blue) throughout the sequence, especially during frames 75–150 where motion blur is most severe. 
+
+3. If the tracker oscillates : increase γ toward 1.0.4. If the tracker lags : decrease γ toward 0.8.5. If the tracker diverges : halve η.30 H.5.2. Interpreting (η, γ )
+
+Table 10. Physical interpretation of K-GMRF hyperparameters. 
+
+Parameter Physical Meaning Effect 
+
+η (step size) Inverse inertia Larger η ⇒ faster response, more noise 
+
+γ (damping) Friction coefficient Larger γ ⇒ smoother, more lag 
+
+1 − γ Momentum retention Smaller γ ⇒ longer coasting 
+
+H.5.3. Failure Modes and Debugging 
+
+Table 11. Common failure modes and remedies. 
+
+Symptom Cause Remedy 
+
+High-frequency oscilla-tion 
+
+η too large Reduce η by 50% Overshooting then cor-recting 
+
+γ too small Increase γ toward 0.98 Persistent phase lag γ too large Decrease γ toward 0.9 Gradual drift Numerical error Check matrix symme-try; re-orthogonalize Q
+
+Explosive divergence Outside D Reset to safe defaults: 
+
+η=0 .01 , γ=0 .99 
+
+H.5.4. Task-Specific Recommendations 
+
+• Low-noise, fast dynamics (e.g., synthetic ellipse): Use γ ∈ [0 .9, 0.95] for aggressive tracking. • High-noise, slow dynamics (e.g., OTB): Use γ ∈ [0 .98 , 1.0] for smoothing. • Frequent occlusions : Use γ < 0.95 to retain momentum during dropout. • Unknown dynamics : Start with η=0 .05 , γ=0 .95 ; tune based on validation error. 
+
+H.6. Extended Theory Validation 
+
+We provide additional experiments validating the theoretical predictions. 
+
+H.6.1. Spectral Gap Phase Transition (Theorem 9) 
+
+We vary the eigenvalue gap δ in Λ( δ) = diag(1 + δ, 1) and measure steady-state error. As δ → 0, the whitened spectral gap 
+
+∆wh → 0, triggering the phase transition. Figure 13 visualizes the phase transition. 
+
+Table 12. Spectral gap phase transition. Error (degrees) vs. eigenvalue gap δ. Noise σ2 = 4 .0, m = 8 .
+
+δ ∆wh K-GMRF EMA K-GMRF/EMA 0.01 0.0012 44 .6◦ 44 .7◦ 1.00 ×
+
+0.05 0.0061 43 .3◦ 43 .5◦ 1.00 ×
+
+0.10 0.0129 41 .4◦ 41 .9◦ 1.01 ×
+
+0.30 0.0475 31 .3◦ 35 .3◦ 1.13 ×
+
+0.50 0.1027 16 .7◦ 30 .7◦ 1.84 ×
+
+1.00 0.8032 5.7◦ 28 .9◦ 5.05 ×
+
+Observations: 
+
+• At δ < 0.1 (∆wh < 0.013 ), both methods fail—the estimation problem becomes ill-posed. • At δ ≥ 0.3, K-GMRF separates from EMA, achieving 5× lower error at δ = 1 .0.• The phase transition boundary ( ∆wh ≈ 0.05 ) matches the theoretical prediction. 31 10 3 10 2 10 1 10 0
+
+# Whitened Spectral Gap wh 
+
+# 0
+
+# 10 
+
+# 20 
+
+# 30 
+
+# 40 
+
+# 50 
+
+> Error (deg)
+
+# Spectral Gap Phase Transition 
+
+K-GMRF 
+
+R-EMA 
+
+Phase boundary Figure 13. Spectral gap phase transition. Error vs. whitened spectral gap ∆wh (log scale). Below ∆wh ≈ 0.05 (dashed line), both methods fail. Above this threshold, K-GMRF separates from EMA, achieving 5× lower error at ∆wh = 0 .8.
+
+H.6.2. Ablation: Effect of Each Component 
+
+Table 13. Ablation study on SPD(2). Angular error (degrees), ω = 0 .08 rad/step, 400 frames. 
+
+Variant Normal 20% Dropout 
+
+K-GMRF (full) 1.18 ±0.00 15 .1±0.01 
+
+− momentum (R-EMA) 13 .87 ±0.00 24 .1±0.00 
+
+− manifold (Alpha-Beta) 1.00 ±0.00 13 .9±0.00 
+
+− both (Eucl. EMA) 15 .62 ±0.00 25 .3±0.00 
+
+Decomposition of gains: 
+
+• Momentum contributes 13 .87 − 1.18 = 12 .69 ◦ reduction under normal conditions. • Manifold contributes 1.00 − 1.18 = −0.18 ◦ (negligible in this setting). • Under dropout , momentum contributes 24 .1 − 15 .1 = 9 .0◦ reduction; manifold contributes 13 .9 − 15 .1 = −1.2◦ (Alpha-Beta slightly better due to Euclidean averaging being less sensitive to observation noise). 
+
+Conclusion: Momentum is the dominant factor ( > 90% of improvement), while manifold geometry provides incremental gains primarily for zero-lag tracking. 
+
+H.7. Reproducibility Checklist 
+
+We summarize the key information for reproducing our experiments: • Code : PyTorch implementation available at [URL redacted for review] .• Datasets : OTB-100 [33] is publicly available; synthetic data is generated on-the-fly using the protocols in Section H.1. • Hyperparameters : All values listed in Tables 4–5. 32 • Random seeds : Tuning on {0, 1, 2, 3, 4}; testing on {5, 6, 7, 8, 9}.• Hardware : All experiments run on a single CPU core (Intel i7-12700K, 3.6 GHz). Total runtime < 2 hours. • Statistical reporting : All error bars indicate ±1 standard deviation over 5 independent seeds. • Figures : Angular velocity sweep (Figure 2) and OTB qualitative results (Figure 3) appear in the main text. 33
