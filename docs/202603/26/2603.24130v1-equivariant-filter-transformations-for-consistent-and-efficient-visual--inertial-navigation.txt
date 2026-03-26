@@ -1,0 +1,3520 @@
+Title: Equivariant Filter Transformations for Consistent and Efficient Visual--Inertial Navigation
+
+URL Source: https://arxiv.org/pdf/2603.24130v1
+
+Published Time: Thu, 26 Mar 2026 00:52:37 GMT
+
+Number of Pages: 28
+
+Markdown Content:
+# Equivariant Filter Transformations for Consistent and Efficient Visual–Inertial Navigation 
+
+Chungeng Tian, Fenghua He, and Ning Hao 
+
+Abstract —This paper presents an equivariant filter (EqF) transformation approach for visual–inertial navigation. By estab-lishing analytical links between EqFs with different symmetries, the proposed approach enables systematic consistency design and efficient implementation. First, we formalize the mapping from the global system state to the local error-state and prove that it induces a nonsingular linear transformation between the error-states of any two EqFs. Second, we derive transformation laws for the associated linearized error-state systems and unobservable subspaces. These results yield a general consistency design principle: for any unobservable system, a consistent EqF with a state-independent unobservable subspace can be synthesized by transforming the local coordinate chart, thereby avoiding ad hoc symmetry analysis. Third, to mitigate the computational burden arising from the non-block-diagonal Jacobians required for consistency, we propose two efficient implementation strate-gies. These strategies exploit the Jacobians of a simpler EqF with block-diagonal structure to accelerate covariance operations while preserving consistency. Extensive Monte Carlo simulations and real-world experiments validate the proposed approach in terms of both accuracy and runtime. 
+
+Index Terms —Equivariant filter, visual–inertial navigation, estimation consistency, coordinate transformation. 
+
+I. I NTRODUCTION 
+
+# VISUAL–Inertial Navigation Systems (VINS), which fuse high-frequency inertial measurements with visual ob-servations, have become a core technology for enabling au-tonomous robots to achieve high-precision positioning in GPS-denied environments [1]–[6]. To address the severe nonlinear-ities inherent in kinematic models, various filter-based nonlin-ear estimators have been developed. Among these, Equivariant Filter (EqF) [7]–[11] has received increasing attention in recent years. The core principle of EqF lies in exploiting inherent system symmetries to lift the nonlinear estimation problem from the original state manifold to an appropriate symmetry Lie group. This perspective unifies the design of classical VINS estimators [12], [13], such as the Error-State Kalman Filter (ESKF) [14]–[16] and the Invariant Extended Kalman Filter (I-EKF) [17]–[21]. Furthermore, because EqF relies solely on fundamental equivariant properties rather than requiring the system model to be explicitly defined on a Lie group, it is applicable to a broader range of complex systems, thereby significantly extending its utility in the field of state estimation. Despite the elegant theoretical unification achieved by EqF, two critical problems remain unresolved. First, universal de-
+
+The authors are with School of Astronautics, Harbin Institute of Technology, Harbin, 150000, China. (email: tcghit@outlook.com; hefenghua@hit.edu.cn; haoning@hit.edu.cn). Corresponding author: Fenghua He. 
+
+sign criteria for consistent EqFs applicable to arbitrary un-observable systems are still lacking. Inconsistency typically arises when the unobservable subspace of a system depends on the state, causing estimators to become overconfident in their uncertainty estimates along unobservable directions [22], [23]. Currently, two main approaches exist to ensure consistency: one involves modifying Jacobians to enforce observability constraints [22], [24], [25], which inevitably sacrifices Jaco-bian optimization; the other aims to attain a state-independent unobservable subspace [26], [27], a direction that is becoming a mainstream solution. While existing studies have achieved a state-independent subspace through the selection of appro-priate symmetries [7], [28], a systematic methodology for EqF remains absent. Consequently, identifying symmetries that ensure estimation consistency is still largely an empirical process, which presents substantial challenges for complex unobservable systems [29]. Second, a fundamental trade-off exists between theoretical consistency and computational efficiency in EqF. Specifically, the symmetries required for consistency often induce intri-cate differential geometric structures that disrupt the inher-ent block-diagonal structure of Jacobian matrices. In VINS, this manifests as a coupling between landmark and IMU pose errors within the propagation Jacobian, leading to a sharp increase in computational overhead. To mitigate this, [30] combined I-EKF with the First-Estimates Jacobian (FEJ) methodology to decouple landmark uncertainty, albeit at the cost of optimality. More recently, [31] and [32] leveraged the block-diagonal structure of Error-State Kalman filters (ESKF) to enable efficient propagation for I-EKF. However, these solutions are often tailored to certain EqF variants; a general method for the efficient implementation of EqFs is still lacking. To address these challenges, this paper develops a system-atic approach for the design of consistent EqFs and their efficient implementation. Our core insight is the identification of a transformation relationship between the error-states of EqFs constructed with different symmetries. Since the choice of error-states directly governs estimator properties and imple-mentation efficiency, elucidating this relationship provides a principled pathway to engineer EqFs with desirable properties by building upon structurally simpler EqFs. To operationalize this insight, our approach proceeds as follows. First, we introduce the global-local map , a local mapping that links the system state around the current estimate to the EqF error-state. We show that, for any two EqFs of the same system, the composition of their global-local maps induces a nonsingular linear transformation between their 1
+
+> arXiv:2603.24130v1 [cs.RO] 25 Mar 2026
+
+error-states. Then, we demonstrate that this transformation is not merely an algebraic convenience: it provides a unified route to transfer key filter structures across EqFs, extending naturally to the Jacobians and unobservable subspaces. Next, building on these results, we establish a rigorous design scheme for consistency; for any unobservable system, one can synthesize a consistent EqF by constructing an appropriate coordinate transformation that renders the unobservable sub-space state-independent, thereby bypassing ad hoc symmetry analysis. Finally, to reconcile theoretical consistency with real-time feasibility in high-dimensional settings, we propose two efficient implementation strategies. By exploiting the sparsity of a structurally simple baseline and using transformations to project expensive covariance operations onto block-diagonal structures, the resulting estimator preserves the consistency benefits while achieving a computational cost comparable to the most efficient estimator, i.e., ESKF. The main contributions of this paper are summarized as follows:  
+
+> •
+
+A universal transformation relationship, with analytical expressions, that links the error-states of disparate EqFs.  
+
+> •
+
+The corresponding transformation laws for Jacobians and observability properties across EqFs.  
+
+> •
+
+A systematic methodology for designing consistent EqFs, applicable to general unobservable systems.  
+
+> •
+
+Two efficient EqF implementations that achieve runtime comparable to that of the most efficient filter. The rest of this paper is organized as follows. Section II reviews the preliminaries of manifolds, Lie groups, and right group actions. Section III derives the transformation rela-tionships between EqFs. Section IV presents a systematic procedure for designing consistent EqFs. Section V develops two efficient implementation strategies. Sections VI and VII validate the proposed approach through simulations and real-world experiments. Finally, Section VIII concludes the paper. II. P RELIMINARIES 
+
+A. Manifolds and Lie Groups 
+
+For a smooth manifold M, let Tξ M denote the tangent space at ξ ∈ M . Given a differentiable mapping h : M → N 
+
+between two smooth manifolds, its differential at ξ′ ∈ M is denoted by the linear map 
+
+Dξ|ξ′ h(ξ) : T ξ′ M → Th(ξ′)N , (1) which pushes forward a tangent vector v ∈ Tξ′ M to 
+
+Dξ|ξ′ h(ξ)[ v] ∈ Th(ξ′)N .A Lie group G is a smooth manifold endowed with a group structure. For any X, Y ∈ G, group multiplication is denoted by XY , the inverse of X by X−1, and the identity element by I. The tangent space at the identity, g := T I G, is the Lie algebra of G. As an n-dimensional vector space, g is isomorphic to Rn via the wedge operator (·)∧ : Rn → g, with its inverse denoted by the vee operator (·)∨ : g → Rn. The group adjoint map Ad X : g → g is defined as the differential of the conjugation mapping at the identity, i.e., 
+
+Ad X [v] := D Y |I (XY X −1)[ v]. (2) The corresponding adjoint matrix Ad ∨ 
+
+> X
+
+∈ Rn×n is defined such that Ad ∨ 
+
+> X
+
+v := (Ad X [v∧]) ∨ for any v ∈ Rn.
+
+B. Right Group Actions 
+
+A right group action of a Lie group G on a smooth manifold 
+
+M is a smooth map ϕ : G × M → M that satisfies 
+
+ϕ(I, ξ ) = ξ, (3) 
+
+ϕ(X2, ϕ (X1, ξ )) = ϕ(X1X2, ξ ), (4) for all ξ ∈ M and X1, X 2 ∈ G. For a fixed X ∈ G, the partial map ϕX : M → M is defined as ϕX (ξ) := ϕ(X, ξ ).Similarly, for a fixed ξ ∈ M , the partial map ϕξ : G → M 
+
+is defined as ϕξ (X) := ϕ(X, ξ ).III. T RANSFORMATION BETWEEN EQFS
+
+In this section, we present the transformation relationships between EqFs constructed from different symmetries. We first briefly introduce the VINS model and the EqF-based estimator, then derive the transformation between the error-states of different EqFs, and finally show that this relationship extends to the linearized error-state system. 
+
+A. System Model 
+
+Consider a robot equipped with an IMU and a camera moving in a 3D environment. The system state to be estimated is 
+
+ξ = ( R, v, p, bω , ba, f1, . . . , fm), (5) where R ∈ SO (3) , v ∈ R3, and p ∈ R3 are the orientation, velocity, and position of the IMU in the world frame, respec-tively; bω ∈ R3 and ba ∈ R3 are the gyroscope bias and accelerometer bias, respectively; fi ∈ R3 is the position of the 
+
+i-th landmark in the world frame. The system dynamics is given by: 
+
+˙R = R[ωm − bω − nω ]×, (6a) 
+
+˙v = R(am − ba − na) + g, (6b) 
+
+˙p = v, (6c) 
+
+˙bω = nwω , (6d) 
+
+˙ba = nwa, (6e) 
+
+˙fi = 0, i = 1 , . . . , m, (6f) where ωm, am are the raw angular velocity and acceleration, respectively; g is the gravity vector; n = [ n⊤ 
+
+> ω
+
+, n⊤ 
+
+> a
+
+, n⊤ 
+
+> wω
+
+, n⊤
+
+> wa
+
+]⊤
+
+is the process noise, with nω , na being the measurement noise of gyroscope and accelerometer, and nwω , nwa being the random walk noise of gyroscope and accelerometer biases. When the camera observes the i-th landmark, the measure-ment model is given by 
+
+zi = h(I pfi ) + ϵi, (7) where I pfi = R⊤(fi − p), (8) 
+
+h = π ◦ Υ, where Υ : R3 → R3 transforms the land-mark position from the IMU frame to the camera frame, 2and π : R3 → R2 is the projection function. By stacking all visual measurements, we obtain the measurement vector 
+
+z = · · · z⊤ 
+
+> i
+
+· · · ⊤, and the corresponding noise vector 
+
+ϵ = · · · ϵ⊤ 
+
+> i
+
+· · · ⊤.
+
+B. Equivariant Filter 
+
+This subsection provides a brief overview of the SD-EqF, an EqF formulated on the semi-direct bias group G := SE 2(3) ⋉
+
+se (3) × R3m. The SD-EqF serves as a representative case to illustrate the fundamental components of the EqF framework, including the symmetry group, group action, global error, and local coordinate. 
+
+Symmetry group: Elements of the semi-direct bias group 
+
+G are denoted by X = ( C, γ, p ), where C = ( R, a, b ) ∈
+
+SE 2(3) , γ ∈ se (3) , and p ∈ R3m. For any X1, X 2 ∈ G, the group multiplication is defined as: 
+
+X1X2 = ( C1C2, γ 1 + Ad Γ( C1)[γ2], p 1 + p2), (9) where Γ( C1) = (R, a ) ∈ SE (3) . The identity element is (I, 0, 0) , and the inverse of an element X is given by 
+
+X−1 = ( C−1, −Ad Γ( C)−1 [γ], −p).
+
+Group action: To define the action of G on the state space 
+
+M, we partition the system state as ξ = ( A, b, f ), where 
+
+A := ( R, v, p) ∈ SE 2(3) , b := ( bω , ba) ∈ R6, and f := (f1, . . . , fm) ∈ R3m. The group action ϕ : G × M → M is then defined as: 
+
+ϕ(X, ξ ) = ( AC, Ad ∨ 
+
+> Γ( C)−1
+
+(b − γ∨), f + p). (10) Given an arbitrary fixed state ξ◦ ∈ M , state estimation is equivalent to estimating an element ˆX ∈ G, such that the estimated system state is expressed as: 
+
+ˆξ = ϕ( ˆX, ξ ◦). (11) In this work, the origin of SD-EqF is chosen as ξ◦ = ( I, 0, 0).
+
+Global error: Let ξ and X denote the true state and its group representation, while ˆξ and ˆX denote their estimated counterparts. The equivariant error is defined as: 
+
+e = ϕ( ˆX−1, ξ ). (12) Notably, e = ξ◦ if and only if ˆX = X. Thus, the global error resides in a neighborhood of ξ◦, i.e., e ∈ U (ξ◦) ⊂ M .
+
+Local coordinate: To facilitate estimator design, the global error e is mapped to a vector space via a local coordinate chart 
+
+ϑ : U(ξ◦) → RN :
+
+ε = ϑ(e), (13) satisfying ϑ(ξ◦) = 0. In this paper, the local coordinate of the global error is referred to as the error-state of EqF, as it serves a functionally analogous role to the error-state in ESKF. For the SD-EqF, the local coordinate is explicitly given by: 
+
+ϑ(e) =  log( eA)∨, eb, ef
+
+ . (14) The linearized error-state system of an EqF is a fundamental component of estimator design, as it governs uncertainty propagation and the computation of state corrections. In conventional EqF derivations, obtaining the linearized system requires the cumbersome computation of the input action and the kinematic lift for each specific group [7]. However, the linearized system can be derived more efficiently by leveraging the transformation relationship between different EqFs, as detailed in the following subsection. 
+
+C. Transformation between Error-States 
+
+This subsection elaborates on the transformation relation-ships between different EqFs. We first derive the transforma-tion matrix between the error-states of two arbitrary EqFs and then use it to derive the linearized error-state system of one EqF from that of another. −1 0 1
+
+> −1.0
+> −0.50.00.51.0
+
+ˆξξ ∈ U ( ˆξ) ⊂ M 
+
+0
+
+ε∗ ∈ RN
+
+0
+
+ε ∈ RN−1 0 1                            
+
+> −1.0
+> −0.50.00.51.0
+> ˆξξ∈ U ( ˆξ)⊂ M
+> 0
+> ε∗∈RN
+> 0
+> ε∈RN−101
+> −1.0
+> −0.50.00.51.0
+> ˆξξ∈ U ( ˆξ)⊂ M
+> 0
+> ε∗∈RN
+> 0
+> ε∈RN
+> φ∗=ϑ∗◦ϕ∗
+> ˆX∗−1φ=ϑ◦ϕˆX−1
+> φ∗◦φ−1≈T
+
+Fig. 1: Error-state relationship between arbitrary two EqFs. The arrows can be reversed to represent the inverse relation-ship. To bridge distinct EqF formulations, we define the global-local map φ := ϑ◦ϕ ˆX−1 : U( ˆξ) → RN , which maps a state in a neighborhood of the current estimate on the manifold to its local error coordinate in the vector space. This mapping not only characterizes the relationship between the true state and the error-state within a single EqF, but also serves as a bridge across different EqFs, as illustrated in Fig. 1. Specifically, the interaction between these global-local maps induces a linear transformation between the corresponding error-states, as formalized in the following theorem. 
+
+Theorem 1. Given two arbitrary EqFs of the same system associated with φ and φ∗, there exists a linear transformation between their error-states: 
+
+ε∗ = Tε, (15) 
+
+where T is a nonsingular matrix given by 
+
+T = D ξ| ˆξ φ∗(ξ) · Dε|0φ−1(ε). (16) 
+
+Proof. Since both EqFs satisfy 
+
+φ−1(ε) = ξ = φ∗− 1(ε∗), (17) we have the following relationship between the two error-states: 
+
+ε∗ = φ∗  φ−1(ε) . (18) 3Note that when ε = 0, it follows that ξ = ˆξ, and consequently 
+
+ε∗ = φ∗( ˆξ) = 0. By linearizing (18) at ε = 0 and neglecting higher-order terms, we obtain the transformation relationship (15). To show that T is nonsingular, note that the global-local map φ (and similarly φ∗) is a diffeomorphism, as it is the composition of a coordinate chart ϑ and a smooth group action 
+
+ϕ ˆX−1 , both of which are diffeomorphisms. By the inverse function theorem and the chain rule, the Jacobians Dξ| ˆξ φ∗(ξ)
+
+and Dε|0φ−1(ε) are linear isomorphisms at their respective evaluation points. Consequently, T is the composition of two linear isomorphisms, which is itself a linear isomorphism, thereby ensuring that T is nonsingular. 
+
+Remark 1. The transformation matrix inherently depends on the estimated system state ˆξ, given that the maps ϕξ◦ : G →M and ϕ∗ 
+
+> ξ◦
+
+: G∗ → M are bijective. By definition, the global-local maps φ and φ∗ are parameterized by the estimated group elements ˆX ∈ G and ˆX∗ ∈ G∗, respectively. As a result, the transformation matrix T is influenced by the estimated elements. In the context of VINS, ϕξ◦ and ϕ∗ 
+
+> ξ◦
+
+are usually bijective, ensuring that ˆX and ˆX∗ are uniquely determined by ˆξ. Consequently, T can be expressed as a function of the estimated system state, i.e., T = T( ˆξ), which guarantees a well-defined transformation. 
+
+Remark 2. The transformations among various EqF formula-tions exhibit a consistent algebraic structure characterized by the following properties:  
+
+> •
+
+Transitivity: The transformation matrices satisfy a chain rule-like property as illustrated in Fig. 2. For any three EqFs associated with φ, φ′, and φ∗, the maps obey 
+
+Tφ∗ 
+
+> φ′
+
+= Tφ∗ 
+
+> φ
+
+Tφφ′ . This allows complex error-state trans-formations to be modularly decomposed into a sequence of simpler, fundamental intermediate transformations, which facilitates the analysis of the complex global-local maps.  
+
+> •
+
+Path independence: A direct consequence of transitivity is that the final transformation between any two EqFs is independent of the computational path taken through in-termediate representations. From a practical perspective, this allows for the selection of the simplest and most familiar EqF (e.g., ESKF) as a universal baseline for deriving other EqF variants, without worrying that this simplified choice will affect the correctness of the final conclusions. Based on Theorem 1, we can establish the transformation relationship of the linearized error-state system between EqFs, which is summarized in the following corollary. 
+
+Corollary 1. Consider two arbitrary EqFs of the same system associated with φ and φ∗. If the linearized error-state system of the EqF for φ is given by 
+
+˙ε = Fε + Gn , (19a) 
+
+˜z = Hε + ϵ, (19b)                       
+
+> Error-State: ε∗
+> Jacobians: F∗,G∗,H∗
+> Unobs. Sub: N∗
+> EqF with φ∗
+> Error-State: ε
+> Jacobians: F,G,H
+> Unobs. Sub: N
+> EqF with φ
+> Error-State: ε′
+> Jacobians: F′,G′,H′
+> Unobs. Sub: N′
+> EqF with φ′
+> Tφ∗
+> φTφφ′
+> Transitivity of Transformation
+> Tφ∗
+> φ′=Tφ∗
+> φTφφ′
+
+Fig. 2: The transitivity property of transformation among different EqFs. 
+
+then the linearized error-state system for φ∗ satisfies 
+
+˙ε∗ = F∗ε∗ + G∗n, (20a) 
+
+˜z = H∗ε∗ + ϵ, (20b) 
+
+where 
+
+F∗ = ˙TT −1 + TFT −1, G∗ = TG , H∗ = HT −1, (21) 
+
+and T is the transformation matrix given by (16) .Proof. See the supplementary material. 
+
+D. Example: Transformation from ESKF to SD-EqF 
+
+As a special but important case, ESKF can be viewed as an EqF based on the special orthogonal group SO (3) × R15+3 m
+
+[12]. In ESKF, the global-local map is simple and defined as the general minus ⊖ on the group, i.e., 
+
+φ(ξ) = ξ ⊖ ˆξ
+
+=
+
+
+
+Log ( ˆR−1R), v − ˆv, p − ˆp,
+
+bω − ˆbω , ba − ˆba,
+
+f1 − ˆf1, · · · , fm − ˆfm
+
+ . (22) Substituting the global-local maps of ESKF and SD-EqF into Theorem 1, we can get the explicit expression of the transformation matrix from ESKF to SD-EqF as follows: 
+
+T =
+
+
+
+ˆR 0 0 0 0
+
+[ˆ v]× ˆR I3 0 0 0
+
+[ˆ p]× ˆR 0 I3 0 0
+
+0 0 0 ˆR 0
+
+0 0 0 [ˆ v]× ˆR ˆR
+
+015 ×3m
+
+03m×15 I3m
+
+
+
+. (23) Deriving the linearized error-state system of ESKF is sim-pler than that of other EqFs, and extensive studies have already been carried out. By substituting the linearized error-state system of ESKF and the above transformation into (20), we obtain the linearized error-state system of SD-EqF (see the supplementary material), which is consistent with the result obtained using the conventional EqF approach [7]. IV. C ONSISTENT EQF D ESIGN 
+
+This section leverages the identified transformation relation-ship to address inconsistency in EqF-based estimators. We first characterize how the unobservable subspaces of different EqFs 4evolve under transformation. We then use this relationship to develop a general design methodology that enforces a state-independent unobservable subspace through an appropriate co-ordinate transformation, thereby achieving consistency without requiring ad hoc symmetry analysis. 
+
+A. Inconsistency Issue 
+
+Observability refers to the ability to recover the initial states of a system from all available measurements. The set of states that cannot be uniquely determined constitutes the unobservable subspace. For the time-varying linear system (19), the local observability matrix O can be used for analysis and is defined as 
+
+O = O⊤ 
+
+> 0
+
+O⊤ 
+
+> 1
+
+· · · O⊤ 
+
+> N−1
+
+ , (24) with O0 = H and Ok+1 = OkF + ˙Ok. The unobservable subspace is spanned by the columns of a basis matrix N with 
+
+ON = 0. (25) By substituting the Jacobians of the SD-EqF into (24)-(25), we obtain its basis matrix N as follows:               
+
+> N=
+> 03×303×3I303×6I3· · · I3
+> −g⊤01×301×301×6([ ˆf1]×g)⊤· · · ([ ˆfm]×g)⊤
+> ⊤
+> ,
+> (26)
+
+where the first three columns correspond to the unobservable directions of global position, and the last column, which is state-dependent, corresponds to the unobservable direction of global yaw. As discussed in [26], if the unobservable direc-tions are state-dependent, the filter tends to acquire spurious information along these unobservable directions, leading to inconsistency. In the following subsections, we demonstrate that this inconsistency can be resolved by ensuring a state-independent unobservable subspace by transforming the local coordinate charts. 
+
+B. Consistent EqF Design 
+
+The unobservable subspaces of different EqFs are related by the transformation matrix, as summarized in the following corollary: 
+
+Corollary 2. Consider two arbitrary EqFs of the same system associated with φ and φ∗. Their local observability matrices 
+
+O and O∗ satisfy: 
+
+O∗ = OT−1, (27) 
+
+where T is the transformation matrix given by (16) . Moreover, if the system is unobservable, let N be a basis matrix for the unobservable subspace of the EqF associated with φ. Then, there exists a basis N∗ for the unobservable subspace of the EqF associated with φ∗ such that: 
+
+N∗ = TN . (28) 
+
+Proof. See the supplementary material. This result suggests that estimation consistency can be achieved by selecting a global-local map whose induced transformation renders the unobservable subspace state-independent. By definition, a global-local map is composed of a group action and a local coordinate chart. Unlike con-ventional methods, which achieve consistency by selecting specific group actions, the following theorem provides a more general route based on transforming the local coordinate chart. 
+
+Theorem 2. For any EqF defined by a global-local map 
+
+φ = ϑ ◦ ϕ ˆX−1 with unobservable subspace N, there exists a nonsingular matrix T such that the EqF constructed via the transformed global-local map φ∗ = ( Tϑ) ◦ ϕ ˆX−1 possesses a state-independent unobservable subspace. Proof. First, according to Theorem 1, T is the transformation matrix between these two EqFs. Subsequently, by Corollary 2, the unobservable subspace of the new EqF is spanned by the columns of TN . Finally, the existence of a nonsingular matrix T that renders TN state-independent is guaranteed by the properties of basis transformation in linear algebra [33], which completes the proof. Theorem 2 shifts the focus of consistent EqF design from identifying complex group symmetries to the more direct task of coordinate transformation. It therefore provides a general methodology for achieving consistency in arbitrary unobserv-able systems, especially when intuitive symmetry groups are not readily apparent [29]. 
+
+C. Example: Design Consistent EqF from SD-EqF 
+
+Here, we present an example of designing a consistent EqF for VINS based on Theorem 2. In this example, SD-EqF serves as the auxiliary EqF with global-local map φ, and the newly designed EqF with global-local map φ∗ is named T-EqF 1. The nonsingular matrix is chosen as 
+
+T =
+
+
+
+015 ×3m
+
+[ˆf1]× 03×12 
+
+... ...
+
+[ˆfm]× 03×12 
+
+I15 
+
+I3m
+
+ . (29) Substituting (29) and (26) into (28), one can verify that the unobservable subspace of T-EqF is state-independent, thereby ensuring its consistency. It is worth noting that we can utilize arbitrary EqF as the auxiliary EqF. If the auxiliary EqF is fixed as ESKF, T-EqF is reduced to T-ESKF in [32]. V. E FFICIENT EQF I MPLEMENTATION 
+
+This section uses the identified transformation relationship to resolve the fundamental trade-off between theoretical con-sistency and computational efficiency in EqFs. While advanced EqFs guarantee consistency or other desirable properties, they often introduce non-block-diagonal Jacobians, which signif-icantly increase the computational cost of covariance prop-agation relative to conventional filters [30]. To mitigate this issue, we propose two implementation strategies that leverage the transformation relationship between EqFs: Transforming Propagation (TP) and Transforming Correction (TC). These strategies exploit the block-diagonal structure of an auxiliary   
+
+> 1Outside theorems and corollaries, we abuse the superscript ∗to distinguish T-EqF variables from SD-EqF ones.
+
+5Image: IMU: Timestamp: Fig. 3: Different measurement frequency of IMU and camera. EqF (e.g., ESKF) for the heavy covariance computations, thereby preserving the consistency benefits of the target EqF with minimal computational overhead. 
+
+A. Computational Bottleneck in Covariance Propagation 
+
+IMUs are typically sampled at a much higher frequency than cameras, without loss of generality, let it be q times that of the camera, as shown in Fig. 3. Let tk−1 and tk denote two consecutive camera measurement instants. Covariance propagation between these instants in the EqF framework follows the standard EKF structure: 
+
+Pk|k−1 = ΦkPk−1|k−1Φk⊤ + Qk. (30) where the state transition matrix Φk := Φ(τq , τ 0) and the accumulated noise matrix Qk := Q(τq , τ 0) are computed iteratively over q sub-intervals: 
+
+Φ(τi+1 , τ 0) = Φ(τi+1 , τ i)Φ(τi, τ 0), (31a) 
+
+Q(τi+1 , τ 0) = Φ(τi+1 , τ i)Q(τi, τ 0)Φ(τi+1 , τ i)⊤
+
++ Q(τi+1 , τ i). (31b) The analytical and explicit expressions for Φ(τi+1 , τ i) and 
+
+Q(τi+1 , τ i) are provided in the supplementary material. In SD-EqF, Φ(τi+1 , τ i) and Q(τi+1 , τ i) are block-diagonal: 
+
+Φ =
+
+ΦI 00 I
+
+
+
+, Q =
+
+QI 00 0
+
+
+
+, (32) where ΦI , QI ∈ R15 ×15 relate only to the IMU error-states. As a result, iterative computation of (31) is highly efficient. However, to get better properties, some EqFs might have more complex Jacobians. For instance, in T-EqF, the transition matrix Φ∗(τi+1 , τ i) is no longer block-diagonal and the noise matrix Q∗(τi+1 , τ i) becomes dense: 
+
+Φ∗ =
+
+ Φ∗ 
+
+> I
+
+0Φ∗ 
+
+> IF
+
+I
+
+
+
+, Q∗ =
+
+ Q∗ 
+
+> I
+
+Q∗
+
+> IF
+
+Q∗ 
+
+> F I
+
+Q∗
+
+> F F
+
+
+
+. (33) When the state vector contains a large number of landmarks, the computation of (31) becomes a major bottleneck, with a prohibitive cost of O(qm 3). In the following, we will present two efficient implementations to address this computational bottleneck, with T-EqF as an example. 
+
+B. Implementation 1: Transforming Propagation 
+
+To bypass the aforementioned bottleneck, our first strategy, TP, exploits the transformation relationship to streamline ma-trix operations. The theoretical foundation for this acceleration is established by the following corollary: 
+
+Corollary 3. Consider two arbitrary EqFs of the same system, associated with the global-local maps φ and φ∗, respectively. 
+
+Algorithm 1: Transforming Propagation (TP) 
+
+Input: Covariance: P∗ 
+
+> k|k
+
+and IMU measurements. 
+
+Output: Covariance: P∗
+
+> k+1 |k
+
+.
+
+// T: from auxiliary EqF to target EqF 
+
+// Small-sized matrix computation  
+
+> 1
+
+Initialize ΦI (τ0, τ 0) = I15 , QI (τ0, τ 0) = 015 ; 
+
+> 2
+
+for i ∈ { 0, 1, . . . , q − 1} do  
+
+> 3
+
+ΦI (τi+1 , τ 0) = ΦI (τi+1 , τ i)ΦI (τi, τ 0);
+
+> 4
+
+QI (τi+1 , τ 0) = ΦI (τi+1 , τ i)QI (τi, τ 0)ΦI (τi+1 , τ i)⊤
+
++ QI (τi+1 , τ i);  
+
+> 5
+
+Φk =
+
+ΦI (τq , τ 0) 00 I3m
+
+
+
+; 
+
+> 6
+
+Qk =
+
+QI (τq , τ 0) 00 03m×3m
+
+
+
+;
+
+// Full-state-size matrix computation  
+
+> 7
+
+Φ∗ 
+
+> k
+
+= T( ˆξk|k−1)ΦkT( ˆξk−1|k−1)−1; 
+
+> 8
+
+Q∗ 
+
+> k
+
+= T( ˆξk|k−1)QkT( ˆξk|k−1)⊤; 
+
+> 9
+
+P∗ 
+
+> k|k−1
+
+= Φ∗
+
+> k
+
+P∗
+
+> k−1|k−1
+
+Φ∗ 
+
+> k
+> ⊤
+
++ Q∗
+
+> k
+
+.
+
+The accumulated transition matrices and noise matrices of these two EqFs are related by the transformation matrix: 
+
+Φ∗ 
+
+> k
+
+= T( ˆξk|k−1)ΦkT( ˆξk−1|k−1)−1, (34a) 
+
+Q∗ 
+
+> k
+
+= T( ˆξk|k−1)QkT( ˆξk|k−1)⊤, (34b) 
+
+where T( ˆξk−1|k−1) and T( ˆξk|k−1) are evaluated at ˆξk−1|k−1
+
+and ˆξk|k−1, respectively. Proof. See the supplementary material. By selecting an auxiliary EqF (such as SD-EqF or ESKF) characterized by block-diagonal structures, we can restrict the primary computations to small-scale IMU sub-blocks. As described in Algorithm 1, the full-scale T-EqF matrices are subsequently recovered through the transformations. This approach avoids the prohibitive O(qm 3) cost of dense matrix operations, ensuring efficient covariance propagation for high-dimensional VINS systems. We choose SD-EqF as the auxiliary EqF in this example. In Lines 1-6 , the algorithm first computes the accumulated transition matrix and noise matrix of SD-EqF. Since these matrices are block diagonal as shown in (32), only the small-sized blocks corresponding to the IMU states need to be computed in Lines 3-4. Moreover, these matrices are all fixed-sized small matrices, so the computational costs are negligible. In Lines 7-8 , we transform the small-sized matrices of SD-EqF into the full-state-size matrices of T-EqF. Finally, in Line 9, we propagate the covariance using the transformed matrices. Note that the sparsity of T and Φ∗ 
+
+> k
+
+is exploited to reduce the computational costs in Lines 7-9. 
+
+C. Implementation 2: Transforming Correction 
+
+Instead of directly maintaining the T-EqF covariance P∗
+
+as in TP, an alternative is to track an equivalent covariance 
+
+6Algorithm 2: Transforming Correction (TC) 
+
+Input: Initial guess ( ˆξ0, P∗
+
+> 0
+
+) and all measurements. 
+
+Output: Posterior ˆξk|k, P∗
+
+> k|k
+
+.
+
+// T: from auxiliary EqF to target EqF 
+
+// Initialization  
+
+> 1
+
+ˆξ0|0 = ˆξ0; 
+
+> 2
+
+P0|0 = T( ˆξ0)−1P∗
+
+> 0
+
+T( ˆξ0)−⊤ ;
+
+// Propagation from tk−1 to tk 
+
+> 3
+
+Propagate ˆξk−1|k−1 to ˆξk|k−1; 
+
+> 4
+
+Pk|k−1 = ΦkPk−1|k−1Φ⊤ 
+
+> k
+
++ Qk;
+
+// Correction at tk 
+
+> 5
+
+K = Pk|k−1H⊤ 
+
+> k
+
+(HkPk|k−1H⊤ 
+
+> k
+
++ Rk)−1; 
+
+> 6
+
+Pk|k = ( I − KH k)Pk|k−1;
+
+// Transforming correction at tk 
+
+> 7
+
+ˆξk|k = φ∗− 1(T( ˆξk|k−1)K˜zk
+
+
+
+> ˆξ= ˆξk|k−1
+
+; 
+
+> 8
+
+Pk|k ← T Pk|kT ⊤ with T = T( ˆξk|k)−1T( ˆξk|k−1); 
+
+> 9
+
+P∗ 
+
+> k|k
+
+= T( ˆξk|k)Pk|kT( ˆξk|k)⊤. This line is optional. 
+
+P := T−1P∗T−⊤ and transform it to P∗ only when needed. According to Corollary 3, the propagation equation of the equivalent covariance is exactly the same as that of the auxiliary EqF covariance, thereby avoiding the need to com-pute dense matrices (Detailed derivation can be found in the supplementary material). However, the equivalent covariance is not identical to that of the auxiliary EqF covariance, because during the correction step, it must undergo an additional relative transformation to maintain its relationship with P∗.This additional correction-stage transformation is the defining feature of TC. Algorithm 2 presents the pseudocode for TC. It assumes that both ϕξ◦ and ϕ∗ 
+
+> ξ◦
+
+are bijective, eliminating the need to explicitly maintain the estimated group elements (Remark 1). We also provide an alternative implementation for non-bijective cases in the supplementary material. The key steps of TC are as follows: Lines 1–2: The initial covariance P∗ 
+
+> 0
+
+is transformed into the SD-EqF representation to initialize the tracking of the equivalent covariance. Lines 3–6: Propagation and correction steps are performed using the Jacobians of the SD-EqF, which are computationally efficient due to their block diagonality. Lines 7–9: The state is updated in Line 7 by transforming the SD-EqF Kalman correction into the T-EqF geometry. Crucially, since the evaluation point of the transformation matrix T shifts from ˆξk|k−1 to ˆξk|k after the update, a relative transformation T is applied in Line 8 to maintain the relationship Pk|k = T( ˆξk|k)−1P∗
+
+> k|k
+
+T( ˆξk|k)−⊤ 
+
+for the next iteration. Finally, in Line 9, the covariance can be transformed back to the T-EqF representation for output; however, this step is optional as only the equivalent covariance 
+
+P is required for subsequent recursions. 
+
+Remark 3. Both TP and TC are general implementation strategies that can be applied to any EqF with dense Jacobians to enhance computational efficiency. The only requirement is that the auxiliary EqF must have block-diagonal Jacobians to ensure efficient covariance propagation. 
+
+Remark 4. When selecting between the TP and TC strategies for implementing a new EqF, two primary aspects should be compared: implementation complexity and computational efficiency.  
+
+> •
+
+Implementation complexity: TC is generally easier to integrate into an existing EqF pipeline. It can be regarded as a refinement of the posterior estimate of an established EqF (the auxiliary EqF), requiring minimal changes to the underlying filter logic. By contrast, TP necessitates a complete re-implementation of the EqF from the ground up.  
+
+> •
+
+Computational efficiency: TP offers better computational efficiency than TC in practice. As summarized in Ta-ble 1, the auxiliary EqF serves as the baseline, with additional costs depending on the implemented strategy (See supplementary material). Thanks to the sparsity of the transformation matrix, TP introduces a limited overhead of O(m2) during propagation (Algorithm 1, Lines 7-9). While TC ostensibly incurs a similar O(m2)
+
+overhead (Algorithm 2, Line 8), this step must be exe-cuted after every correction. In practice, due to batched visual measurements and delayed feature initializations [3], VINS estimators continuously perform multiple cor-rections ( p > 1) per camera frame. Therefore, the overall additional cost of TC compounds to O(pm 2), establishing TP as the inherently more efficient alternative. TABLE I: Additional computational costs of different imple-mentations compared to the auxiliary EqF. 
+
+Naive TP TC 
+
+Propagation O(qm 3) O(m2) 0Correction 0 0 O(pm 2)
+
+VI. M ONTE CARLO SIMULATIONS 
+
+In this section, we validate the proposed consistent EqF design and efficient implementation methods through Monte Carlo simulations. Besides ESKF, SD-EqF, and the proposed T-EqF, we also include Invariant SD-EqF (ISD-EqF) in the comparison. ISD-EqF is a consistent filter designed by se-lecting a specific group action that leverages the advantages of both SD-EqF and I-EKF. Detailed derivations and analysis of ISD-EqF are provided in the supplementary material. To ensure a fair comparison, all four estimators are integrated into the same VINS framework [3], with identical data association, feature management, and initialization modules. The only difference among these estimators is the design of the global-local maps and the corresponding Jacobians. During testing, the IMU and camera measurements are generated using a high-fidelity simulator [3], with detailed parameters listed in Table II. 7TABLE II: Simulator basic parameters 
+
+Parameter Value Parameter Value 
+
+Accel. White Noise 2.0e-03 Gyro. White Noise 1.7e-04 Accel. Random Walk 3.0e-03 Gyro. Random Walk 2.0e-05 IMU Freq. 200 Max Landmarks 40 Cam. Freq. 10 Cam. Resolution 752 × 480 Cam. Number Mono Cam. Noise 1 pixel 
+
+A. Estimation Consistency 
+
+We first validate the proposed consistent EqF design by comparing estimator accuracy and consistency. The four es-timators are tested on seven trajectories from OpenVINS. For each trajectory and each estimator, 100 Monte Carlo simulations are conducted. The position and orientation root mean square errors (RM-SEs) over the 100 runs are reported in Table III. Since the unobservable subspaces of ESKF and SD-EqF are state-dependent, both filters suffer from inconsistency and therefore achieve lower accuracy. In contrast, T-EqF shares the same state-independent subspace as ISD-EqF, leading to consistent estimation and improved performance. Although T-EqF does not uniformly outperform ISD-EqF in accuracy, it provides a systematic route for designing consistent EqFs for arbitrary systems. TABLE III: Position (meter) and Orientation (deg) RMSE comparison among ESKF, SD-EqF, and T-EqF on different datasets. 
+
+Trajectory ESKF SD-EqF ISD-EqF T-EqF (Ours) 
+
+Udel-Gore 0.360 / 0.102 0.360 / 0.102 0.254 / 0.092 0.254 / 0.092 
+
+Udel-Gara 0.245 / 1.686 0.249 / 1.704 0.222 / 1.655 0.222 / 1.653 
+
+Udel-Arl-s 1.291 / 0.141 1.291 / 0.141 0.756 / 0.124 0.756 / 0.124 
+
+Udel-Neig 1.625 / 10.94 1.569 / 10.65 1.137 / 7.847 1.139 / 7.855 TUM-Corr 0.169 / 0.082 0.170 / 0.082 0.152 / 0.079 0.152 / 0.079 
+
+TUM-Magi 0.456 / 0.420 0.499 / 0.432 0.376 / 0.392 0.376 / 0.391 
+
+EuRoC-V101 0.232 / 0.027 0.231 / 0.027 0.166 / 0.025 0.166 / 0.025 
+
+To better illustrate the consistency differences among these estimators, we run 1000 Monte Carlo simulations on the Udel-Gore trajectory. The orientation and position normalized estimation error squared (NEES) results are shown in Fig. 4. Compared with SD-EqF, the mean and 95% bounds of the NEES for T-EqF agree closely with the theoretical values, indicating good consistency. We further present the orientation estimation error about the z-axis in Fig. 5. In T-EqF, the estimation errors remain well bounded, whereas in SD-EqF the error exceeds the 3-sigma bound, especially in yaw. This occurs because the corresponding unobservable direction is state-dependent in SD-EqF and is therefore falsely treated as observable, leading to overconfident yaw estimates. 
+
+B. Computational Efficiency 
+
+We next evaluate the computational efficiency of the pro-posed EqF implementations. For T-EqF, we compare three implementations: i) T-EqF(Naive), the naive implementation described in Section V-A; ii) T-EqF(TP); and iii) T-EqF(TC). As for ESKF and SD-EqF, their naive implementations are 0       
+
+> 5
+> 10
+> Ori. NEES
+> SD-EqF T-EqF
+> Experi. mean
+> Experi. 95% bound
+> Theore. mean
+> Theore. 95% bound
+> 050 100 150
+> Time (s)
+> 0
+> 5
+> 10
+> Pos. NEES
+> 050 100 150
+> Time (s)
+
+Fig. 4: Orientation and position NEES over time of 1000 Monte Carlo simulations on Udel-Gore.The plots of ESKF and ISD-EqF are omitted since they are almost the same as SD-EqF and T-EqF, respectively. 2       
+
+> 0
+> 2
+> Yaw Error (deg)  SD-EqF T-EqF
+> 0.5
+> 0.0
+> Pos. X Error (m)
+> 0.0
+> 0.5
+> Pos. Y Error (m)
+> 050 100 150
+> Time (s)
+> 0.0
+> 0.1
+> Pos. Z Error (m)
+> 050 100 150
+> Time (s)
+
+Fig. 5: Estimation error (blue line) and 3-sigma bounds (red dashed line) of IMU yaw and position of 1000 Monte Carlo simulations on Udel-Gore dataset. 0 2 4 6 8 10 12 14    
+
+> Time (ms)
+> T-EqF(TC)
+> T-EqF(TP)
+> T-EqF(Naive)
+> ISD-EqF
+> SD-EqF
+> ESKF Others Correction Propagation
+
+Fig. 6: Average time of processing one camera on dataset Udel-Gore. The test platform is a x86 desktop (R9 7950X@4.5GHz). adopted since their covariance propagation is already efficient. ISD-EqF suffers from the same computational bottleneck as T-EqF. Note that for T-EqF(Naive) and ISD-EqF, the sparsity of the matrices involved in covariance propagation is fully 8200 400 600 800 1000                     
+
+> IMU Frequency
+> 20 40 60 80 100
+> Landmark Number  0.84 0.90 0.98 1.07 1.16
+> 2.01 2.05 2.13 2.22 2.30
+> 3.70 3.74 3.83 3.91 4.00
+> 5.91 5.99 6.05 6.16 6.21
+> 9.01 9.13 9.16 9.24 9.31
+
+SD-EqF                         
+
+> 200 400 600 800 1000
+> IMU Frequency
+> 20 40 60 80 100
+> 5.07 6.49 7.88 9.65 11.3
+> 13.6 22.1 24.1 27.3 30.2
+> 24.8 38.3 43.8 48.8 54.5
+> 40.5 71.2 97.9 122 129
+> 63.7 113 150 186 205
+
+ISD-EqF                         
+
+> 200 400 600 800 1000
+> IMU Frequency
+> 20 40 60 80 100
+> 5.17 6.62 8.06 9.71 11.4
+> 13.5 22.1 24.4 27.9 30.0
+> 24.8 38.5 44.1 48.8 54.2
+> 40.8 72.0 97.3 121 129
+> 64.0 114 150 186 205
+
+T-EqF(Naive)                         
+
+> 200 400 600 800 1000
+> IMU Frequency
+> 20 40 60 80 100
+> 0.90 0.95 1.03 1.11 1.20
+> 2.25 2.22 2.28 2.35 2.43
+> 4.20 4.12 4.13 4.20 4.26
+> 6.70 6.77 6.63 6.69 6.71
+> 10.2 10.3 10.2 10.2 10.2
+
+T-EqF(TP)                         
+
+> 200 400 600 800 1000
+> IMU Frequency
+> 20 40 60 80 100
+> 0.94 1.03 1.11 1.20 1.29
+> 2.52 2.60 2.68 2.76 2.86
+> 5.08 5.11 5.20 5.29 5.39
+> 8.70 8.77 8.84 8.97 9.00
+> 14.1 14.2 14.2 14.3 14.4
+
+T-EqF(TC) 
+
+> 10 0
+> 10 1
+> 10 2
+> Time (ms)
+
+Fig. 7: Average time of processing one camera with different number of landmarks and IMU frequency on dataset Udel-Gore. The result of ESKF is similar to that of SD-EqF and omitted to save space. exploited to reduce computational costs, otherwise their com-putational time would be even higher. The average processing time per camera frame is shown in Fig. 6. The naive T-EqF implementation clearly suffers from the covariance-propagation bottleneck, whereas the proposed TP and TC implementations substantially reduce the runtime. Furthermore, TP is more efficient than TC, especially during correction. As discussed in Remark 4, Line 9 in Algorithm 1 is executed only once per camera frame, whereas Line 8 in Algorithm 2 must be executed multiple times per camera frame in practical applications, leading to higher computational cost for TC. To evaluate the effectiveness of the proposed TP and TC methods in scenarios with many landmarks and high-frequency IMU measurements, we conduct additional simulations by varying the number of landmarks and the IMU frequency. The results are shown in Fig. 7. As the number of landmarks and the IMU frequency increase, the runtime of the naive T-EqF implementation grows substantially, whereas TP and TC maintain relatively low computational cost. Compared with the simplest estimator (ESKF), TP incurs almost no additional computational cost, while TC introduces only a small overhead. VII. E XPERIMENTS ON REAL -WORLD DATASETS 
+
+A. Dataset Experiment on EuRoC MAV 
+
+The proposed T-EqF is further evaluated on the public Eu-RoC MAV dataset. During evaluation, the maximum number of landmarks is capped at 40, and only the left camera is used. Due to the complexities of real-world environments, such as motion blur, imperfect data association, and non-Gaussian noise, performance differences among the estimators are less pronounced than in simulation. Nevertheless, T-EqF maintains superior accuracy over ESKF and SD-EqF across most sequences, as summarized in Table IV. Furthermore, Fig. 8 shows the average computational time per camera frame. Compared with the simulation results, the processing time on real-world datasets is higher because of the overhead of feature extraction and matching. However, as shown in Fig. 8, the proposed TP and TC implementations significantly reduce the computational latency of T-EqF, achieving efficiency compa-rable to ESKF and SD-EqF. TABLE IV: Position (meter) and Orientation (deg) RMSE on EuRoC MAV dataset. 
+
+Dataset ESKF SD-EqF ISD-EqF T-EqF 
+
+V1-01 1.536 / 0.108 1.063 / 0.137 0.998 / 0.099 0.502 / 0.077 
+
+V1-02 1.232 / 0.214 1.930 / 0.226 1.015 / 0.131 0.743 / 0.134 V1-03 5.266 / 0.308 6.925 / 0.363 2.244 / 0.262 2.871 / 0.257 
+
+V2-01 1.890 / 0.195 3.359 / 0.216 1.212 / 0.136 0.777 / 0.142 V2-02 1.731 / 0.104 1.854 / 0.147 2.361 / 0.106 2.754 / 0.103 
+
+V2-03 2.688 / 0.263 1.955 / 0.158 1.181 / 0.189 2.017 / 0.215 MH-01 5.369 / 0.483 6.302 / 0.603 2.254 / 0.471 1.471 / 0.509 MH-02 6.908 / 0.686 3.504 / 0.484 2.202 / 0.415 1.578 / 0.320 
+
+MH-03 3.164 / 0.280 2.536 / 0.264 1.433 / 0.279 1.586 / 0.353 MH-04 6.540 / 1.081 3.221 / 0.807 1.557 / 0.813 1.622 / 0.980 MH-05 3.416 / 0.981 6.207 / 1.043 1.819 / 0.849 1.240 / 0.529 
+
+Average 3.312 / 0.392 3.238 / 0.371 1.523 / 0.313 1.430 / 0.302 V1_01 V1_02 MH_01 MH_02 
+
+> Dataset
+> 2
+> 4
+> 6
+> 8
+> Average Processing Time (ms)  ESKF
+> SD-EqF
+> ISD-EqF
+> T-EqF(Naive)
+> T-EqF(TP)
+> T-EqF(TC)
+
+Fig. 8: Average time of processing one camera frame on EuRoC dataset. 
+
+B. Experiment on an Aerial Robot 
+
+We further validate the proposed approach through challeng-ing experiments on a custom aerial robot platform (Fig. 9 (a)), in which the robot continuously rotates in yaw to increase the estimation difficulty throughout the maneuvers. The platform provides stereo imagery at 30 Hz (848 × 480 pixel resolution) and IMU data at 200 Hz, while ground-truth data are obtained from a high-precision motion capture system. We collect a total of six experimental sequences: three for the Eight motion pattern (Fig. 9 (b)) and three for the Zero motion pattern. Within each sequence, the corresponding pattern is repeated six times, resulting in a total flight distance of approximately 80–85 meters. For each estimator, the maximum number of 9Fig. 9: (a) Aerial robot with a Realsense D430 stereo camera and a Kakute H7 flight controller (MPU6000, 200Hz) (b) Aerial robot flight trajectory shape. (c) A sample frame with tracked features in the experiment. SLAM points is capped at 60 to balance accuracy and com-putational efficiency. Additionally, online camera intrinsic and spatial-temporal calibrations are enabled to enhance overall estimation accuracy. A representative frame displaying the tracked features is shown in Fig. 9 (c). 1 0 1  
+
+> x (m)
+> 2
+> 1
+> 0
+> 1
+> 2
+> y (m)
+> Motion pattern: Eight
+> 202
+> x (m)
+> 2
+> 1
+> 0
+> 1
+> y (m)
+> Motion pattern: Zero
+> SD-EqF
+> T-EqF
+
+Fig. 10: Estimated trajectories of SD-EqF (blue solid) and T-EqF (red solid) on the Eight and Zero motion patterns. The ground-truth trajectories are shown in black dashed lines. Fig. 10 compares the estimated trajectories of SD-EqF and T-EqF against ground truth for both motion patterns in one representative sequence, where the estimated trajectories are aligned to the ground truth using the first frame as the reference. T-EqF yields more accurate trajectory estimates than SD-EqF, especially in the yaw orientation. As discussed earlier, the state-dependent unobservable subspace of SD-EqF leads to overconfident estimates in this direction, resulting in significant drift over time. Finally, the joint comparison of estimation accuracy and computational efficiency for all six estimators is summarized in Fig. 11. The results form three distinct clusters. First, ESKF and SD-EqF are positioned in the top-left corner: they are computationally efficient but suffer from significant drift due to inconsistency. Second, the naive T-EqF and ISD-EqF appear 5.0     
+
+> 7.5
+> 10.0
+> Orientation RMSE (deg)  Motion pattern: Eight
+> 10
+> 20
+> Motion pattern: Zero
+> ESKF
+> SD-EqF
+> ISD-EqF
+> T-EqF(Naive)
+> T-EqF(TP)
+> T-EqF(TC)
+> 5.0 7.5 10.0
+> Computation Time (ms)
+> 0.20
+> 0.25
+> 0.30
+> Position RMSE (m)
+> 5.0 7.5 10.0
+> Computation Time (ms)
+> 0.2
+> 0.4
+> 0.6
+
+Fig. 11: RMSE-Time joint comparison of these estimators on the Eight and Zero motion patterns. Each point represents the average RMSE and time of processing one frame on three sequences. The closer to the bottom-left corner, the better the performance. in the bottom-right corner, demonstrating high estimation ac-curacy at the expense of a heavy computational penalty. Third, T-EqF with the proposed TP and TC implementations lies in the bottom-left corner, achieving the best overall performance by maintaining high accuracy while significantly reducing processing time, with TP delivering the best trade-off overall. VIII. C ONCLUSION AND FUTURE WORK 
+
+This paper proposed an EqF transformation approach that bridges EqF formulations arising from different symmetries and enables consistent and efficient visual–inertial navigation. By introducing the global-local map, we established a non-singular transformation between the error-states of arbitrary EqFs and derived the corresponding transformation laws for linearized error dynamics and unobservable subspaces. These results led to a systematic consistency design principle: for unobservable systems, one can construct a suitable coordinate transformation to obtain an EqF with a state-independent unobservable subspace, thereby bypassing ad hoc symmetry analysis. To address the computational burden introduced by non-block-diagonal Jacobians in high-dimensional estimators, we further developed two efficient implementation strate-gies: Transforming Propagation and Transforming Correction, which exploit the sparsity of a simpler baseline EqF to achieve efficiency comparable to ESKF while preserving consistency. Extensive Monte Carlo simulations, EuRoC evaluations, and real-robot experiments validated the effectiveness of the pro-posed approach in both consistency and efficiency. While the current methodology establishes a foundation for the EqF transformation approach, it leaves the exploration of output equivariance as an open direction for future research. Consequently, future work will focus on integrating output equivariance into the present framework to further mitigate linearization errors and improve estimation accuracy. 10 REFERENCES [1] T. Qin, P. Li, and S. Shen, “VINS-Mono: A Robust and Versatile Monoc-ular Visual-Inertial State Estimator,” IEEE Transactions on Robotics ,vol. 34, no. 4, pp. 1004–1020, Aug. 2018. [2] L. Jin, H. Zhang, and C. Ye, “Camera intrinsic parameters estimation by visual–inertial odometry for a mobile phone with application to assisted navigation,” IEEE/ASME Trans. Mechatronics , vol. 25, no. 4, pp. 1803– 1811, Aug. 2020. [3] P. Geneva, K. Eckenhoff, W. Lee, Y. Yang, and G. Huang, “OpenVINS: A Research Platform for Visual-Inertial Estimation,” in 2020 IEEE International Conference on Robotics and Automation . IEEE, May 2020, pp. 4666–4672. [4] R. Duan, D. P. Paudel, C. Fu, and P. Lu, “Stereo orientation prior for UAV robust and accurate visual odometry,” IEEE/ASME Trans. Mechatronics , vol. 27, no. 5, pp. 3440–3450, Oct. 2022. [5] W. Wang, F. Meng, and X. Yu, “Intelligent multisource autonomous navigation: Review and perspectives,” IEEE/ASME Trans. Mechatronics ,vol. 30, no. 6, pp. 4081–4091, Dec. 2025. [6] X. Wang, X. Li, H. Yu, H. Chang, Y. Zhou, and S. Li, “GIVL-SLAM: A robust and high-precision SLAM system by tightly coupled GNSS RTK, inertial, vision, and LiDAR,” IEEE/ASME Trans. Mechatronics ,vol. 30, no. 2, pp. 1212–1223, Apr. 2025. [7] P. Van Goor, T. Hamel, and R. Mahony, “Equivariant Filter (EqF),” IEEE Transactions on Automatic Control , vol. 68, no. 6, pp. 3501–3512, Jun. 2023. [8] A. Fornasier, Y. Ng, R. Mahony, and S. Weiss, “Equivariant Filter Design for Inertial Navigation Systems with Input Measurement Biases,” in 
+
+2022 International Conference on Robotics and Automation . IEEE, May 2022, pp. 4333–4339. [9] P. van Goor and R. Mahony, “EqVIO: An Equivariant Filter for Visual-Inertial Odometry,” IEEE Transactions on Robotics , vol. 39, no. 5, pp. 3567–3585, Oct. 2023. [10] Y. Ge, P. van Goor, and R. Mahony, “Equivariant filter design for discrete-time systems,” in 2022 IEEE 61st Conference on Decision and Control (CDC) , Dec. 2022, pp. 1243–1250. [11] A. Tao, Y. Luo, C. Xia, C. Guo, and X. Li, “Equivariant filter for tightly coupled LiDAR-inertial odometry,” in 2025 IEEE International Conference on Robotics and Automation (ICRA) , May 2025, pp. 2147– 2153. [12] A. Fornasier, Y. Ge, P. Van Goor, R. Mahony, and S. Weiss, “Equivariant symmetries for inertial navigation systems,” Automatica , vol. 181, p. 112495, Nov. 2025. [13] Y. Ge, G. Delama, M. Scheiber, A. Fornasier, P. Van Goor, S. Weiss, and R. Mahony, “The difference between the left and right invariant extended kalman filter,” Control Eng. Pract. , vol. 167, p. 106656, Feb. 2026. [14] N. Trawny and S. I. Roumeliotis, “Indirect kalman filter for 3d attitude estimation,” University of Minnesota, Dept. of Comp. Sci. & Eng., Tech. Rep , vol. 2, p. 2005, 2005. [15] J. Sola, “Quaternion kinematics for the error-state Kalman filter,” arXiv preprint arXiv:1711.02508 , 2017. [16] L. Chang, F. Zha, and F. Qin, “Indirect kalman filtering based atti-tude estimation for low-cost attitude and heading reference systems,” 
+
+IEEE/ASME Trans. Mechatronics , vol. 22, no. 4, pp. 1851–1858, Aug. 2017. [17] A. Barrau and S. Bonnabel, “The Invariant Extended Kalman Filter as a Stable Observer,” IEEE Transactions on Automatic Control , vol. 62, no. 4, pp. 1797–1812, Apr. 2017. [18] P. Shi, Z. Zhu, S. Sun, X. Zhao, and M. Tan, “Invariant extended kalman filtering for tightly coupled LiDAR-inertial odometry and mapping,” 
+
+IEEE/ASME Trans. Mechatronics , vol. 28, no. 4, pp. 2213–2224, Aug. 2023. [19] A. Barrau and S. Bonnabel, “The Geometry of Navigation Problems,” 
+
+IEEE Transactions on Automatic Control , vol. 68, no. 2, pp. 689–704, Feb. 2023. [20] C. Xia, X. Li, S. Li, and Y. Zhou, “Invariant-EKF-based GNSS/INS/vision integration with high convergence and accuracy,” 
+
+IEEE/ASME Trans. Mechatronics , vol. 30, no. 6, pp. 4238–4249, Dec. 2025. [21] Z. He, S. Teng, T.-Y. Lin, M. Ghaffari, and Y. Gu, “Invariant filtering for full-state estimation of ground robots in noninertial environments,” 
+
+IEEE/ASME Trans. Mechatronics , pp. 1–10, 2025. [22] G. P. Huang, A. I. Mourikis, and S. I. Roumeliotis, “Analysis and im-provement of the consistency of extended Kalman filter based SLAM,” in 2008 IEEE International Conference on Robotics and Automation ,May 2008, pp. 473–479. [23] C. Tian, F. He, and N. Hao, “Unobservable subspace evolution and alignment for consistent visual-inertial navigation,” arXiv:2511.17992 ,no. arXiv:2511.17992, Nov. 2025. [24] J. A. Hesch, D. G. Kottas, S. L. Bowman, and S. I. Roumeliotis, “Con-sistency Analysis and Improvement of Vision-aided Inertial Navigation,” 
+
+IEEE Transactions on Robotics , vol. 30, no. 1, pp. 158–176, Feb. 2014. [25] C. Chen, Y. Yang, P. Geneva, and G. Huang, “FEJ2: A Consistent Visual-Inertial State Estimator Design,” in 2022 International Conference on Robotics and Automation . IEEE, May 2022, pp. 9506–9512. [26] Y. Song, L. Zhao, and S. Huang, “Affine EKF: Exploring and utilizing sufficient and necessary conditions for observability maintenance to improve EKF consistency,” arXiv:2412.10809 , Dec. 2024. [27] N. Hao, C. Tian, and F. He, “A transformation-based consistent estima-tion framework: Analysis, design and applications,” arXiv:2502.05008 ,Feb. 2025. [28] A. Barrau and S. Bonnabel, “An EKF-SLAM algorithm with consistency properties,” arXiv:1510.06263 , Sep. 2016. [29] Z. Zhang, Y. Song, S. Huang, R. Xiong, and Y. Wang, “Toward Consistent and Efficient Map-Based Visual-Inertial Localization: Theory Framework and Filter Design,” IEEE Transactions on Robotics , vol. 39, no. 4, pp. 2892–2911, Aug. 2023. [30] Y. Yang, C. Chen, W. Lee, and G. Huang, “Decoupled Right Invariant Error States for Consistent Visual-Inertial Navigation,” IEEE Robotics and Automation Letters , vol. 7, no. 2, pp. 1627–1634, Apr. 2022. [31] C. Chen, Y. Peng, and G. Huang, “Visual-inertial state estimation with decoupled error and state representations,” in Proc. of International Workshop on the Algorithmic Foundations of Robotics, Chicago, IL ,2024. [32] C. Tian, N. Hao, and F. He, “T-ESKF: Transformed error-state kalman filter for consistent visual-inertial navigation,” IEEE Robotics and Au-tomation Letters , vol. 10, no. 2, pp. 1808–1815, Feb. 2025. [33] R. A. Horn and C. R. Johnson, Matrix Analysis . Cambridge: Cambridge University Press, 1985. [34] A. I. Mourikis and S. I. Roumeliotis, “A Multi-State Constraint Kalman Filter for Vision-aided Inertial Navigation,” in Proceedings 2007 IEEE International Conference on Robotics and Automation . IEEE, Apr. 2007, pp. 3565–3572. [35] Y. Yang, B. P. Wisely Babu, C. Chen, G. Huang, and L. Ren, “Analytic Combined IMU Integration (ACI 2 ) For Visual Inertial Navigation,” in 2020 IEEE International Conference on Robotics and Automation .IEEE, May 2020, pp. 4680–4686. 
+
+11 Supplementary Material for “Equivariant Filter Transformations for Consistent and Efficient Visual–Inertial Navigation” 
+
+In this supplementary material, we provide detailed proofs and derivations that support the main manuscript. Specifically, we present full proofs of Corollaries 1–3, a step-by-step derivation of Algorithm 2 (including the non-bijective case), explicit transformations among representative EqFs (ESKF, SD-EqF, RI-EKF, LI-EKF, ISD-EqF, and T-EqF), transformed unobservable subspaces and their consistency implications, complete continuous- and discrete-time Jacobians for key filters, and a detailed computational complexity analysis of the naive, TP, and TC implementations. IX. P ROOFS AND DERIVATIONS 
+
+A. Proof of Corollary 1 
+
+Corollary 4. Consider two arbitrary EqFs of the same system, associated with φ and φ∗. If the linearized error-state system of the EqF associated with φ is given by 
+
+˙ε = Fε + Gn , (35a) 
+
+˜z = Hε + ϵ, (35b) 
+
+then the linearized error-state system associated with φ∗ satisfies 
+
+˙ε∗ = F∗ε∗ + G∗n, (36a) 
+
+˜z = H∗ε∗ + ϵ, (36b) 
+
+where 
+
+F∗ = ˙TT −1 + TFT −1, (37) 
+
+G∗ = TG , (38) 
+
+H∗ = HT −1, (39) 
+
+and T is the transformation matrix given by Theorem 1 (in the primary manuscript). Proof. By Theorem 1 (in the primary manuscript), the error-states of the two EqFs are related by 
+
+ε∗ = Tε, (40) where T is nonsingular. Taking the time derivative of both sides gives 
+
+˙ε∗ = ˙Tε + T ˙ε. (41) Substituting (35a) and (40) into (41) yields 
+
+˙ε∗ =
+
+ ˙TT −1 + TFT −1
+
+ε∗ + TGn (42a) 
+
+=: F∗ε∗ + G∗n, (42b) Similarly, substituting (40) into (35b) gives 
+
+˜z = HT −1ε∗ + ϵ (43a) 
+
+=: H∗ε∗ + ϵ, (43b) which completes the proof. 
+
+B. Proof of Corollary 2 
+
+Corollary 5. Consider two arbitrary EqFs of the same system, associated with φ and φ∗. Their local observability matrices 
+
+O and O∗ satisfy 
+
+O∗ = OT−1, (44) 
+
+where T is the transformation matrix given by Theorem 1 (in the primary manuscript). Moreover, if the system is unobservable, let N be a basis matrix for the unobservable subspace of the EqF associated with φ. Then there exists a basis matrix N∗ for the unobservable subspace of the EqF associated with φ∗ such that 
+
+N∗ = TN . (45) 12 Proof. Equation (44) can be proved by induction. First, for k = 0 , we have O∗ 
+
+> 0
+
+= H∗ = HT −1 = O0T−1. Then, assuming that O∗ 
+
+> k−1
+
+= Ok−1T−1 holds, we have: 
+
+O∗ 
+
+> k
+
+= O∗
+
+> k−1
+
+F∗ + ˙O∗ 
+
+> k−1
+
+(46a) 
+
+= Ok−1T−1(TFT −1 + ˙TT −1) + ( ˙Ok−1T−1 + Ok−1 ˙T−1) (46b) 
+
+= ( Ok−1F + ˙Ok−1)T−1 + Ok−1 (T−1 ˙TT −1 + ˙T−1)
+
+| {z }
+
+> 0
+
+(46c) 
+
+= OkT−1. (46d) Therefore, by induction, we obtain 
+
+O∗ =
+
+
+
+O∗
+
+> 0
+
+O∗
+
+> 1
+
+...
+
+O∗
+
+> n
+
+ =
+
+
+
+O0
+
+O1
+
+...
+
+On
+
+ T−1 = OT−1, (47) which proves (44). If the system is unobservable, let the columns of N form a basis for the unobservable subspace associated with φ, so that 
+
+ON = 0. For the EqF associated with φ∗, we seek a basis matrix N∗ satisfying O∗N∗ = 0. Substituting (44) into this condition yields 
+
+(OT−1)N∗ = 0. (48) By defining N∗ = TN , we have: 
+
+OT−1(TN ) = O(T−1T)N = ON = 0. (49) Since T is nonsingular and the columns of N are linearly independent, the columns of N∗ = TN are also linearly independent. Moreover, because rank (O∗) = rank (O), the null-space dimension is preserved. Therefore, N∗ = TN is a valid basis for the unobservable subspace of the EqF associated with φ∗. This completes the proof. 
+
+C. Proof of Corollary 3 
+
+Corollary 6. Consider two arbitrary EqFs of the same system, associated with the global-local maps φ and φ∗, respectively. Their accumulated transition matrices and noise matrices are related by the transformation matrix as follows: 
+
+Φ∗ 
+
+> k
+
+= T( ˆξk|k−1)ΦkT( ˆξk−1|k−1)−1, (50) 
+
+Q∗ 
+
+> k
+
+= T( ˆξk|k−1)QkT( ˆξk|k−1)⊤, (51) 
+
+where T( ˆξk−1|k−1) and T( ˆξk|k−1) are the transformation matrices from φ to φ∗ evaluated at ˆξk−1|k−1 and ˆξk|k−1, respectively. Proof. Proof of (50): The accumulated transition matrix Φk = Φ(τq , τ 0) is obtained by solving ddτ Φ(τ, τ 0) = Fτ Φ(τ, τ 0), Φ(τ0, τ 0) = I, (52) where Fτ is the state-propagation Jacobian evaluated at ˆξτ . The definition of Φ∗(τ, τ 0) is analogous, with Fτ replaced by F∗ 
+
+> τ
+
+.Define Ψ(τ ) = Tτ Φ(τ, τ 0)T−1 
+
+> τ0
+
+, where Tτ denotes the transformation matrix evaluated at ˆξτ . Differentiating Ψ(τ ) with respect to τ yields: ddτ Ψ(τ ) = ˙Tτ Φ(τ, τ 0)T−1 
+
+> τ0
+
++ Tτ
+
+ddτ Φ(τ, τ 0)T−1
+
+> τ0
+
+= ˙Tτ Φ(τ, τ 0)T−1 
+
+> τ0
+
++ Tτ Fτ Φ(τ, τ 0)T−1
+
+> τ0
+
+= ( ˙Tτ T−1 
+
+> τ
+
++ Tτ Fτ T−1 
+
+> τ
+
+)Ψ(τ )= F∗ 
+
+> τ
+
+Ψ(τ ).
+
+(53) Since Ψ(τ ) satisfies the same differential equation as Φ∗(τ, τ 0) and shares the same initial condition Ψ(τ0) = Φ∗(τ0, τ 0) = I,uniqueness implies that Ψ(τ ) = Φ∗(τ, τ 0). Consequently, 
+
+Φ∗(τq , τ 0) = Tτq Φ(τq , τ 0)T−1 
+
+> τ0
+
+. (54) During propagation, ˆξτ0 and ˆξτq correspond to ˆξk−1|k−1 and ˆξk|k−1, respectively. Therefore, 
+
+Φ∗ 
+
+> k
+
+= T( ˆξk|k−1)ΦkT( ˆξk−1|k−1)−1. (55) 13 Proof of (51): The accumulated noise matrix Qk = Q(τq , τ 0) is computed by integrating the noise covariance over time: 
+
+Q(τq , τ 0) = 
+
+Z τq
+
+> τ0
+
+Φ(τq , τ )Gτ QcGτ ⊤Φ(τq , τ )⊤dτ, (56) where Gτ is the noise propagation Jacobian evaluated at ˆξτ , and Qc is the covariance of the continuous-time noise. Then, the accumulated noise matrix Q∗(τq , τ 0) is given by 
+
+Q∗(τq , τ 0) = 
+
+Z τq
+
+> τ0
+
+Φ∗(τq , τ )G∗ 
+
+> τ
+
+QcG∗
+
+> τ
+> ⊤
+
+Φ∗(τq , τ )⊤dτ
+
+=
+
+Z τq
+
+> τ0
+
+Tτq Φ(τq , τ )T−1 
+
+> τ
+
+Tτ Gτ QcGτ ⊤T⊤ 
+
+> τ
+
+Φ(τq , τ )⊤T⊤ 
+
+> τq
+
+dτ
+
+= Tτq
+
+Z τq
+
+> τ0
+
+Φ(τq , τ )Gτ QcGτ ⊤Φ(τq , τ )⊤dτ
+
+
+
+T⊤
+
+> τq
+
+= Tτq Q(τq , τ 0)T⊤ 
+
+> τq
+
+.
+
+(57) Substituting τq with the corresponding discrete-time instant gives 
+
+Q∗ 
+
+> k
+
+= T( ˆξk|k−1)QkT( ˆξk|k−1)⊤, (58) which completes the proof. 14 D. Derivation of Algorithm 2 (Transforming Correction) 
+
+Algorithm 2 is derived by tracking an equivalent covariance P := T−1P∗T−⊤ instead of tracking the T-EqF covariance P∗
+
+directly. Table V presents the derivation side by side. The left column shows the naive T-EqF implementation (i.e., T-EqF(Naive) in the primary manuscript), which propagates P∗ using the T-EqF Jacobians. The right column derives the corresponding steps of Algorithm 2 by substituting the transformation relationship 
+
+P = T−1P∗T−⊤ (59) into each step (i.e., initialization, propagation, and correction) in the left column, where T is evaluated at the output state estimate of the corresponding step. The blue annotations in the right column highlight the intermediate algebraic details behind this substitution. As a result, Algorithm 2 operates entirely on P using the computationally efficient Jacobians of the auxiliary EqF (e.g., SD-EqF), while maintaining the transformation relationship (59) at the end of each step (Lines 2, 4, and 8). TABLE V: Comparison of the naive implementation and Algorithm 2. 
+
+Naive Implementation ( P∗) Transforming Correction ( P)
+
+//Initialization: //Initialization: 
+
+1 ˆξ0|0 = ˆξ0; ˆξ0|0 = ˆξ0;2 P∗ 
+
+> 0|0
+
+= P∗
+
+> 0
+
+; P0|0 = T( ˆξ0)−1P∗
+
+> 0
+
+T( ˆξ0)−⊤ ;
+
+//Propagation from tk−1 to tk: //Propagation from tk−1 to tk:
+
+3 Propagate ˆξk−1|k−1 to ˆξk|k−1; Propagate ˆξk−1|k−1 to ˆξk|k−1;4 P∗ 
+
+> k|k−1
+
+= Φ∗
+
+> k
+
+P∗
+
+> k−1|k−1
+
+Φ∗ 
+
+> k
+> ⊤
+
++ Q∗
+
+> k
+
+; Pk|k−1 = ΦkPk−1|k−1Φ⊤ 
+
+> k
+
++ Qk;Given Pk−1|k−1 = T( ˆξk−1|k−1)−1P∗
+
+> k−1|k−1
+
+T( ˆξk−1|k−1)−⊤ ,
+
+Φk = T( ˆξk|k−1)−1Φ∗
+
+> k
+
+T( ˆξk−1|k−1),and Qk = T( ˆξk|k−1)−1Q∗
+
+> k
+
+T( ˆξk|k−1)−⊤ ,we have: 
+
+Pk|k−1 = T( ˆξk|k−1)−1P∗
+
+> k|k−1
+
+T( ˆξk|k−1)−⊤ .
+
+//Correction at tk: //Correction at tk:
+
+5 K∗ = P∗
+
+> k|k−1
+
+H∗⊤  
+
+> k
+
+(H∗
+
+> k
+
+P∗
+
+> k|k−1
+
+H∗⊤  
+
+> k
+
++ R)−1; K = Pk|k−1H⊤ 
+
+> k
+
+(HkPk|k−1H⊤ 
+
+> k
+
++ R)−1;6 P∗ 
+
+> k|k
+
+= ( I − K∗H∗
+
+> k
+
+)P∗
+
+> k|k−1
+
+; Pk|k = ( I − KH k)Pk|k−1;Given Hk = H∗
+
+> k
+
+T( ˆξk|k−1), we have: 
+
+K = T( ˆξk|k−1)−1K∗,and Pk|k = T( ˆξk|k−1)−1P∗
+
+> k|k
+
+T( ˆξk|k−1)−⊤ .Note that T is still evaluated at ˆξk|k−1.
+
+//Transforming Correction at tk:
+
+7 ˆξk|k = φ∗− 1(K∗˜zk)|ˆξ= ˆξk|k−1 . ˆξk|k = φ∗− 1 T( ˆξk|k−1)K˜zk
+
+
+
+> ˆξ= ˆξk|k−1
+
+;8 – Pk|k ← T Pk|kT ⊤ with T = T( ˆξk|k)−1T( ˆξk|k−1).After the transformation, we have: 
+
+T( ˆξk|k−1)K˜zk = K∗˜zk,and Pk|k = T( ˆξk|k)−1P∗
+
+> k|k
+
+T( ˆξk|k)−⊤ .Note that T is evaluated at ˆξk|k as expected. 
+
+E. Algorithm 2 when ϕξ◦ or ϕ∗ 
+
+> ξ◦
+
+is not bijective 
+
+The implementation presented in Table V follows a standard EKF structure under the assumption that the map ϕξ◦ and 
+
+ϕ∗ 
+
+> ξ◦
+
+are bijective. In that case, the estimated group element ˆX and ˆX∗ are uniquely determined by the state estimate ˆξ and therefore does not need to be maintained explicitly. Although this bijectivity holds for the VINS estimators analyzed in this work, it may not hold for other manifolds or applications. When ϕξ◦ or ϕ∗ 
+
+> ξ◦
+
+is not bijective, the group-element estimates must be maintained explicitly. For completeness, Table VI compares the naive implementation with Algorithm 2 for the non-bijective case. (Algorithm 1 would also need to be modified in this setting, but the required changes are straightforward and therefore omitted.) 15 TABLE VI: Comparison of the naive implementation and Algorithm 2 when ϕξ◦ or ϕ∗ 
+
+> ξ◦
+
+is not bijective. 
+
+Naive Implementation ( P∗) Transforming Correction ( P)
+
+//Initialization: //Initialization: 
+
+1 ξ◦ = ˆξ0; ξ◦ = ˆξ0;2 – ˆX0|0 = I;3 ˆX∗ 
+
+> 0|0
+
+= I; ˆX∗ 
+
+> 0|0
+
+= I;4 P∗ 
+
+> 0|0
+
+= P∗
+
+> 0
+
+; P0|0 = T( ˆX0, ˆX∗ 
+
+> 0
+
+)−1P∗
+
+> 0
+
+T( ˆX0, ˆX∗ 
+
+> 0
+
+)−⊤ ;
+
+//Propagation from tk−1 to tk: //Propagation from tk−1 to tk:
+
+5 – Propagate ˆXk−1|k−1 to ˆXk|k−1;6 Propagate ˆX∗ 
+
+> k−1|k−1
+
+to ˆX∗
+
+> k|k−1
+
+; Propagate ˆX∗ 
+
+> k−1|k−1
+
+to ˆX∗
+
+> k|k−1
+
+;7 P∗ 
+
+> k|k−1
+
+= Φ∗
+
+> k
+
+P∗
+
+> k−1|k−1
+
+Φ∗ 
+
+> k
+> ⊤
+
++ Q∗
+
+> k
+
+; Pk|k−1 = ΦkPk−1|k−1Φ⊤ 
+
+> k
+
++ Q;Same as Table 1, we have: 
+
+Pk|k−1 = T( ˆXk|k−1, ˆX∗
+
+> k|k−1
+
+)−1P∗
+
+> k|k−1
+
+T( ˆXk|k−1, ˆX∗
+
+> k|k−1
+
+)−⊤ .
+
+//Correction at tk: //Correction at tk:
+
+8 K∗ = P∗
+
+> k|k−1
+
+H∗⊤  
+
+> k
+
+(H∗
+
+> k
+
+P∗
+
+> k|k−1
+
+H∗⊤  
+
+> k
+
++ R)−1; K = Pk|k−1H⊤ 
+
+> k
+
+(HkPk|k−1H⊤ 
+
+> k
+
++ R)−1;9 P∗ 
+
+> k|k
+
+= ( I − K∗H∗
+
+> k
+
+)P∗
+
+> k|k−1
+
+; Pk|k = ( I − KH k)Pk|k−1;Same as Table 1, we have: 
+
+K = T( ˆXk|k−1, ˆX∗
+
+> k|k−1
+
+)−1K∗,and Pk|k = T( ˆXk|k−1, ˆX∗
+
+> k|k−1
+
+)−1P∗
+
+> k|k
+
+T( ˆXk|k−1, ˆX∗
+
+> k|k−1
+
+)−⊤ .Note that T is still evaluated at ˆXk|k−1 and ˆX∗
+
+> k|k−1
+
+.
+
+//Transforming Correction at tk:
+
+10 – ∆ = DE|I ϕξ◦ (E)†Dε|0ϑ−1(ε)K˜zk;11 ∆∗ = DE|I ϕ∗ 
+
+> ξ◦
+
+(E)†Dε|0ϑ∗− 1(ε)K∗˜zk; ∆∗ = DE|I ϕ∗ 
+
+> ξ◦
+
+(E)†Dε|0ϑ∗− 1(ε)T( ˆXk|k−1, ˆX∗
+
+> k|k−1
+
+)K˜zk;12 – ˆXk|k = exp(∆) ˆXk|k−1;13 ˆX∗ 
+
+> k|k
+
+= exp(∆ ∗) ˆX∗
+
+> k|k−1
+
+. ˆX∗ 
+
+> k|k
+
+= exp(∆ ∗) ˆX∗
+
+> k|k−1
+
+;14 – T = T( ˆXk|k, ˆX∗
+
+> k|k
+
+)−1T( ˆXk|k−1, ˆX∗
+
+> k|k−1
+
+);15 – Pk|k ← T Pk|kT ⊤.After the transformation, we have: 
+
+T( ˆXk|k−1, ˆX∗
+
+> k|k−1
+
+)K˜zk = K∗˜zk,and Pk|k = T( ˆXk|k, ˆX∗
+
+> k|k
+
+)−1P∗
+
+> k|k
+
+T( ˆXk|k, ˆX∗
+
+> k|k
+
+)−⊤ .Note that T is evaluated at ˆXk|k and ˆX∗ 
+
+> k|k
+
+as expected. As noted in Remark 1 (in the primary manuscript), when bijectivity is lost, the transformation matrix T becomes a function of the group-element estimates ˆX and ˆX∗, i.e., T = T( ˆX, ˆX∗). Consequently, both estimates must be tracked throughout the filtering process:  
+
+> •
+
+During the propagation step (Lines 5–6), both ˆX and ˆX∗ are updated via their respective kinematic lifts [7].  
+
+> •
+
+During the correction step, the group-element corrections ∆ and ∆∗ are computed (Lines 10–11) and then used to update 
+
+ˆX and ˆX∗ (Lines 12–13) [10]. Although this formulation requires maintaining two group-element estimates, covariance propagation and correction are still performed only once. Hence, the additional computational overhead remains limited relative to the bijective case. 16 X. T RANSFORMATIONS BETWEEN REPRESENTATIVE EQFS
+
+Due to space limitations, the primary manuscript presents only the transformation from ESKF to SD-EqF and omits the detailed derivation. In this section, we provide that derivation in full. We also present transformations involving other representative EqFs, including the Right-Invariant EKF (RI-EKF), the Left-Invariant EKF (LI-EKF), and the Invariant-SD-EqF (ISD-EqF). 
+
+A. Transformation from ESKF to SD-EqF 
+
+We first recall Theorem 1 in the primary manuscript. Given two EqFs associated with φ and φ∗, their error-states are related by the linear transformation 
+
+ε = Tε∗, (60) where T is the nonsingular matrix 
+
+T = D ξ| ˆξ φ(ξ) · Dε∗|0φ∗− 1(ε∗). (61) The transformation matrix from ESKF to SD-EqF is computed as follows 2.
+
+Step 1. Compute the global-local maps. Let φ denote the global-local map of the SD-EqF. To derive φ, we first compute 
+
+ϕ ˆX−1 :
+
+ϕ ˆX−1 (ξ) = 
+
+
+
+A ˆC−1,
+
+Ad ∨
+
+> Γ( ˆC)
+
+b + ˆ γ∨,
+
+f − ˆp
+
+ . (62) Since ϕ◦ 
+
+> ξ
+
+is bijective, ˆX = ( ˆC, ˆγ, ˆp) is uniquely determined by ˆξ = ( ˆA, ˆb, ˆf ). Therefore, the above expression can be rewritten as 
+
+ϕ ˆX−1 (ξ) = 
+
+
+
+A ˆA−1,
+
+Ad ∨
+
+> Γ( ˆA)
+
+(b − ˆb),
+
+f − ˆf
+
+ . (63) Given that ϑ(e) = (log( eA)∨, e b, e f ), we have 
+
+φ(ξ) = ϑ ◦ ϕ ˆX−1 (ξ)=
+
+
+
+log( A ˆA−1)∨,
+
+Ad ∨
+
+> Γ( ˆA)
+
+(b − ˆb),
+
+f − ˆf
+
+ . (64) Let φ∗ denote the global-local map of ESKF, which coincides with its error-state and is given by 
+
+φ∗(ξ) = 
+
+
+
+log( ˆR−1R)∨, v − ˆv, p − ˆp,
+
+b − ˆb,
+
+f − ˆf
+
+ , (65) with 
+
+φ∗− 1(ε∗) = 
+
+
+
+ˆR exp([ ε∗
+
+> R
+
+]×), ˆv + ε∗
+
+> v
+
+, ˆp + ε∗
+
+> p
+
+,
+
+ˆb + ε∗
+
+> b
+
+,
+
+ˆf + ε∗
+
+> f
+
+ . (66) 
+
+Step 2. Compute the Jacobians. 
+
+Dε∗|0φ∗− 1(ε∗)[ ε∗] = 
+
+
+
+ˆR[ε∗
+
+> R
+
+]×, ε∗
+
+> v
+
+, ε∗
+
+> p
+
+,
+
+ε∗
+
+> b
+
+,
+
+ε∗
+
+> f
+
+ , (67) 
+
+Dξ| ˆξ φ(ξ)[ μ] = 
+
+ μA ˆA−1∨,
+
+Ad ∨
+
+> Γ( ˆA)
+
+μb,μf
+
+
+
+=
+
+
+
+(μR ˆR−1)∨, μ v − μR ˆR−1 ˆv, μ p − μR ˆR−1 ˆp,
+
+Ad ∨
+
+> Γ( ˆA)
+
+μb,μf
+
+ ,
+
+(68)    
+
+> 2For convenience, we reverse the notation used in the primary manuscript: the starred variables (ε∗, φ ∗)now refer to ESKF, whereas the unstarred variables
+> (ε, φ )refer to SD-EqF, RI-EKF, LI-EKF, or ISD-EqF.
+
+17 where μ = ( μA, μ b, μ f ) =  (μR, μ v, μ p), μ b, μ f
+
+ belongs to the tangent space of M at ˆξ. Combining (67) and (68) yields 
+
+ε = D ξ| ˆξ φ(ξ) · Dε∗|0φ∗− 1(ε∗)[ ε∗]=
+
+
+
+( ˆR[ε∗
+
+> R
+
+]× ˆR−1)∨, ε∗ 
+
+> v
+
+− ˆR[ε∗
+
+> R
+
+]× ˆR−1 ˆv, ε∗ 
+
+> p
+
+− ˆR[ε∗
+
+> R
+
+]× ˆR−1 ˆp,
+
+Ad ∨
+
+> Γ( ˆA)
+
+ε∗
+
+> b
+
+,
+
+ε∗
+
+> f
+
+
+
+=
+
+
+
+ˆRε∗
+
+> R
+
+, [ˆ v]× ˆRε∗ 
+
+> R
+
++ ε∗
+
+> v
+
+, [ˆ p]× ˆRε∗ 
+
+> R
+
++ ε∗
+
+> p
+
+,
+
+Ad ∨
+
+> Γ( ˆA)
+
+ε∗
+
+> b
+
+,
+
+ε∗
+
+> f
+
+ .
+
+(69) 
+
+Step 3. Compute the transformation matrix. Rewriting (69) in matrix form yields the transformation matrix from ESKF to SD-EqF: 
+
+εR
+
+εv
+
+εp
+
+εb
+
+εf
+
+| {z } 
+
+> SD-EqF error-state
+
+=
+
+
+
+ˆR 0 0 0 0
+
+[ˆ v]× ˆR I3 0 0 0
+
+[ˆ p]× ˆR 0 I3 0 00 0 0 Ad ∨ 
+
+> Γ( ˆA)
+
+00 0 0 0 I3m
+
+| {z }
+
+> TSD-EqF ESKF
+
+
+
+ε∗
+
+> R
+
+ε∗
+
+> v
+
+ε∗
+
+> p
+
+ε∗
+
+> b
+
+ε∗
+
+> f
+
+| {z } 
+
+> ESKF error-state
+
+. (70) 
+
+B. Transformation from ESKF to RI-EKF 
+
+In RI-EKF, the IMU state and the feature state are defined on SE 2+ m(3) . The global-local map (i.e., the error-state definition) in RI-EKF is given by 
+
+φ(ξ) = 
+
+
+
+log( R ˆR−1)∨, J v − R ˆR−1 ˆv, J p − R ˆR−1 ˆp,
+
+b − ˆb,
+
+J f1 − R ˆR−1ˆf1
+
+, . . . , J f1 − R ˆR−1ˆfm
+
+ , (71) with J = J−1
+
+> l
+
+
+
+log( R ˆR−1)∨
+
+
+
+. Then the Jacobian is given by 
+
+Dξ| ˆξ φ(ξ)[ μ] = 
+
+
+
+(μR ˆR−1)∨, μ v − μR ˆR−1 ˆv, μ p − μR ˆR−1 ˆp,μb,μf1 − μR ˆR−1ˆf1, . . . , μ fm − μR ˆR−1ˆfm
+
+ . (72) Combining (67) and (72) yields 
+
+ε = D ξ| ˆξ φ(ξ) · Dε∗|0φ∗− 1(ε∗)[ ε∗]=
+
+
+
+ˆRε∗
+
+> R
+
+, [ˆ v]× ˆRε∗ 
+
+> R
+
++ ε∗
+
+> v
+
+, [ˆ p]× ˆRε∗ 
+
+> R
+
++ ε∗
+
+> p
+
+,
+
+ε∗
+
+> b
+
+,
+
+[ˆf1]× ˆRε∗ 
+
+> R
+
++ ε∗ 
+
+> f1
+
+, . . . , [ˆfm]× ˆRε∗ 
+
+> R
+
++ ε∗
+
+> fm
+
+ . (73) Rewriting the above equation in matrix form gives the transformation matrix from ESKF to RI-EKF as follows: 
+
+
+
+εR
+
+εv
+
+εp
+
+εb
+
+εf1
+
+...
+
+εfm
+
+| {z } 
+
+> RI-EKF error-state
+
+=
+
+
+
+ˆR 0 0 0 0 . . . 0
+
+[ˆ v]× ˆR I3 0 0 0 . . . 0
+
+[ˆ p]× ˆR 0 I3 0 0 . . . 00 0 0 I6 0 . . . 0
+
+[ˆf1]× ˆR 0 0 0 I3 . . . 0
+
+... ... ... ... ... . . . ...
+
+[ˆfm]× ˆR 0 0 0 0 . . . I3
+
+| {z }
+
+> TRI-EKF ESKF
+
+
+
+ε∗
+
+> R
+
+ε∗
+
+> v
+
+ε∗
+
+> p
+
+ε∗
+
+> b
+
+ε∗
+
+> f1
+
+...
+
+ε∗
+
+> fm
+
+| {z } 
+
+> ESKF error-state
+
+. (74) 
+
+C. Transformation from ESKF to LI-EKF 
+
+LI-EKF is also defined on SE 2+ m(3) but with a left-invariant error definition: 
+
+φ(ξ) = 
+
+
+
+log( ˆR−1R)∨, J  ˆR−1(v − ˆv), J  ˆR−1(p − ˆp),
+
+b − ˆb,
+
+J  ˆR−1(f1 − ˆf1), . . . , J  ˆR−1(fm − ˆfm) , (75) 18 with J = J−1
+
+> l
+
+
+
+log( ˆR−1R)∨
+
+
+
+. Then the Jacobian is given by 
+
+Dξ| ˆξ φ(ξ)[ μ] = 
+
+
+
+( ˆR−1μR)∨, ˆR−1μv, ˆR−1μp,μb,
+
+ˆR−1μf1 , . . . , ˆR−1μfm ,
+
+ . (76) Combining (67) and (76) yields 
+
+ε = D ξ| ˆξ φ(ξ) · Dε∗|0φ∗− 1(ε∗)[ ε∗]=
+
+
+
+ε∗
+
+> R
+
+, ˆR−1ε∗
+
+> v
+
+, ˆR−1ε∗
+
+> p
+
+,
+
+ε∗
+
+> b
+
+,
+
+ˆR−1ε∗ 
+
+> f1
+
+, . . . , ˆR−1ε∗
+
+> fm
+
+ . (77) Rewriting the above equation in a matrix form gives the transformation matrix from ESKF to LI-EKF as follows: 
+
+
+
+εR
+
+εv
+
+εp
+
+εb
+
+εf1
+
+...
+
+εfm
+
+| {z } 
+
+> LI-EKF error-state
+
+=
+
+
+
+I3 0 0 0 0 . . . 00 ˆR−1 0 0 0 . . . 00 0 ˆR−1 0 0 . . . 00 0 0 I6 0 . . . 00 0 0 0 ˆR−1 . . . 0
+
+... ... ... ... ... . . . ...
+
+0 0 0 0 0 . . . ˆR−1
+
+| {z }
+
+> TLI-EKF ESKF
+
+
+
+ε∗
+
+> R
+
+ε∗
+
+> v
+
+ε∗
+
+> p
+
+ε∗
+
+> b
+
+ε∗
+
+> f1
+
+...
+
+ε∗
+
+> fm
+
+| {z } 
+
+> ESKF error-state
+
+. (78) 
+
+D. Transformation from ESKF to ISD-EqF 
+
+The ISD-EqF is based on the invariant-semi-direct bias group G = SE 2+ m(3) ⋉ se (3) , which combines the right-invariant error definition for feature states and the SD-EqF error definition for the IMU states (including the biases). Denote an element of G by X = ( B, γ ), where B = ( R, a, b, p 1, . . . , p m) ∈ SE 2+ m(3) and γ ∈ se (3) . The group multiplication is given by 
+
+X1X2 =  B1B2, γ 1 + Ad Γ( B1)(γ2) , (79) where Γ( B) = ( R, a ) ∈ SE (3) . To define the group action, we first regroup the system state as follows: ξ = ( D, b), where 
+
+D = ( R, v, p, f1, . . . , fm) ∈ SE 2+ m(3) and b = ( bω , ba) ∈ R6. The group action on the state space M is given by 
+
+ϕX (ξ) = 
+
+ DB, 
+
+Ad ∨ 
+
+> Γ( D)−1
+
+(b − γ∨)
+
+
+
+. (80) The local coordinate is given by 
+
+ϑ(e) = 
+
+I9 0 00 0 I6
+
+0 I3m 0
+
+| {z }
+
+> P
+
+log( eB)∨
+
+eb
+
+
+
+, (81) where P is a permutation matrix used to rearrange the components of the error state. Then we obtain the global-local map of the ISD-EqF as follows: 
+
+φ(ξ) = ϑ ◦ ϕ ˆX−1 (ξ)= P log( D ˆD−1)∨,
+
+Ad ∨
+
+> Γ( ˆD)
+
+(b − ˆb)
+
+!
+
+. (82) The Jacobian Dξ| ˆξ φ(ξ) is given by 
+
+Dξ| ˆξ φ(ξ)[ μ] = P (μD ˆD−1)∨,
+
+Ad ∨
+
+> Γ( ˆD)
+
+μb
+
+!
+
+=
+
+
+
+(μR ˆR−1)∨, μ v − μR ˆR−1 ˆv, μ p − μR ˆR−1 ˆp,
+
+Ad ∨
+
+> Γ( ˆD)
+
+μb,μf1 − μR ˆR−1ˆf1, . . . , μ fm − μR ˆR−1ˆfm
+
+ .
+
+(83) 19 Combining (67) and (83) yields 
+
+ε = D ξ| ˆξ φ(ξ) · Dε∗|0φ∗− 1(ε∗)[ ε∗]=
+
+
+
+ˆRε∗
+
+> R
+
+, [ˆ v]× ˆRε∗ 
+
+> R
+
++ ε∗
+
+> v
+
+, [ˆ p]× ˆRε∗ 
+
+> R
+
++ ε∗
+
+> p
+
+,
+
+Ad ∨
+
+> Γ( ˆD)
+
+ε∗
+
+> b
+
+,
+
+[ˆf1]× ˆRε∗ 
+
+> R
+
++ ε∗ 
+
+> f1
+
+, . . . , [ˆfm]× ˆRε∗ 
+
+> R
+
++ ε∗
+
+> fm
+
+ . (84) Rewriting the above equation in a matrix form gives the transformation matrix from ESKF to ISD-EqF as follows: 
+
+
+
+εR
+
+εv
+
+εp
+
+εb
+
+εf1
+
+...
+
+εfm
+
+| {z } 
+
+> ISD-EqF error-state
+
+=
+
+
+
+ˆR 0 0 0 0 . . . 0
+
+[ˆ v]× ˆR I3 0 0 0 . . . 0
+
+[ˆ p]× ˆR 0 I3 0 0 . . . 00 0 0 Ad ∨ 
+
+> Γ( ˆD)
+
+0 . . . 0
+
+[ˆf1]× ˆR 0 0 0 I3 . . . 0
+
+... ... ... ... ... . . . ...
+
+[ˆfm]× ˆR 0 0 0 0 . . . I3
+
+| {z }
+
+> TISD-EqF ESKF
+
+
+
+ε∗
+
+> R
+
+ε∗
+
+> v
+
+ε∗
+
+> p
+
+ε∗
+
+> b
+
+ε∗
+
+> f1
+
+...
+
+ε∗
+
+> fm
+
+| {z } 
+
+> ESKF error-state
+
+. (85) 
+
+E. Transformation from SD-EqF to ISD-EqF 
+
+The transformations among EqFs satisfy the transitivity property.. Therefore, the transformation from SD-EqF to ISD-EqF can be computed by combining the transformation from ESKF to SD-EqF and the transformation from ESKF to ISD-EqF. The transformation matrix from SD-EqF to ISD-EqF is given by 
+
+TISD-EqF SD-EqF = TISD-EqF ESKF 
+
+
+
+TSD-EqF ESKF 
+
+−1
+
+=
+
+
+
+I3 0 0 . . . 00 I12 0 . . . 0
+
+[ˆf1]× 0 I3 . . . 0
+
+... ... ... . . . ...
+
+[ˆfm]× 0 0 . . . I3
+
+
+
+.
+
+(86) 
+
+F. Transformation from ISD-EqF to T-EqF 
+
+The transformation from SD-EqF to ISD-EqF is identical to that from SD-EqF to T-EqF (Eq. (29) in the primary manuscript), i.e., 
+
+TISD-EqF SD-EqF = TT-EqF SD-EqF . (87) Then the transformation from ISD-EqF to T-EqF is given by 
+
+TT-EqF ISD-EqF = TT-EqF SD-EqF 
+
+
+
+TISD-EqF SD-EqF 
+
+−1
+
+= I, (88) which indicates that T-EqF and ISD-EqF share the same continuous- and discrete-time Jacobians and the same observability properties. 20 XI. U NOBSERVABLE SUBSPACE OF REPRESENTATIVE EQFS
+
+Corollary 2 allows the unobservable subspace of one EqF to be derived from that of another through the transformation, without explicitly constructing the observability matrix. In this section, we derive the unobservable subspaces of SD-EqF, RI-EKF, LI-EKF, ISD-EqF, and T-EqF from that of ESKF, and then analyze the consistency of these filters through the resulting subspaces. 
+
+A. ESKF’s Unobservable Subspace 
+
+The unobservable subspace of ESKF has been widely studied in the literature [3] and is given by Span 
+
+> col
+
+(NESKF ) = Span 
+
+> col
+
+
+
+03×3 − ˆR⊤g03×3 [ˆ v]×gI3 [ˆ p]×g06×3 06×1
+
+I3 [ˆf1]×g
+
+... ...
+
+I3 [ˆfm]×g
+
+
+
+, (89) where the first three columns correspond to the unobservable directions of global position, and the last column, which depends on the state estimates, corresponds to the unobservable direction associated with global yaw. Because the last column of the unobservable subspace depends on the state estimates, it may spuriously become observable during estimation, leading to overconfidence. 
+
+B. SD-EqF’s Unobservable Subspace 
+
+According to Corollary 2, the unobservable subspace of SD-EqF can be obtained by transforming the unobservable subspace of ESKF using the transformation matrix from ESKF to SD-EqF: Span 
+
+> col
+
+(NSD-EqF ) = Span 
+
+> col
+
+
+
+TSD-EqF ESKF NESKF 
+
+
+
+= Span 
+
+> col
+
+
+
+03×3 −g03×3 03×1
+
+I3 03×1
+
+06×3 06×1
+
+I3 [ˆf1]×g
+
+... ...
+
+I3 [ˆfm]×g
+
+
+
+.
+
+(90) As in ESKF, the last column of the SD-EqF unobservable subspace also depends on the state estimates. It may therefore become spuriously observable during filtering, which leads to inconsistency. 
+
+C. RI-EKF’s Unobservable Subspace 
+
+The unobservable subspace of RI-EKF can be obtained by transforming the unobservable subspace of ESKF using the transformation matrix from ESKF to RI-EKF: Span 
+
+> col
+
+(NRI-EKF ) = Span 
+
+> col
+
+ TRI-EKF ESKF NESKF 
+
+
+
+= Span 
+
+> col
+
+
+
+03×3 −g03×3 03×1
+
+I3 03×1
+
+06×3 06×1
+
+I3 03×1
+
+... ...
+
+I3 03×1
+
+
+
+.
+
+(91) Notably, the unobservable subspace of RI-EKF does not depend on the state estimates and therefore does not suffer from the inconsistency issue. 21 D. LI-EKF’s Unobservable Subspace 
+
+The unobservable subspace of LI-EKF can be obtained by transforming the unobservable subspace of ESKF using the transformation matrix from ESKF to LI-EKF: Span 
+
+> col
+
+(NLI-EKF ) = Span 
+
+> col
+
+ TLI-EKF ESKF NESKF 
+
+ (92a) 
+
+= Span 
+
+> col
+
+
+
+03×3 − ˆR⊤g03×3 ˆR⊤[ˆ v]×g
+
+ˆR⊤ ˆR⊤[ˆ p]×g06×3 06×1
+
+ˆR⊤ ˆR⊤[ˆf1]×g
+
+... ...
+
+ˆR⊤ ˆR⊤[ˆfm]×g
+
+
+
+(92b) 
+
+= Span 
+
+> col
+
+
+
+03×3 − ˆR⊤g03×3 ˆR⊤[ˆ v]×gI3 ˆR⊤[ˆ p]×g06×3 06×1
+
+I3 ˆR⊤[ˆf1]×g
+
+... ...
+
+I3 ˆR⊤[ˆfm]×g
+
+
+
+. (92c) Applying column operations to a basis matrix does not change the spanned subspace. In (92c), such operations are applied to the first three columns to make them independent of the state estimates. However, no analogous column operation can eliminate the state dependence of the last column. Therefore, the unobservable subspace of LI-EKF also depends on the state estimates, which may again become spuriously observable during filtering and lead to inconsistency. 
+
+E. ISD-EqF and T-EqF’s Unobservable Subspace 
+
+Since the transformation from ISD-EqF to T-EqF is an identity transformation, ISD-EqF and T-EqF share the same unobservable subspace. Their unobservable subspace can be obtained by transforming the unobservable subspace of ESKF using the transformation matrix from ESKF to ISD-EqF: Span 
+
+> col
+
+(NT-EqF ) = Span 
+
+> col
+
+(NISD-EqF ) = Span 
+
+> col
+
+
+
+TISD-EqF ESKF NESKF 
+
+
+
+= Span 
+
+> col
+
+
+
+03×3 −g03×3 03×1
+
+I3 03×1
+
+06×3 06×1
+
+I3 03×1
+
+... ...
+
+I3 03×1
+
+
+
+.
+
+(93) Because the unobservable subspaces of ISD-EqF and T-EqF are state-independent, these filters do not suffer from this inconsistency issue. 22 XII. P ROPAGATION JACOBIANS 
+
+In the primary manuscript, we compared four types of EqFs: the ESKF, SD-EqF, ISD-EqF, and T-EqF. Due to space constraints, the explicit forms of the continuous-time Jacobians F and G, the state transition matrix Φ(τi+1 , τ i), and the discrete-time noise covariance Q(τi+1 , τ i) were omitted from the primary manuscript. However, these expressions are essential both for practical implementation and for identifying the computational bottlenecks in covariance propagation. We therefore provide the detailed derivations here. The Jacobians of RI-EKF and LI-EKF can be derived analogously and are omitted because they are not discussed in the primary manuscript. Let ε denote the error-state of an EqF, with dynamics given by 
+
+˙ε = Fε + Gn , (94) where F ∈ RN ×N and G ∈ RN ×12 (N = 15 + 3 m) are the state-propagation and noise-propagation Jacobians, respectively, and n = [ n⊤ 
+
+> ω
+
+, n⊤ 
+
+> a
+
+, n⊤ 
+
+> wω
+
+, n⊤
+
+> wa
+
+]⊤ is Gaussian white noise with covariance Qc = diag( σ2 
+
+> ω
+
+I3, σ 2
+
+> a
+
+I3, σ 2 
+
+> wω
+
+I3, σ 2
+
+> wa
+
+I3). In the estimator, this continuous-time error-state model is discretized to propagate uncertainty, yielding 
+
+Pk|k−1 = ΦkPk−1|k−1Φ⊤ 
+
+> k
+
++ Qk, (95) where the state transition matrix Φk ≜ Φ(τq , τ 0) and the accumulated noise matrix Qk ≜ Q(τq , τ 0) are computed iteratively over q sub-intervals: 
+
+Φ(τi+1 , τ 0) = Φ(τi+1 , τ i)Φ(τi, τ 0), (96) 
+
+Q(τi+1 , τ 0) = Φ(τi+1 , τ i)Q(τi, τ 0)Φ(τi+1 , τ i)⊤
+
++ Q(τi+1 , τ i). (97) 
+
+Φ(τi+1 , τ i) is obtained by solving the linear differential equation: ddτ Φ(τ, τ i) = Fτ Φ(τ, τ i), Φ(τi, τ i) = I, (98) and the noise covariance over each sub-interval is given by 
+
+Q(τi+1 , τ i) = 
+
+Z τi+1 
+
+> τi
+
+Φ(τi+1 , τ )Gτ QcGτ ⊤Φ(τi+1 , τ )⊤dτ. (99) 
+
+A. ESKF’s Jacobians 
+
+The continuous-time Jacobians of ESKF have been widely studied [3], [34] and are given by 
+
+F =
+
+
+
+−[ωm − ˆbω ]× 0 0 −I 0
+
+− ˆR[am − ˆba]× 0 0 0 − ˆR
+
+0 I 0 0 0
+
+0 0 0 0 0
+
+0 0 0 0 0
+
+015 ×3m
+
+03m×15 03m×3m
+
+
+
+, (100) 
+
+G =
+
+
+
+−I 0 0 0
+
+0 − ˆR 0 0
+
+0 0 0 0
+
+0 0 I 0
+
+0 0 0 I
+
+03m×12 
+
+
+
+. (101) 23 Using the IMU integration theory [35], the discrete-time Jacobians of ESKF can be computed as follows: 
+
+Φ(τi+1 , τ i) = 
+
+
+
+ˆR⊤
+
+> τi+1
+
+ˆRτi 0 0 − ˆR⊤
+
+> τi+1
+
+ˆRτi Jl(∆ θ)∆ τ 0
+
+− ˆRτi [∆ v]× I 0 ˆRτi Ξ3 − ˆRτi Ξ1
+
+− ˆRτi [∆ p]× I∆τ I ˆRτi Ξ4 − ˆRτi Ξ2
+
+0 0 0 I 0
+
+0 0 0 0 I
+
+015 ×3m
+
+03m×15 I3m
+
+
+
+, (102) 
+
+Q(τi+1 , τ i) = Gd(τi+1 , τ i)QdGd(τi+1 , τ i)⊤, (103) 
+
+Gd(τi+1 , τ i) = 
+
+
+
+− ˆR⊤
+
+> τi+1
+
+ˆRτi Jl(∆ θ)∆ τ 0 0 0
+
+ˆRτi Ξ3 − ˆRτi Ξ1 0 0
+
+ˆRτi Ξ4 − ˆRτi Ξ2 0 0
+
+0 0 I∆τ 0
+
+0 0 0 I∆τ
+
+03m×12 
+
+
+
+, (104) (105) where 
+
+∆v = ˆR⊤ 
+
+> τi
+
+(ˆ vτi+1 − ˆvτi + g∆τ ), (106) 
+
+∆p = ˆR⊤ 
+
+> τi
+
+(ˆ pτi+1 − ˆpτi − ˆvτi ∆τ + 12 g∆τ 2), (107) 
+
+Qd = 1∆τ Qc. (108) 
+
+Ξ1, Ξ2, Ξ3, and Ξ4 are given by [35]. As the above expressions show, the transition matrix Φ(τi+1 , τ i) and the noise matrix 
+
+Q(τi+1 , τ i) of ESKF are both block diagonal, with nontrivial entries confined to their top-left 15 × 15 submatrices. 
+
+B. SD-EqF’s Jacobians 
+
+According to Corollary 1, the continuous-time Jacobians of SD-EqF can be obtained by applying the transformation matrix 
+
+TSD-EqF ESKF to the ESKF Jacobians. The explicit forms of F and G for SD-EqF are 
+
+F =
+
+
+
+0 0 0 −I 0
+
+[g]× 0 0 0 0
+
+0 I3 0 −[ˆ p]× 0
+
+0 0 0 [ ˆR(ωm − ˆbω )] × 0
+
+0 0 0 [ ˆR(am − ˆba) + [ˆ v]× ˆR(ωm − ˆbω ) + g]× [ ˆR(ωm − ˆbω )] ×
+
+015 ×3m
+
+03m×15 03m×3m
+
+
+
+, (109) 
+
+G =
+
+
+
+− ˆR 0 0 0
+
+−[ˆ v]× ˆR − ˆR 0 0
+
+−[ˆ p]× ˆR 0 0 0
+
+0 0 ˆR 0
+
+0 0 [ˆ v]× ˆR ˆR
+
+03m×12 
+
+
+
+. (110) According to Corollary 3, the discrete-time Jacobians of SD-EqF can be obtained by applying the transformation matrix 24 TSD-EqF ESKF to the discrete-time ESKF Jacobians. The explicit forms of Φ(τi+1 , τ i) and Q(τi+1 , τ i) for SD-EqF are 
+
+Φ(τi+1 , τ i) = 
+
+
+
+I 0 0 Φ14 0
+
+[g]×∆τ I 0 Φ24 Φ25  
+
+> 12
+
+[g]×∆τ 2 I∆τ I Φ34 Φ35 
+
+0 0 0 Φ44 0
+
+0 0 0 Φ54 Φ55 
+
+015 ×3m
+
+03m×15 I3m
+
+
+
+, (111) 
+
+Q(τi+1 , τ i) = Gd(τi+1 , τ i)QdGd(τi+1 , τ i)⊤, (112) 
+
+Gd(τi+1 , τ i) = 
+
+
+
+− ˆRτi Jl(∆ θ)∆ τ 0 0 0
+
+−[ˆ vτi+1 ]× ˆRτi Jl(∆ θ)∆ τ + ˆRτi Ξ3 − ˆRτi Ξ1 0 0
+
+−[ˆ pτi+1 ]× ˆRτi Jl(∆ θ)∆ τ + ˆRτi Ξ4 − ˆRτi Ξ2 0 0
+
+0 0 ˆRτi+1 ∆τ 0
+
+0 0 [ˆ vτi+1 ]× ˆRτi+1 ∆τ ˆRτi+1 ∆τ
+
+03m×12 
+
+
+
+, (113) (114) with 
+
+Φ14 = − ˆRτi Jl(∆ θ) ˆR⊤ 
+
+> τi
+
+∆τ, (115) 
+
+Φ24 = −[ˆ vτi+1 ]× ˆRτi Jl(∆ θ) ˆR⊤ 
+
+> τi
+
+∆τ + ˆRτi Ξ3 ˆR⊤ 
+
+> τi
+
++ ˆRτi Ξ1 ˆR⊤ 
+
+> τi
+
+[ˆ vτi ]×, (116) 
+
+Φ34 = −[ˆ pτi+1 ]× ˆRτi Jl(∆ θ) ˆR⊤ 
+
+> τi
+
+∆τ + ˆRτi Ξ4 ˆR⊤ 
+
+> τi
+
++ ˆRτi Ξ2 ˆR⊤ 
+
+> τi
+
+[ˆ vτi ]×, (117) 
+
+Φ25 = − ˆRτi Ξ1 ˆR⊤ 
+
+> τi
+
+, (118) 
+
+Φ35 = − ˆRτi Ξ2 ˆR⊤ 
+
+> τi
+
+, (119) 
+
+Φ44 = Φ55 = ˆRτi+1 
+
+ˆR⊤ 
+
+> τi
+
+, (120) 
+
+Φ54 = [ˆ vτi+1 ]× ˆRτi+1 
+
+ˆR⊤ 
+
+> τi
+
+− ˆRτi+1 
+
+ˆR⊤ 
+
+> τi
+
+[ˆ vτi ]×. (121) Like those of ESKF, the discrete-time Jacobians of SD-EqF are also block diagonal, which naturally guarantees efficient covariance propagation. 25 C. ISD-EqF and T-EqF’s Jacobians 
+
+Since TT-EqF ISD-EqF = I, ISD-EqF and T-EqF share the same Jacobians. Their continuous-time Jacobians can be obtained by applying the transformation matrix TISD-EqF ESKF to the ESKF Jacobians. The explicit forms of F and G for ISD-EqF and T-EqF are 
+
+F =
+
+
+
+0 0 0 −I 0
+
+[g]× 0 0 0 0
+
+0 I3 0 −[ˆ p]× 0
+
+0 0 0 [ ˆR(ωm − ˆbω )] × 0
+
+0 0 0 [ ˆR(am − ˆba) + [ˆ v]× ˆR(ωm − ˆbω ) + g]× [ ˆR(ωm − ˆbω )] ×
+
+0 0 0 −[ˆf1]× 0
+
+... ... ... ... ...
+
+0 0 0 −[ˆfm]× 0
+
+015 ×3m
+
+03m×3m
+
+
+
+, (122) 
+
+G =
+
+
+
+− ˆR 0 0 0
+
+−[ˆ v]× ˆR − ˆR 0 0
+
+−[ˆ p]× ˆR 0 0 00 0 ˆR 00 0 [ˆ v]× ˆR ˆR
+
+−[ˆf1]× ˆR 0 0 0
+
+... ... ... ...
+
+−[ˆfm]× ˆR 0 0 0
+
+
+
+. (123) Their discrete-time Jacobians are given by 
+
+Φ(τi+1 , τ i) = 
+
+
+
+I 0 0 Φ14 0
+
+[g]×∆τ I 0 Φ24 Φ25  
+
+> 12
+
+[g]×∆τ 2 I∆τ I Φ34 Φ35 
+
+0 0 0 Φ44 0
+
+0 0 0 Φ54 Φ55 
+
+0 0 0 [ˆf1]×Φ14 0
+
+... ... ... ... ...
+
+0 0 0 [ˆfm]×Φ14 0
+
+015 ×3m
+
+I3m
+
+
+
+, (124) 
+
+Q(τi+1 , τ i) = Gd(τi+1 , τ i)QdGd(τi+1 , τ i)⊤, (125) 
+
+Gd(τi+1 , τ i) = 
+
+
+
+− ˆRτi Jl(∆ θ)∆ τ 0 0 0
+
+−[ˆ vτi+1 ]× ˆRτi Jl(∆ θ)∆ τ + ˆRτi Ξ3 − ˆRτi Ξ1 0 0
+
+−[ˆ pτi+1 ]× ˆRτi Jl(∆ θ)∆ τ + ˆRτi Ξ4 − ˆRτi Ξ2 0 0
+
+0 0 ˆRτi+1 ∆τ 0
+
+0 0 [ˆ vτi+1 ]× ˆRτi+1 ∆τ ˆRτi+1 ∆τ
+
+−[ˆf1]× ˆRτi Jl(∆ θ)∆ τ 0 0 0
+
+... ... ... ...
+
+−[ˆfm]× ˆRτi Jl(∆ θ)∆ τ 0 0 0
+
+
+
+, (126) (127) where Φ14 , Φ24 , Φ34 , Φ25 , Φ35 , Φ44 and Φ54 are the same as those of SD-EqF. Note that the transition matrix Φ(τi+1 , τ i) of ISD-EqF and T-EqF is not block diagonal, and the noise matrix Q(τi+1 , τ i)
+
+becomes dense. These structures increase the cost of covariance propagation in ISD-EqF and T-EqF, especially when the number of features m is large. XIII. C OMPUTATIONAL COMPLEXITY ANALYSIS 
+
+Taking SD-EqF as the auxiliary EqF, we analyze the additional computational cost of T-EqF under the naive, TP, and TC implementations. The results are summarized in Table VII. Using ESKF as the auxiliary EqF leads to the same conclusions and is therefore omitted. 26 TABLE VII: Additional computational cost of different implementations relative to the auxiliary EqF. Naive TP TC 
+
+Propagation O(qm 3) O(m2) 0Correction 0 0 O(pm 2)
+
+Covariance propagation in EqFs has the same form as in the standard EKF, given by 
+
+Φ(τi+1 , τ 0) = Φ(τi+1 , τ i)Φ(τi, τ 0), (128) 
+
+Q(τi+1 , τ 0) = Φ(τi+1 , τ i)Q(τi, τ 0)Φ(τi+1 , τ i)⊤
+
++ Q(τi+1 , τ i), for i = 0 , 1, ..., q − 1, (129) 
+
+Pk|k−1 = ΦkPk−1|k−1Φk⊤ + Qk. (130) In SD-EqF, Φ(τi+1 , τ i) and Q(τi+1 , τ i) are both block diagonal, with nontrivial entries confined to the top-left 15 × 15 
+
+submatrices. As a result, (128) and (129) involve only 15 × 15 matrix multiplications, such as those in Lines 2–4 of Algorithm 1 in the primary manuscript. Moreover, (130) can be evaluated efficiently by exploiting this block-diagonal structure: 
+
+ΦI 00 I3m
+
+| {z }
+
+> Φk
+
+ PII PIF 
+
+PF I PF F 
+
+| {z }
+
+> Pk−1|k−1
+
+Φ⊤ 
+
+> I
+
+00 I3m
+
+| {z }
+
+> Φ⊤
+> k
+
++
+
+QI 00 03m×3m
+
+| {z }
+
+> Qk
+
+=
+
+ΦI PII Φ⊤ 
+
+> I
+
++ QI ΦI PIF 
+
+(ΦI PIF )⊤ PF F 
+
+
+
+(131) The computational complexity of ΦI PII Φ⊤ 
+
+> I
+
+is O(15 3) = O(1) , and that of ΦI PIF is O(15 2 × 3m) = O(m). Therefore, covariance propagation in SD-EqF has complexity O(m).For the naive implementations of T-EqF and ISD-EqF, the transition matrix Φ(τi+1 , τ i) is not block diagonal and the noise matrix Q(τi+1 , τ i) is dense. Consequently, the matrix multiplications in (128), (129), and (130) involve dense N × N products, where N = 15 + 3 m. Since (128) and (129) are evaluated iteratively over q subintervals, the overall complexity of covariance propagation for T-EqF and ISD-EqF under the naive implementation is O(qN 3) = O(qm 3).For TP, the additional computational cost arises from Lines 7–9 (in the primary manuscript). By exploiting the sparsity of the transformation matrix, these equations can be computed efficiently, as detailed in Table VIII. Here, 
+
+L =
+
+
+
+[ˆf1]× 03×12 
+
+... ...
+
+[ˆfm]× 03×12 
+
+ , C =
+
+
+
+03×9 [ˆf1]×ΦI [1:3 ,10:12] 03×3
+
+... ... ...
+
+03×9 [ˆfm]×ΦI [1:3 ,10:12] 03×3
+
+ , (132) and the notation ΦI[1:3 ,10:12] ∈ R3×3 denotes the 3 × 3 submatrix of ΦI at block position (1 : 3 , 10 : 12) . To further reduce overhead, the sparsity of L and C is fully exploited during the calculation. Table VIII lists the corresponding floating-point operations (FLOPs) for each matrix multiplication; the cost of matrix addition is omitted because it is negligible compared with that of matrix multiplication. Consequently, the overall complexity of TP is reduced to O(m2), a substantial improvement over the naive implementation. In TC, the additional computational cost arises from Line 8. Note that the relative transformation T can be decomposed into a product of sparse matrices: 
+
+T = TT-EqF SD-EqF ( ˆξk|k)−1
+
+TT-EqF SD-EqF ( ˆξk|k−1)=
+
+
+
+I3 0 0 0 . . . 00 I12 0 0 . . . 0
+
+∆f1 0 I3 0 . . . 0
+
+∆f2 0 0 I3 . . . 0
+
+... ... ... ... . . . ...
+
+∆fm 0 0 0 . . . I3
+
+
+
+=
+
+
+
+I3 0 0 0 . . . 00 I12 0 0 . . . 0
+
+∆f1 0 I3 0 . . . 00 0 0 I3 . . . 0
+
+... ... ... ... . . . ...
+
+0 0 0 0 . . . I3
+
+
+
+I3 0 0 0 . . . 00 I12 0 0 . . . 00 0 I3 0 . . . 0
+
+∆f2 0 0 I3 . . . 0
+
+... ... ... ... . . . ...
+
+0 0 0 0 . . . I3
+
+
+
+· · · 
+
+
+
+I3 0 0 0 . . . 00 I12 0 0 . . . 00 0 I3 0 . . . 00 0 0 I3 . . . 0
+
+... ... ... ... . . . ...
+
+∆fm 0 0 0 . . . I3
+
+
+
+=: T1T2 · · · T m,
+
+(133) 27 TABLE VIII: Additional computational costs incurred by Lines 7–9 of Algorithm 1. Line Equation FLOPs 7
+
+I15 0L I3m
+
+| {z }
+
+> TT-EqF SD-EqF ( ˆξk|k−1)
+
+ΦI 00 I3m
+
+| {z }
+
+> Φk
+
+I15 0
+
+−L I3m
+
+| {z }
+
+> TT-EqF SD-EqF ( ˆξk−1|k−1)−1
+
+=
+
+ΦI 0C I3m
+
+
+
+C 3 ∗ 3 ∗ 3m
+
+8
+
+I15 0L I3m
+
+| {z }
+
+> TT-EqF SD-EqF ( ˆξk|k−1)
+
+QI 00 03m×3m
+
+| {z }
+
+> Qk
+
+I15 L⊤
+
+0 I3m
+
+| {z }
+
+> TT-EqF SD-EqF ( ˆξk|k−1)⊤
+
+=
+
+ QI QI L⊤
+
+LQ I LQ I L⊤
+
+ QI L⊤ 15 ∗ 3 ∗ 3m
+
+L(QI L⊤) 3 m ∗ 3 ∗ 3m
+
+9
+
+ΦI 0C I3m
+
+| {z }
+
+> Φ∗
+> k
+
+ P∗ 
+
+> II
+
+P∗
+
+> IF
+
+P∗ 
+
+> F I
+
+P∗
+
+> F F
+
+| {z }
+
+> P∗
+> k−1|k−1
+
+Φ⊤ 
+
+> I
+
+C⊤
+
+0 I3m
+
+| {z } 
+
+> Φ∗
+> k⊤
+
++Q∗
+
+> k
+
+=
+
+ ΦI P∗ 
+
+> II
+
+Φ⊤ 
+
+> I
+
+ΦI (P∗ 
+
+> IF
+
++ P∗ 
+
+> II
+
+C⊤)(ΦI (P∗ 
+
+> IF
+
++ P∗ 
+
+> II
+
+C⊤)) ⊤ P∗ 
+
+> F F
+
++ CP ∗ 
+
+> IF
+
++ P∗ 
+
+> F I
+
+C⊤ + CP ∗ 
+
+> II
+
+C⊤
+
+
+
++ Q∗
+
+> k
+
+P∗ 
+
+> II
+
+C⊤ 15 ∗ 3 ∗ 3m
+
+ΦI (P∗ 
+
+> IF
+
++ P∗ 
+
+> II
+
+C⊤) 15 ∗ 15 ∗ 3m
+
+CP ∗ 
+
+> IF
+
+3m ∗ 3 ∗ 3m
+
+C(P∗ 
+
+> II
+
+C⊤) 3 ∗ 3 ∗ 3m
+
+where ∆fi = [ ˆfi,k |k−1 − ˆfi,k |k]×. Accordingly, the matrix multiplication in Line 8 can be computed as follows: 
+
+T Pk|kT ⊤ = T1T2 · · · T mPk|kT ⊤ 
+
+> m
+
+· · · T ⊤ 
+
+> 2
+
+T ⊤ 
+
+> 1
+
+. (134) By exploiting the sparsity of Ti, the product of Ti with a dense matrix can be computed in O(m) time. Since Line 8 involves 
+
+2m such multiplications, its cumulative complexity is O(m2). Furthermore, because the correction step is performed p times to account for batched visual measurements and delayed feature initialization, the total additional complexity of TC is O(pm 2).28

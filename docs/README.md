@@ -6,54 +6,50 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-03-25
-- 运行时间：2026-03-25 20:13:42 UTC
+- 最新运行日期：2026-03-26
+- 运行时间：2026-03-26 20:12:34 UTC
 - 运行状态：成功
-- 本次总论文数：11
+- 本次总论文数：9
 - 精读区：0
-- 速读区：11
+- 速读区：9
 
 ### 今日简报（AI）
-今日速览 11 篇前沿论文，聚焦拉格朗日系统分岔、跨模态导航及多体位姿
-- 详情：[/202603/25/README](/202603/25/README)
+今日速览 9 篇前沿成果，重点攻克未知环境自主着陆与多卫星在轨服务规划难题。
+推荐关注 SafeLand 的贝叶斯语义建图着陆方案，以及提升多卫星任务效率的新型遗传算法。
+建议深入了解微分环境与语义感知如何为航天及无人系统提供更安全的轨迹决策。
+- 详情：[/202603/26/README](/202603/26/README)
 
 ### 精读区论文标签
 - 本次无精读推荐。
 
 ### 速读区论文标签
-1. [Bifurcations for Lagrangian systems and geodesics I](/202603/25/2603.20551v1-bifurcations-for-lagrangian-systems-and-geodesics-i)  
+1. [SafeLand: Safe Autonomous Landing in Unknown Environments with Bayesian Semantic Mapping](/202603/26/2603.17430v1-safeland-safe-autonomous-landing-in-unknown-environments-with-bayesian-semantic-mapping)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：拉格朗日系统与轨道的分叉研究
-2. [Cross-Modal Reinforcement Learning for Navigation with Degraded Depth Measurements](/202603/25/2603.22182v1-cross-modal-reinforcement-learning-for-navigation-with-degraded-depth-measurements)  
+   evidence：利用视觉系统在未知环境中进行自主着陆
+2. [Route-Phasing-Split-Encoded Genetic Algorithm for Multi-Satellite On-Orbit Servicing Mission Planning](/202603/26/2603.22210v1-route-phasing-split-encoded-genetic-algorithm-for-multi-satellite-on-orbit-servicing-mission-planning)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：传感器退化情况下的跨模态强化学习导航
-3. [Distributed Hybrid Feedback for Global Pose Synchronization of Multiple Rigid Body Systems on $SE(3)$](/202603/25/2603.22773v1-distributed-hybrid-feedback-for-global-pose-synchronization-of-multiple-rigid-body-systems-on-se3)  
-   标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：多刚体系统的全局位姿同步
-4. [On the Suboptimality of Rate--Distortion-Optimal Compression: Fundamental Accuracy Limits for Distributed Localization](/202603/25/2603.23006v1-on-the-suboptimality-of-rate--distortion-optimal-compression-fundamental-accuracy-limits-for-distributed-localization)  
-   标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：多传感器融合与定位精度极限
-5. [Path Planning and Reinforcement Learning-Driven Control of On-Orbit Free-Flying Multi-Arm Robots](/202603/25/2603.23182v1-path-planning-and-reinforcement-learning-driven-control-of-on-orbit-free-flying-multi-arm-robots)  
-   标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：在轨机器人的轨迹优化与控制
-6. [Koopman Generator Decomposition for Port-Hamiltonian System](/202603/25/2603.17849v1-koopman-generator-decomposition-for-port-hamiltonian-system)  
+   evidence：在轨服务的任务规划与轨道相位调整
+3. [Learn for Variation: Variationally Guided AAV Trajectory Learning in Differentiable Environments](/202603/26/2603.18853v1-learn-for-variation-variationally-guided-aav-trajectory-learning-in-differentiable-environments)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：哈密顿系统的稳定性与控制
-7. [Parametric Spectral Submanifolds across Hopf Bifurcations with Applications to Fluid Dynamics](/202603/25/2603.19079v2-parametric-spectral-submanifolds-across-hopf-bifurcations-with-applications-to-fluid-dynamics)  
+   evidence：自主飞行器轨迹学习与运动学演化
+4. [TRGS-SLAM: IMU-Aided Gaussian Splatting SLAM for Blurry, Rolling Shutter, and Noisy Thermal Images](/202603/26/2603.20443v1-trgs-slam-imu-aided-gaussian-splatting-slam-for-blurry-rolling-shutter-and-noisy-thermal-images)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：参数化动力系统中的谱子流形
-8. [K-GMRF: Kinetic Gauss-Markov Random Field for First-Principles Covariance Tracking on Lie Groups](/202603/25/2603.19601v1-k-gmrf-kinetic-gauss-markov-random-field-for-first-principles-covariance-tracking-on-lie-groups)  
+   evidence：移动机器人的自主导航与SLAM
+5. [Dynamic Control Barrier Function Regulation with Vision-Language Models for Safe, Adaptive, and Realtime Visual Navigation](/202603/26/2603.21142v1-dynamic-control-barrier-function-regulation-with-vision-language-models-for-safe-adaptive-and-realtime-visual-navigation)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：李群上的协方差跟踪与状态估计
-9. [Image-Conditioned Adaptive Parameter Tuning for Visual Odometry Frontends](/202603/25/2603.21785v1-image-conditioned-adaptive-parameter-tuning-for-visual-odometry-frontends)  
+   evidence：用于安全自适应视觉导航的视觉到控制导航框架
+6. [Directional Mollification for Controlled Smooth Path Generation](/202603/26/2603.21831v1-directional-mollification-for-controlled-smooth-path-generation)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：自主机器人视觉里程计的自适应参数调整
-10. [Data-Driven Synthesis of Robust Positively Invariant Sets from Noisy Data](/202603/25/2603.22460v1-data-driven-synthesis-of-robust-positively-invariant-sets-from-noisy-data)  
+   evidence：自主机器人平滑路径生成与轨迹跟踪
+7. [Equivariant Filter Transformations for Consistent and Efficient Visual--Inertial Navigation](/202603/26/2603.24130v1-equivariant-filter-transformations-for-consistent-and-efficient-visual--inertial-navigation)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：用于轨迹稳定性和控制的鲁棒正不变集综合
-11. [Learning Actuator-Aware Spectral Submanifolds for Precise Control of Continuum Robots](/202603/25/2603.23044v1-learning-actuator-aware-spectral-submanifolds-for-precise-control-of-continuum-robots)  
+   evidence：用于一致性视觉惯性导航的等变滤波器
+8. [Accelerated Spline-Based Time-Optimal Motion Planning with Continuous Safety Guarantees for Non-Differentially Flat Systems](/202603/26/2603.24133v1-accelerated-spline-based-time-optimal-motion-planning-with-continuous-safety-guarantees-for-non-differentially-flat-systems)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：将高维非线性动力学简化为低维不变流形
+   evidence：具有连续安全保证的时间最优运动规划
+9. [Artificial precession and instability in solar system and planetary simulations: analytic and numerical results](/202603/26/2603.24456v1-artificial-precession-and-instability-in-solar-system-and-planetary-simulations-analytic-and-numerical-results)  
+   标签：评分：6.0/10、query:cislunar-dyn-nav
+   evidence：太阳系与行星稳定性模拟的数值算法
 
 
 <div class="dpr-home-promo-card">

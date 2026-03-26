@@ -1,0 +1,834 @@
+Title: Route-Phasing-Split-Encoded Genetic Algorithm for Multi-Satellite On-Orbit Servicing Mission Planning
+
+URL Source: https://arxiv.org/pdf/2603.22210v1
+
+Published Time: Tue, 24 Mar 2026 02:53:55 GMT
+
+Number of Pages: 39
+
+Markdown Content:
+# RoutePhasingSplitEncoded Genetic Algorithm for MultiSatellite OnOrbit Servicing Mission Planning 
+
+Shridhar Velhal, Avijit Banerjee, and George Nikolakopoulos 
+
+> Robotics and AI Group, Luleå University of Technology, Luleå, Sweden
+
+Abstract 
+
+This article addresses multi-servicer on-orbit servicing mission planning in geosynchronous Earth orbit, where routing decisions are tightly coupled with time-dependent orbital phasing and strict propellant and mission-duration constraints. We propose a RoutePhasingSplit Genetic Algorithm (RPS-GA) that simultaneously optimizes target sequencing, discrete phasing rotation decisions (i.e., the number of phasing revolutions/waiting cycles), and route partitioning across multiple servicing spacecrafts (SSCs). An RPS triplet chromosome encodes route order, phasing rotations, and route splits in a uni-fied structure, enabling split-aware recombination without disrupting feasible multi-servicer route blocks. Feasibility is enforced through a constraint-aware fitness function that ranks feasible solutions based on total ∆V , while penal-izing propellant and mission duration violations, using aggregate and imbal-ance penalties. This formulation discourages the concentration of violations on a single servicing spacecraft (SSC). Once a feasible best solution is iden-tified, it is preserved as feasible in subsequent generations, thereby enhanc-ing convergence stability. The framework incorporates split-aware crossover, mutation and a regret-based Large Neighborhood Search for local intensifi-cation. Experiments on representative GEO servicing scenarios demonstrate that RPS-GA produces feasible multi-servicer plans with substantially im-proved fuel efficiency, reducing total ∆V by 24 .5% , (from 1956 .36 m/s to 
+
+1476 .32 m/s ) compared with a state-of-the-art LNS-AGA baseline. 
+
+Keywords: On-orbit servicing, Multi-servicer mission planning, Genetic algorithm, Integrated route phasing allocation optimization, Time-dependent orbital routing 
+
+> arXiv:2603.22210v1 [eess.SY] 23 Mar 2026
+
+1. Introduction 
+
+With the increasing emphasis on sustainable space operations, enhanced on-orbit servicing (OOS) is emerging as a foundational capability for future space infrastructure, supporting satellite life extension, constellation mainte-nance, failure recovery, and long-term orbital sustainability [1]. As demand for such services increases, efficient orbital routing in geosynchronous Earth orbit (GEO) becomes critical, given the high value and long life-span of GEO satellites [2, 3]. As demand for such services grows, Servicing spacecrafts (SSCs) must transfer sequentially among multiple targets, rendering route sequencing and timing central for ensuring mission feasibility and propellant efficiency. In GEO, maneuver cost is dominated by total ∆V , while feasi-bility is strongly constrained by orbital phasing. Even small inefficiencies in visit order or departure timing can result in significant propellant penalties and reduced operational lifetime. GEO orbital routing poses additional challenges due to the continuous evolution of relative satellite geometry, which renders transfer feasibility and cost inherently time-dependent, and they are summarized in a [4]. From a planning perspective, on-orbit routing can be viewed as a spatio-temporal multi-task assignment (STMTA) problem, since it must decide both which targets to service and when to execute transfers (i.e., from where and when to maneuver) under strict timing constraints. However, unlike standard STMTA formulations [5, 6] that typically assume stationary travel costs be-tween tasks, orbital transfers induce nonstationary transition costs of the (∆V ) and even feasibility of moving between the same pair of targets vary due to phasing. Planning therefore needs to balance the objective of min-imizing ( ∆V ) while satisfying tight time windows and maintaining feasible phasing, all under the strong coupling between sequence, split, and orbital synchronization decisions. Large constellations and multi-servicer missions further demand scalable, near-real-time solutions, which traditional deter-ministic methods often cannot provide as problem size and constraint com-plexity increase. These factors motivate adaptive optimization frameworks capable of efficiently exploring large combinatorial spaces while preserving mission feasibility under nonlinear orbital dynamics. Within on-orbit servicing, routing formulations vary with mission objec-tives and task heterogeneity. Refueling missions [7, 8, 9] primarily involve transferring propellant from servicing spacecraft or depots to fuel-deficient targets, creating capacity and logistics constrained routing problems where 2rendezvous and return maneuvers dominate cost. Repair or maintenance missions [10] introduce variable service durations, urgency constraints, and specialized servicing capabilities, often requiring strict deadlines. Mixed mis-sions [11, 12] combine multiple service types and may involve uncertainty in service success or duration, increasing task heterogeneity and the complexity of feasible routing. Recently, [13] explicitly distinguishes between full-service and quick-service policies to maximize task completion under tight propellant and time budgets. This heterogeneity directly impacts routing representa-tions and optimization strategies, as it introduces strong coupling between route sequencing, split/allocation decisions, and orbital phasing. Route feasi-bility and transfer cost are typically estimated using impulsive, near-circular maneuvers such as Hohmann-type transfers or Lambert targeting [14, 15], highlighting the need for flexible, mission-feasible solution encodings. Figure 1 shows the on orbit routing problem in which SSC needs to find the optimal sequence for visiting target orbits. The SSC needs to coast until the intersection point of source and target orbits, then it needs to perform phasing to rendezvous at the target satellite. A central modeling difficulty in GEO routing is that transfer feasibility and ∆V cost depend on phasing. Un-like terrestrial routing, the travel cost between two targets is non-stationary. For a plane change, the SSC needs to wait for a favorable alignment, and for phasing corrections, it requires several orbital revolutions to synchronize the transfer. Consequently, sequencing alone is insufficient; effective planning must jointly determine the route of SSCs, phasing rotations (i.e., phasing-time and cost), and how targets are partitioned and assigned across multiple servicing spacecraft. This tight coupling distinguishes orbital routing from classical vehicle routing problems (VRPs) and motivates specialized repre-sentations and search operators to maintain feasibility and avoid repeated violations during optimization. Earlier studies have progressively adapted classical routing formulations to reflect orbital constraints. Single-servicer GEO missions have been mod-eled as time-dependent TSP-like problems using transfer costs derived from Hohmann or Lambert-based rendezvous [7, 14, 15]. Deadline and window-constrained variants introduce VRPTW structure, where accessibility win-dows and mission completion constraints govern feasibility [10]. To handle larger instances, clustered formulations partition targets by orbital proxim-ity or demand and then coordinate intra/inter cluster routing [16]. Multi-servicer and depot-enabled scenarios yield multi-depot VRP variants in which servicing spacecraft shuttle between depots and targets under capacity and 3(a) Orbital transfer incorporating change of plane as well as phasing, a representative scenario transfer-ring from green orbit to blue orbit. ∗ denotes the initial orbital position of service satellites, ◦ denote the initial positions of target satellites , □ denotes the position at the plane change transfer. After phasing revolutions on the red orbit, SCC rendezvous with the target satellite. 
+
+(b) SSCs need to find the sequence in which they service all satellites within ∆V and mission deadline constraints. ∗ denotes the initial orbital position of service satellites, ◦ denote the initial positions of target satellites 
+
+Figure 1: A snapshot of on-Orbit servicing mission 
+
+4timing constraints [9], while service-station architectures and multi-orbit ser-vicing generalize these models to hub-and-spoke or network logistics struc-tures [17, 18]. These developments reflect increasing recognition that orbital routing must simultaneously capture time dependence, capacity logistics, and multi-agent coordination. Solution techniques range from exact optimization to heuristics and learning-based replanning, with scalability as the primary differentiator. Exact meth-ods such as MILP and time-expanded network formulations are effective for strategic analysis and small instances, including architecture evaluation with depots and multi-commodity flows [19, 18]. However, the strong coupling be-tween discrete routing decisions and time-dependent phasing typically limits exact approaches as the number of targets or SSCs increases. Metaheuris-tics are therefore prevalent in operational settings. Genetic Algorithms (GA) and Non-dominated Sorting Genetic Algorithm II (NSGA-II) are widely used for sequencing and multi-objective tradeoffs in refueling and repair planning [10, 7, 9], while Particle Swarm Optimization (PSO)-based methods are em-ployed when continuous variables such as departure times or transfer dura-tions must be optimized alongside assignments [20, 21, 15]. Large Neighbor-hood Search (LNS) and Adaptive Large Neighborhood Search (ALNS) frame-works provide robust feasibility handling through destroy-and-repair cycles with adaptive operator selection [22, 23], and hybrid GALNS methods have demonstrated improved performance in tightly constrained GEO scenarios [10, 13]. For large-scale settings, clusteringreconstruction and hierarchical decomposition are commonly used to reduce problem dimension and coor-dinate multi-SSc decisions [16, 24, 25]. More recently, learning-based meth-ods such as reinforcement learning [26] and pointer-network approaches [27] have been explored for rapid sequencing and replanning, trading strict opti-mality guarantees for speed and adaptability, and Monte Carlo Tree Search (MCTS)based approaches [28] have also been proposed for multi-spacecraft allocation. Despite these advancements, multi-servicer GEO routing with time de-pendent feasibility still faces three persistent challenges. (i) feasibility is often enforced through penalty and repair steps in a way that allows constraint vi-olations to oscillate among servicing spacecraft, rather than converging to a jointly feasible plan. (ii) Routing, phasing time, and multi-servicer par-titioning are often optimized sequentially or weakly coupled. However, in on-orbit routing these decisions are tightly linked; changing the visit order can invalidate feasible phasing windows and transfer timing, while reassigning 5targets can disrupt route partitions. Optimizing these layers independently can therefore induce repeated feasibility violations during search, as improve-ments in one dimension inadvertently degrade another. (iii) Many genetic and neighborhood operators used in orbital routing are adapted from terres-trial VRP methods designed for stationary edge costs. While they preserve adjacency or partition structure, recombination can disrupt route blocks and phasing/waiting sequences, leading to violations of time windows and propel-lant constraints under time-dependent transfer costs. Consequently, multi-servicer orbital routing is an NP-hard problem combining VRP-like combina-torial complexity with nonlinear, time-dependent orbital constraints. Effec-tive methods must explore large discrete spaces while preserving feasibility and minimizing repeated violations during search. To address these challenges, this paper proposes a RoutePhasingSplit Genetic Algorithm (RPS-GA) for on-orbit servicing mission planning. The method introduces an RPS triplet chromosome that jointly encodes the route sequence, phasing rotations, and route splits in a single integrated structure, enabling integrated optimization of the coupled decisions under tight propel-lant and mission-duration constraints. In addition, we propose a constraint-aware fitness to manage feasibility reliably. Feasible solutions are compared only by total ∆V while infeasible solutions are penalized both for aggre-gate constraint violations across all servicing spacecraft and for unbalanced violations in which a single spacecraft carries the majority of infeasibility. This design encourages convergence toward globally feasible multi-servicer plans rather than merely shifting infeasibility between routes. Moreover, the penalty structure ensures forward invariance of the best-found solution i.e., once a feasible solution is found, the best chromosome remains feasible in subsequent generations, preventing infeasible low-( ∆V ) solutions from being selected as best The framework is further enhanced with operators tailored to the Route Phasing-Split (RPS) representation. Split-aware genetic operatorsRoute-Block Crossover (RBC) and adaptive mutation, explicitly preserve and re-combine feasible route blocks, reducing disruption of high-quality partitions during reproduction. To strengthen local improvement, a regret-based Large Neighborhood Search is embedded using 2-regret insertion and rotation-neighborhood exploration to refine sequences and exploit favorable phasing opportunities. Experimental results on the GEO servicing scenario show that RPS-GA substantially improves the fuel efficiency under identical evaluation settings, reducing total ∆V by 24 .5% , (from 1956 .36 m/s to 1476 .32 m/s )6compared with state-of-the-art baselines[10], while maintaining feasibility for multi-servicer mission plans. The main contributions of this paper are as follows: 1. Novel RPS Triplet Chromosome: A RoutePhasingSplit (RPS) repre-sentation that encodes route sequences, phasing rotations, and route splits in a single structure, enabling efficient exploration of complex orbital routing solutions under tight propellant and mission deadline constraints. 2. Constraint-Aware Fitness with Forward-Invariant Best Solution: Apenalty mechanism that preserves the feasibility of the best-found solu-tion across generations, guiding the search toward physically realizable multi-servicer plans while reducing the tendency to shift constraint vi-olations between routes. 3. Significant ∆V Reduction: The proposed method achieves a significant improvement over state-of-the-art LNS-AGA [10] approach, reducing total ∆V from 1956 .36 m/s to 1476 .32 m/s , demonstrating enhanced fuel efficiency and optimized orbital maneuver planning. The rest of the paper is organized as follows. Section 2 reviews the on-orbit transfer model, including transfer time and ( ∆V ) computation. Section 3 formulates the multi-servicer GEO routing problem and its con-straints. Section 4 presents RPS-GA, including the RPS triplet chromosome, constraint-aware fitness, and split-aware operators. Section 5 reports the ex-perimental setup and comparative results. Section 6 concludes the paper. 
+
+2. Preliminaries on Orbital Transfers 
+
+The on-orbit scheduling problem aims to plan transfers of multiple satel-lites between different orbital tasks while minimizing total propellant con-sumption, quantified by the ∆V cost. Each satellite starts from a distinct initial orbit and may perform maneuvers such as plane changes and phasing adjustments to reach the target orbit. This section details the orbital transfer strategy for servicing missions between geosynchronous satellites. 
+
+2.1. Transfer Method Overview 
+
+The transfer method consists of two main maneuvers: 1. Plane-Change Maneuver: Adjust the inclination and orientation of the orbit to match the target orbital plane. 72. Phasing Maneuver: Modify the orbit temporarily (in the target plane) to synchronize the satellite with the target phase. The total ∆V cost of a transfer is the sum of the impulses required for these maneuvers. Intermediate points along the orbital plane intersection are selected to minimize coast times, and velocity vectors are computed at these maneuver points to determine the required impulses. 
+
+2.2. Mathematical Formulation of ∆V and Temporal Components 
+
+Let the source and target orbits be characterized by semi-major axes as,
+
+at, inclinations is, it, and right ascension of ascending nodes (RAANs) Ωs,
+
+Ωt. The gravitational parameter is denoted μ.
+
+Angular Separation Between Orbits:. The angular separation can be calcu-lated as 
+
+α = arccos 
+
+(
+
+cos is cos it + sin is sin it cos(Ω s − Ωt)
+
+)
+
+(1) 
+
+2.2.1. Plane Change Maneuver 
+
+The plane change maneuver aligns the SSC (Service Spacecraft) with the target’s orbital plane. This maneuver can only occur at the intersec-tion points of the two orbital planes, providing two opportunities per orbital period. The intersection points are: 
+
+rm1 = a hs × ht
+
+∥hs × ht∥, rm2 = −rm1 (2) where a is the GEO orbit radius, and hs, ht are angular momentum vectors. The angular momentum vectors can be computed as 
+
+h = r × v
+
+= √μa 
+
+
+
+cos Ω − sin Ω 0sin Ω cos Ω 00 0 1
+
+
+
+1 0 00 cos i − sin i
+
+0 sin i cos i
+
+
+
+001
+
+
+
+where μ is Earth’s gravitational constant. 8∆vplane . The plane change impulse at the intersection point is: 
+
+∆v plane = vt − vs, (3) 
+
+∥∆v plane ∥ = 2 ∥vt∥ sin( α/ 2) (4) where vs and vt are velocities at the maneuver point, and v is the circular orbit velocity magnitude. 
+
+Coast Time ( tcoast ):. Time to travel along the orbit to the plane-change ma-neuver point: 
+
+tcoast = ∆θωGEO 
+
+tcoast =
+
+
+
+arccos 
+
+( rm1 · r0
+
+∥rm1∥∥ r0∥
+
+)
+
+ωGEO 
+
+, (r0 × rm1) · hs > 0
+
+π − arccos 
+
+( rm1 · r0
+
+∥rm1∥∥ r0∥
+
+)
+
+ωGEO 
+
+, (r0 × rm1) · hs < 0
+
+(5) GEO satellites maintain a circular orbit at aGEO ≈ 42 , 164 km, with orbital period of 24 hours. All satellites share the same angular velocity ωGEO ,and relative positions remain fixed in the Earth-centered rotating frame. For circular GEO orbit, tcoast is constant and independent of mission start time. 
+
+2.2.2. Phasing Maneuver 
+
+After plane alignment, the SSC must synchronize its position with the target through a phasing maneuver. The phasing angle θ between SSC and target is: 
+
+θ =
+
+
+
+ψ, |ψ| ≤ π
+
+−2π + |ψ|, ψ > π 
+
+2π − | ψ|, ψ < −π
+
+(6) where ψ = (Ω s + ωs) − (Ω t + ωt), with ωs, ω t being true anomalies. 9Phasing Revolutions. The SSC enters a phasing orbit tangent to the original orbit, completing kphase revolutions while the target completes kGEO revolu-tions. The phasing time is: 
+
+tphase = 2πk GEO + θ
+
+2π TGEO (7) The corresponding semi-major axis of the phasing orbit is: 
+
+aphase = rGEO 
+
+(2πk GEO + θ
+
+2πk GEO 
+
+)2/3
+
+(8) 
+
+Delta-V for Phasing. The total phasing delta-v (split into two equal and opposite impulses) is: 
+
+∆vphase = 2 
+
+∣∣∣∣∣
+
+√μ
+
+(√ 
+
+2
+
+rGEO 
+
+− 1
+
+aphase 
+
+−
+
+√ 1
+
+rGEO 
+
+)∣ ∣∣∣∣ (9) The individual impulses aligned with the velocity direction ˆvm are: 
+
+∆v phase 1 = 12∆vphase sgn( θ) vm
+
+∥vm∥, (10) 
+
+∆v phase 2 = −∆v phase 1 (11) where vm is the target velocity at the maneuver point. 
+
+2.2.3. Combined Plane Change and Phasing Maneuver Strategy 
+
+The plane change and phasing maneuvers can be combined by executing both at the intersection point. As shown in Figure 3b, ∆v 1 and ∆v 2 merge into a single impulse, reducing the total delta-v cost. The second impulse will be applied using in-plane impuelse after achieving the desired phase angle. The first impulse is computed as 
+
+∆v 1 = ∥∆v plane + ∆v phase 1∥ (12) The second impulse is 
+
+∆v 2 = ∆v phase 2 (13) The total efforts are 
+
+∆vtotal = ∥∆v plane + ∆v phase 1∥ + ∥∆v 2∥ (14) 
+
+t = tcoast + tphase (15) 10 Figure 2: Combined plane-change and phasing maneuver illustrating ∆V components 
+
+11 2.2.4. Waiting Time 
+
+The phase change maneuver starts from either of two intersection points 
+
+(rm1 and rm2). After reaching the targeted orbit, SSC repairs the satellite. After this repair task, SSC needs to stay in the same orbit till the closest intersection point for the next maneuver. This time is referred to as a waiting time. For GEO-to-GEO transfers, coast and phasing times are constants, only twait may vary. It varies with the sequence in which the SSC travels through the orbits. 
+
+2.3. Summary 
+
+This orbital transfer strategy combines plane change and phasing ma-neuvers into an efficient two-impulse sequence. The total delta-v (Eq. 14) and transfer time (Eq. 15) are functions of the phasing revolution count 
+
+kGEO , which serves as an integer decision variable in the mission planning optimization. 
+
+3. Multi-TSP Formulation for Orbital Routing in GEO 
+
+Let m represent the total number of servicing spacecraft (SSC), and S =
+
+{1, 2, . . . , m } denotes the index set of SSCs. Let nt represent the number of repair tasks in the mission. The index set of repair tasks is denoted as 
+
+T = {1, 2, . . . , n t}. In general nt >> m .The on-orbit repairing problem considers the multi satellite orbital rout-ing problem in which each SSCs, operating in geosynchronous orbit, sequen-tially visits multiple geosynchronous orbital satellites to repair them. The route of Si , denoted as μi, is the ordered sequence of repair tasks to be ex-ecuted. The objective is to determine the routes and maneuver parameters that minimize the total orbital transfer cost, measured in terms of cumulative 
+
+∆V required by the team of SSCs for the entire mission. In the proposed on-orbit servicing framework, each SSC is assigned a mission route that specifies the sequence of GEO satellites to be serviced. The mathematical characteristics of these routes are defined as: 1. route μi consists only of valid GEO servicing tasks ⇒ μi ⊆ T 
+
+2. Each GEO satellite is visited at most once by SSC ⇒ ∀ j, k ∈ μi, j ̸ = k, 
+
+3. Each servicing task is assigned to exactly one agent ⇒ μi ∩ μl =
+
+∅, ∀i̸ = l, 
+
+12 These conditions ensure that each servicing spacecraft follows a physi-cally meaningful and non-redundant orbital route, while preventing conflict-ing task assignments among multiple agents. In the GEO servicing context, this guarantees unique assignment of each target satellite, avoids duplicate rendezvous maneuvers, and enables efficient fuel usage for plane-change and phasing transfers. 
+
+3.1. Route Continuity and Assignment Variables 
+
+For each servicing spacecraft (SSC) Si with assigned route μi, task as-signment and route connectivity are captured by two sets of binary variables: Task assignment variable, xij ∈ { 0, 1} indicates whether SSC Si is as-signed for servicing task Tj or not?. The transition variable yikj ∈ { 0, 1}. yikj 
+
+is a binary variable equal to one if SSC Si directly transits from orbit k to execute task Tj in its route. This focuses on the sequence of tasks in path. Each task must be serviced by exactly one SSC, ensuring complete cov-erage without duplication. 
+
+∑
+
+> i∈S
+
+xij = 1 , ∀j ∈ T , (16) Each task in a route must have exactly one incoming edge (either from a previous task or the start node), conditional on being assigned to SSC i.
+
+∑
+
+> k∈{T ∪S}
+
+yikj = xij , ∀i ∈ S , ∀j ∈ T , (17) Each task and SSC in a route must have exactly one outgoing edge to the next task, conditional on being assigned to SSC i.
+
+∑
+
+> j∈T
+
+yikj = xij , ∀i ∈ S , ∀k ∈ {T ∪ S} , (18) Self-transitions are prohibited to avoid trivial loops. 
+
+yijj = 0 , ∀i ∈ S , ∀j ∈ T . (19) 
+
+3.2. Cost Function 
+
+The objective of the mission is to execute all the repair tasks with min-imum total ∆V . Unlike classical TSP formulations, the cost of traversing an edge depends not only on the task sequence but also on the number of 13 phasing orbits executed between successive tasks. Let nikj ∈ Z+ , denote the number of phasing revolutions performed by Si when transitioning from task 
+
+Tk to task Tj .The maneuver cost for Si transitioning from task Tk to task Tj is then given by 
+
+∆V ikj = f (k, j, n ikj ), (20) where f (·) captures the ∆V required for the Hohmann transfer and asso-ciated phasing adjustments in GEO and computed using eq (14). ∆V ikj is a function of task Tk and Tj , and this does not depend on the remaining tasks in route. The total cost of route μi is defined as the sum of the costs of all transitions in a route, 
+
+∆Vi(μi) = ∑
+
+> (k,j )∈μi
+
+∆V ikj , (21) and the overall mission cost is the sum over all SSCs. s
+
+> tt
+> (a) Phasing maneuvers for positive and negative angles
+
+n = 1 
+
+n = 2 
+
+> s
+> t
+> (b) Multi-rotation phasing
+> Figure 3: Phasing maneuvers
+
+3.3. Temporal Constraints and Mission Completion 
+
+Each orbital transfer and servicing operation incurs not only energy i.e. a ∆V cost but also a temporal cost, which depends on the selected phasing maneuver. 14 Let us define the notation used for temporal variables: 
+
+• tik 
+
+> arrive
+
+: Arrival time of spacecraft i at task k
+
+• tk
+
+> repair
+
+: Repair duration for task k
+
+• tik 
+
+> end
+
+: Completion time of task k by spacecraft i
+
+• tikj 
+
+> coast
+
+: Coast time required for spacecraft i to transfer from task k to task j
+
+• tikj 
+
+> phase
+
+: Phasing time required for spacecraft i to transfer from task k to task j
+
+• tmax : Mission deadline 
+
+> Table 1: Temporal parameters and decision variables.
+
+tik  
+
+> arrive
+
+Arrival time of spacecraft i at task ktk 
+
+> repair
+
+Repair duration for task ktik  
+
+> end
+
+Completion time of task k by spacecraft itikj  
+
+> coast
+
+Coast time required for spacecraft i to transfer from task k to task 
+
+jtikj  
+
+> phase
+
+Phasing time required for spacecraft i to transfer from task k to task jtmax Mission deadline The temporal sequence for an orbital transfer executed by spacecraft i
+
+from task k to task j consists of five consecutive phases. First, the spacecraft arrives at task k at time tik  
+
+> arrive
+
+and performs the repair operation, which requires a fixed duration tk
+
+> repair
+
+. Thus the repair is completed at 
+
+tik  
+
+> end
+
+= tik  
+
+> arrive
+
++ tk
+
+> repair
+
+. (22) The orbital transfer comprises a coast phase of duration tikj  
+
+> coast
+
+followed by a phasing maneuver of duration tikj 
+
+> phase
+
+, both determined by the orbital mechanics described in Section 2. Consequently, the arrival time at the next task j is 
+
+tij  
+
+> arrive
+
+= tik  
+
+> end
+
++ tikj  
+
+> coast
+
++ tikj 
+
+> phase
+
+. (23) 15 Let τ ikj denote the time required by Si to transfer from task Tk to task Tj .This temporal cost is the time required by Si after the completion of task Tk
+
+until it completes the task Tk.The temporal maneuver cost for Si transitioning from task Tk to task Tj
+
+is the time required for coast time, phasing time and the repair time. 
+
+τ ikj = tikj  
+
+> coast
+
++ tikj  
+
+> phase
+
++ tj 
+
+> repair
+
+(24) Unlike ∆V ikj , the τ ikj is route-dependent. In geosynchronous orbits, the phasing time depends only on the two orbits involved and the number of phasing revolutions. Also the repair time is fixed for each task. But the coast time depends on position of the spacecraft, i.e., it depends on the start time of task Tk. Hence, τ ikj is a function of entire route μi and cannot be computed locally for pair Tk and Tj .To ensure temporal feasibility in the mission schedule, a Big-M constraint enforces the proper sequencing whenever spacecraft i travels directly from task k to task j (i.e., when xikj = 1 ). The constraint is written as 
+
+tij  
+
+> end
+
+≥ tik  
+
+> end
+
++ τ ikj − M (1 − yikj ) ∀i ∈ S , ∀k, j ∈ T , (25) where M is chosen large enough that the inequality is automatically satisfied when yikj = 0 . For active transfers yikj = 1 the constraint reduces to the exact temporal relationship. Finally, all repair tasks must be completed before the mission deadline 
+
+tmax . This requirement is captured by the deadline constraint 
+
+tik  
+
+> end
+
+≤ tmax , ∀i ∈ S, ∀k ∈ T. (26) Together, constraints (25) and (26) guarantee that the mission schedule re-spects both the orbital-dynamics-dictated transfer times and the overall time limit for the servicing campaign. 
+
+3.4. Optimization Problem 
+
+The orbital routing problem can now be formulated as the following mixed-integer optimization problem: 
+
+min  
+
+> μi, x ij , n ikj
+
+∑
+
+> i∈S
+
+∑
+
+> (k,j )∈μi
+
+∆V ikj (27) 16 subject to: 
+
+∑
+
+> i∈S
+
+xij = 1 ∀j ∈ T , (27a) 
+
+xij ∈ { 0, 1} ∀i ∈ S , ∀j ∈ T , (27b) 
+
+nikj ∈ Z+ ∀i ∈ S , ∀(k, j ) ∈ μi, (27c) 
+
+∆Vi(μi) ≤ ∆Vmax ∀i ∈ S , (27d) 
+
+tij  
+
+> end
+
+≥ tik  
+
+> end
+
++ τ ikj − M (1 − yikj ) ∀i ∈ S , ∀k, j ∈ T (27e) 
+
+tik  
+
+> end
+
+≤ tmax , ∀i ∈ S, ∀k ∈ T. (27f) This formulation captures the coupled nature of route selection and ma-neuver planning, where the ordering of tasks and the number of phasing revolutions jointly determine the orbital transfer cost. 
+
+3.5. Discussion 
+
+The resulting problem is a highly combinatorial, nonconvex multi-TSP with maneuver-dependent edge costs, rendering exact solution approaches computationally intractable for realistic GEO servicing scenarios. This mo-tivates the use of evolutionary optimization techniques, such as the proposed GA with the Route–Phasing–Split Triplet Chromosome, to efficiently com-pute high-quality feasible solutions. 
+
+4. RoutePhasingSplit-Encoded Genetic Algorithm 
+
+Planning on-orbit satellite repair problem formulated in 3 is a complex and highly constrained problem. Maneuver costs are nonlinear and depend on prior trajectory decisions, task execution windows are tight, and servicing multiple satellites requires maintaining both route feasibility with bounded propellant and mission time. Together, these factors create a large, combina-torial solution space that is highly sensitive to timing and orbital dynamics, making deterministic approaches prone to infeasible or suboptimal solutions. To tackle these challenges, we employ a RoutePhasingSplit (RPS) en-coded Genetic Algorithm (GA) framework that jointly explores route as-signments, task sequences, and phasing decisions. Its adaptive, evolutionary search efficiently navigates the constrained, nonconvex solution space, bal-ancing maneuver cost, feasibility, and robustness against temporal and or-bital uncertainties. Chromosomes evolve through split-aware operators and 17 feasibility-biased repair, while elite RPS solutions are further refined via a regret-based large-neighborhood search (LNS) using 2-regret destroy-and-repair and rotation polishing. This approach generates temporally coherent, low-∆V multi-servicer plans, making it well-suited for multi-satellite repair missions. 
+
+4.1. Chromosome Representation 
+
+Earlier, [29] established permutation-based path encodings for the single-agent TSP, later extended in [30] to the mTSP via composite chromosomes that decouple task allocation from subtour sequencing. GARST [31] fur-ther extended this approach for multi-agent routing with non-stationary cost. Motivated by this progression, the proposed RPS chromosome introduces a third Phasing dimension alongside Route sequencing and Split allocation, explicitly incorporating orbital synchronization requirements and enabling a unified encoding tailored to on-orbit servicing missions. Each candidate solution is encoded using a Route–Phasing–Split (RPS) encoded Chromosome, designed to represent complete routing solutions while preserving feasibility. Each chromosome C consists of three distinct compo-nents: 
+
+• R (Route) = [ Ta, T b, . . . , T N ] is a permutation of N tasks defining the global execution order. 
+
+• n (Phasing) = [ na, n b, . . . , n N ] specifies the number of phasing rotations 
+
+ni ∈ Z+ associated with each task transition. 
+
+• L (Splitlength) = [ L1, L 2, . . . , L M ] defines the segmentation of the task sequence into M distinct routes, with ∑Mk=1 Lk = N .Ta Tb Tc Td Te . . . TN na nb nc nd ne . . . nN L1 = 3 L2 = 2 . . . LM    
+
+> Route (Task Sequence ) Phasing Rotations Splits (route lengths)
+> RnL
+> Figure 4: Structure of the Route–Phasing–Split (RPS) chromosome. Routing genes encode task order, phasing genes specify transfer rotations, and split genes define route segmen-tation.
+
+18 The route-length vector L determines how the global task sequence is partitioned among SSCs. This triplet encoding enables the GA to simul-taneously optimize task ordering, phasing decisions, and route allocation, while ensuring that each task is executed exactly once and all routes remain feasible by construction. 
+
+4.2. Fitness Function Design 
+
+The fitness of each chromosome is evaluated based on the total orbital maneuvering cost required to execute all assigned servicing tasks, while pe-nalizing violations of mission-level feasibility constraints inherent to on-orbit servicing operations. In the proposed framework, minimizing propellant con-sumption is the primary objective, as the total required ∆V directly deter-mines fuel usage, mission lifetime, and the number of GEO satellites that can be serviced by the available fleet. We first define penalty terms associated with constraint violations for each servicing spacecraft. 
+
+Penalty for propellant limit violation: 
+
+P∆Vi = max(0 , ∆Vi(μi) − ∆Vmax ) , (28) 
+
+Penalty for mission time violation: 
+
+Pti = max (0, t i
+
+> end
+
+(μi) − tmax 
+
+) , (29) where ti
+
+> end
+
+(μi) denotes the completion time of the servicing route μi, and tmax 
+
+is the mission deadline. The total penalty associated with SSC Si is defined as the sum of its individual constraint violations: 
+
+PSi = P∆Vi + Pti . (30) To penalize infeasibilities at the mission level while avoiding dispropor-tionate dominance by any single SSC, the aggregate penalty term is defined as 
+
+Pteam =
+
+(∑
+
+> i∈S
+
+PSi
+
+)2
+
++ λ ∑
+
+> i∈S
+
+P 2 
+
+> Si
+
+. (31) where λ is a scaling factor. The first term penalizes the overall magnitude of constraint violations across all the SSCs, while the second term discourages solutions in which 19 a single SSC absorbs a large violation while others remain feasible. This combined structure mitigates oscillatory behavior in which the optimization alternates infeasibility among different SSCs without converging to a globally feasible solution. 
+
+infeasibility penalty A binary infeasibility penalty is introduced to penal-ize solutions that violate hard operational constraints. 
+
+Pinfeasible =
+
+{
+
+κ, Pteam ̸ = 0 0, Pteam = 0 (32) where, κ is a large value, in this paper we choose κ = ∆ Vmax 
+
+An infeasibility penalty is necessary because the primary mission objec-tive is to minimize total ∆V subject to bounded propellant and mission duration constraints, rather than to minimize mission time itself. In many scenarios, a reduction in ∆V can be achieved by violating temporal con-straints (e.g., through extended coasting or phasing), which may cause an otherwise feasible solution to evolve toward an infeasible one. The binary infeasibility penalty prevents such solutions from being favored during selec-tion and ensures convergence toward physically realizable on-orbit servicing plans. The fitness function is defined as: 
+
+F = ∑
+
+> i∈S
+
+∆Vi(μi) + Pteam + Pinfeasible (33) 
+
+∆Vi(μi) represents the true physical cost of orbital transfers and is therefore the dominant component of the fitness function. The second term penalizes violations of the mission constraint. The third term is added to avoid the evolution of the feasible chromosome to an infeasible chromosome. 
+
+4.3. Genetic Operators 
+
+All genetic operators act on the Route–Phasing–Split (RPS) triplet chro-mosome C = ( R, n, L). Wherever possible operators are component-wise (operate only on R, n or L); when cross-component modification is required, operators are split-aware and preserve route integrity and phasing consistency to the greatest extent possible. A lightweight repair stage follows crossover and mutation to restore task-uniqueness and to attempt local feasibility fixes prior to fitness evaluation. 20 4.3.1. Selection strategy 
+
+At each generation, the population is first sorted in ascending order of fitness value, where lower fitness corresponds to lower total mission cost and thus higher solution quality. An elitist selection mechanism is employed to ensure the preservation of high-quality solutions across generations. Specif-ically, the two best-performing chromosomes are copied unchanged into the next generation, thereby guaranteeing retention of the current best solutions. Any additional elite chromosomes, if present, are randomly permuted before insertion into the next generation. This permutation avoids positional bias during subsequent crossover operations while maintaining elite solution qual-ity. The remaining population slots are filled using roulette-wheel selection applied to an inverted fitness measure, which is appropriate for the present minimization problem. For each candidate chromosome i, the sampling weight is computed as 
+
+wi = max  
+
+> j
+
+(fj ) − fi + ε, 
+
+where fi denotes the total fitness value of chromosome i, including maneuver cost and penalty terms, and ε = 0 .01 is a small constant introduced to prevent zero selection probability. The inverted formulation ensures that chromosomes with lower cost and fewer constraint violations are more likely to be selected. The normalized selection probability is then computed as 
+
+pi = wi
+
+∑ 
+
+> j
+
+wj
+
+,
+
+after which a cumulative probability distribution is formed. Stochastic sam-pling with replacement is performed to generate the roulette-selected chro-mosomes, allowing highly fit individuals to be selected multiple times while maintaining population diversity. The final mating pool is constructed as the concatenation of the elite sub-set and the roulette-wheelselected individuals. This hybrid selection strategy balances exploitation of high-quality orbital routing solutions with explo-ration of the broader search space, which is critical for navigating the highly nonconvex and combinatorial landscape of the on-orbit servicing problem. 21 4.3.2. Split-aware crossover operators 
+
+Standard permutation-based crossover operators are inadequate for the on-orbit servicing problem, as they frequently violate route feasibility, inval-idate task-phasing associations, and generate infeasible offspring. To over-come these limitations, a split-aware crossover family is developed that treats route blocks, as defined by the route-length vector L, as first-class struc-tural elements. The crossover process is implemented within an adaptive, evaluate-and-select framework that explicitly prioritizes route integrity and task–phasing coherence. 
+
+Route-Block Crossover (RBC). Route-Block Crossover (RBC) exchanges en-tire route blocks between two parent chromosomes while preserving intra-block task order and the associated phasing information. The implementa-tion proceeds as follows: 1. Decompose parents P A = ( RA, nA, LA) and P B = ( RB , nB , LB ) into route blocks according to L.2. Select one or more route blocks (contiguous or non-overlapping) from each parent using a block-selection policy (uniform, length-weighted, or improvement-guided). 3. Exchange the selected blocks and concatenate the remaining blocks to form offspring task sequences; remove duplicated tasks and reinsert any missing tasks while preserving the original intra-block order. 4. Inherit the phasing vector n for transferred blocks from the donor par-ent and apply small, localized integer perturbations to restore or im-prove feasibility where necessary. By operating at the route-block level, RBC strongly preserves route-level feasibility and limits large combinatorial disruption of otherwise promising schedules. 
+
+Hybrid Order-Preserving Crossover (HOPC). When finer-grained intra-route exploration is beneficial, Hybrid Order-Preserving Crossover (HOPC) is em-ployed. HOPC applies an order-preserving crossover restricted to tasks within selected routes, thereby preserving the relative task order inherited from donor parents while allowing limited intra-route recombination. This opera-tor is applied selectively, for example on short routes or when operator-credit history indicates consistent local improvements. 22 Adaptive Crossover Selection. Both crossover operator choice and applica-tion probability are adapted online based on population fitness statistics. For each parent pair, the recombination probability pc is computed using the pair-wise best (lower) fitness fi, the population mean fitness ¯f , and the global best fitness f ∗:
+
+pc =
+
+
+
+pc, max , fi ≤ ¯f , pc, max − (pc, max − pc, min ) fi − ¯ff ∗ − ¯f + ε, fi > ¯f , 
+
+This formulation ensures that higher-quality parent pairs are preferentially recombined, while weaker pairs are preserved to maintain population diver-sity. A small probability of randomized location reseeding ( preseed ) is intro-duced to prevent stagnation when parent chromosomes are identical or nearly identical. Operator selection among RBC, multi-block RBC, HOPC, and other vari-ants is governed by a credit-assignment mechanism. When operator k pro-duces offspring that improve fitness or restore feasibility, it receives a reward 
+
+rk. Operator quality estimates are updated using exponential smoothing: 
+
+Qk ← (1 − β)Qk + βr k, qk = Qk
+
+∑ 
+
+> l
+
+Ql
+
+,
+
+where β is a small learning rate controlling adaptation speed, and qk deter-mines the future selection probability of operator k.
+
+Evaluate-and-Select Policy. Each mating operation generates a small candi-date pool by combining multiple location crossovers (OX variants), rotation realignments, and split recombinations. Rotation counts are remapped to the offspring task order, followed by mask-based mixing and small integer perturbations, and then rounded and clipped to admissible bounds. Route-length vectors are recombined using a disruptive arithmetic split crossover to propose alternative task-to-route partitions. Candidates are deduplicated and immediately evaluated using the GA fit-ness function, and only the best one or two evaluated offspring are retained to replace the parent pair. Although this evaluate-and-select strategy increases per-mating computational cost, it significantly reduces the propagation of infeasible or high-cost offspring. This trade-off is particularly advantageous for constrained multi-TSP GEO routing problems, where maintaining route 23 integrity and task–phasing coherence is essential for producing physically realizable servicing schedules. 
+
+4.3.3. Mutation Strategy 
+
+Mutation operators are applied independently to each component of the RPS triplet chromosome C = ( R, n, L) after preserving elites. Mutation rates are adaptive and fitness-dependent. For a feasible indi-vidual i we normalize its fitness to [0 , 1] ,
+
+˜fi = fi − fmin 
+
+fmax − fmin 
+
+,
+
+and set the per-individual mutation probability 
+
+pm = pm, min + ( pm, max − pm, min ) ˜fi,
+
+so that better solutions receive lower mutation rates. Typical implementation values are pm, min = 0 .01 and pm, max = 0 .2. Infeasible chromosomes are assigned a higher mutation probability to encourage escape from infeasible basins. Component-wise mutation events are sampled independently using the computed pm.Route, number of phasing orbits and split length mutations are imple-mented as follows. 
+
+Route Mutation. - Swap Mutation: exchange two randomly selected tasks -Inversion Mutation: reverse a contiguous subsequence. - Scramble Mutation: randomly permute tasks within a chosen subsequence. Mutation magnitude are annealed over generations to favor exploration early and fine-tuning later. 
+
+Phasing Rotation Mutation. Phasing rotations are integer-valued and per-turbed discretely. In the general model: 
+
+n′ 
+
+> i
+
+= max (1, n i + ∆ n · sign( N (0 , σ 2
+
+> n
+
+)) ),
+
+where ∆n is typically 12 and σn is adaptively reduced with convergence. In the code, rotations are first remapped to the (possibly mutated) route by copying each task’s phasing rotation, an optional small integer perturba-tion is applied, then rotations are repaired and clipped to admissible bounds 
+
+[0 , max_rot ]. This preserves taskrotation association while enabling con-trolled phasing exploration. 24 Split Length Mutation. Operators on the split vector L adjust route parti-tioning with conservative, local moves: 
+
+• Route Splitting: divide a long route into two at a chosen boundary to reduce local infeasibility or cost. 
+
+• Route Merging: combine adjacent routes when the merged route can be feasibly repaired or yields net benefit. 
+
+• Boundary Adjustment (Transfer): move a small number of tasks be-tween two routes. It typically transfers 12 tasks between randomly selected routes. All split mutations are repaired to preserve chromosome’s structure. 
+
+Repair and Practical Notes. Every mutation step is followed by inexpensive, targeted repairs (task-uniqueness enforcement, rotation repair, and split-sum repair) before subsequent evaluation. This adaptive, feasibility-biased mu-tation strategy concentrates fine-grained search in promising regions while aggressively perturbing infeasible or poorly performing chromosomes, balanc-ing exploration and exploitation in the constrained multiTSP GEO routing problem. 
+
+4.4. Large-Neighborhood Search (LNS) Intensification 
+
+To enhance the GAs global exploration while improving local solutions, we embed a Large-Neighborhood Search (LNS) module as a local improvement module applied to the RPS triplet chromosome. One of the elite triplets, en-coding task routes R, phasing rotations n, and route lengths L, serves as the LNS seed. The method repeatedly performs destroy-and-repair moves on this seed, enabling substantial, structured adjustments across ordering, phasing and partitioning that crossover or mutation alone often cannot achieve. LNS returns the best solution found within a fixed iteration budget and is applied selectively to concentrate computational effort on the most promising regions of the search space. Each iteration proceeds through three steps: destroy, repair and accept. 
+
+Destroy. Destruction generates a partial RPS triplet by removing a fraction of tasks (defined by a destruction rate ρ) from the task sequence while main-taining route-split and phasing structure. To balance exploration and tar-geted refinement, three strategies are rotated: (i) random deletion, (ii) high-25 cost deletion, removing tasks that contribute disproportionately to route-level ∆V , and (iii) cluster deletion, removing a contiguous subsequence from the longest route. These strategies trade broad exploration (random) for impact-focused restructuring (high-cost) and coherent local reallocation (clus-ter). 
+
+Repair. Repair reconstructs a feasible RPS triplet using a regret-based, time-aware insertion heuristic. For each unassigned task, feasible insertion posi-tions across servicers and route segments are evaluated, accounting for wait-ing, coasting, phasing rotations, and repair durations. Denoting the best and second-best insertion costs by c(1) and c(2) , the 2-regret value is 
+
+regret( t) = c(2) (t) − c(1) (t).
+
+Tasks with maximum regret are inserted first at their optimal positions, reusing stored phasing rotations where possible and updating the route-length vector L accordingly. This approach mitigates myopic placements and produces temporally coherent, feasible reconstructions. 
+
+Accept. Repaired triplets are evaluated with the GAs penalized fitness. Ac-ceptance may be greedy or probabilistic: nonimproving candidates can be accepted with probability 
+
+Paccept = exp ( − ∆f /T ), ∆f = fnew − fcurrent > 0,
+
+where T is a temperature parameter. Best-so-far bookkeeping preserves the best feasible (or leastpenalized) solution across the iteration budget. 
+
+Rotation neighbourhood search (phasing polish). In addition to destroy-and-repair LNS, we apply a lightweight rotation neighbourhood search that per-turbs only the integer phasing vector n while holding R and L fixed. The neighbourhood consists of singleunit adjustments 
+
+n′ = n + δ, δ ∈ {− 1, 0, 1}k, 1⊤δ = 0 ,
+
+(clipped to admissible bounds 1 ≤ ni ≤ Rmax ) and a permutationaug-mented copy of the same singlestep moves to permit nonlocal reassignment of phasing patterns. Because small changes in n often produce large, inter-pretable effects on transfer geometry and schedule feasibility, the rotation search provides highleverage, lowcost improvements. 26 Remarks. LNS is applied selectively, typically once per generation or when convergence stagnates, to limit computational overhead. By exploring small, feasible perturbations around the current best RPS triplet chromosome, it complements the GAs global search, refining task ordering, phasing, and route assignments without disrupting population diversity. This synergy be-tween global exploration and targeted local exploitation improves the like-lihood of identifying low-∆V feasible routes while preserving taskphasing and route integrity, particularly in the highly constrained multi-TSP GEO servicing problem. 
+
+4.5. Stagnation Detection, Diversity Injection, and Convergence 
+
+On-orbit routing is highly combinatorial and constrained, producing a search landscape with numerous deep local minima and narrow feasible re-gions; without intervention, the population can rapidly collapse around a single incumbent, eliminating the exploratory variability needed to discover alternative RPS configurations. A stagnation-control mechanism is there-fore required, not to micromanage the search, but to restore the capacity to explore structurally different solutions while preserving elites. 
+
+Stagnation Detection. To mitigate premature convergence, we employ a dual-criterion stagnation detection mechanism and inject controlled diversity when necessary. After an elitist merge of parents and offspring, duplicate genotypes (identical RPS chromosomes), are removed while preserving the relative or-dering of remaining individuals. The population is then sorted by ascending fitness. To monitor convergence, the population is considered compressed if the fitness of a near-tail individual (e.g., the 90% percentile) is within 0.5% of the best fitness, indicating that exploration has slowed. Let f (t)(1) denote the best fitness at generation t; stagnation is declared only if the population is compressed and the relative improvement of the best fitness over a window of w generations satisfies 
+
+|f (t)(1) − f (t−w)(1) |
+
+f (t−w)(1) 
+
+< δ. 
+
+In this work, we select a window of w = 5 generations and a tolerance of 
+
+δ = 10 −4.27 Diversity Injection. Upon detecting stagnation, a substantial diversity injec-tion is applied, replacing a large fraction (e.g., 90%) of the population with new individuals drawn from deeper entries in the merged, deduplicated pool: 
+
+PN −b+1: N ← P merged 
+
+> j:j+b−1
+
+, b ≈ 0.9N, j > N, 
+
+where Pmerged is the merged, sorted, and deduplicated population. Unlike random reinitialization, this approach preserves structural features of the current search context, producing individuals that are more amenable to subsequent repair and local improvement. 
+
+Convergence. Finally, convergence is ensured through a stopping criterion based on the improvement of the best fitness. If the relative improvement over the last 50 generations satisfies 
+
+|f (t)(1) − f (t−50) (1) |
+
+f (t)(1) 
+
+< δ, 
+
+the algorithm is terminated. This prevents unnecessary computation once the search has effectively stabilized while ensuring sufficient opportunity for exploration, particularly in complex, multi-target routing scenarios. The algorithm delays diversity injection until after burnin, measures com-pression using a neartail metric, removes duplicate genotypes, and replaces individuals with contextually related ones rather than random candidates. These choices reintroduce useful diversity without losing valuable learned structure. They preserve elite solutions, give tunable controls (replacement fraction, compression threshold, stagnation window), and help the algorithm escape stagnation to converge on feasible, low ∆V solution. 
+
+4.6. Discussion 
+
+The proposed genetic algorithm evolves the population through selection, split-aware crossover, adaptive mutation, and local neighborhood search. To prevent premature convergence, stagnation is detected via population com-pression and relative fitness improvement, triggering controlled diversity in-jection of structurally distinct, contextually related individuals. The algo-rithm stops when either a maximum generation limit is reached or improve-ment over a defined window falls below a tolerance. 28 This integrated framework efficiently converges to feasible, low-∆V on-orbit routing solutions while respecting multiTSP GEO constraints. By com-bining elitist preservation, forward-invariant evolution, targeted diversity in-jection, and local refinement, it balances exploration and exploitation for ro-bust multi-target mission planning. The resulting performance is presented in the following section. 
+
+5. Results 
+
+All algorithms were implemented in the MATLAB 2024b environment and executed on a PC equipped with a 1.8 GHz Intel Core i7 CPU and 48 GB RAM. 
+
+5.1. Case Study 
+
+To evaluate the performance of the proposed method, a real-world mis-sion scenario reported in [10] is considered. All algorithms were developed in MATLAB R2024b and executed on a workstation equipped with a 1.8 GHz Intel Core i7 processor and 48 GB of RAM to ensure a consistent compu-tational environment for performance assessment. Table 2 lists the orbital parameters of 2 SSCs and 14 target satellites at the commencement of the mission. Each SSC is constrained by a maximum total ∆V budget of 1000 m/s. All targets must be serviced within a 30-day mission horizon, and the on-orbit servicing duration for each satellite is fixed at 20 hours. The param-eters for RPS based GA are set as follows: the minimum iteration number is set to 100, the population size is set to 100, the the crossover probabil-ity adaptively changes from 0.6 to 0.9, the mutation probability adaptively changes from 0.08 to 0.2, the remove rate for Destroy method is 30%, the iteration number of LNS procedure is fixed to 5. The infeasibility penalty coefficient κ is 1000. The stopping criteria comprise two conditions; the total number of iterations must exceed the prescribed minimum threshold, and the best fitness value must remain unchanged over the most recent 50 consecutive iterations, indicating convergence. To evaluate robustness and statistical stability, the mission scenario is independently solved 100 times using the proposed RPS-based GA algorithm. Figure 5 shows the convergence curve for the best run among 100 trials. The algorithm converges to an optimal total ∆V of 1476.32 m/s, significantly lower than the previously reported in [10] best values of 1956 .36 m/s for LNS-AGA and 2285 .59 m/s for standard GA. 29 Table 2: Orbital Parameters of Servicing Spacecraft (SSC) and Target Satellites 
+
+ID Name Inclination (i◦)RAAN (Ω◦)True Anomaly (ω◦)
+
+SSC1 SSC1 0.00 0.00 0.00 SSC2 SSC2 5.00 0.00 160.00 
+
+T1 Beidou2_G7 1.60 66.76 278.27 
+
+T2 Beidou2_G8 0.30 328.08 156.03 
+
+T3 Beidou_G1 1.80 45.11 252.16 
+
+T4 Beidou_G2 7.77 52.63 328.00 
+
+T5 Beidou_G3 1.89 52.10 274.21 
+
+T6 Beidou_G4 1.06 59.65 144.68 
+
+T7 Beidou_G5 1.45 67.40 288.52 
+
+T8 Beidou_G6 1.86 85.65 319.30 
+
+T9 Chinasat_11 0.09 103.25 331.94 
+
+T10 Fengyun_2E 5.00 68.04 285.07 
+
+T11 Fengyun_2F 2.80 83.11 224.48 
+
+T12 Tianlian1_01 4.81 71.74 337.75 
+
+T13 Tianlian1_02 2.21 74.98 229.24 
+
+T14 Tianlian1_03 0.99 98.18 230.86 30 Figure 5: Convergence Curve for RPS-based LNSAGA 
+
+31 Figure 6: Distribution of the final values obtained for randomised simulations 
+
+32 Figure 6 reports the histogram of final fitness values for 100 runs. All of the runs results in a feasible solution, and final fitness values follow the gamma distribution as shown in Fig 6 the histogram. Fig 7, shows the schedule of both SSCs for the optimal solution. One can observe that all the targets have been repaired. All tasks in the on-orbit repair mission are completed within the mission deadline of 720 hours, i.e., 30 days. Unlike the results reported in [10], the schedule shows that the phasing time is dynamic and significantly varies due to dynamic number of phasing rotations.  
+
+> (a) Repairing schedule of SSC 1 (b) Repairing schedule of SSC 2
+> Figure 7: Schedules of the SSC for entire mission
+
+Table 3 presents the detailed mission schedule, including the start time of each task, coast time, first impulse vector, phasing time, number of phas-ing revolutions, second impulse vector, task completion time, and the corre-sponding ∆V magnitude. The time of the first impulse, ∆v1, is computed as the sum of the task’s start time and the coast time. The second impulse, 
+
+∆v2, occurs at the sum of the task’s start time, coast time, and phasing time. After rendezvous, the SSC performs on-orbit servicing for 20 hours, upon which the task is completed. From Table 3, SSC1 consumes a total 
+
+∆V of 586.09 m/s, while SSC2 consumes 890.23 m/s. Both servicing space-craft operate within the maximum allowable individual SSC’s ∆V limit of 1000 m/s. Both SSCs complete their respective servicing tasks within the temporal constraint of 720 hours. Table 4 presents the comparison of the mission with the state-of-the-art LNS-AGA method proposed in [10]. The proposed RPS-GA finds the solu-tion with total DeltaV = 1476 .32 , which is 24 .5% lower than the previously known best value ( 1956 .32 ). Both SSCs satisfy the temporal constraint of 33 Table 3: Detailed mission planning results for orbital routing details                                                                                                                                      
+
+> Id Name start time (h) coast time (h) ∆v 1
+> phasing time (h) Phasing rotations ∆v 2
+> completion time(h) ∆vtotal
+> SSC1
+> T7Beidou_G5 0.00 4.48 [-4.42,1.84,77.80 ] 48.14 2[5.33,-2.22,0.00] 72.62 83.73
+> T1Beidou2_G7 72.62 4.28 [-8.71,4.94,8.36] 72.53 3[8.91,-5.02,-0.26] 169.43 23.27
+> T14 Tianlian1_03 169.43 3.10 [-9.06,12.83,-48.73] 72.87 3[8.01,-12.62,-0.34] 265.40 66.15
+> T5Beidou_G3 265.40 3.41 [-1.20,6.51,75.06] 24.12 1[2.82,-7.18,-0.03] 312.92 83.07
+> T11 Fengyun_2F 312.92 10.30 [-11.65,-10.49,82.21] 73.05 3[14.71,9.41,-0.19] 416.28 101.16
+> T13 Tianlian1_02 416.28 10.69 [-6.06,-1.35,-36.64] 48.09 2[4.48,1.65,-0.21 ] 495.06 41.94
+> T3Beidou_G1 495.06 0.19 [9.37,5.22,59.13] 48.33 2[-7.60,-6.18,0.22 ] 563.58 69.89
+> T6Beidou_G4 563.58 5.75 [-22.99,45.86,-42.41] 125.85 5[22.15, -45.17, -1.49] 715.18 116.89
+> 715.18 586.09
+> SSC2
+> T2Beidou2_G8 0.00 1.46 [0.48,-36.49,252.28] 98.12 4[-0.83,24.82,2.17] 119.58 279.83
+> T9Chinasat_11 119.58 0.90 [-18.09,-20.25,19.68] 122.92 5[18.08,20.21,0.14] 263.41 60.66
+> T8Beidou_G6 263.41 0.56 [-19.38,1.82,95.23] 97.75 4[20.99,-1.92,-0.03] 381.72 118.28
+> T12 Tianlian1_01 381.72 1.11 [3.32,0.58,162.91] 47.57 2[5.81,-2.92,-0.20] 450.40 169.45
+> T10 Fengyun_2E 450.40 9.27 [4.23,-29.97,-21.00] 123.42 5[-5.82,30.55,1.27] 603.09 67.97
+> T4Beidou_G2 603.09 2.18 [6.87,7.58,173.78] 93.91 4[9.47,-17.53,-1.34] 719.19 194.05
+> 719.19 890.23
+
+720 hrs. 
+
+5.2. Ablation Study 
+
+The infeasibility penalty is discrete in nature and is introduced to prevent convergence toward infeasible local minima. To evaluate its necessity, the proposed RPS-based LNS-AGA was simulated with the infeasibility penalty coefficient set to zero.Out of 100 runs, 12 converged to infeasible solutions, and several runs that produced feasible solutions exhibited oscillations be-tween feasible and infeasible states during evolution. Without the infeasibil-ity penalty, the proposed RPS-based GA converges to the best solution with 
+
+∆V = 1476 .32 ; however, during evolutions, the solution toggles between the feasible and infeasible chromosomes as shown in the fig 8a. One representative infeasible example (the lowest infeasible solution) is shown in Fig. 8b, where the converged solution is infeasible. Although feasible individuals exist in the final population, the additive fitness structure allows an infeasible solution to attain the best objective value in the absence of an infeasibility penalty term. In this infeasible run, SSC1 is assigned the sequence {SSC 1 - T14 - T5 -
+
+T3 - T13 - T11 - T10 - T12 - T4} with phasing rotations (3, 1, 3, 1, 1, 4, 5, 3), resulting in a total ∆V of 816.95 m/s and a completion time of 710.94 hours. 34 Table 4: Comparison table 
+
+∆V (m/s ) Completion time (hr) Constraints 1000 720 LNS AGA [10] SSC1 992.68 607.45 SSC2 963.68 703.33 Mission 1956.36 703.33 RPS-GA SSC1 586.09 715.18 SSC2 890.23 719.19 Mission 1476.32 719.19  
+
+> (a) Feasible solution (b) Infeassible solution
+> Figure 8: Convergence Curves without infeasibility penalty
+
+SSC2 is assigned {SSC 2 - T6 - T2 - T9 - T8 - T7 - T1}, with phasing rotations (4, 5, 5, 3, 5, 2), resulting in a total ∆V of 686.91 m/s and a completion time of 720.92 hours, thereby violating the temporal constraint. The results show that without an infeasibility penalty, the algorithm fa-vors infeasible solutions and oscillates between feasible and infeasible indi-viduals, highlighting the penaltys essential role in ensuring forward-invariant evolution within the feasible solution space. 
+
+6. Conclusion 
+
+This paper presented a RoutePhasingSplit Genetic Algorithm (RPS-GA) for multi-servicer on-orbit servicing (OOS) mission planning in geosynchronous 35 Earth orbit (GEO). The proposed RPS-GA approach integrates route, phas-ing, and split decisions within a single optimization framework. The core element is an RPS triplet chromosome that jointly encodes route order, phas-ing rotations, and route partitions, enabling split-aware recombination while preserving high-quality multi-servicer route blocks. The proposed constraint-aware fitness function compares feasible solutions solely by total ∆V , penal-izing both aggregate and unbalanced violations of propellant and temporal constraints while preserving a forward-invariant feasibility of the best solu-tion. The approach is further strengthened by tailored split-aware genetic operators, including RouteBlock Crossover, adaptive mutation, and a regret-based Large Neighborhood Search for local improvement and exploitation of favorable phasing opportunities. Computational experiments on representa-tive GEO servicing scenarios demonstrate that RPS-GA produces feasible multi-servicer plans with substantially improved propellant efficiency, reduc-ing total ∆V from 1956.36 m/s to 1476.32 m/s compared with a state-of-the-art LNS-AGA baseline, in the same scenario. These result highlight the benefits of explicitly co-optimizing route sequencing, phasing rotations, and route partitioning, combined with split-aware evolutionary operators and ro-bust feasibility management, for realistic multi-servicer GEO OOS planning. 
+
+Acknowledgment 
+
+This work was partially supported by the Wallenberg AI, Autonomous Systems and Software Program (WASP) funded by the Knut and Alice Wal-lenberg Foundation, and partially by the OPTACOM a research project funded by European Space Agency (ESA). 
+
+References 
+
+[1] A. Banerjee, M. Mukherjee, S. G. Satpute, G. Nikolakopoulos, Re-siliency in space autonomy: a review, Current Robotics Reports 4 (2023) 1–12. [2] N. H. Barbara, S. Lizy-Destrez, P. Guardabasso, D. Alary, New geo paradigm: Re-purposing satellite components from the geo graveyard, Acta Astronautica 173 (2020) 155–163. [3] Y. Liu, Y. Zhao, C. Tan, H. Liu, Y. Liu, Economic value analysis of on-orbit servicing for geosynchronous communication satellites, Acta As-tronautica 180 (2021) 176–188. 36 [4] R. Opromolla, D. Grishko, J. Auburn, R. Bevilacqua, L. Buinhas, J. Cas-sady, M. Jäger, M. Jankovic, J. Rodriguez, M. A. Perino, et al., Future in-orbit servicing operations in the space traffic management context, Acta Astronautica 220 (2024) 469–477. [5] S. Velhal, S. Sundaram, N. Sundararajan, A decentralized multirobot spatiotemporal multitask assignment approach for perimeter defense, IEEE Transactions on Robotics 38 (5) (2022) 3085–3096. [6] S. Velhal, S. Sundaram, N. Sundararajan, Dynamic resource allocation with decentralized multi-task assignment approach for perimeter defense problem, IEEE Transactions on Aerospace and Electronic Systems 58 (4) (2022) 3313–3325. [7] Y. Zhou, Y. Yan, X. Huang, Y. Yang, Multi-objective planning of a multiple geostationary spacecraft refuelling mission, Engineering Opti-mization 49 (3) (2017) 531–548. [8] T.-J. Zhang, Y.-K. Yang, B.-H. Wang, Z. Li, H.-X. Shen, H.-N. Li, Opti-mal scheduling for location geosynchronous satellites refueling problem, Acta Astronautica 163 (2019) 264–271. [9] L. Kong, Y. Zhou, Multiobjective mission planning for multiple geosyn-chronous spacecraft refueling, International Journal of Aerospace Engi-neering 2023 (1) (2023) 6623461. [10] P. Han, Y. Guo, C. Li, H. Zhi, Y. Lv, Multiple geo satellites on-orbit repairing mission planning using large neighborhood search-adaptive ge-netic algorithm, Advances in Space Research 70 (2) (2022) 286–302. [11] W. Liang, H. Zhi, P. Han, G. Ran, G. Ma, Y. Guo, Geo satellite on-orbit refueling and debris removal hybrid mission planning under uncertainty, Advances in Space Research 74 (5) (2024) 2376–2387. [12] J. S. Hudson, D. Kolosa, Versatile on-orbit servicing mission design in geosynchronous earth orbit, Journal of Spacecraft and Rockets 57 (4) (2020) 844–850. [13] H. Yan, L. Yuan, C. Li, Y. Guo, G. Ran, B. Wang, Rapid on-orbit repair mission planning for multiple geo spacecraft based on a mixed 37 repair strategy, IEEE Transactions on Aerospace and Electronic Systems 61 (1) (2024) 279–295. [14] L. Xie, Y.-q. Zhang, J.-y. Xu, Hohmann transfer via constrained opti-mization, Frontiers of Information Technology & Electronic Engineering 19 (11) (2018) 1444–1458. [15] K. Daneshjou, A. Mohammadi-Dehabadi, M. Bakhtiari, Mission plan-ning for on-orbit servicing through multiple servicing satellites: A new approach, Advances in Space Research 60 (6) (2017) 1148–1162. [16] S. Yin, Y. Guo, C. Li, G. Ran, J. H. Park, A clustering-reconstruction-based multi-objective refueling mission scheduling framework for large-scale geosynchronous orbit spacecraft, Aerospace Science and Technol-ogy (2025) 111457. [17] B. Qiao, W. Chen, Y. Feng, H. Qin, W. Wu, Optimal scheduling of k-m-n geo on-orbit service network based on hybrid simulated annealing algorithm, Journal of aerospace engineering 37 (6) (2024) 04024074. [18] S. E. Sorenson, S. G. N. Pinkley, Multi-orbit routing and scheduling of refuellable on-orbit servicing space robots, Computers & Industrial Engineering 176 (2023) 108852. [19] T. Sarton du Jonchay, H. Chen, O. Gunasekara, K. Ho, Framework for modeling and optimization of on-orbit servicing operations under demand uncertainties, Journal of Spacecraft and Rockets 58 (4) (2021) 1157–1173. [20] Y. Li, X. Sun, X. Liu, J. Wu, Q. Liu, Deployment of on-orbit service vehicles using a fuzzy adaptive particle swarm optimization algorithm, Modelling and Simulation in Engineering 2021 (1) (2021) 6644339. [21] Y. Zhou, Y. Yan, X. Huang, L. Kong, Mission planning optimization for multiple geosynchronous satellites refueling, Advances in Space Research 56 (11) (2015) 2612–2625. [22] S. Ropke, D. Pisinger, An adaptive large neighborhood search heuristic for the pickup and delivery problem with time windows, Transportation science 40 (4) (2006) 455–472. 38 [23] Y. Chen, M. Chen, J. Wen, Y. Chen, W. Xiang, An adaptive large neigh-borhood search algorithm for the satellite data transmission scheduling problem, International Journal of Aerospace Engineering 2020 (1) (2020) 5243749. [24] W. Wu, H. Lu, J. Xu, Y. Sun, Hierarchical optimization method of space patrol task assignment based on deep neural network and consensus-based bundle algorithm, Acta Astronautica 207 (2023) 295–306. [25] Z. Li, Y. Liu, M. Wang, Y. Zhao, Multi-satellite mission allocation and scheduling method for large-scale problem, Advances in Space Research 76 (4) (2025) 2123–2139. [26] S. Wu, Y. Guo, C. Li, G. Ran, B. Wang, M. Z. Ashraf, Geo space-craft rendezvous sequence mission planning based on data augmented reinforce algorithm, IEEE Transactions on Aerospace and Electronic Systems (2025). [27] E. Tomanek-Volynets, M. Ceriotti, The pointer network for reward max-imisation in multi-target space mission sequence selection, Advances in Space Research 75 (12) (2025) 8687–8706. [28] J. Ye, Y. Zhang, Y.-J. Chen, An improved monte carlo tree search algo-rithm with dynamic classification for multi-spacecraft multi-target allo-cation, Advances in Space Research 76 (1) (2025) 412–428. [29] P. Larranaga, C. M. H. Kuijpers, R. H. Murga, I. Inza, S. Dizdarevic, Genetic algorithms for the travelling salesman problem: A review of representations and operators, Artificial intelligence review 13 (2) (1999) 129–170. [30] A. E. Carter, C. T. Ragsdale, A new approach to solving the multi-ple traveling salesperson problem using genetic algorithms, European journal of operational research 175 (1) (2006) 246–257. [31] J. John, S. Sundaram, Genetic algorithm-based routing and scheduling for wildfire suppression using a team of uavs, in: 2024 IEEE Congress on Evolutionary Computation (CEC), IEEE, 2024, pp. 1–8. 39
