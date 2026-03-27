@@ -1,0 +1,1041 @@
+Title: Bayesian Learning-Enhanced Navigation with Deep Smoothing for Inertial-Aided Navigation
+
+URL Source: https://arxiv.org/pdf/2603.25364v1
+
+Published Time: Fri, 27 Mar 2026 01:09:37 GMT
+
+Number of Pages: 14
+
+Markdown Content:
+> 1
+
+# Bayesian Learning-Enhanced Navigation with Deep Smoothing for Inertial-Aided Navigation 
+
+Nadav Cohen and Itzik Klein 
+
+Abstract —Accurate post-processing navigation is essential for applications such as survey and mapping, where the full mea-surement history can be exploited to refine past state estimates. Fixed-interval smoothing algorithms represent the theoretically optimal solution under Gaussian assumptions. However, loosely coupled INS/GNSS systems fundamentally inherit the systematic position bias of raw GNSS measurements, leaving a persistent accuracy gap that model-based smoothers cannot resolve. To address this limitation, we propose BLENDS, which integrates Bayesian learning with deep smoothing to enhance navigation performance. BLENDS is a a data-driven post-processing frame-work that augments the classical two-filter smoother with atransformer-based neural network. It learns to modify the filter covariance matrices and apply an additive correction to the smoothed error-state directly within the Bayesian framework. A novel Bayesian-consistent loss jointly supervises the smoothed mean and covariance, enforcing minimum-variance estimates while maintaining statistical consistency. BLENDS is evaluated on two real-world datasets spanning a mobile robot and a quadrotor. Across all unseen test trajectories, BLENDS achieves horizontal position improvements of up to 63% over the baseline forward EKF. 
+
+Index Terms —Inertial Navigation System, GNSS, Extended Kalman Smoothing, Two-Filter Smoother, Deep Learning, Sensor Fusion 
+
+I. I NTRODUCTION 
+
+# ACCURATE and reliable navigation is a fundamental requirement for autonomous mobile platforms operating in outdoor environments. Inertial navigation systems (INS), driven by inertial measurement units (IMUs), provide high-rate, self-contained state estimates but suffer from unbounded error growth due to the integration of accelerometer and gyroscope measurements, which are corrupted by noise and bias [1]. Global navigation satellite systems (GNSS) provide global position measurements that bound this drift, and their fusion with INS through an extended Kalman filter (EKF) has become the standard approach for navigation across ground vehicles, aerial platforms, and marine systems [2]. Despite its widespread adoption, loosely coupled INS/GNSS fusion is limited by the accuracy of the GNSS measurements, which typically achieves two to five meters of positional accuracy, far from the centimeter-level precision offered by real-time kine-matics (RTK) corrected GNSS [3]. This discrepancy manifests as a systematic position offset in the fused solution, which directly motivates the approach proposed in this paper. In some cases, the navigation performance recorded during a mission is insufficient for post-processing analysis, for 
+
+N. Cohen and I. Klein are with the Hatter Department of Marine Technolo-gies, Charney School of Marine Sciences, University of Haifa, Israel. Corresponding author: ncohe140@campus.haifa.ac.il (N.Cohen) 
+
+example in surveying and mapping [4], airborne gravime-try [5], and direct georeferencing of unmanned aerial vehicle imagery [6]. To this end, prior work has proposed exploiting the full measurement history, incorporating both past and future observations, to refine the navigation solution. Fixed-interval smoothing algorithms, such as the Rauch–Tung– Striebel smoother (RTSS) [7] and the two-filter smoother (TFS) [8], represent the theoretically optimal solution for post-processing navigation under Gaussian assumptions. Beyond refining positioning performance, these algorithms have also been applied to address challenges arising in real-time scenar-ios, such as GNSS-denied environments, where they demon-strate the ability to compensate for EKF divergence [9, 10], and in conditions where the GNSS signal is severely disturbed or degraded [11, 12]. With recent advancements in hardware capabilities and com-putational power, data-driven approaches such as machine and deep learning have begun to be integrated into the filtering mechanism to enhance navigation performance. Specifically, in inertial-aided navigation, data-driven methods have been inves-tigated either as end-to-end approaches or as replacements for specific blocks within the filtering framework [13, 14]. Replac-ing a specific block within the framework, while maintaining the reliability and interpretability of the navigation solution rather than adopting a black-box approach, has shown great promise. Adaptive approaches have been suggested to estimate the process and measurement noise covariance matrices [15, 16, 17, 18]. Data-driven methods have also been used to com-pensate for partial or intermittent measurement availability and subsequently integrated into the filter [19, 20]. These efforts have also extended to the post-processing smoothing stage. In [21, 22], a hybrid deep learning and Kalman smoothing network called RTSNet was proposed. However, this approach has not been evaluated on INS/GNSS fusion and is specifically designed for partially known state-space models, which is not the case in INS/GNSS fusion where the process and measurement noise covariance matrices can be determined from sensor specifications. Furthermore, RTSNet is designed to learn the forward and backward filter gains jointly, which does not explicitly enforce the minimum-variance optimality criterion [23], nor does it address the systematic position bias that arises from raw GNSS measurements. To address these limitations, this paper proposes BLENDS, a Bayesian learning-enhanced deep smoothing framework for inertial-aided navigation. BLENDS is a data-driven post-processing framework that augments the classical TFS with a transformer-based neural network. Unlike existing approaches, BLENDS operates directly within the Bayesian smoothing framework rather than replacing it, preserving the theoretical 
+
+> arXiv:2603.25364v1 [cs.RO] 26 Mar 2026 2
+
+guarantees of the TFS while learning to correct the systematic position bias that classical smoothers are unable to address. The network learns to modify the filter covariance matrices and apply an additive correction to the smoothed error-state, guided by a Bayesian-consistent loss that jointly supervises the smoothed mean and covariance. BLENDS is evaluated on two real-world datasets spanning substantially different platforms, a mobile robot and a quadrotor. The main contributions of this paper are: 1) A learning-enhanced two-filter smoother that corrects systematic GNSS position bias within the Bayesian framework, without compromising the theoretical opti-mality of the smoothed solution. 2) A Bayesian-consistent loss function that jointly super-vises the smoothed mean and covariance, enforcing minimum-variance estimates while maintaining statisti-cal consistency. 3) A training strategy that constrains the network outputs to physically meaningful ranges, ensuring stable conver-gence across different platforms and dynamics. The proposed method is validated on two real-world datasets: a 55-minute mobile robot dataset covering six distinct motion patterns, and the INSANE quadrotor benchmark [24]. Across all unseen test trajectories, BLENDS achieves horizontal posi-tion improvements of up to 63% over the forward EKF, while maintaining covariance consistency across both platforms. The remainder of this paper is organized as follows. Sec-tion II presents the system modeling and estimation frame-work, including the forward error-state EKF, the backward information filter, the TFS, and the RTSS. Section III motivates the proposed approach through simulation, demonstrating the fundamental limitation of classical smoothers in the pres-ence of biased GNSS measurements. Section IV describes the BLENDS framework, the network architecture, and the Bayesian-consistent loss. Section V presents the datasets, eval-uation metrics, implementation details, experimental results, and discussion. Section VI concludes the paper. II. S YSTEM MODELING AND ESTIMATION FRAMEWORK 
+
+The following subsections introduce smoothing techniques for loosely coupled INS/GNSS sensor fusion. State smoothing aims to estimate the marginal posterior distribution of the state at time step k using the entire set of measurements available up to a later time T , where T > k . In contrast to filtering, which relies only on measurements up to the current time, smoothing incorporates future observations in order to refine past state estimates. Fixed–interval smoothing is commonly implemented using either the TFS, also referred to as forward-backward smoothing (FBS), or the RTSS. The forward–backward approach provides the most straightforward implementation of fixed-interval smoothing. In contrast, the RTSS is conceptually more challenging but computationally more efficient than the TFS, while remaining theoretically equivalent in the linear case [25]. 
+
+A. Forward Error-State Extended Kalman Filter 
+
+The system state vector x is decomposed into a nominal state vector xN OM and a perturbation error state vector δx, as: 
+
+x = xN OM − δx. (1) The forward error-state vector is defined as follows: 
+
+δxnf =
+
+h
+
+(δpn)T (δvn)T (δϵn)T δbTa δbTg
+
+iT
+
+(2) where the subscript f denotes the forward filter. Here, δpn ∈
+
+R3×1, δvn ∈ R3×1, δϵn ∈ R3×1, δba ∈ R3×1, and δbg ∈
+
+R3×1 denote the position error expressed in the navigation frame (e.g., latitude, longitude, and altitude), the velocity error expressed in the navigation frame, the misalignment angles be-tween predicted and true navigation frame, the accelerometer bias error, and the gyroscope bias error, respectively [26]. The governing state-space differential equation is: 
+
+δ ˙xf = F δxf + G ω (3) where the system matrix F ∈ R15 ×15 is derived by lineariza-tion of the inertial equations of motion in the navigation frame, and the noise distribution matrix G ∈ R15 ×12 is constructed accordingly. The process noise vector, assuming the biases evolve as random walks, is defined as: 
+
+ω = ωTa ωTg ωTab ωTgb
+
+T ∈ R12 ×1 (4) where ωa ∈ R3×1 and ωg ∈ R3×1 represent the additive noise for the accelerometer and gyroscope, respectively, and 
+
+ωab ∈ R3×1 and ωgb ∈ R3×1 denote the random walk driving noise for the accelerometer and gyroscope biases, respectively, such that: ˙ba = ωab , ˙bg = ωgb (5) In discrete form, (3) is discretized for the prediction phase of the Kalman filter as: 
+
+δx− 
+
+> f,k
+
+= Φk−1 δx+ 
+
+> f,k −1
+
+(6) 
+
+P− 
+
+> f,k
+
+= Φk−1P+
+
+> f,k −1
+
+ΦTk−1 + Qk−1 (7) where P ∈ R15 ×15 is the error-state covariance matrix, and the superscripts (·)− and (·)+ denote the a priori (predicted) and a posteriori (updated) estimates, respectively. The state transition matrix Φ is approximated using a first-order power-series expansion of the system matrix over the time interval 
+
+dt , where I15 ∈ R15 ×15 denotes the identity matrix: 
+
+Φ = I15 + F dt (8) and the approximated discretized process noise covariance matrix of Q = E[ωω T ] is given by: 
+
+Qk−1 = 12 Gk−1 Q G Tk−1 dt (9) In a loosely coupled INS/GNSS fusion, a position update is performed using the following measurement model: 
+
+δzk = Hk δx− 
+
+> f,k
+
++ v (10) where δzk denotes the measurement residual between the INS solution and the GNSS position measurement, given by: 
+
+δzk = zIN S k − zGN SS k (11) 3
+
+and v is the measurement noise vector. The measurement matrix Hk ∈ R3×15 maps the error-state vector to the position measurement residual, and is defined as: 
+
+Hk = [ I3 03×12 ] (12) where I3 ∈ R3×3 is the identity matrix and 03×12 ∈ R3×12 
+
+is a zero matrix. The measurement noise covariance matrix 
+
+Rk = E[vv T ] ∈ R3×3 represents the uncertainty in the GNSS position measurements. The Kalman update steps are then carried out as: 
+
+Kk = P−
+
+> f,k
+
+HTk
+
+
+
+HkP−
+
+> f,k
+
+HTk + Rk
+
+−1
+
+(13) 
+
+P+ 
+
+> f,k
+
+= ( I − KkHk) P− 
+
+> f,k
+
+(14) 
+
+δx+ 
+
+> f,k
+
+= δx− 
+
+> f,k
+
++ Kk
+
+
+
+δzk − Hk δx−
+
+> f,k
+
+
+
+. (15) Lastly, the updated error-state vector is reset to zero, ensuring that the nominal state is realigned with the updated state: 
+
+δx− 
+
+> f,k +1
+
+= 0 (16) The detailed derivations of the error-state EKF for INS/GNSS fusion presented in this paper follow the formulations outlined in [27]. 
+
+B. Backward Information Filter 
+
+The backward filter operates in reverse time, starting at epoch 
+
+k = n. The backward estimates must remain independent of the forward filter estimates, therefore, none of the information used in the forward filter is permitted to be used in the backward filter. As a consequence, the backward covariance matrix Pb,k ∈ R15 ×15 , where the subscript (·)b denotes backward run, is initialized at k = n to represent infinite uncertainty, i.e., no prior information, as [28]: 
+
+P− 
+
+> b,n
+
+= ∞, I− 
+
+> b,n
+
+=
+
+
+
+P−
+
+> b,n
+
+−1
+
+= 0 (17) where Ib,k ∈ R15 ×15 is the backward information matrix, defined as the inverse of the backward covariance matrix. This initialization describes a state of complete ignorance, ensuring independence between the forward and backward filters. The backward information vector is then introduced as: 
+
+δsb,k = Ib,k δxb,k (18) where δxb,k ∈ R15 ×1 is the backward error-state vector and δsb,k ∈ R15 ×1 is the backward information vector. In accordance with (17), this is initialized as δsb,n = 0, enforcing independence between the forward and backward filters at the starting epoch. The discrete error-state information filter is propagated back-wards in time as follows: 
+
+δx− 
+
+> b,k −1
+
+= Φ−1 
+
+> k−1
+
+δx+ 
+
+> b,k
+
+(19) where Φ−1 
+
+> k−1
+
+is well defined for all k, since the state transition matrix Φk−1 is derived from the matrix exponential and is therefore always invertible. The backward covariance is propagated as: 
+
+P− 
+
+> b,k −1
+
+= Φ−1
+
+> k−1
+
+
+
+P+ 
+
+> b,k
+
++ Qb,k 
+
+
+
+Φ−Tk−1 (20) where the backward discrete process noise covariance matrix 
+
+Qb,k ∈ R15 ×15 is approximated as: 
+
+Qb,k = 12 Φ−1 
+
+> k
+
+Gk Q G Tk Φ−Tk dt (21) The update phase of the backward filter is carried out as follows: 
+
+I+ 
+
+> b,k
+
+= I− 
+
+> b,k
+
++ HTk R−1 
+
+> k
+
+Hk (22) 
+
+δs+ 
+
+> b,k
+
+= I− 
+
+> b,k
+
+δx− 
+
+> f,k
+
++ HTk R−1 
+
+> k
+
+δzk + I− 
+
+> b,k
+
+δx−
+
+> b,k
+
+. (23) A more detailed derivation of (17)–(23) can be found in [9]. 
+
+C. Two-Filter Smoother 
+
+The TFS combines the forward error-state EKF and a back-ward information filter to produce a smoothed state estimate at each epoch k. Suppose the forward and backward state estimates are combined into a smoothed estimate as: 
+
+xs,k = Kf xf,k + Kb xb,k (24) where Kf ∈ R15 ×15 and Kb ∈ R15 ×15 are the forward and backward fusion gain matrices, respectively. Since both estimates are unbiased, and to ensure the fused estimate xs,k 
+
+is also unbiased, the constraint Kf + Kb = I is enforced, giving: 
+
+xs,k = Kf xf,k + ( I − Kf ) xb,k (25) The covariance of the smoothed estimate can then be derived as follows: 
+
+Ps,k = E
+
+h xN OM k − xs,k 
+
+   xN OM k − xs,k 
+
+T i
+
+= E
+
+n
+
+Kf
+
+ δxf,k δxTf,k + δxb,k δxTb,k 
+
+ KTf
+
++ δxb,k δxTb,k − Kf δxb,k δxTb,k 
+
+− δxb,k δxTb,k KTf
+
+o
+
+(26) where δxf,k = xN OM k − xf,k and δxb,k = xN OM k − xb,k 
+
+are the forward and backward error-state vectors as defined in (1), and where the cross-covariance term vanishes due to the independence of the forward and backward estimates, i.e., 
+
+E
+
+h
+
+δxf,k δxTb,k 
+
+i
+
+= 0. Defining Pf,k = E[δxf,k δxTf,k ] and 
+
+Pb,k = E[δxb,k δxTb,k ] as the forward and backward error-state covariance matrices, respectively, a minimum variance estimate is obtained by taking the derivative of the trace of 
+
+Ps,k with respect to Kf , setting it to zero and solving for the optimal Kf :
+
+Kf = Pb,k (Pf,k + Pb,k )−1 (27) and consequently: 
+
+Kb = I − Kf = Pf,k (Pf,k + Pb,k )−1 (28) Substituting (27) back into (26), after some algebra, the smoothed covariance simplifies to: 
+
+Ps,k =
+
+
+
+P−1 
+
+> f,k
+
++ P−1
+
+> b,k
+
+−1
+
+= ( If,k + Ib,k )−1 (29) The result in (29) shows that the information from both filters is additively combined, which is a direct consequence of the 4
+
+independence between the forward and backward estimates. Ultimately, the smoothed full state estimate in (24) becomes: 
+
+xs,k = Ps,k (If,k xf,k + Ib,k xb,k ) (30) 
+
+Proposition 1. TFS fusion can be performed on the error-state alone, yielding the same smoothed full state after correction of the nominal state: 
+
+δxs,k = Ps,k (If,k δxf,k + Ib,k δxb,k ) (31) 
+
+Proof. Recall the error-state decomposition from (1): 
+
+xf,k = xN OM k − δxf,k , xb,k = xN OM k − δxb,k (32) Substituting (32) into (30): 
+
+xs,k = Ps,k 
+
+ If,k (xN OM k − δxf,k )+ Ib,k (xN OM k − δxb,k ) (33) Expanding and collecting terms in xN OM k :
+
+xs,k = Ps,k (If,k + Ib,k ) xN OM k
+
+− Ps,k (If,k δxf,k + Ib,k δxb,k ) (34) From (29), Ps,k (If,k + Ib,k ) = I, so the first term cancels to 
+
+xN OM k and (34) simplifies to: 
+
+xs,k = xN OM k − Ps,k (If,k δxf,k + Ib,k δxb,k ) (35) Applying the error-state correction from (1) using (31): 
+
+xs,k = xN OM k − δxs,k 
+
+= xN OM k − Ps,k (If,k δxf,k + Ib,k δxb,k ) (36) Since (35) and (36) are identical, it is confirmed that operating on the error-state via (31) and correcting the nominal state is sufficient to recover the optimal smoothed full navigation state. The TFS therefore provides an optimal smoothed estimate over the entire trajectory by additively combining the information from the forward and backward filters at each epoch, without requiring storage of the full forward filter history as in the RTSS, making it particularly well-suited for post-processing navigation applications. A full derivation and theory of the TFS can be seen, for example, in [25]. 
+
+D. Rauch–Tung–Striebel Smoother 
+
+The RTSS is a fixed-interval backward smoother that op-erates on the stored results of the forward Kalman filter pass described in the preceding subsection. Since all required variables, namely the a priori and a posteriori error-state estimates δx− 
+
+> f,k
+
+and δx+
+
+> f,k
+
+, and their associated covariance matrices P− 
+
+> f,k
+
+and P+
+
+> f,k
+
+, are saved during the forward pass, the RTSS requires no additional propagation steps, making it computationally efficient for post-processing applications. The RTSS equations are given by: 
+
+Ks,k = P+ 
+
+> f,k
+
+Φk
+
+
+
+P−
+
+> f,k +1
+
+−1
+
+(37) 
+
+Ps,k = P+ 
+
+> f,k
+
++ Ks,k 
+
+h
+
+Ps,k +1 − P−
+
+> f,k +1
+
+i
+
+KTs,k (38) 
+
+δxs,k = δx+ 
+
+> f,k
+
++ Ks,k 
+
+h
+
+δxs,k +1 − δx−
+
+> f,k +1
+
+i
+
+(39) 
+
+xs,k = xN OM f,k − δxs,k (40) where Ks,k ∈ R15 ×15 is the smoother gain matrix. The smoother is initialized at the last epoch k = n using the forward filter’s final estimates, i.e., Ps,n = P+ 
+
+> f,n
+
+and δxs,n =
+
+δx+
+
+> f,n
+
+.III. M OTIVATION 
+
+In INS/GNSS navigation, the fused solution typically achieves 
+
+2−5 meters positional accuracy, whereas GNSS RTK provides centimeter-level accuracy. The accuracy discrepancy between the two systems manifests primarily as a systematic position offset rather than zero-mean noise [29]. Since smoothing algorithms operate by reducing stochastic noise, they are fun-damentally unable to correct such an offset, which motivates the problem addressed in this work. To illustrate the problem, 
+
+Fig. 1: Estimated trajectory with zero-mean GNSS noise ( μ =0 [m], σ = 0 .5 [m]). All estimators closely follow the GT, confirming standard smoothing performance under unbiased measurements. a simulation of an INS/GNSS loosely-coupled system is con-ducted over a 400-second lawnmower trajectory. The inertial data is corrupted with additive white noise equivalent to a consumer-grade micro-electro-mechanical system (MEMS) IMU, with standard deviations of 0.0316 [rad/s] and 32 .2
+
+[mg] for the gyroscope and accelerometer, respectively. The INS, operating in 100 Hz, is then updated by GNSS position measurements, in 10 Hz. We examine three different noise configurations: 1) Zero-mean Gaussian noise with a standard deviation of 
+
+0.5 [m]. 2) Gaussian noise with a mean of 1.5 [m] and a standard deviation of 0.5 [m]. 3) Gaussian noise with a mean of 3 [m] and a standard deviation of 0.5 [m]. This allows the effect of a systematic position bias on the smoothed solution to be isolated and clearly demonstrated. Figs. 1, 2, and 3 present the estimated trajectories, using EKF 5
+
+(Section II-A), TFS (Section II-C) and RTSS (Section II-D), for the three noise configurations. In the zero-mean case (Fig. 1), all three estimators, the EKF, TFS, and RTSS, closely follow the ground truth (GT) trajectory, confirming that standard smoothing effectively reduces noise when the GNSS measurements are unbiased. However, as a systematic bias is introduced, the behavior of the estimators shifts accordingly. In the 1.5 [m] bias case (Fig. 2), the EKF solution is visibly offset from the GT, while the RTSS and TFS smoothed solutions, despite reducing noise, inherit the same bias and remain offset. This effect is further amplified in the 3 [m] bias case (Fig. 3), where the offset between all estimators and the GT is clearly visible even in the full-scale trajectory. The enlarged insets confirm that smoothing improves the precision of the solution, reducing the spread around the mean. However, it does not correct the systematic offset, as the smoothed trajectories remain displaced from the GT by the same bias magnitude as the EKF. 
+
+Fig. 2: Estimated trajectory with biased GNSS noise ( μ = 1 .5
+
+[m], σ = 0 .5 [m]). The EKF, RTSS, and TFS solutions all exhibit a systematic offset from the GT, demonstrating that smoothing cannot correct a position bias. The above demonstrates that conventional smoothing algo-rithms are fundamentally limited in the presence of biased GNSS measurements, as they inherit the systematic offset from the filter and are unable to correct it in the backward pass. Ultimately, this implies that the smoothing framework lacks sufficient information to bridge the gap between or-dinary GNSS positioning accuracy and RTK-level precision. This raises the central question addressed in this paper: can neural-aided approaches be incorporated into the smoothing mechanism to improve navigation accuracy while remaining consistent with the theoretical foundations of Bayesian esti-mation? IV. P ROPOSED APPROACH 
+
+To improve navigation accuracy through a software-only im-plementation, we propose a neural-aided approach termed BLENDS, Bayesian learning-enhanced navigation with deep 
+
+Fig. 3: Estimated trajectory with biased GNSS noise ( μ = 3 
+
+[m], σ = 0 .5 [m]). The systematic offset is clearly amplified relative to Fig. 2, further confirming that the bias is inherited by the smoothed solutions regardless of the smoothing algo-rithm used. smoothing. The proposed method incorporates a deep learning component directly into the TFS framework, where modifica-tion matrices are learned to adjust the forward and backward estimated covariances. The modified covariances, together with an additive correction term, are then used to compute the smoothed error-state and its associated covariance. Conse-quently, BLENDS has the potential to correct the systematic bias that conventional smoothing algorithms are unable to address. 
+
+A. BLENDS Framework 
+
+The BLENDS framework augments the classical TFS by introducing two learned quantities per time step: covariance modification matrices Df,k and Db,k , and an additive correc-tion vector ck, produced by a neural network Fθ . Given these outputs, the forward and backward TFS covariance matrices are computed as: 
+
+˜Pf,k = Df,k Pf,k DTf,k , ˜Pb,k = Db,k Pb,k DTb,k . (41) Although modified, the forward and backward covariance matrices (41) preserve their essential positive semi-definite property. Since P+ 
+
+> f,k
+
+≻ 0 by construction of the Kalman filter and Df,k is full-rank, the congruence transformation property guarantees that ˜Pf,k ≻ 0, and equivalently for 
+
+˜Pb,k . This ensures that the modified information matrices 
+
+˜If,k = ˜P−1 
+
+> f,k
+
+and ˜Ib,k = ˜P−1 
+
+> b,k
+
+remain well-defined throughout the entire trajectory. The modified covariance matrices (41) are substituted into (27)–(28) to compute the fusion gains, producing hybrid learned gains rather than the standard model-based gains of the classical TFS. The additive correction term ck provides the network with a direct mechanism to compensate for systematic biases that the 6
+
+covariance modification alone cannot address. It is bounded element-wise via a scaled hyperbolic tangent: 
+
+ck = tanh(ˆ ck) ⊙ mk (42) where ⊙ denotes element-wise multiplication and mk ∈ R15 
+
+is a time-varying bound vector that contracts during training via a ramp ρ ∈ [0 , 1] :
+
+mk = (1 − ρ) mwide + ρ mbase , (43) 
+
+mwide and mbase define the initial and final per-state correction bounds, respectively, the ramp ρ is defined as: 
+
+ρ(e) = 
+
+
+
+min 
+
+
+
+max 
+
+ eew
+
+, 0
+
+
+
+, 1
+
+ p
+
+, (44) 
+
+e is the current training epoch, ew is the warm-up duration, and 
+
+p controls the rate of contraction. At the beginning of training (e ≪ ew), ρ ≈ 0 and the network is permitted to produce large corrections within mwide , allowing broad exploration of the solution space. As training progresses ( e → ew), ρ → 1
+
+and the bounds contract to mbase , encouraging the network to produce small, precise corrections. This strategy serves as a physically motivated constraint that prevents the network from producing corrections that violate the expected dynamic ranges of the navigation states, and ensures that the learned outputs remain physically meaningful throughout training. The final BLENDS smoothed error-state is obtained by substi-tuting the modified covariances into the TFS fusion (31) and appending the learned correction: 
+
+δxBLENDS  
+
+> s,k
+
+= ˜Ps,k 
+
+˜If,k δxf,k + δsb,k 
+
+
+
++ ck (45) The BLENDS smoothed covariance is defined as the second central moment of the smoothed error-state: 
+
+˜Ps,k = EδxBLENDS  
+
+> s,k
+
+(δxBLENDS  
+
+> s,k
+
+)T  . (46) Substituting (45) into (46) and using the independence of the forward and backward filter errors, the BLENDS smoothed covariance expands as: 
+
+˜Ps,k = ˜Kf,k ˜Pf,k ˜KTf,k + ˜Kb,k ˜Pb,k ˜KTb,k + ckcTk (47) where the first two terms represent the propagated uncertainty from the forward and backward filters, respectively, and the outer product ckcTk is a deterministic matrix that captures the additional uncertainty introduced by the additive correction term. The complete BLENDS inference procedure is summa-rized in Algorithm 1. 
+
+B. Network Architecture 
+
+The input to the network is formed by concatenating a time window of the forward and backward error-state vectors with their associated flattened covariance matrices: 
+
+uk = [ δxf,k , δ xb,k , vec (Pf,k ), vec (Pb,k )] ∈ R480 (48) where vec (·) denotes the vectorization of a matrix. The full se-quence {uk}Nk=1 is processed jointly by a transformer encoder, which exploits temporal dependencies across the trajectory to produce three outputs per time step: 
+
+(Df,k , Db,k , ck) = Fθ (u1: N ) (49) 
+
+Algorithm 1 BLENDS: Inference Pipeline 
+
+Require: IMU data {f k, ωk}Nk=1 , GNSS positions {zk}Nk=1 ,trained network Fθ
+
+Ensure: Smoothed navigation states {xBLENDS  
+
+> s,k
+
+}Nk=1 
+
+— Forward Pass —  
+
+> 1:
+
+for k = 1 to N do  
+
+> 2:
+
+Propagate INS mechanization equations  
+
+> 3:
+
+Predict error-state and covariance via (6), (7)  
+
+> 4:
+
+if GNSS measurement available then  
+
+> 5:
+
+Update δx+
+
+> f,k
+
+, P+ 
+
+> f,k
+
+via (13)–(16)  
+
+> 6:
+
+end if  
+
+> 7:
+
+Store δxf,k , Pf,k , xNOM  
+
+> f,k
+
+, Φk 
+
+> 8:
+
+end for — Backward Pass —  
+
+> 9:
+
+Initialize I− 
+
+> b,N
+
+= 0, δs+ 
+
+> b,N
+
+= 0 
+
+> 10:
+
+for k = N down to 1 do  
+
+> 11:
+
+Update I+
+
+> b,k
+
+, δs+ 
+
+> b,k
+
+via (22), (23)  
+
+> 12:
+
+Propagate I−
+
+> b,k −1
+
+, δx− 
+
+> b,k −1
+
+via (20), (19)  
+
+> 13:
+
+Store δxb,k , Pb,k  
+
+> 14:
+
+end for — BLENDS Fusion —  
+
+> 15:
+
+Assemble input sequence {uk}Nk=1 via (48)  
+
+> 16:
+
+Compute {Df,k , Db,k , ck}Nk=1 = Fθ (u1: N ) via (49)  
+
+> 17:
+
+for k = 1 to N do  
+
+> 18:
+
+Scale covariances ˜Pf,k , ˜Pb,k via (41)  
+
+> 19:
+
+Compute fusion gains ˜Kf,k , ˜Kb,k via (27), (28)  
+
+> 20:
+
+Compute smoothed error-state δxBLENDS  
+
+> s,k
+
+via (45)  
+
+> 21:
+
+Compute smoothed covariance ˜Ps,k via (47)  
+
+> 22:
+
+Recover full state xBLENDS  
+
+> s,k
+
+= xNOM  
+
+> f,k
+
+− δxBLENDS  
+
+> s,k
+> 23:
+
+end for  
+
+> 24:
+
+return {xBLENDS  
+
+> s,k
+
+, ˜Ps,k }Nk=1 
+
+where Df,k , Db,k ∈ R15 ×15 are covariance modification ma-trices, ck ∈ R15 is an additive correction vector, and θ denotes the trainable network parameters. The BLENDS architecture is illustrated in Fig. 4. The input sequence is projected to embedding dimension dmodel via a linear layer, followed by sinusoidal positional encoding to preserve temporal order. The embedded sequence is processed by a transformer encoder [30] of L layers, each with H attention heads, feed-forward hidden dimension dff , and GELU activations [31], enabling the net-work to exploit long-range temporal dependencies across the trajectory. The encoder output is passed to two independent prediction heads, each consisting of two linear layers with a GELU acti-vation and layer normalization, with hidden dimension dhead .The covariance modification head outputs ˆDf,k and ˆDb,k , and the correction head outputs ˆck. The modification matrices are parameterized as near-identity residual perturbations: 
+
+Df,k = I15 + α tanh 
+
+ ˆDf,k 
+
+
+
+, Db,k = I15 + α tanh 
+
+ ˆDb,k 
+
+
+
+(50) where α ≪ 1 ensures that the modification matrices remain close to the identity, limiting the network’s influence on the filter covariances to a small learned perturbation. Both heads are initialized with zero weights and biases, ensuring that at the 7
+
+Fig. 4: Overview of the BLENDS architecture. The forward EKF and backward information filter outputs are concatenated and passed through a transformer encoder, which produces covariance modification matrices Df,k , Db,k and an additive correction vector ck. These are used to augment the Two-Filter Smoother fusion, yielding the final BLENDS smoothed state δxBLENDS  
+
+> s,k
+
+.start of training BLENDS reduces exactly to the standard TFS, providing a stable and physically meaningful initialization point. 
+
+C. Bayesian-Consistent Loss Function 
+
+A key design principle of BLENDS is that the network output must remain consistent with the theoretical foundations of Bayesian estimation. Specifically, the smoothed state should represent the minimum-variance unbiased estimate, and the smoothed covariance should reflect the true uncertainty of the solution. To enforce these properties, we propose a Bayesian-consistent loss (BCL) that jointly supervises the mean and covariance of the smoothed output, comprising four loss terms: 1) position loss L(p) 
+
+> k
+
+, 2) velocity loss L(v) 
+
+> k
+
+, 3) rotation loss 
+
+L(R) 
+
+> k
+
+, and 4) covariance loss L(c) 
+
+> k
+
+. The BCL is defined as: 
+
+LBCL = 1
+
+BT 
+
+> B
+
+X
+
+> b=1
+> T
+
+X
+
+> k=1
+
+
+
+λp L(p) 
+
+> k
+
++ λv L(v) 
+
+> k
+
++ λr L(R) 
+
+> k
+
++ λc L(c)
+
+> k
+
+
+
+(51) where λp, λv , λr , λc are the weighting coefficients while T
+
+and B are the time window and batch size, respectively. The first three terms supervise the estimated mean, while the last term enforces covariance consistency. The position loss L(p) 
+
+> k
+
+is computed in the local NED frame by converting the predicted and GT latitude, longitude, and altitude coordinates to NED displacements relative to a com-mon reference point, taken as the first GT position in the batch. This normalization decouples the loss from absolute geographic coordinates, allowing the network to generalize across trajectories collected at arbitrary locations on the Earth without requiring position-specific training data. The position loss is defined as: 
+
+L(p) 
+
+> k
+
+= ℓβ
+
+
+
+pNED ,GT  
+
+> k
+
+− pNED  
+
+> k
+
+, 0
+
+
+
+(52) where ℓβ (·) denotes the Huber loss [32] with threshold β =5.0 m, which provides robustness to large position errors during early training. The velocity loss is defined analogously: 
+
+L(v) 
+
+> k
+
+= ℓβ
+
+ vGT  
+
+> k
+
+− vk, 0 . (53) The rotation loss L(R) 
+
+> k
+
+supervises the estimated attitude by penalizing the Frobenius norm of the difference between the predicted and GT rotation matrices: 
+
+L(R) 
+
+> k
+
+= RGT  
+
+> k
+
+− Rk 
+
+> 2
+> F
+
+(54) where ∥ · ∥ F denotes the Frobenius norm. This formulation directly penalizes errors in all nine elements of the rotation matrix, providing a geometry-aware attitude supervision sig-nal. The covariance consistency term L(c) 
+
+> k
+
+minimizes the trace of the smoothed covariance matrix, and by doing so, enforces the minimum-variance property that is the theoretical optimality criterion of the Kalman smoother: 
+
+L(c) 
+
+> k
+
+= Tr (Ps,k ) (55) where the smoothed covariance is expressed in (47). Jointly minimizing L(p) 
+
+> k
+
+, L(v) 
+
+> k
+
+, and L(R) 
+
+> k
+
+drives the smoothed mean towards the GT, while minimizing L(c) 
+
+> k
+
+ensures that the covariance matrix remains tight and physically meaningful, preventing the network from producing overconfident or in-consistent uncertainty estimates. Together, these terms ensure that BLENDS produces a Bayesian-consistent output in both mean and covariance. V. A NALYSIS AND RESULTS 
+
+A. Datasets Description 1) Mobile Robot 
+
+Field data were collected using a Husarion ROSbot XL [33] mobile robot platform, equipped with two independent sensor suites operating simultaneously. The experimental configu-ration is illustrated in Fig. 5. The unit under test is the 8
+
+Fig. 5: Experimental platform used for data collection. The mobile robot is equipped with two sensor suites: the Arazim system, comprising a MEMS IMU and two GNSS antennas mounted 40 cm from the vehicle center on a rigid crossbar, and the Xsens system, comprising a consumer-grade IMU and a single GNSS antenna mounted at the vehicle body. A cellular RTK receiver provides centimeter-level reference trajectories via a network RTK correction service, supported by two cellular antennas and a power supply. Arazim Exiguo ® EX-300 IMU [34] , operating at 100 Hz. GNSS position updates are provided by the Xsens MTi-680G at 5 Hz [35], serving as the measurement input to the navigation filter. The GT reference is the RTK solution integrated to the Arazim Exiguo ® EX-300 IMU at 10 Hz, providing centimeter-level position accuracy via a cellular network RTK correction service. In addition, the dual-antenna configuration with a baseline separation of 80 cm provides sub-degree heading measurements. The RTK and the sub-degree heading measurements solutions does not contribute to the filter inputs and is used exclusively for performance evaluation. The dataset comprises approximately 55 minutes of recorded data, divided into 30 trajectory segments spanning six mo-tion patterns: square, infinity, sine, lawnmower, circle, and zigzag. The trajectories vary in duration and complexity, closed geometric paths, such as squares and circles, range from roughly 30 to 140 seconds per lap, while open patterns, such as lawnmower and sine, sweeps extend up to 250 seconds per segment. Together they cover a broad range of heading changes, curvatures, and linear accelerations representative of mobile vehicle operation. The dataset is split such that the square, infinity, sine, lawnmower, circle, and zigzag segments are used for training, while the three mixed-maneuver trajec-tories are held out for validation and testing. The training set comprises approximately 49 minutes of data. The validation set, denoted MR-Val, consists of Trajectory 1 and comprises around 2 minutes, while the test set, denoted MR-Tes, includes Trajectory 2 and Trajectory 3, amounting to approximately 4 minutes in total. Table I summarizes the IMU specifications. 
+
+2) Quadrotor 
+
+The second dataset is the INSANE benchmark [24], which em-ploys an aerial quadrotor platform equipped with a Pixhawk4 autopilot. An external RTK receiver provides centimeter-level TABLE I: Arazim EX-300 IMU Specifications.       
+
+> Parameter Arazim EX-300
+> Gyroscope
+> In-run bias stability 2 °/hr Angle random walk 0.1 °/ √hr
+> Accelerometer
+> In-run bias stability 20 μgVelocity random walk 0.05 m/s/ √hr
+
+GT, alongside additional sensors that are not utilized in this work. Specifically, this paper considers the Mars analogue desert subset, collected at the Ramon Crater in the Negev Desert, Israel. The Pixhawk4 IMU operates at 200 Hz, GNSS position updates are provided at 5 Hz, and the RTK GT at 8 Hz. The onboard ICM-20689 IMU is a consumer-grade MEMS sensor, lower in both cost and performance compared to the Arazim EX-300 used in the mobile robot dataset, as reflected by its higher noise density and bias instability characteristics. The Mars analogue subset consists of 19 recorded trajectories, numbered trajectory 1 through trajectory 19. Following inspec-tion of all trajectories for data quality and completeness, 13 trajectories were selected for use in this work. The selected trajectories are drawn primarily from zones 1 and 2, which are used for training and validation, while one trajectory from the entirely unseen zone 3 is held out for testing. The training set comprises approximately 23.7 minutes of data. The validation set, denoted QR-Val, consists of Trajectory 2 and comprises around 2.8 minutes, while the test set, denoted QR-Tes, includes Trajectory 12 and Trajectory 15, amounting to approximately 4.8 minutes of flight data in total. This split ensures that the test trajectory is representative of a genuinely unseen environment, providing a rigorous evaluation of the generalization capability of BLENDS. Full details regarding platform configuration, sensor calibration, and data collection procedures are available in the original publication [24]. 
+
+B. Evaluation Metrics 
+
+The performance of each estimator is evaluated using the root mean square error (RMSE), defined as: RMSE =
+
+vuut 1
+
+T
+
+> T
+
+X
+
+> k=1
+
+∥ek∥2 (56) where ek denotes the error vector at time step k. This metric is applied separately to position [m], velocity [m/s], and orientation [rad]. Additionally, to quantify the improvement in estimation uncertainty, the percent covariance improvement (PCI) is defined as the relative reduction in the trace of the smoothed covariance with respect to the forward EKF covariance: PCI j = 100 × Tr  Pref  
+
+> j
+
+− Ptest 
+
+> j
+
+
+
+Tr  Pref 
+
+> j
+
+ (57) where Pref  
+
+> j
+
+is the forward EKF covariance and Ptest  
+
+> j
+
+is the smoothed covariance at the corresponding time step. A higher PCI value indicates a greater reduction in uncertainty achieved by the smoothing algorithm. 9
+
+C. Implementation Details 
+
+The deep neural network is implemented in PyTorch. All weights and biases of the final layers, those responsible for outputting the covariance modification matrices and the addi-tive correction term, are initialized to zero, ensuring that the network reduces exactly to the standard TFS at initialization, as described in Section IV. The GT labels used for supervised training are generated by applying the TFS to the inertial measurements along with the RTK position measurements. The resulting smoothed trajec-tory serves as the reference signal for all loss terms in (51). This approach ensures that the network is trained to reproduce a theoretically optimal Bayesian estimate, rather than being directly supervised by raw RTK measurements alone. Training is performed using the AdamW optimizer [36] with an initial learning rate of 10 −2 and weight decay of 10 −6, with a batch size of 128 for both datasets. An adaptive learning rate scheduling is employed, reducing the learning rate by a factor of 0.1 whenever the validation loss fails to improve for 
+
+10 consecutive epochs, with a minimum learning rate floor of 10 −8. The transformer encoder comprises L = 2 layers with H = 16 attention heads, a model dimension of dmodel =256 , a feed-forward dimension of dff = 512 , and a dropout rate of 0.1. Both prediction heads use a hidden dimension of 
+
+dhead = 256 . The input sequence is processed with a non-overlapping sliding window, where the window size equals the stride. For the mobile robot dataset, a window of T = 150 
+
+time steps is used, corresponding to 1.5 s of data at 100 Hz. For the quadrotor dataset, a window of T = 50 time steps is used, corresponding to 0.25 s of data at 200 Hz. The curriculum ramp defined in (44) is applied with warm-up ew = 1000 epochs and power p = 2 , smoothly transitioning the correction bound from mwide to mbase as specified in Table II. TABLE II: Per-state correction bounds for the BLENDS correction term ck for the mobile robot and quadrotor datasets. The bound contracts during training from mwide to mbase via the curriculum ramp ρ.
+
+Mobile robot Quadrotor State mwide mbase mwide mbase 
+
+δp x,y [rad] 3 × 10 −7 2 × 10 −7 3 × 10 −7 2 × 10 −7
+
+δp z [m] 50 .0 1.0 50 .0 1.0
+
+δv x,y,z [m/s] 2.0 0.50 15 .0 5.0
+
+δϕ x,y,z [rad] π π/ 180 π π/ 180 
+
+δb ax,y,z [m/s 2] 0.5 0.2 0.5 0.1
+
+δb gx,y,z [rad/s] 0.05 0.002 0.05 0.01 
+
+The covariance modification perturbation (50) is bounded by 
+
+α = 10 −8. The BCL (51) is applied with weights λp = 10 ,
+
+λv = 10 −1, and λc = 10 −2 for both datasets. The rotation weight differs between the two platforms: λr = 10 −1 for the mobile robot dataset and λr = 1 for the quadrotor dataset. Training was carried out for 200 epochs on the mobile robot dataset and 35 epochs on the quadrotor dataset. All of the above hyperparameters are shared between the two datasets, with the only dataset-specific differences being the window size and the correction bounds in Table II, which are adapted to reflect the distinct motion characteristics of each platform. Both the zero initialization of the output layer weights and biases, described above, and the correction bounds introduced in (43) are critical for successful training. Together, they ensure that the network converges to reliable and physically meaningful values rather than diverging or causing training instability. The correction bounds for both datasets are de-signed to reflect the distinct motion characteristics of each platform. For the mobile robot dataset, the vehicle is operating at low speeds with smooth, planar trajectories, and conse-quently the velocity bounds are set conservatively ( mwide =2.0 m/s, mbase = 0 .5 m/s). In contrast, the quadrotor dataset involves performing agile three-dimensional manoeuvres at significantly higher velocities, requiring considerably wider bounds ( mwide = 15 .0 m/s, mbase = 5 .0 m/s) to allow the network sufficient freedom to correct the larger dynamic errors encountered during flight. The remaining state bounds are shared across both datasets. It should be noted that these bounds are themselves hyperparameters that must be tuned through a trial-and-error process, guided by prior knowledge of the platform dynamics and the expected ranges of each navigation state. A final aspect that must be addressed is whether each com-ponent of the BCL converges independently during training. While the overall loss convergence is important, it does not tell the full story, since the total loss is dominated by the position term due to its relatively large weight. Therefore, each component must be monitored individually to ensure that the network is learning meaningful corrections across all navigation states. 
+
+D. Results 
+
+The performance of BLENDS is evaluated against three clas-sical baselines, the forward EKF, the TFS, and the RTSS, across both datasets. For the mobile robot dataset, MR-Val consists of Trajectory 1, while MR-Tes includes Trajectory 2 and Trajectory 3. For the quadrotor dataset, QR-Val consists of Trajectory 2, while QR-Tes includes Trajectory 12 and Trajectory 15. Results, for the two platforms, are reported in Tables III and IV. TABLE III: Mobile robot dataset per-axis RMSE for position, velocity, and orientation across validation and test trajectories.                                                                                                                         
+
+> Position [m] Velocity [m/s] Orientation [rad] Traj. Method pNpEpDvNvEvDϕθψ
+> MR-Val (1) EKF 0.824 2.373 0.953 0.195 0.247 0.139 0.027 0.027 1.795 RTSS 0.824 2.373 0.951 0.146 0.148 0.114 0.017 0.018 1.777
+> TFS 0.825 2.374 0.951 0.172 0.206 0.137 0.018 0.019 1.786 BLENDS 0.793 1.335 0.958 0.177 0.198 0.137 0.018 0.019 1.786 MR-Tes (2) EKF 1.182 2.729 1.403 0.172 0.220 0.130 0.039 0.018 2.099 RTSS 1.179 2.729 1.402 0.142 0.140 0.119 0.036 0.017 2.306 TFS 1.179 2.729 1.402 0.152 0.181 0.126 0.037 0.018 2.322 BLENDS 0.543 1.661 1.345 0.152 0.177 0.127 0.037 0.018 2.099
+> MR-Tes (3) EKF 1.623 2.350 1.207 0.141 0.242 0.149 0.025 0.023 2.580 RTSS 1.620 2.349 1.206 0.129 0.222 0.146 0.017 0.018 2.548 TFS 1.620 2.348 1.206 0.123 0.159 0.134 0.015 0.018 2.534
+> BLENDS 1.446 1.368 1.242 0.129 0.220 0.149 0.017 0.018 2.549
+
+As shown in the tables, BLENDS achieves consistent and sub-stantial improvements in horizontal position accuracy across both datasets and all unseen test trajectories. On the mobile robot dataset, BLENDS reduces the horizontal position error 10 
+
+(a) MR-Val (Traj. 1). (b) MR-Tes (Traj. 2). (c) MR-Tes (Traj. 3). 
+
+(d) QR-Val (Traj. 2). (e) QR-Tes (Traj. 12). (f) QR-Tes (Traj. 15). 
+
+Fig. 6: 2D position trajectory comparison across all evaluation trajectories for the mobile robot (top) and quadrotor (bottom) datasets. Each subplot shows the GT alongside the estimated trajectories of EKF, TFS, RTSS, and BLENDS. on the validation trajectory and consistently on the two unseen test trajectories. As illustrated in Fig. 6, the estimated trajec-tory of BLENDS visually aligns more closely with the GT in the North–East plane compared to the classical baselines. On MR-Tes trajectory 2, the pN improvement stands at approxi-mately 54% while the pE RMSE improvement is around 40% relative to the EKF baseline. A similar performance gain is observed on MR-Tes trajectory 3, where pN improves by more than 10% and pE by more than 40%, as further quantified in Fig. 7. The classical smoothers TFS and RTSS provide negli-gible improvement in position, as the positional bias cannot be compensated by covariance-based fusion alone, as established in Section III, in other words, there is insufficient information within the filter framework to correct the systematic offset. BLENDS, through its learned covariance modification and additive correction term, is able to identify and compensate for the systematic position bias introduced by the loosely coupled GNSS position measurements. These results generalize to the quadrotor dataset, where the horizontal position improvements are even more pronounced. The visual separation between the BLENDS trajectory and those of the classical baselines in the North–East plane is clearly visible in Fig. 6. On QR-Tes trajectory 12, BLENDS reduces pN by up to 34% and pE by up to 18% relative to the EKF. On QR-Tes trajectory 15, which was recorded in an entirely unseen zone of the dataset, BLENDS achieves reductions of more than 63% in pN and more than 23% in 
+
+pE , as further quantified in Fig. 8. The classical smoothers again show minimal position improvement across all quadro-tor trajectories, further confirming that the systematic bias cannot be corrected through covariance-based fusion alone and that a data-driven correction mechanism is necessary. For velocity and orientation, the classical smoothers TFS and RTSS generally outperform BLENDS. On both the mobile robot and quadrotor datasets, RTSS consistently achieves the lowest velocity RMSE across all axes and trajectories, with improvements of over 30% relative to the EKF on the mobile robot data and improvements of more than 40% on the quadrotor data, while BLENDS shows comparable but TABLE IV: Quadrotor dataset per-axis RMSE for position, velocity, and orientation across validation and test trajectories.                                                                                                                         
+
+> Position [m] Velocity [m/s] Orientation [rad] Traj. Method pNpEpDvNvEvDϕθψ
+> QR-Val (2) EKF 3.703 1.100 3.819 0.287 0.175 0.275 0.041 0.024 0.408 RTSS 3.704 1.101 3.822 0.283 0.166 0.292 0.032 0.012 0.179
+> TFS 3.704 1.102 3.822 0.372 0.176 0.369 0.028 0.011 0.183 BLENDS 2.533 0.586 3.801 0.184 0.118 0.276 0.013 0.012 0.426 QR-Tes (12) EKF 3.423 2.609 2.979 0.205 0.281 0.255 0.037 0.050 0.406
+> RTSS 3.422 2.611 2.977 0.147 0.165 0.273 0.034 0.036 0.558 TFS 3.422 2.610 2.977 0.142 0.160 0.225 0.036 0.038 0.542 BLENDS 2.226 2.117 3.001 0.159 0.162 0.283 0.034 0.053 0.659 QR-Tes (15) EKF 1.345 2.298 1.808 0.152 0.213 0.200 0.037 0.023 0.224
+> RTSS 1.345 2.298 1.808 0.127 0.131 0.207 0.027 0.013 0.263 TFS 1.345 2.298 1.807 0.122 0.119 0.177 0.024 0.015 0.243 BLENDS 0.496 1.752 1.787 0.150 0.134 0.209 0.028 0.018 0.257 11
+> (a) MR-Tes (Traj. 2).
+> (b) MR-Tes (Traj. 3).
+
+Fig. 7: RMSE improvement [%] relative to the forward EKF for TFS, RTSS, and BLENDS across all navigation states on the mobile robot dataset test trajectories. Positive values indicate improvement over the EKF baseline. slightly higher velocity errors. A similar pattern holds for orientation, where TFS and RTSS reduce roll and pitch errors more effectively than BLENDS. This behavior is expected, as the classical smoothers are theoretically optimal for Gaussian linear systems and seek to minimize the estimation variance. Both velocity and orientation are not directly measured by GNSS and are instead deduced by the filter through the INS mechanism and state propagation. As a result, they are more responsive to changes in filter parameters and to the incorporation of additional information, such as the future measurements provided by the smoother in the backward pass. The learned correction in BLENDS primarily targets the systematic position bias rather than the stochastic velocity and orientation errors. Although the BCL includes a minimum-variance regularization term, it is not absolute and permits the other loss components, particularly the position supervision, to trade off some velocity and orientation accuracy in favor of bias correction. In contrast, the model-based smoothers exclusively target variance reduction, which makes them more effective for these states. An exception is observed for yaw, where all methods, includ-ing the classical smoothers, exhibit degraded performance or even regression relative to the EKF on certain trajectories. This is a known consequence of the fact that heading is not observable in a loosely coupled INS/GNSS system without a dual-antenna configuration or magnetometer aiding [37]. As a result, the yaw error grows unbounded even in the presence of GNSS position updates. The 2σ envelope in Figs. 9(c) and 9(f) reflects this diverging uncertainty and explains why smoothing the heading does not yield a meaningful improvement, once the yaw estimate has drifted significantly from its true value, neither the forward nor the backward filter retains sufficient heading information to recover it, and the smoother merely inherits the diverged estimate from both passes. Of particular interest are the north and east position error states, shown in Figs. 9(a) and 9(d), where BLENDS expands the 2σ envelope relative to the classical smoothers. This is consistent with the presence of a systematic position offset, by incorporating the learned correction, the smoother explicitly acknowledges and expresses the residual uncertainty associ-ated with the bias. For the mobile robot dataset, an even more notable behavior is observed in Fig. 9(a): the envelope inflates and contracts adaptively in response to the vehicle’s manoeuvres, with the error signal following accordingly. This reflects the network’s ability to modulate its uncertainty esti-mates based on the local dynamics of the trajectory. For all remaining states, the error remains well bounded within the predicted envelope, 95% confidence interval, with only a small number of outlier estimates, which is closely consistent with Bayesian estimation theory. An additional way to evaluate a smoother is by quantifying how much the uncertainty is reduced relative to the forward EKF. For this purpose, the PCI (57) over time is shown in Figs. 10 and 11. BLENDS maintains a consistently higher PCI 
+
+> (a) QR-Tes (Traj. 12).
+> (b) QR-Tes (Traj. 15).
+
+Fig. 8: RMSE improvement [%] relative to the forward EKF for TFS, RTSS, and BLENDS across all navigation states on the quadrotor dataset test trajectories. Positive values indicate improvement over the EKF baseline. 12     
+
+> (a) MR-Tes (Traj. 2) position error. (b) MR-Tes (Traj. 2) velocity error. (c) MR-Tes (Traj. 2) orientation error.
+> (d) QR-Tes (Traj. 15) position error. (e) QR-Tes (Traj. 15) velocity error. (f) QR-Tes (Traj. 15) orientation error.
+
+Fig. 9: BLENDS navigation error and 2σ covariance bounds for a representative test trajectory from the mobile robot (top) and quadrotor (bottom) datasets. Each subplot shows the per-axis error (black) and the corresponding ±2σ uncertainty envelope (red dashed), demonstrating that the smoothed error remains consistent with the predicted covariance throughout the trajectory. than both TFS and RTSS across all test trajectories on both datasets, indicating that the learned covariance modification produces tighter smoothed covariances without sacrificing consistency. On the quadrotor dataset, BLENDS sustains a PCI of approximately 60–70% throughout the majority of both test trajectories, compared to 50–60% for the classical smoothers, with the gap widening towards the end of each trajectory. For the mobile robot dataset, the PCI values of BLENDS are comparable to those of the classical smoothers, which at first glance may appear to suggest a lesser degree of uncertainty reduction. However, this result should be interpreted carefully. As discussed above, BLENDS deliberately inflates the position uncertainty envelope to account for the systematic offset, thereby increasing the trace of the smoothed covariance in the position states. Since the PCI is computed over the full state covariance trace, this inflation in the position block partially offsets the uncertainty reduction achieved in the remaining states. Consequently, PCI values similar to those of classical smoothers indicate that BLENDS achieves a meaningful re-duction in uncertainty across velocity, orientation, and bias states. At the same time, it provides a more honest and infor-mative representation of the position uncertainty, consistent with the principles of Bayesian estimation. A key result of this evaluation is that BLENDS generalizes across two substantially different platforms with distinct dy-namics and operating speeds, a mobile robot and a quadrotor, using the same network architecture and training procedure, with only the correction bounds and window duration adapted to reflect the characteristics of each platform. The consistent horizontal position improvement across all four unseen test trajectories demonstrates that the learned correction captures a systematic bias that is present across different trajectory types and motion profiles, rather than overfitting to the specific pat-terns seen during training. This cross-platform generalization, combined with the covariance consistency demonstrated by the 2σ envelopes and the PCI results, confirms that BLENDS operates within the theoretical foundations of Bayesian es-timation while meaningfully extending the capabilities of classical smoothing algorithms in the presence of biased GNSS measurements. VI. C ONCLUSION 
+
+This paper presented BLENDS, a Bayesian learning-enhanced deep smoothing framework for inertial-aided navigation. BLENDS augments the classical two-filter smoother with a transformer-based neural network. Operating as a software-only post-processing framework, BLENDS addresses a fun-damental limitation of conventional smoothing algorithms, namely their inability to correct systematic position biases inherited from the forward filter. It achieves this by learning to modify the filter covariances and apply an additive correction directly within the Bayesian smoothing framework. The proposed method was evaluated on two real-world datasets covering substantially different platforms and dynamics, a mobile robot and a quadrotor. Across all unseen test trajec-tories, BLENDS consistently achieved substantial reductions in horizontal position error, with improvements of up to 63% over the forward EKF in the north direction and more than 13 
+
+> (a) MR-Tes (Traj. 2).
+> (b) MR-Tes (Traj. 3).
+
+Fig. 10: PCI over time for TFS, RTSS, and BLENDS relative to the forward EKF on the mobile robot dataset test trajecto-ries. 40% in the east direction, while the classical smoothers RTSS and TFS provided negligible position improvement. The 2σ
+
+covariance envelopes confirm that the BLENDS smoothed esti-mates remain statistically consistent throughout all trajectories, and the PCI results demonstrated that BLENDS achieves a higher reduction in estimation uncertainty than the classical smoothers across both platforms. A key design principle of BLENDS is its adherence to the theoretical foundations of Bayesian estimation. The BCL jointly supervises the smoothed mean and covariance, enforc-ing minimum-variance estimates while maintaining a tight and honest uncertainty representation. The curriculum ramp strategy further constrains the learned correction to physically meaningful ranges throughout training, preventing the network from producing unrealistic outputs. Nevertheless, BLENDS has several limitations. The correction bounds and window size must be manually tuned for each platform, requiring prior knowledge of the expected dynamic ranges of the naviga-tion states. Additionally, similar to model-based approaches, the performance of BLENDS is inherently limited by state observability, as unobservable states cannot be meaningfully corrected regardless of the learned output. The cross-platform generalization demonstrated in this work is achieved with a single network architecture and training procedure, adapted only through platform-specific correction bounds. These results suggest that BLENDS captures a sys-tematic bias inherent to loosely coupled INS/GNSS navigation rather than specific to any particular platform or trajectory. This makes BLENDS a practical and deployable software-only post-processing tool for improving navigation accuracy in applications where RTK-level precision is desired but only standard GNSS measurements are available during operation. 
+
+> (a) QR-Tes (Traj. 12).
+> (b) QR-Tes (Traj. 15).
+
+Fig. 11: PCI over time for TFS, RTSS, and BLENDS relative to the forward EKF on the quadrotor dataset test trajectories. ACKNOWLEDGMENT 
+
+N.C. is supported by the Maurice Hatter Foundation and the University of Haifa presidential scholarship for outstanding students on a direct Ph.D. track. The authors would like to thank Arazim Ltd. for their support and for providing the Arazim Exiguo ® EX-300 unit used in the data collection. REFERENCES 
+
+[1] A. B. Chatfield, Fundamentals of high accuracy inertial navigation . Aiaa, 1997, vol. 174. [2] D. Titterton and J. L. Weston, Strapdown inertial navi-gation technology . IET, 2004, vol. 17. [3] P. J. Teunissen, O. Montenbruck et al. , Springer hand-book of global navigation satellite systems . Springer, 2017, vol. 10. [4] E.-H. Shin and N. El-Sheimy, “Backward smoothing for pipeline surveying applications,” in Proceedings of the 2005 National Technical Meeting of The Institute of Navigation , 2005, pp. 921–927. [5] J. H. Kwon and C. Jekeli, “A new approach for airborne vector gravimetry using GPS/INS,” Journal of Geodesy ,vol. 74, no. 10, pp. 690–700, 2001. [6] K.-W. Chiang, M.-L. Tsai, and C.-H. Chu, “The de-velopment of an UAV borne direct georeferenced pho-togrammetric platform for ground control point free 14 
+
+applications,” Sensors , vol. 12, no. 7, pp. 9161–9180, 2012. [7] H. E. Rauch, F. Tung, and C. T. Striebel, “Maximum likelihood estimates of linear dynamic systems,” AIAA journal , vol. 3, no. 8, pp. 1445–1450, 1965. [8] D. Fraser and J. Potter, “The optimum linear smoother as a combination of two optimum linear filters,” IEEE Transactions on automatic control , vol. 14, no. 4, pp. 387–390, 1969. [9] H. Liu, S. Nassar, and N. El-Sheimy, “Two-filter smooth-ing for accurate INS/GPS land-vehicle navigation in urban centers,” IEEE Transactions on Vehicular Tech-nology , vol. 59, no. 9, pp. 4256–4267, 2010. [10] X. Zhang, F. Zhu, X. Tao, and R. Duan, “New optimal smoothing scheme for improving relative and absolute accuracy of tightly coupled GNSS/SINS integration,” 
+
+GPS Solutions , vol. 21, no. 3, pp. 861–872, 2017. [11] Y. Yin, J. Zhang, M. Guo, X. Ning, Y. Wang, and J. Lu, “Sensor fusion of GNSS and IMU data for robust local-ization via smoothed error state Kalman filter,” Sensors ,vol. 23, no. 7, p. 3676, 2023. [12] Y. Zhao, N. Yu, L. Yan, and H. Zhao, “A Smoothing Algorithm Based on Adaptive RTSS for GNSS/IMU Tightly Coupled Navigation and Positioning,” IEEE Sen-sors Journal , 2025. [13] N. Cohen and I. Klein, “Inertial navigation meets deep learning: A survey of current trends and future direc-tions,” Results in Engineering , vol. 24, p. 103565, 2024. [14] C. Chen and X. Pan, “Deep learning for inertial po-sitioning: A survey,” IEEE Transactions on Intelligent Transportation Systems , vol. 25, no. 9, pp. 10 506– 10 523, 2024. [15] F. Wu, H. Luo, H. Jia, F. Zhao, Y. Xiao, and X. Gao, “Predicting the noise covariance with a multitask learn-ing model for Kalman filter-based GNSS/INS integrated navigation,” IEEE Transactions on Instrumentation and Measurement , vol. 70, pp. 1–13, 2020. [16] N. Cohen and I. Klein, “Adaptive Kalman-informed transformer,” Engineering Applications of Artificial In-telligence , vol. 146, p. 110221, 2025. [17] A. Levy and I. Klein, “Adaptive neural unscented Kalman filter,” IEEE Transactions on Intelligent Vehicles , 2026. [18] G. Versano and I. Klein, “A Hybrid Neural-Assisted Unscented Kalman Filter for Unmanned Ground Vehicle Navigation,” arXiv preprint arXiv:2603.11649 , 2026. [19] W. Fang, J. Jiang, S. Lu, Y. Gong, Y. Tao, Y. Tang, P. Yan, H. Luo, and J. Liu, “A LSTM algorithm estimating pseudo measurements for aiding INS during GNSS signal outages,” Remote sensing , vol. 12, no. 2, p. 256, 2020. [20] N. Cohen and I. Klein, “Seamless underwater navigation with limited Doppler velocity log measurements,” IEEE Transactions on Intelligent Vehicles , 2024. [21] X. Ni, G. Revach, N. Shlezinger, R. J. van Sloun, and Y. C. Eldar, “RTSNet: Deep learning aided Kalman smoothing,” in ICASSP 2022-2022 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP) . IEEE, 2022, pp. 5902–5906. [22] G. Revach, X. Ni, N. Shlezinger, R. J. Van Sloun, and Y. C. Eldar, “RTSNet: Learning to smooth in partially known state-space models,” IEEE Transactions on Signal Processing , vol. 71, pp. 4441–4456, 2023. [23] Y. Bar-Shalom, X. R. Li, and T. Kirubarajan, Estimation with applications to tracking and navigation: Theory algorithms and software . John Wiley & Sons, 2001. [24] C. Brommer, A. Fornasier, M. Scheiber, J. Delaune, R. Brockers, J. Steinbrener, and S. Weiss, “INSANE: Cross-domain UAV data sets with increased number of sensors for developing advanced and novel estimators,” 
+
+arXiv preprint arXiv:2210.09114 , 2022. [25] D. Simon, Optimal state estimation: Kalman, H infinity, and nonlinear approaches . John Wiley & Sons, 2006. [26] J. Farrell, Aided navigation: GPS with high rate sensors .McGraw-Hill, Inc., 2008. [27] P. Groves, Principles of GNSS, Inertial, and Multisen-sor Integrated Navigation Systems, Second Edition , ser. GNSS/GPS. Artech House, 2013. [28] S. S¨ arkk¨ a and L. Svensson, Bayesian filtering and smoothing . Cambridge university press, 2023, vol. 17. [29] G. Falco, M. Pini, and G. Marucco, “Loose and tight GNSS/INS integrations: Comparison of performance as-sessed in real urban scenarios,” Sensors , vol. 17, no. 2, p. 255, 2017. [30] A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit, L. Jones, A. N. Gomez, Ł. Kaiser, and I. Polosukhin, “Attention is all you need,” Advances in neural informa-tion processing systems , vol. 30, 2017. [31] D. Hendrycks and K. Gimpel, “Gaussian error linear units (gelus),” arXiv preprint arXiv:1606.08415 , 2016. [32] P. J. Huber, “Robust estimation of a location parameter,” in Breakthroughs in statistics: Methodology and distri-bution . Springer, 1992, pp. 492–518. [33] Husarion, “ROSbot XL — Indoor AMR,” https://husarion.com/manuals/rosbot-xl/overview/, accessed: March 2026. [34] Arazim Navigation Systems, “Exiguo ® EX-300: Industrial-Grade Dual-Antenna Inertial Navigation System,” https://arazim.com/exiguo-ex-300/, accessed: March 2026. [35] Xsens by Movella, “MTi-680G RTK GNSS/INS,” https://www.xsens.com/sensor-modules/ xsens-mti-680g-rtk-gnss-ins, accessed: March 2026. [36] I. Loshchilov and F. Hutter, “Decoupled weight decay regularization,” arXiv preprint arXiv:1711.05101 , 2017. [37] G. Teodori and H. Neuner, “Analysis of the Yaw Ob-servability in GNSS-INSS Integration for UAV Pose Estimation,” in The 8th INGEO International Conference on Engineering Surveying and 4th SIG Symposium on Engineering Geodesy . Springer, 2020, pp. 259–269.
