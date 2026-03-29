@@ -1,0 +1,543 @@
+Title: GeoFlow: Real-Time Fine-Grained Cross-View Geolocalization via Iterative Flow Prediction
+
+URL Source: https://arxiv.org/pdf/2603.21943v1
+
+Published Time: Tue, 24 Mar 2026 02:55:49 GMT
+
+Number of Pages: 18
+
+Markdown Content:
+# GeoFlow: Real-Time Fine-Grained Cross-View Geolocalization via Iterative Flow Prediction 
+
+# Ayesh Abu Lehyeh 1, Xiaohan Zhang 1, Ahmad Arrabi 1, Waqas Sultani 2, Chen Chen 3, Safwan Wshah 1∗ 
+
+> 1
+
+# Vermont Artificial Intelligence Lab, Department of Computer Science, University of Vermont  
+
+> 2
+
+# Intelligent Machines Lab, Information Technology University  
+
+> 3
+
+# Institute of Artificial Intelligence, University of Central Florida  
+
+> ∗
+
+Corresponding and senior author. 
+
+# Abstract 
+
+Accurate and fast localization is vital for safe autonomous navigation in GPS-denied areas. Fine-Grained Cross-View Geolocalization (FG-CVG) aims to estimate the precise 2-Degree-of-Freedom (2-DoF) location of a ground image relative to a satellite image. However, current methods force a difficult trade-off, with high-accuracy models be-ing slow for real-time use. In this paper, we introduce Ge-oFlow, a new approach that offers a lightweight and highly efficient framework that breaks this accuracy-speed trade-off. Our technique learns a direct probabilistic mapping, predicting the displacement (in distance and direction) re-quired to correct any given location hypothesis. This is complemented by our novel inference algorithm, Iterative Refinement Sampling (IRS). Instead of trusting a single pre-diction, IRS refines a population of hypotheses, allowing them to iteratively ‘flow’ from random starting points to a robust, converged consensus. Even its iterative nature, this approach offers flexible inference-time scaling, allow-ing a direct trade-off between performance and computa-tion without any re-training. Experiments on the KITTI and VIGOR datasets show that GeoFlow achieves state-of-the-art efficiency, running at real-time speeds of 29 FPS while maintaining competitive localization accuracy. This work opens a new path for the development of practical real-time geolocalization systems. Code is available at: GitHub 
+
+# 1. Introduction 
+
+Intelligent systems such as autonomous vehicles, robotics, and augmented reality require precise and real-time lo-calization to operate safely in complex environments. While satellite-based positioning approaches (e.g., GPS or Galileo) are traditionally used, they proved to be unreli-able in many practical settings where signals are blocked or affected by surrounding objects [7, 8, 23]. Recently, many attempts have been made for precise localization by (a) Matching -based Methods  (b) Regression -based Methods  (c) Ours 
+
+Figure 1. Comparison of FG-CVG techniques. (a) Match-based methods search over discrete grids. (b) Regression-based meth-ods directly or iteratively regress the pose. (c) Our method uses learned displacement predictions to iteratively guide multiple di-verse hypotheses (in different colors) in continuous space towards the ground truth. 
+
+leveraging Fine-Grained Cross-View Geolocalization (FG-CVG) [3, 9, 15, 18, 22, 25]. The general goal of Fine-Grained Cross-View Geolocalization (FG-CVG) is to find the full 3-DoF pose of a ground camera: its 2-DoF planar location (x, y ) and its 1-DoF orientation ( θ). However, in many real-world applications, such as a vehicle-mounted camera, the orientation is often known or can be reliably obtained from onboard sensors like an IMU or a compass. Therefore, in this work, we focus on the 2-DoF localization task. This problem has high practical relevance, as solving for the (x, y ) location is the foundational challenge for nav-igation in GPS-denied areas. Similar to many cross-view geo-localization tasks, FG-CVG is difficult due to extreme viewpoint variations, scale differences, and appearance dif-ferences between the views [16, 23, 30–32]. Existing FG-CVG methods can be categorized into two main types: matching-based methods [3, 4, 9, 26, 27, 29] and regression-based methods [15, 18, 20, 22, 32]. Matching-based methods discretize the search space into a finite set of patches where a model is trained to predict a probability distribution for the ground image’s location over these patches. However, this reliance on discretization in-herently introduces quantization errors. Such errors can be-come more significant as the search area expands, thereby limiting localization accuracy and posing scalability chal-
+
+> arXiv:2603.21943v1 [cs.CV] 23 Mar 2026
+
+lenges for larger satellite regions. While some of these methods optimize a Negative Log-Likelihood (NLL) loss to provide probabilistic uncertainty estimates, this valuable aspect is often compromised by the quantization artifacts inherent in their patch-based representations. Regression-based methods, on the other hand, operate within a continuous representation of the pose space. Sim-pler direct regression methods, for instance, may provide initial pose estimates but can struggle to achieve high fine-grained accuracy [32]. More advanced methods aim for greater precision by iteratively refining an initial pose es-timate through visual correspondence. However, deploy-ing these methods can introduce practical hurdles. Some of these methods may require prior knowledge (such as accu-rate camera intrinsics) [15, 20, 25], and others may require intermediate steps such as a bird’s eye view (BEV) or ho-mography estimation [20, 22, 25], increasing overall com-plexity and hindering real-time deployment. Furthermore, many of these methods usually produce only a deterministic point estimate of the pose, thereby lacking the uncertainty modeling needed to generate probabilistic estimates in con-tinuous space [15]. Additionally, these methods typically lack flexible inference-time scaling, which is important for practical deployment. Considering these limitations, in this paper, we raise the following question: Is there a method that can solve FG-CVG in continuous space, achieve accurate localization, and operate at real-time speeds suitable for practical de-ployment? 
+
+Flow matching models recently showed significant suc-cess in image synthesis [2, 10]. Such models learn a vec-tor field that transports samples from a prior distribution to a target distribution. In inference, a sample from a given prior distribution is updated iteratively by the predicted vec-tor field until reaching the target distribution. In FG-CVG, this iterative refinement process mimics how humans solve localization problems. Humans do not typically jump to a precise location in a single step. Similarly, our approach starts with a rough coarse estimate and then iteratively re-fines based on visual cues (see Figure 1). Inspired by this observation, in this paper, we propose a novel FG-CVG flow-inspired approach (GeoFlow) that performs regression from multiple initial pose (location) hypotheses toward the ground-truth location. Instead of learning a continuous flow field (like in flow matching), GeoFlow directly predicts the displacement (distance and direction) from each candidate pose to the target, effec-tively learning a regression field over the pose space. Ad-ditionally, to complement and enhance localization accu-racy, we propose an Iterative Refinement Sampling (IRS) algorithm during inference. IRS generates diverse, ran-dom pose hypotheses and then iteratively refines them us-ing the learned regression field. This process naturally guides the predictions towards more confident regions of the pose space, which also provides a practical measure of the overall localization confidence. By combining the pro-posed flow-inspired approach and IRS algorithm, GeoFlow achieves competitive geo-localization results on the pop-ular VIGOR [32] and KITTI [5] datasets. Moreover, by leveraging the flexibility of the IRS algorithm, we observe inference-time scaling behavior from GeoFlow, advancing the research of FG-CVG by introducing a novel paradigm for boosting the performance. While iterative methods are often computationally expensive, IRS is designed for high speed. We run the costly visual analysis only once , and then apply an extremely fast iterative refinement which makes our IRS very efficient during inference. In this work, our contributions can be summarized as threefold: • We propose GeoFlow, a novel flow-inspired regression approach designed for Fine-Grained Cross-View Geolo-calization. GeoFlow operates directly in continuous pose space and is designed to predict a displacement vector (distance and direction) from multiple initial location hy-potheses toward the ground-truth. • We introduce a novel inference algorithm, IRS, which en-hances localization accuracy and robustness by generat-ing diverse pose hypotheses and iteratively refining them through the learned displacement fields. IRS not only im-proves convergence toward the true pose but also provides a natural estimate of localization confidence while main-taining low computational overhead. • Through extensive experiments on VIGOR and KITTI datasets, we demonstrate that GeoFlow achieves com-petitive accuracy to SOTA methods while operating at a fraction of their computational cost. Notably, our model uses 7.8 × fewer parameters and 4 × GFLOPS reduction than SOTA methods like CCVPE [27], making it ideal for real-time settings. Moreover, the IRS mechanism en-ables inference-time scalability, offering a controllable trade-off between accuracy and speed for real-time ap-plications. 
+
+# 2. Related Work 
+
+Cross-View Geolocalization (CVGL): The foundational task in this domain is Cross-View Geolocalization, typically framed as an image retrieval problem [6, 11, 16, 17, 24, 28, 30–32]. These methods learn global descriptors for ground and satellite images to find the best-matching satellite re-gion for a ground-view query from a large database [15]. In these cross-view retrieval methods, the camera is assumed to be located at the center of the satellite map. However, this assumption limits the generalization of these methods and restricts their precision to the coarse level of the entire satellite tile. 𝜓 𝑠 
+
+𝜓 𝑔 
+
+(𝜇 𝑟 , 𝜎 𝑟 )
+
+𝑰 𝑠 
+
+𝑰 𝑔 
+
+> 𝑭 𝑠
+> 𝑭 𝑔
+
+𝒇 𝑣𝑖𝑠 
+
+𝒔 
+
+(𝑥 0, 𝑦 0)  
+
+> 𝑅𝑎𝑛𝑑𝑜𝑚 𝑠𝑎𝑚𝑝𝑙 𝑒
+> FC
+> P𝑜𝑜𝑙 c
+
+𝑣 𝜙   
+
+> 𝑃𝑟𝑒𝑑𝑖𝑐𝑡𝑒𝑑 𝐷𝑖𝑠𝑡𝑎𝑛𝑐𝑒 (𝑟 )
+
+# GeoFlow Model 
+
+# Iterative Refinement Sampling 
+
+(1)  (2)  (3)  (4)  (5) 
+
+> is concatenation c
+> 𝐹𝑙𝑎𝑡𝑡𝑒𝑛
+> 𝐹𝑙𝑎𝑡𝑡𝑒𝑛
+> Cross
+> Attention
+> block
+
+𝑣 𝜙  (𝜇 𝜃 , 𝜅 )  
+
+> 𝑃𝑟𝑒𝑑𝑖𝑐𝑡𝑒𝑑 𝐷𝑖𝑟𝑒𝑐𝑡𝑖𝑜𝑛 (𝜃 )
+
+𝑞 0Figure 2. The top panel illustrates the architecture of our proposed GeoFlow. Ground ( Fg ) and satellite ( Fs) features are extracted by 
+
+ψg and ψs, then flattened, positionally encoded, and fused by a Cross-Attention block to produce a single visual representation, fvis .Separately, an initial location point q0 = ( x0, y 0) is passed through a fully connected layer (FC). This point embedding is concatenated with fvis to form the joint representation s. Finally, two regression heads ( vϕ) predict the parameters for the probabilistic displacement: distance (μr , σ r ) and direction (μθ , κ ). The bottom panel illustrates our Iterative Refinement Sampling (IRS) algorithm. (1) The process starts with N randomly sampled hypotheses (red dots), the green dot represents the ground truth location. (2-4) In each round, our model predicts the displacement (blue arrows) for all hypotheses, which are then updated and iteratively converge toward the target. (5) After R
+
+rounds, the final robust location (yellow dot) is computed as the mean of the entire converged population. 
+
+Fine-Grained Cross-View Geolocalization (FG-CVG): 
+
+Existing Fine-Grained Cross-View Geolocalization meth-ods follow two main paradigms. Matching-based meth-ods discretize the continuous pose space into a finite grid of patches [3, 4, 9, 26], reframing the problem as a clas-sification task. While this allows for probabilistic model-ing, this ”patchify” process has a fundamental limitation of quantization error. The model’s precision is capped by the patch size, posing significant scalability challenges for real-world search areas. To overcome this, regression-based methods operate in a continuous space. Early work, such as VIGOR [32], introduced this concept by adding a regres-sion head to a retrieval backbone but struggled to achieve high fine-grained accuracy. More advanced methods have emerged, but they often introduce significant computational overhead, hindering real-time deployment. For instance, Shi et al. [15] use a Levenberg-Marquardt (LM) optimiza-tion to iteratively refine the pose. However, this requires heavy geometric projections and relies on priors like cam-era intrinsics. Similarly, methods like [20, 25] leverage dense feature matching between the two views, but their geometric alignment modules also depend on these same heavy projections and intrinsic camera data. Other ap-proaches, like [22], use recurrent homography estimation, which still requires an intermediate BEV projection. Fi-nally, the work in [27] suffer from high memory utiliza-tion in their complex matching decoders, making them less appropriate for efficient, real-time deployment. In contrast to these approaches, we propose GeoFlow, a lightweight, flow-inspired model that regresses the camera pose in con-tinuous space without any ”patchify” process. Furthermore, our GeoFlow leverages the proposed IRS to fully explore the search area achieving robust consensus. Finally, for the first time, we observe inference time scaling on the FG-CVG task from our GeoFlow, enabling GeoFlow to achieve SOTA-comparable accuracy at real-time speeds, which im-plies its potential for practical deployment in autonomous systems. 
+
+# 3. Methodology 
+
+Figure 2 illustrates the proposed GeoFlow, designed for FG-CVG. Given a ground query image Ig ∈ RHg ×Wg ×3
+
+and a corresponding geo-referenced satellite map Is ∈
+
+RHs×Ws×3, the objective of FG-CVG is to estimate the precise 2-DoF location q = (x, y ) of the ground cam-era relative to the reference satellite map’s coordinate sys-tem. To achieve this, GeoFlow is a flow-inspired model that performs regression from multiple initial pose hypothe-ses to perform pose estimation directly within the continu-ous satellite space. Specifically, GeoFlow learns a regres-sion field vϕ(q0, Ig , Is) that predicts the probabilistic dis-placement vector (distance r and direction θ) from an arbi-trary initial hypothesis q0 ∼ p0 towards the target location 
+
+q1. Critically, the model predicts parameters that define a probabilistic distribution over this displacement, allowing a Negative Log-Likelihood (NLL) training objective for both 
+
+r and θ. Furthermore, GeoFlow captures localization con-fidence through the novel IRS algorithm during inference. This multi-seed sampling approach can iteratively refine pose estimates using the learned displacement vector and evaluate the consensus of the hypotheses, yielding a robust final location. The following subsections detail the cross-view feature extraction, the probabilistic displacement re-gression, the training objective, and the IRS technique. 
+
+3.1. Cross-View Feature Extraction and Matching 
+
+We utilize two separate backbones, defined as ψg and 
+
+ψs, to extract features from the ground image Ig and the satellite map Is, respectively. We employ the lightweight EfficientNet-B0 [21] architecture as the backbone for both 
+
+ψg and ψs. This was an intentional choice to prioritize an efficient model design and to clearly demonstrate the ef-fectiveness of our proposed GeoFlow. Denoting the output from the backbones as F′ 
+
+> g
+
+= ψg (Ig ) and F′ 
+
+> s
+
+= ψs(Is),these feature maps are first projected to a common dimen-sion d using 1 × 1 convolutional layers, yielding Fg ∈
+
+RH′    
+
+> g×W′
+> g×d
+
+and Fs ∈ RH′ 
+
+> s×W′
+> s×d
+
+.To inject explicit spatial awareness, these feature maps are augmented with fixed 2D sinusoidal positional encodings following [29]: 
+
+˜Fg = Fg + PE g , ˜Fs = Fs + PE s. (1) To match features across views, we employ a cross-attention mechanism [29]. The positionally-encoded fea-tures are first flattened into sequences of tokens, Tg ∈
+
+RNg ×d (where Ng = H′ 
+
+> g
+
+× W ′ 
+
+> g
+
+) and Ts ∈ RNs×d (where 
+
+Ns = H′ 
+
+> s
+
+× W ′
+
+> s
+
+). The core idea is to use the ground tokens 
+
+Tg as queries to retrieve information from the satellite to-kens Ts, which serve as keys and values. The Query, Key, and Value projections are created as follows: 
+
+Qg = Tg WQ, Ks = TsWK , Vs = TsWV , (2) where WQ, WK , and WV are learnable weight matrices. The attention scores are computed by taking the scaled dot-product of the queries and keys, which are then normalized using the Softmax function: Scores = softmax 
+
+ Qg KTs
+
+√dk
+
+
+
+, (3) where dk is the dimension of the keys. The resulting at-tended features, fg , are obtained by taking the weighted sum of the values: 
+
+fg = Scores × Vs. (4) This operation effectively creates a new ground-view rep-resentation fg where each token is enriched with relevant fused information from the satellite view. Finally, we ap-ply adaptive average pooling to aggregate this representa-tion into a single, fixed-dimensional vector: 
+
+fvis = AvgPool (fg ) ∈ Rd. (5) This global visual representation fvis serves as the core vi-sual context that conditions the probabilistic regression net-work, as detailed in the following section. 
+
+3.2. Probabilistic Displacement Regression 
+
+We frame FG-CVG as learning a probabilistic regression field, vϕ(q0, fvis ), that directly estimates the 2-DoF dis-placement from an arbitrary initial pose hypothesis q0 =(x0, y 0) towards the ground truth location q1 = ( x1, y 1).Our model relies on two key inputs: the global visual rep-resentation fvis (from Sec. 3.1) and the spatial location ran-domly sampled q0. The 2D coordinate q0 is first passed through a coordinate projection layer to produce a high-dimensional positional embedding s. This spatial embed-ding is then concatenated with the visual representation fvis 
+
+to form a single, joint vector: 
+
+z = [ fvis ⊕ s]. (6) This joint representation z, which encapsulates both the scene’s appearance and the current query location, is then fed into the main regression network. This network is implemented as a Multi-Layer Perceptron (MLP) that de-codes this information to predict a probabilistic displace-ment. Specifically, the MLP branches into two separate prediction heads to define the displacement in polar coor-dinates (r, θ ) and its associated uncertainty. The distance head predicts the parameters (μr , σ 2 
+
+> r
+
+) for a Gaussian distri-bution N (μr , σ 2 
+
+> r
+
+) over the distance r. Here, μr represents the predicted mean distance, and σ2 
+
+> r
+
+is the predicted vari-ance. Concurrently, the direction head predicts parameters for the von Mises-Fisher (vMF) distribution [14]. The vMF distribution is a distribution on the hypersphere, analogous to the Gaussian for linear data. In our case, for a 2D dis-placement, the direction vector lies on the unit circle S1
+
+(n = 2 dimensions in the general vMF definition). The probability density for a direction vector u ∈ S1 is given by: 
+
+p(u|μθ , κ ) = C2(κ) exp( κμ Tθ u), (7) where μθ ∈ S1 is the mean direction vector, κ ≥ 0 is the concentration parameter, and C2(κ) is the normaliza-tion constant, which for n = 2 simplifies to C2(κ) =(2 πI 0(κ)) −1, with I0 being the modified Bessel function of the first kind at order 0. Our network head is trained to predict the components of the mean direction μθ and the concentration κ.This probabilistic formulation, with dedicated heads for dis-tance and direction, is essential for our NLL training ob-jective (as detailed in Sec 3.3), which is designed to match the parameters of these predicted distributions to the ground truth displacement. During inference, this learned regression field provides a single-step refinement operation. Given a hypothesis 
+
+q0, the network predicts the mean displacement parameters 
+
+(μr , μ θ ). The refined pose ˆq1 is then computed by applying this displacement: 
+
+ˆq1 = q0 + μr · μθ
+
+|| μθ || 2
+
+, (8) This single-step refinement forms the core operation of our Iterative Refinement Sampling (IRS) algorithm, which, as detailed in Sec 3.4, leverages this field to robustly evaluate multiple hypotheses and determine a final, confident loca-tion. 
+
+3.3. Training Objective 
+
+To train our regression network, we employ a probabilistic objective that minimizes the NLL of the ground truth dis-placement. This approach encourages the predicted distri-butions (from Sec. 3.2) to precisely match the true displace-ment in both distance and direction. For each training sample (Ig , Is, qgt ), we first sample a random hypothesis q0 uniformly from the satellite map. From this pair, we compute the ground truth displacement vector ugt = qgt − q0. This vector is then decomposed into its polar components, which serve as the targets for our two specialized loss functions: the ground truth distance 
+
+rgt = || ugt || 2 and the ground truth direction θgt = ugt /r gt .First, for the distance, we use the standard Gaussian NLL loss, Lr . This loss encourages the predicted mean μr to match rgt , while the predicted variance σ2 
+
+> r
+
+regularizes the loss based on confidence: 
+
+Lr = 12
+
+ (rgt − μr )2
+
+σ2
+
+> r
+
++ log σ2
+
+> r
+
+
+
+. (9) The first term is the squared error weighted by the inverse variance, which penalizes errors more heavily when the model is confident (small σ2 
+
+> r
+
+). The second term, log σ2 
+
+> r
+
+, is a regularizer that prevents the network from collapsing the variance to zero. Second, for the direction, we use the Angular von Mises-Fisher (AngMF) loss from [1]. This NLL loss is designed to directly minimize the angular error, which is more robust than simple L2 losses. The loss Lθ is formulated as a func-tion of the predicted concentration κ and the angular error between the predicted mean direction and the ground truth: 
+
+Lθ = − log( κ2+1)+ κ·cos −1(μTθ ·θgt )+log(1+exp( −κπ )) .
+
+(10) Here, θgt is the ground truth direction vector, and the term 
+
+cos −1(μTθ · θgt ) represents the angular error. Similar to the distance loss, the main term κ · cos −1(·) penalizes angular errors more heavily when the model is confident (high κ), while the other terms act as regularizers on the concentra-tion parameter. Finally, the total training loss L is the sum of these two components. By minimizing this combined objective, the network learns to predict both the correct displacement and a meaningful measure of confidence for each part. 
+
+L = Lr + Lθ . (11) 
+
+3.4. Iterative Refinement Sampling (IRS) 
+
+While the NLL training objective (Sec. 3.3) teaches our net-work vϕ to predict a displacement, a single prediction from an arbitrary starting point can be sensitive to visual ambi-guities. To overcome this and achieve a highly robust final estimate, we introduce our novel inference algorithm, Iter-ative Refinement Sampling (IRS). This is a flexible, multi-step procedure that not only enhances localization accuracy but also provides a direct trade-off between performance and computation speed at inference time. Instead of trust-ing a single prediction, IRS operates on a population of hy-potheses. The process begins by initializing a set Q0 con-taining N candidate poses, {q(i)0 }Ni=1 , drawn from a broad prior distribution (e.g., sampled uniformly across the satel-lite map). The algorithm then iteratively refines this entire set of poses over R rounds. In each round (indexed by 
+
+k = 1 ...R ), every candidate pose q(i) 
+
+> k−1
+
+from the previous set Qk−1 is fed back into our learned regression network 
+
+vϕ (along with the scene’s visual context fvis ). The net-work predicts the displacement from that specific pose, and we apply the single-step refinement defined in Eq. 8 to com-pute the updated pose q(i) 
+
+> k
+
+:
+
+q(i) 
+
+> k
+
+= q(i) 
+
+> k−1
+
++ μ(i) 
+
+> r
+
+· μ(i)
+
+> θ
+
+|| μ(i) 
+
+> θ
+
+|| 2
+
+, (12) where (μ(i) 
+
+> r
+
+, μ (i) 
+
+> θ
+
+) are the mean parameters predicted by the network vϕ when conditioned on the previous pose q(i)
+
+> k−1
+
+.Afterward, this refinement step is applied to all N candi-dates in parallel for R iterations. This process allows the entire population of hypotheses to ”flow” across the map and converge toward the most probable location(s) dictated by the learned regression field. After the final round R, we are left with a set of N refined poses, QR = {q(i) 
+
+> R
+
+}Ni=1 . The final, robust location estimate, ˆqfinal , is then simply com-puted as the mean of this entire final population. This multi-step, multi-hypothesis approach allows the model to find a strong consensus, effectively averaging out the noise from any single ambiguous prediction and improving localization accuracy. 4. Experiments 
+
+Datasets and Evaluation Metrics: Our experiments are conducted on two popular FG-CVG datasets: VIGOR and KITTI. • VIGOR [32] provides 105 , 214 ground-level panoramic images and 90 , 618 aerial images collected across four U.S. cities. Each aerial image covers a ∼ 70 m × 70 m 
+
+ground region. We utilize the corrected 2-DoF ground truth camera pose labels from [9]. Our evaluations are performed on both the same-Area and cross-Area set-tings. • KITTI [5] contains forward-facing ground images with a limited field of view, augmented with aerial images by [19]. Each aerial patch covers a region of ∼ 100 m ×
+
+100 m . We follow the standard data split and evaluate on both the same-area (Test1) and cross-area (Test2) test sets. As in prior works [9, 27], we assume ground im-ages are located within the central 40 m × 40 m area of the corresponding aerial map. For both datasets, we report the standard metrics for 2-DoF localization: mean and median translation error (in meters). For KITTI, we further decompose this error into longitudi-nal and lateral components, following [27]. As a key contri-bution of our work is efficiency, we also report and compare the inference speed (FPS) for all methods. For more details on the implementation, please refer to the supplementary material. 
+
+4.1. Main Results 
+
+Quantitative Comparison. We compare GeoFlow against recent SOTA methods including GGCVT [18], CCVPE [27], HC-Net [22], DenseFlow [20], and FG 2 [25]. Our performance on the KITTI dataset, shown in Ta-ble 1, highlights our model’s exceptional efficiency. Ge-oFlow sets a new benchmark for speed, achieving 29.49 FPS. This is 1.2x faster than the next-fastest competitor (HC-Net) and 8-14x faster than compute-heavy models like FG 2. In the same-area setting, our model proves that speed does not sacrifice accuracy. We remain highly competitive with the top performers, achieving a 0.98m mean error and 99.68% lateral recall at 5m. This demonstrates an ideal balance of SOTA speed and robust, high-end performance. In the challenging cross-area setting, our lightweight de-sign remains remarkably robust. Our model’s mean er-ror is highly competitive, proving comparable to the fastest SOTA method, HC-Net, while achieving an 8.1% error re-duction over CCVPE. This result solidifies GeoFlow as a well-balanced solution, delivering comparable accuracy while being the most efficient model in the field. This per-formance trade-off is an expected result of our lightweight design. On VIGOR (Table 2), GeoFlow’s efficiency stands out clearly. At 29.49 FPS, our model is 1.5x faster than the next-fastest methods (HC-Net and CCVPE) and 5-10x faster than highly accurate, compute-heavy models like FG 2.While heavyweight models like FG 2 lead in accuracy, our lightweight model remains highly competitive. We achieve a 2.5% reduction in mean error over CCVPE in the same-area setting. More notably, in the challenging cross-area setting, our model’s mean error outperforms CCVPE by 7.0%, while also beating GGCVT and DenseFlow. This result confirms our model’s excellent balance, delivering state-of-the-art speed while maintaining competitive local-ization accuracy. For more details on GeoFlow’s 3-DoF extension, please refer to the supplementary material. 
+
+Qualitative Results. In Figure 3, we visualize the power of our learned regression field on VIGOR dataset. We show how five distinct, randomly sampled initial poses are refined using our IRS with ( R = 10 ). The trajectories demonstrate our model’s robust ability to guide diverse, initial estimates towards a coherent solution near the ground truth. In Figure 4, we visualize the confidence of our IRS al-gorithm. While our NLL loss provides a per-step uncer-tainty, IRS builds upon this to refine the final predictive confidence. The visualization shows how an initial, scat-tered distribution of N hypotheses (at R=1) is refined itera-tively. As the refinement rounds R increase, the population of poses is actively guided by our learned regression field. This leads to a progressive ”shrinking” and convergence of the hypotheses, transforming the broad initial set into a tight, focused cluster centered on the ground truth. This process illustrates how IRS builds confidence and achieves a robust consensus, actively sculpting the predictive uncer-tainty from a wide distribution into a sharp, final estimate. 
+
+For more qualitative results, please refer to the supplemen-tary material. 
+
+4.2. Inference-Time Scaling 
+
+A key advantage of our IRS algorithm is the ability to scale performance at inference-time without any re-training. We can tune the number of seeds ( N ) and rounds ( R) for a di-rect trade-off between accuracy and speed. The magic of this approach lies in its efficiency. We run the EfficientNet backbone and the cross-attention module only once to get the visual context fvis . The IRS iterations only re-run the tiny, lightweight coordinate projection layer and regression MLPs. This means we can add more initial seeds and refine-ment steps with minimal impact on our real-time speed. We analyze this trade-off on the KITTI Cross-Area set in Ta-ble 3 and Table 4. First, in Table 3, we fix N = 10 seeds and vary the refinement rounds R. The results show a dramatic improvement when moving from a single step ( R = 1 ) to multi-step refinement. The mean error drops by 20.8% at 
+
+R = 3 . After this point, further refinement continues to offer smaller gains, improving the mean error to 8.41 m at 
+
+R = 10 . Similarly, in Table 4, we fix R = 5 and vary the Table 1. KITTI test results comparison. We report localization error (Mean/Median, m), lateral/longitudinal recall (R@1m/R@5m, %), and inference speed (FPS) for both Same-Area and Cross-Area splits. Best results are in bold .
+
+Efficiency Same-area Cross-area FPS ↑ ↓Loc. (m) ↑Lateral (%) ↑Long. (%) ↓Loc. (m) ↑Lateral (%) ↑Long. (%) Method Mean Median R@1m R@5m R@1m R@5m Mean Median R@1m R@5m R@1m R@5m GGCVT [18] 4.17 – – 76.44 98.89 23.54 62.18 – – 57.72 91.16 14.15 45.00 CCVPE [27] 24.00 1.22 0.62 97.35 99.71 77.13 97.16 9.16 3.33 44.06 90.23 23.08 64.31 HC-Net [22] 25.00 0.80 0.50 99.01 99.73 92.20 99.25 8.47 4.57 75.00 97.76 58.93 76.46 
+
+DenseFlow [20] 7.30 1.48 0.47 95.47 99.79 87.89 94.78 7.97 3.52 54.19 91.74 23.10 61.75 FG 2 [25] 4.20 0.75 0.52 99.73 100.00 86.99 98.75 7.45 4.03 89.46 99.80 12.42 55.73 GeoFlow (Ours) 29.49 0.98 0.68 96.85 99.68 74.05 98.75 8.42 5.60 36.36 83.85 14.76 52.51   
+
+> Figure 3. Qualitative examples on the VIGOR dataset. The trajectories demonstrate our model’s regression field, showing how five randomly sampled initial hypotheses are guided towards a coherent solution near the ground truth (red X) using our IRS algorithm.
+
+𝑅 = 1 𝑅 = 2 𝑅 = 3 𝑅 = 4     
+
+> Figure 4. Visualization of an initial, scattered distribution of N= 10 hypotheses is iteratively guided by our learned field over
+> R= 4 rounds in the IRS algorithm. The population progressively converges into a tight cluster centered on the Ground Truth.
+
+number of initial seeds N . We see a consistent, stable im-provement as we increase N , with the mean error dropping from 8.58 m (N = 1 ) to 8.41 m (N = 20 ) as the consen-sus from the population of hypotheses grows stronger. In summary, this analysis shows our GeoFlow’s capability for inference-time scaling. We can achieve significant accuracy improvements by increasing R and N at test time, without any re-training. Notably, our lightweight model keeps the inference speed high (over 26 FPS) in all configurations. Based on these results, we select N = 10 , R = 5 as our de-fault, as it captures the vast majority of the accuracy gains while maintaining a high speed of 29.5 FPS. Table 2. Comparison on VIGOR dataset. Localization error (m) and inference speed (FPS) are reported. Best results are in bold .
+
+Method Area ↓Mean (m) ↓Med. (m) ↑ FPS GGCVT [18] Same 4.12 1.34 3.57 Cross 5.16 1.40 
+
+CCVPE [27] Same 3.60 1.36 18.00 Cross 4.97 1.68 HC-Net [22] Same 2.65 1.17 20.00 Cross 3.35 1.59 DenseFlow [20] Same 3.03 0.97 6.10 Cross 5.01 2.42 FG 2 [25] Same 2.18 1.18 3.60 Cross 2.74 1.52 GeoFlow (Ours) Same 3.51 2.53 29.49 
+
+Cross 4.62 2.78 
+
+> Table 3. Impact of refinement rounds ( R) on KITTI Cross-Area.
+
+Rounds ( R) ↓Mean (m) ↓Median (m) ↑Speed (FPS) 1 10.69 9.95 32.55 
+
+3 8.47 5.88 31.23 5 8.42 5.60 29.49 10 8.41 5.59 26.23  
+
+> Table 4. Impact of initial seeds ( N) on KITTI Cross-Area.
+
+Seeds ( N ) ↓Mean (m) ↓Median (m) ↑Speed (FPS) 1 8.58 5.75 30.70 
+
+5 8.49 5.66 30.05 10 8.42 5.60 29.49 20 8.41 5.60 28.08 
+
+> Table 5. Comparison of computational efficiency.
+
+Method ↓Params(M) ↓Mem(MiB) ↑FPS ↓Mean(m) CCVPE [27] 57.40 4730 24.00 9.16 HC-Net [22] 11.21 1900 25.00 8.47 Ours 7.38 686 29.49 8.42 
+
+4.3. Computational Efficiency Analysis 
+
+We provide a head-to-head comparison of computational ef-ficiency on the KITTI dataset in Table 5. All benchmarks were run on an NVIDIA V100 GPU. The results clearly demonstrate our model’s superior efficiency. In terms of model size, GeoFlow is 1.5x smaller than HC-Net and 7.8x smaller than CCVPE. This lightweight design leads to a sig-nificantly reduced memory footprint, using only 686 MiB, which is 2.7x less memory than HC-Net and 6.9x less than CCVPE. Crucially, this efficiency does not come at the cost of performance. GeoFlow is the fastest method at 29.49 FPS, while also achieving the lowest mean error of 8.42 m
+
+in this comparison. In summary, GeoFlow achieves a state-of-the-art balance of accuracy and efficiency, using a frac-tion of the parameters and memory while delivering top-tier speed and mean localization performance. For more details, please refer to the supplementary material. 
+
+> Table 6. Efficacy of the proposed IRS algorithm.
+
+IRS Config. ↓Mean (m) ↓Med (m) Single-Pass ( N = 1 , R = 1 ) 12.47 11.79 Full IRS (Default) 8.42 5.60 
+
+4.4. Ablation Study 
+
+Finally, to quantify the benefit of our inference strategy, we compare our full IRS algorithm against a simple single-pass baseline ( N = 1 , R = 1 ) on the KITTI dataset. The re-sults in Table 6 are definitive. Our full IRS process, with its robust multi-hypothesis consensus, dramatically improves localization, reducing the mean error by 32.5% and more than halving the median error with a 52.5% improvement. This confirms that our IRS algorithm is not a minor tweak but a critical component for achieving robust and accurate localization. For more ablation studies, please refer to the supplementary material. 
+
+# 5. Conclusion and Future Work 
+
+This paper introduced GeoFlow, a lightweight and highly efficient framework for fine-grained cross-view geolocal-ization. GeoFlow learns to predict the displacement (in dis-tance and direction) required to correct any given location hypothesis. It is trained using a dedicated NLL loss for both the distance and direction, framing this as a probabilistic re-gression problem. Its name is inspired by its Iterative Re-finement Sampling (IRS) algorithm, where a population of hypotheses iteratively flows from random starting points to a robust, converged estimate, enabling high localization accu-racy and flexible inference-time scaling without re-training. Despite its iterative nature, our experiments demonstrated that GeoFlow achieves a new state-of-the-art in computa-tional efficiency, operating significantly faster than compet-ing methods while maintaining competitive localization ac-curacy. This work’s success opens new avenues for effi-cient, real-time geolocalization. Future efforts will focus on extending GeoFlow to full 6-DoF estimation and adapt-ing its efficient principles for downstream tasks, like pre-cise cross-view object geolocalization, further broadening its impact on real-world spatial understanding. Acknowledgments 
+
+This research has been supported by the U.S. National Sci-ence Foundation with grant 2119485. 
+
+# References 
+
+[1] Gwangbin Bae, Ignas Budvytis, and Roberto Cipolla. Es-timating and exploiting the aleatoric uncertainty in surface normal estimation. In International Conference on Computer Vision (ICCV) , 2021. 5 [2] Patrick Esser, Sumith Kulal, Andreas Blattmann, Rahim Entezari, Jonas M¨ uller, Harry Saini, Yam Levi, Dominik Lorenz, Axel Sauer, Frederic Boesel, Dustin Podell, Tim Dockhorn, Zion English, and Robin Rombach. Scaling rec-tified flow transformers for high-resolution image synthesis. In Proceedings of the International Conference on Machine Learning , pages 12606–12633, 2024. 2 [3] Florian Fervers, Sebastian Bullinger, Christoph Bo-densteiner, Michael Arens, and Rainer Stiefelhagen. Uncertainty-aware vision-based metric cross-view geolocal-ization. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pages 21621–21631, 2023. 1, 3 [4] Florian Fervers, Sebastian Bullinger, Christoph Boden-steiner, Michael Arens, and Rainer Stiefelhagen. C-bev: Contrastive bird’s eye view training for cross-view im-age retrieval and 3-dof pose estimation. arXiv preprint arXiv:2312.08060 , 2023. 1, 3 [5] Andreas Geiger, Philip Lenz, Christoph Stiller, and Raquel Urtasun. Vision meets robotics: The kitti dataset. Interna-tional Journal of Robotics Research , 2013. 2, 6 [6] Sixing Hu, Mengdan Feng, Rang MH Nguyen, and Gim Hee Lee. Cvm-net: Cross-view matching network for image-based ground-to-aerial geo-localization. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition , pages 7258–7267, 2018. 2 [7] Ayesh Abu Lehyeh, Anastassia Gharib, Tian Xia, Dryver Huston, and Safwan Wshah. Ubigtloc: A unified bilstm-graph transformer localization framework for iot sensor net-works. IEEE Internet of Things Journal , 12(20):41788– 41807, 2025. 1 [8] Ayesh Abu Lehyeh, Anastassia Gharib, and Safwan Wshah. Spatially-adaptive conformal graph transformer for indoor localization in wi-fi driven networks. arXiv preprint arXiv:2601.22322 , 2026. 1 [9] Ted Lentsch, Zimin Xia, Holger Caesar, and Julian FP Kooij. Slicematch: Geometry-guided aggregation for cross-view pose estimation. In Proceedings of the IEEE/CVF Confer-ence on Computer Vision and Pattern Recognition , pages 17225–17234, 2023. 1, 3, 6 [10] Yaron Lipman, Ricky T. Q. Chen, Heli Ben-Hamu, Maxim-ilian Nickel, and Matthew Le. Flow matching for genera-tive modeling. In The International Conference on Learning Representations , 2023. 2 [11] Liu Liu and Hongdong Li. Lending orientation to neural networks for cross-view geo-localization. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 2019. 2 [12] Ilya Loshchilov and Frank Hutter. Decoupled weight de-cay regularization. In International Conference on Learning Representations , 2019. 11 [13] A Paszke. Pytorch: An imperative style, high-performance deep learning library. arXiv preprint arXiv:1912.01703 ,2019. 11 [14] Tyler R. Scott, Andrew C. Gallagher, and Michael C. Mozer. von mises–fisher loss: An exploration of embed-ding geometries for supervised learning. In IEEE/CVF In-ternational Conference on Computer Vision (ICCV) , pages 10592–10602, 2021. 4 [15] Yujiao Shi and Hongdong Li. Beyond cross-view image retrieval: Highly accurate vehicle localization using satel-lite image. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 17010– 17020, 2022. 1, 2, 3 [16] Yujiao Shi, Liu Liu, Xin Yu, and Hongdong Li. Spatial-aware feature aggregation for image based cross-view geo-localization. Advances in Neural Information Processing Systems , 32:10090–10100, 2019. 1, 2 [17] Yujiao Shi, Xin Yu, Dylan Campbell, and Hongdong Li. Where am i looking at? joint location and orientation es-timation by cross-view matching. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 2020. 2 [18] Yujiao Shi, Fei Wu, Akhil Perincherry, Ankit Vora, and Hongdong Li. Boosting 3-dof ground-to-satellite camera localization accuracy via geometry-guided cross-view trans-former. In Proceedings of the IEEE/CVF International Con-ference on Computer Vision (ICCV) , pages 21516–21526, 2023. 1, 6, 7, 8 [19] Yujiao Shi, Xin Yu, Liu Liu, Dylan Campbell, Piotr Koniusz, and Hongdong Li. Accurate 3-dof camera geo-localization via ground-to-satellite image matching. IEEE Transactions on Pattern Analysis and Machine Intelligence , 45(3):2682– 2697, 2023. 6 [20] Zhenbo Song, Jianfeng Lu, Yujiao Shi, et al. Learning dense flow field for highly-accurate cross-view camera localiza-tion. Advances in Neural Information Processing Systems ,36:70612–70625, 2023. 1, 2, 3, 6, 7, 8 [21] Mingxing Tan and Quoc V. Le. Efficientnet: Rethinking model scaling for convolutional neural networks. ArXiv ,abs/1905.11946, 2019. 4, 11, 13 [22] Xiaolong Wang, Runsen Xu, Zhuofan Cui, Zeyu Wan, and Yu Zhang. Fine-grained cross-view geo-localization using a correlation-aware homography estimator. Advances in Neu-ral Information Processing Systems , 36:5301–5319, 2023. 1, 2, 3, 6, 7, 8 [23] Daniel Wilson, Xiaohan Zhang, Waqas Sultani, and Safwan Wshah. Image and object geo-localization. International Journal of Computer Vision , 132(4):1350–1392, 2024. 1 [24] Scott Workman, Richard Souvenir, and Nathan Jacobs. Wide-area image geolocalization with aerial reference im-agery. In Proceedings of the IEEE International Conference on Computer Vision (ICCV) , 2015. 2 [25] Zimin Xia and Alexandre Alahi. Fgˆ 2: Fine-grained cross-view localization by fine-grained feature matching. In Pro-ceedings of the Computer Vision and Pattern Recognition Conference , pages 6362–6372, 2025. 1, 2, 3, 6, 7, 8, 11, 12 [26] Zimin Xia, Olaf Booij, Marco Manfredi, and Julian FP Kooij. Visual cross-view metric localization with dense un-certainty estimates. In European Conference on Computer Vision , pages 90–106. Springer, 2022. 1, 3 [27] Zimin Xia, Olaf Booij, and Julian F. P. Kooij. Convolutional cross-view pose estimation. IEEE Transactions on Pattern Analysis and Machine Intelligence , 46(5):3813–3831, 2024. 1, 2, 3, 6, 7, 8, 11 [28] Hongji Yang, Xiufan Lu, and Yingying Zhu. Cross-view geo-localization with layer-to-layer transformer. In Ad-vances in Neural Information Processing Systems , pages 29009–29020, 2021. 2 [29] Dong Yuan, Frederic Maire, and Feras Dayoub. Cross-attention between satellite and ground views for enhanced fine-grained robot geo-localization. In 2024 IEEE/CVF Win-ter Conference on Applications of Computer Vision (WACV) ,pages 1238–1245, 2024. 1, 4 [30] Xiaohan Zhang, Xingyu Li, Waqas Sultani, Yi Zhou, and Safwan Wshah. Cross-view geo-localization via learning disentangled geometric layout correspondence. In Proceed-ings of the AAAI conference on artificial intelligence , pages 3480–3488, 2023. 1, 2 [31] Xiaohan Zhang, Xingyu Li, Waqas Sultani, Chen Chen, and Safwan Wshah. Geodtr+: toward generic cross-view geolo-calization via geometric disentanglement. IEEE Transac-tions on Pattern Analysis and Machine Intelligence , 2024. [32] Sijie Zhu, Taojiannan Yang, and Chen Chen. Vigor: Cross-view image geo-localization beyond one-to-one retrieval. In 
+
+Proceedings of the IEEE/CVF Conference on Computer Vi-sion and Pattern Recognition (CVPR) , pages 3640–3649, 2021. 1, 2, 3, 6 GeoFlow: Real-Time Fine-Grained Cross-View Geolocalization via Iterative Flow Prediction 
+
+# Supplementary Material 
+
+In this supplementary material, we provide additional technical and experimental details, organized as follows: • Implementation Details (Sec. A). We offer more details about our final model architecture, training routines, hy-perparameters and IRS parameters • Feasibility of 3-DoF Extension (Sec. B). We present the methodology and quantitative results demonstrating Ge-oFlow’s capability to generalize to the full 3-DoF pose estimation task with minimal overhead. • Backbone Capacity and Efficiency Trade-Off (Sec. C). We quantify the trade-off between model size and accu-racy by comparing two EfficientNet backbones, justifying our final design choice for real-time deployment. • Efficiency Analysis and Deployment Considerations 
+
+(Sec. D). We analyze GeoFlow’s computational effi-ciency, including its decoupled inference design, unified efficiency benchmark, and implications for real-world edge deployment. • Uncertainty and Convergence Dynamics (Sec. E). We offer visualizations showing how the IRS algorithm re-fines predictive uncertainty and builds confidence. • Additional Qualitative Results (Sec. F). We provide ex-tensive visual evidence of the learned regression field, showcasing refinement trajectories in both same-area and cross-area settings. • Discussion of Failure Cases (Sec. G). We provide an analysis of specific failure modes (e.g., highly vegetated areas) that contribute to the shift in the error distribution. • Societal Impact and Limitations (Sec. H). We provide the required discussion on the broader context, efficiency advantages, and practical limitations of our system. 
+
+# A. Implementation and Training Details 
+
+Implementation Details: GeoFlow is implemented in Py-Torch [13]. For both ψg and ψs, we use an EfficientNet-B0 [21] backbone, initialized with pre-trained ImageNet weights. The cross-attention module (Sec. 3.1 of the manuscript) is a standard multi-head attention layer with 4 heads. The coordinate projection layer embeds the 2D hy-pothesis into a 16-dimensional vector. This is concatenated with the 128-dimensional visual representation fvis , creat-ing a 144-dimensional input for the regression MLPs. 
+
+Training Details: Our model is trained end-to-end for 200 epochs by optimizing the combined NLL loss (Eq. 11) on a single NVIDIA H100 GPU. We employ the AdamW op-timizer [12] with a batch size of 80 and a weight decay of 
+
+1×10 −2. We use a differential learning rate: the pre-trained EfficientNet backbones are fine-tuned with a low learning rate of 1 × 10 −4, while the rest of the network is trained with a higher learning rate of 1 × 10 −3. For both VIGOR and KITTI, we resize the ground image Ig to 256 × 1024 
+
+and the aerial image Is to 512 × 512 . During training, the initial hypothesis q0 is formed by uniformly sampling a 2D translation (x0, y 0) from the valid spatial range. To ensure consistency across the model, all spatial inputs and outputs, including the initial hypothesis q0, the target location q1,are normalized to the continuous range [−1, 1] relative to the reference satellite map. During inference, all reported inference results and comparisons (accuracy and FPS) are measured on a single NVIDIA V100 GPU to ensure a fair comparison with existing literature. 
+
+Inference and IRS Parameters: During inference, we use our Iterative Refinement Sampling (IRS) algorithm (Sec. 3.4 in the main paper) to ensure a robust prediction. Unless otherwise stated, we adopt the following default pa-rameters for evaluation: we initialize N = 10 candidate poses (seeds) by sampling uniformly from the pose space. We then perform R = 5 iterative refinement rounds, where each of the N poses using Eq. 12. The final location esti-mate is computed as the mean of all N = 10 refined poses after the final round. 
+
+# B. Extending GeoFlow to Full 3-DoF 
+
+The primary objective of this feasibility study is to demonstrate the inherent modularity and generalizabil-ity of the GeoFlow architecture . We show its capabil-ity to seamlessly extend from 2-DoF planar localization (translation-only) to the full 3-DoF pose estimation task (translation g(x,y ) and orientation γ) with minimal architec-tural changes and negligible computational overhead. This extension validates that the learned cross-view spatial repre-sentations are rich enough to capture both metric displace-ment and angular alignment between ground and satellite views. 
+
+B.1. Context and Clarification of Main Results 
+
+For fair comparison with existing state-of-the-art methods, the primary 2-DoF evaluation in the main paper (Table 1) uses test data where images contain random orientation shifts ( ±10 ◦), following other methods [25, 27]. Moreover, the main 2-DoF model in the paper only estimates the trans-lation vector (x, y ), without the orientation prediction itself. In this supplementary study, we extend the model to explic-itly predict the vehicle’s orientation angle γ, demonstrating Table 7. 3-DoF Pose Estimation Comparison on KITTI. GeoFlow demonstrates competitive accuracy against state-of-the-art methods while maintaining a superior computational profile. Best results are in bold 
+
+Loc. (m) Orientation ( γ) Errors ( ◦) Inference 
+
+Dataset Method ↓Mean ↓Median ↓Mean ↓Median ↑R@1 ↑R@5 Speed (FPS) 
+
+Same Area 
+
+FG 2 [25] 0.75 0.52 1.28 0.74 61.17 % 95.65 % 4.20 GeoFlow (3-DoF) 1.03 0.69 2.51 1.93 27.30% 87.80% 29.49 Cross Area 
+
+FG 2 [25] 7.45 4.03 3.33 1.88 30.34 % 81.17 % 4.20 GeoFlow (3-DoF) 8.53 5.68 3.87 2.75 20.00% 72.30% 29.49 
+
+GeoFlow’s adaptability to the full 3-DoF pose estimation task. 
+
+B.2. Methodology: Architectural Extension 
+
+The extension from 2-DoF to 3-DoF is achieved by append-ing a lightweight orientation prediction head, vγ , to the de-coder, thus preserving the core GeoFlow framework. 
+
+B.2.1. Orientation Representation: Unit Circle 
+
+Rather than directly regressing the angle γ, we adopt a unit circle representation by predicting the pair (cos γ, sin γ).This design choice resolves the inherent periodicity and discontinuity problems associated with angular quantities (e.g., the wrap-around at ±10 ◦). Representing orientation as a point on the unit circle in R2 ensures continuity, pro-viding smooth and stable gradients for optimization. The ground-truth orientation γgt is converted to the unit vector representation 
+
+gγ =
+
+cos( γgt )sin( γgt )
+
+
+
+, where γgt = γgt · π
+
+180 . (13) 
+
+B.2.2. Orientation Head and Loss Function 
+
+The orientation prediction head vγ is a simple MLP ap-pended to the decoder: vγ : R144 → R64 → R2. The output prediction pγ = [pcos , p sin ] is ℓ2-normalized to 
+
+ˆpγ = pγ /∥pγ ∥2 to enforce consistency with the unit cir-cle manifold. We employ a cosine similarity loss Lγ to measure the angular distance ∆γ between the predicted ˆpγ and ground-truth gγ unit vectors: 
+
+Lγ = E
+
+
+
+1 − ˆpγ · gγ
+
+∥ˆpγ ∥ ∥ gγ ∥
+
+
+
+= E [1 − cos(∆ γ)] . (14) This loss is stable ( Lγ ∈ [0 , 2] ), differentiable, and correctly handles circular continuity. The final training objective for the 3-DoF model is simply the sum of the original transla-tion losses and the new orientation loss: 
+
+L3-DoF = Lr + Lθ + Lγ . (15) 
+
+B.3. Computational Overhead Analysis 
+
+The addition of the orientation head results in a minimal parameter increase, demonstrating high architectural mod-ularity. The base 2-DoF model contains 7.38 M parameters, while the extended 3-DoF model contains 7.39 M parame-ters, representing an overhead of only 0.13% increase. This minimal overhead is entirely contained within the small new orientation MLP. Furthermore, we measured inference time on a single V100 NVIDIA GPU and found no measurable impact on speed. The base and extended models both main-tain an inference rate around 29 .49 FPS, confirming that the dominant computation remains in the backbone feature ex-traction and cross-attention. Crucially, this demonstrates that the full 3-DoF capability is achieved with negligible computational overhead, reinforcing the core efficiency argument of the GeoFlow framework. 
+
+B.4. Quantitative Results and Interpretation 
+
+Quantitative results in Table 7 demonstrate that GeoFlow can reliably estimate full 3-DoF pose, achieving compara-ble accuracy against state-of-the-art method FG2 [25] while maintaining a significant advantage in computational effi-ciency. The 3-DoF model achieves comparable translation accuracy relative to FG2 [25]. For the Same Area, the me-dian localization error is 0.69 m, and for the Cross Area, it is 
+
+5.68 m. This confirms that adding the orientation prediction task does not compromise the learned translation features, highlighting the robustness of the GeoFlow architecture. Moreover, GeoFlow achieves a significant breakthrough in efficiency, processing data at 29.49 FPS. This establishes GeoFlow as the fastest full 3-DoF pose estimation model, operating 7.02 × faster than competitive methods like FG2 (4.20 FPS), a critical advantage for real-time deployment. Furthermore, the orientation prediction results validate the feasibility of extending GeoFlow to estimate heading. On the Same Area, the median orientation error is 1.93 ◦, with 
+
+87 .8% of predictions within 5◦ (R@5 success rate). On the Cross Area, the median error is 2.75 ◦, with a 72 .3% R@5 success rate. This suggests that GeoFlow can provide fair and practical orientation prediction for real-time appli-cations, especially given the significant speed advantage and minimal architectural overhead. These results con-firm GeoFlow’s suitability for autonomous navigation tasks requiring accurate and rapid position and head-ing estimation. 
+
+B.5. Key Insights and Conclusions 
+
+This feasibility study provides strong evidence for Ge-oFlow’s architectural flexibility. The model was seamlessly extended to a new task (3-DoF pose) with negligible com-putation overhead. This confirms that GeoFlow provides an efficient and generalizable framework, with learned cross-view representations rich enough to capture both metric dis-placement and angular alignment, extending to a complete pose 3-DoF estimation pipeline. 
+
+# C. Backbone Capacity and Efficiency Trade-Off 
+
+To address potential concerns regarding model capacity, we conducted an ablation comparing our default lightweight backbone (EfficientNet-B0 [21]) against a larger architec-ture (EfficientNet-B5 [21]). This study quantifies the fun-damental trade-off between absolute accuracy and compu-tational overhead. The results in Table 8 clearly demonstrate the substan-tial cost required for marginal performance gains. While the larger EfficientNet-B5 backbone is more accurate, pro-viding a slight improvement of 0.08 m in Median Error (Same Area) and 0.04 m gain in Median Error (Cross Area), this comes at a severe computational penalty: the model is 7.4x larger and incurs a 46 .7% reduction in real-time speed. Our GeoFlow is designed to be backbone agnostic and demonstrates clear generalizability, working seamlessly with larger architectures like EfficientNet-B5. However, as mentioned before, this flexibility comes with a signif-icant computational overhead ( 7.4x more parameters and 
+
+46 .7% slower inference speed), which is not justified by the resulting marginal accuracy gains. This is especially critical for real-world deployment scenarios, as devices like small drones, mobile robots, and embedded systems pos-sess severely limited memory and computational power, meaning they simply cannot run large-scale models like EfficientNet-B5. This decisively validates our initial de-sign choice: the lightweight EfficientNet-B0 provides the optimal balance between necessary accuracy and SOTA efficiency, ensuring the model remains viable for real-time deployment. 
+
+# D. Efficiency Analysis and Deployment Con-siderations 
+
+This section provides additional analysis of the computa-tional efficiency of GeoFlow and its implications for de-ployment in real-world localization systems. In practical navigation scenarios, inference speed and memory foot-print are critical constraints, particularly for embedded plat-forms such as drones, mobile robots, and edge vision de-vices. While improving fine-grained cross-view geolocal-ization accuracy is important, many real-world applications require models that can operate reliably under strict compu-tational and memory budgets. 
+
+D.1. Architectural Efficiency 
+
+GeoFlow is designed with a strong emphasis on computa-tional efficiency. Compared with existing FG-CVG meth-ods, our model maintains a significantly smaller computa-tional footprint in terms of both FLOPs and memory con-sumption. This lightweight design enables deployment on resource-constrained hardware while still maintaining com-petitive localization accuracy. 
+
+D.2. Efficient Iterative Refinement 
+
+The efficiency of the proposed Iterative Refinement Sam-pling (IRS) algorithm arises from a decoupled computa-tion strategy. The most computationally expensive oper-ations (feature extraction using the EfficientNet backbone and cross-attention-based visual fusion) are performed only once per image pair to obtain the shared visual context rep-resentation fvis .Subsequent refinement iterations operate exclusively on lightweight modules: • Coordinate encoding layers • Small regression MLPs used for flow prediction Since these components represent only a small fraction of the total model computation, multiple refinement itera-tions can be performed with minimal additional cost. This design allows GeoFlow to benefit from iterative hypothe-sis refinement without significantly increasing inference la-tency. 
+
+D.3. Unified Efficiency Benchmark 
+
+Table 9 compares GeoFlow with representative FG-CVG approaches in terms of computational cost, memory foot-print, and inference latency. GeoFlow achieves the lowest computational cost among the compared approaches, reducing FLOPs by 34% and memory consumption by 64% relative to HC-Net while also achieving lower inference latency. We achieved this sta-bility while still outperforming CCVPE in mean localiza-tion accuracy (8.42m vs 9.16m) and maintaining parity with HC-Net. We simply trade peak static precision in rare cases for the operational reliability required to keep the platform airborne. 
+
+D.4. Deployment Implications 
+
+The reduced computational and memory requirements make GeoFlow particularly suitable for edge deployment Table 8. Ablation Study: Accuracy vs. Computational Overhead. We report Mean and Median localization error (m) for both Same and Cross-Area splits on KITTI. 
+
+Efficiency Same Area (m) Cross Area (m) 
+
+Backbone ↓Params (M) ↓Mem (MiB) ↑Speed (FPS) ↓Mean ↓Median ↓Mean ↓Median EffNet-B0 (Default) 7.38 686 29.49 0.98 0.68 8.42 5.60 EffNet-B5 (Large) 54.81 1169 15.70 0.86 0.60 7.93 5.56                     
+
+> Table 9. Unified efficiency comparison across representative FG-CVG methods.
+> Model GFLOPs VRAM Inference Time FPS
+> CCVPE 31.18 4730 MiB 41.7 ms 24.0 HC-Net 11.56 1900 MiB 40.0 ms 25.0
+> GeoFlow 7.65 686 MiB 26.0 ms 29.5
+> Gain (vs HC-Net) -34% -64% -35% +18%
+
+scenarios. On embedded platforms such as micro-UAVs or mobile robots, available memory must be shared among multiple perception modules (e.g., obstacle detection, plan-ning, and control). Models with large memory footprints can therefore become impractical even if their theoretical accuracy is high. By requiring only 686 MiB of VRAM, GeoFlow leaves sufficient memory headroom for other concurrent percep-tion tasks while maintaining video-rate inference (26 ms per frame). Lower computational cost also reduces power consumption and thermal load, which are critical consider-ations for battery-powered platforms. Furthermore, lower inference latency directly improves closed-loop navigation stability. For example, for a plat-form moving at 15 m/s, reducing latency from 60 ms to 26 ms decreases the distance traveled between localization updates by nearly 60%, improving the responsiveness of downstream navigation systems. 
+
+# E. Additional Uncertainty Results 
+
+Figure 5 shows additional results of the uncertainty pro-duced by our GeoFlow and how our IRS refines the uncer-tainty during inference, enhancing accuracy and confidence. These visualizations further support our contribution to the IRS algorithm. The convergence of hypotheses from a broad initial distribution to a sharp, final cluster visually proves that IRS is an effective mechanism for building predictive confidence and enhancing overall localization robustness. 
+
+# F. Additional Qualitative Results 
+
+This section provides a deeper qualitative analysis of Ge-oFlow’s performance on the VIGOR dataset through two distinct visual scenarios. Figure 6 visualizes the refine-ment trajectories for the Same-Area setting, demonstrat-ing precise localization within known operational environ-ments. Figure 7, in contrast, showcases the robustness of the learned regression field in the highly challenging Cross-Area setting, highlighting the model’s generalization capa-bilities to unseen areas. The combined visual evidence across both known and unseen environments supports the effectiveness of the learned regression field, demon-strating the framework’s reliable precision and general-ization capabilities. 
+
+# G. Failure Cases Analysis 
+
+While GeoFlow generally demonstrates robust perfor-mance, understanding the characteristics of its error dis-tribution is essential. This section highlights the spe-cific failure modes responsible for the outliers in our error distribution. As illustrated in Figure 8, the major-ity of these errors are isolated to environments dominated by dense and visually ambiguous vegetation, particularly in the VIGOR Cross-Area setting. The homogeneous textures in the satellite image prevent GeoFlow from establishing the necessary feature variance to guide the hypotheses cor-rectly, leading to convergence at an incorrect, distant loca-tion. These catastrophic, isolated failures contribute to the error distribution (i.e., the shift between the Mean and Me-dian error). 
+
+# H. Societal Impact and Limitations 
+
+Societal Impact. The proposed GeoFlow advances the field of autonomous navigation by providing a robust, low-latency alternative to GPS. By enabling accurate local-ization at real-time speeds with minimal computational overhead, our framework is particularly valuable for resource-constrained platforms, such as small delivery drones or mobile search-and-rescue robots operating in GPS-noisy areas, such as metropolitan areas, GPS-denied environments, and mountainous areas. Further-more, the robustness gained from iteratively refining diverse poses allows downstream decision-making systems to re-ceive a reliable final location estimate, mitigating risks in critical scenarios like disaster response or urban navigation. 𝑅 = 1 𝑅 = 2 𝑅 = 3 𝑅 = 4Figure 5. Additional results for IRS refinement dynamics: Visualization of pose hypotheses distribution over refinement rounds R ∈{1, 2, 3, 4}, demonstrating convergence towards the ground truth and how hypothesis consensus reflects confidence. 
+
+Limitations. Our method achieves state-of-the-art effi-ciency, but practical deployment for the FG-CVG task still faces challenges inherent to the domain. Performance is sensitive to factors such as the difficulty in accurately pre-dicting location with limited field-of-view (LFOV) ground images, referring to those with a severely restricted viewing angle (unlike the relatively wide LFOV in the KITTI bench-mark), where local visual context is severely restricted. Figure 6. Additional Qualitative localization examples by GeoFlow on the Same-Area VIGOR dataset. The figure visualizes the trajectories generated by the learned regression field by GeoFlow: trajectories show how five randomly sampled initial pose hypotheses (seeds) are transformed to their respective predicted locations (colored circular markers), relative to the ground truth (red X). Figure 7. Additional Qualitative localization examples by GeoFlow on the Cross-Area VIGOR dataset. The figure visualizes the trajectories generated by the learned regression field by GeoFlow: trajectories show how five randomly sampled initial pose hypotheses (seeds) are transformed to their respective predicted locations (colored circular markers), relative to the ground truth (red X). Figure 8. Failure Cases: Localization difficulties in densely vegetated forest environments. The top row shows the ground images, and the bottom row visualizes the refinement trajectories and final converged hypotheses on the corresponding satellite images.

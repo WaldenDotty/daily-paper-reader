@@ -1,0 +1,732 @@
+Title: DC-Reg: Globally Optimal Point Cloud Registration via Tight Bounding with Difference of Convex Programming
+
+URL Source: https://arxiv.org/pdf/2603.25442v1
+
+Published Time: Fri, 27 Mar 2026 01:05:02 GMT
+
+Number of Pages: 14
+
+Markdown Content:
+# DC-Reg: Globally Optimal Point Cloud Registration via Tight Bounding with Di ff erence of Convex Programming 
+
+Wei Lian a, ∗, Fei Ma a, Hang Pan a, Zhesen Cui a, Wangmeng Zuo b
+
+> aDepartment of Computer Science, Changzhi University, Changzhi, Shanxi, China, 046011
+> bSchool of Computer Science and Technology, Harbin Institute of Technology, Harbin 150001, China
+
+Abstract 
+
+Achieving globally optimal point cloud registration under partial overlaps and large misalignments remains a fun-damental challenge. While simultaneous transformation ( θ) and correspondence ( P) estimation has the advantage of being robust to nonrigid deformation, its non-convex coupled objective often leads to local minima for heuristic methods and prohibitive convergence times for existing global solvers due to loose lower bounds. To address this, we propose DC-Reg, a robust globally optimal framework that significantly tightens the Branch-and-Bound (BnB) search. Our core innovation is the derivation of a holistic concave underestimator for the coupled transformation-assignment objective, grounded in the Di ff erence of Convex (DC) programming paradigm. Unlike prior works that rely on term-wise relaxations (e.g., McCormick envelopes) which neglect variable interplay, our holistic DC de-composition captures the joint structural interaction between θ and P. This formulation enables the computation of remarkably tight lower bounds via e ffi cient Linear Assignment Problems (LAP) evaluated at the vertices of the search boxes. We validate our framework on 2D similarity and 3D rigid registration, utilizing rotation-invariant features for the latter to achieve high e ffi ciency without sacrificing optimality. Experimental results on synthetic data and the 3DMatch benchmark demonstrate that DC-Reg achieves significantly faster convergence and superior robustness to extreme noise and outliers compared to state-of-the-art global techniques. 
+
+Keywords: branch-and-bound, partial overlap, bilinear monomial, point set registration, convex envelope, linear assignment 
+
+1. Introduction 
+
+Point cloud registration is a fundamental task in com-puter vision, yet achieving global optimality under signif-icant noise, outliers, and non-rigid deformations remains challenging. While local methods like ICP [1] and CPD [2] are e ffi cient, their reliance on initialization often leads to suboptimal local minima.        
+
+> ∗Corresponding author
+> Email addresses: lianwei3@gmail.com (Wei Lian ),
+> mafei@czc.edu.cn (Fei Ma), panhang@czc.edu.cn (Hang Pan),
+> cuizhesen@gmail.com (Zhesen Cui), cswmzuo@gmail.com
+> (Wangmeng Zuo)
+
+To ensure global convergence, Branch-and-Bound (BnB) frameworks [3] have been widely adopted. How-ever, correspondence-free solvers like Go-ICP [4] are largely restricted to rigid alignment. Better paradigm in-volves simultaneous estimation of pose ( θ) and correspon-dences ( P) [5], but its coupled non-convex objective is no-toriously di ffi cult to optimize. Current global solvers face a critical trade-o ff between two strategies: i) Variable Elimination: By eliminating the transfor-mation parameters θ, this approach reduces the problem to a concave minimization over the correspondence ma-trix P. While mathematically elegant, these methods are often restricted to subset-embedding scenarios [6, 7] or su ff er from high-dimensional branching within the pro- 
+
+> Preprint submitted to Elsevier March 27, 2026
+> arXiv:2603.25442v1 [cs.CV] 26 Mar 2026
+
+jected space of the correspondence variables, which scales poorly as problem size increases [8, 9]. ii) Term-wise Relaxation: These methods perform branching in the low-dimensional transformation space while retaining both θ and P within the optimization. However, they typically derive lower bounds by relaxing each objective term independently—for instance, via con-vex envelopes of trilinear [10] or bilinear monomials [11]. This "term-wise" independence neglects the global struc-tural interplay between variables, leading to loose lower bounds and prohibitive convergence times, especially in outlier-heavy regimes. In this paper, we follow the second strategy by branch-ing exclusively in the transformation space. To overcome the limitations of independent relaxations, we propose DC-Reg, a globally optimal framework that significantly tightens the BnB search. By leveraging the Di ff erence of Convex (DC) programming paradigm, we derive a holistic concave underestimator for the entire coupled objective. Our primary contributions are: i) Holistic DC Bounding: Instead of term-wise relax-ation, we linearize the convex component of a holistic DC decomposition. This generates demonstrably tighter bounds that capture the joint interaction of variables, sig-nificantly accelerating the pruning process. ii) Algorithmic Flexibility: Our framework seam-lessly handles 2D similarity and 3D registration (via rotation-invariant features [12]), maintaining high re-silience to non-rigid distortions where rigid-only solvers fail. iii) Superior Robustness: DC-Reg ensures reliable performance even at low inlier ratios, outperforming state-of-the-art global solvers on both synthetic bench-marks and the 3DMatch dataset. 
+
+2. Related Work 
+
+Point set registration is a mature field with diverse opti-mization strategies; for a comprehensive survey, see [13]. We categorize the most relevant works into local search, global optimization, and robust pre-filtering. 
+
+Local and Robust Optimization. Local methods such as ICP [14] and its variants [15] are the standards for fine alignment but remain sensitive to initialization. To en-hance robustness, Iteratively Reweighted Least-Squares (IRLS) and M-estimators have been rigorously analyzed regarding convergence on manifolds and global rates in outlier-robust estimation [16, 17, 18]. Alternatively, Graduated Non-Convexity (GNC) avoids local minima by solving increasingly non-convex surrogates, as seen in Fast Global Registration (FGR) [19] and robust spatial perception frameworks [20]. While e ffi cient, these meth-ods lack the mathematical guarantees of global optimality required for extreme misalignments. 
+
+BnB-based Global Methods. Branch-and-Bound (BnB) [3] provides a deterministic path to the global optimum. Early applications focused on 3D-3D reg-istration [21] and Euclidean problems [22], eventually leading to Go-ICP [23]. Recent innovations have ac-celerated BnB by leveraging rotation-invariant features [24], stereographic projections [25], and novel transfor-mation decompositions [26, 27]. However, many existing BnB solvers either decouple the problem into sequential searches or employ term-wise relaxations [10], which of-ten yield loose bounds and slow convergence in the pres-ence of heavy outliers. 
+
+Certifiable and Convex Relaxations. Semidefinite Programming (SDP) relaxations o ff er a "certifiably opti-mal" alternative by transforming non-convex registration into convex programs [28, 29]. Notably, Yang and Car-lone [30] achieved resilience against extreme outlier ra-tios through quaternion-based Wahba solvers. While the-oretically elegant, the tightness of these relaxations can be sensitive to noise models [31], and their computational cost often exceeds that of modern geometric solvers. 
+
+Outlier Removal and Consistency Graphs. To man-age computational complexity, pre-processing steps like Guaranteed Outlier Removal (GORE) [32] and Mixed-Integer Linear Programs (MILP) [33] are used to prune the search space. Modern robust solvers frequently lever-age consistency graphs to identify reliable correspon-dences. TEASER [34] and CLIPPER [35] utilize trun-cated least-squares and graph-theoretic data association, respectively. Further extensions like SC2-PCR ++ [36] and MAC [37] exploit high-order spatial compatibility and maximal cliques to find the largest consensus set of correspondences. 
+
+Deep Learning for Registration. Data-driven ap-proaches have evolved from direct regression models like DCP [38] to frameworks that integrate robust geometric encoding. Deep Global Registration (DGR) [39] employs 26D convolutional networks with weighted solvers, while recent works like Hunter [40] and Qin et al. [41] utilize Transformers and graph-based consistency to handle ex-treme outlier ratios and non-rigid distortions. 
+
+Our Approach. Unlike local M-estimators or de-coupled GNC solvers, DC-Reg provides a determinis-tic global guarantee via BnB. Distinguishing ourselves from previous BnB methods that rely on loose, term-wise relaxations [10, 11], we utilize a holistic DC program-ming paradigm. This allows us to capture the joint in-teraction between pose and correspondence, providing a tighter lower bound that significantly accelerates conver-gence compared to existing global registration techniques. 
+
+3. Methodology: The DC-Reg Framework 
+
+We propose DC-Reg, a globally optimal registration framework employing a Branch-and-Bound (BnB) strat-egy. The core innovation lies in deriving a tight lower bound for the coupled objective function via a holistic Di ff erence of Convex (DC) decomposition. 
+
+3.1. General Bounding Operation 
+
+Problem Formulation. We aim to minimize the cou-pled transformation-assignment objective: 
+
+E(P, θ) =
+
+X 
+
+> i,j
+
+pi j Ei j (θ) (1) where θ ∈ Rnθ denotes the transformation parameters con-strained within a search box M = [θ, θ], and P = {pi j } is the assignment matrix belonging to the feasible set P. The set P typically enforces partial permutation constraints, allowing for one-to-one matching while accommodating outliers. Minimizing the joint objective E(P, θ) over both vari-ables is equivalent to minimizing the marginalized objec-tive function E(θ): 
+
+E(θ) = min 
+
+> P∈P
+
+X 
+
+> i,j
+
+pi j Ei j (θ) (2) 
+
+DC Decomposition and Concave Underestimation. 
+
+To bound E(θ) over a sub-box M, we assume the pairwise cost Ei j (θ) admits a DC decomposition: 
+
+Ei j (θ) = Ei j 
+
+> cvx
+
+(θ) + Ei j 
+
+> cav
+
+(θ) (3)     
+
+> Figure 1: obain concave underestimator mi j of Ei j via DC decomposi-tion and linearization of the convex term.
+
+where Ei j  
+
+> cvx
+
+is convex and Ei j  
+
+> cav
+
+is concave. We construct a concave underestimator mi j (θ) of Ei j (θ) by linearizing the convex term Ei j  
+
+> cvx
+
+at a point θ0 ∈ M:
+
+mi j (θ) : = Ei j 
+
+> cvx
+
+(θ0) + ξ⊤(θ − θ0)
+
+| {z }
+
+> Linear Underestimator
+
++Ei j 
+
+> cav
+
+(θ) (4) where ξ is a subgradient of Ei j cvx (θ) at θ0. If Ei j cvx (θ) is dif-ferentiable, the gradient ∇Ei j cvx (θ0) is the unique subgra-dient ξ. Fig. 1 illustrates the process of constructing the concave underestimator mi j (θ) of Ei j (θ). 
+
+Lower Bound Calculation. We define an auxiliary function 
+
+z(θ) = min 
+
+> P∈P
+
+X 
+
+> i,j
+
+pi j mi j (θ) (5) Since mi j (θ) is concave, therefore, for any fixed P ≥ 0, the term P pi j mi j (θ) is concave. Consequently, z(θ) is the pointwise minimum of concave functions, implying z(θ)is itself concave, as illustrated in Fig. 2. A fundamental property of concave minimization over a polytope dictates that the minimum is attained at a vertex. Thus, a valid lower bound LB (M) for E(θ) over M is: 
+
+LB (M) : = min  
+
+> v∈V(M)
+
+z(v) (6) where V(M) is the set of the 2 nθ vertices of M. This re-duces the bounding step to solving a Linear Assignment Problem (LAP) at each vertex of the box M.3Figure 2: Pointwise minimum of concave functions is a concave func-tion. 
+
+3.2. Branch-and-Bound Algorithm 
+
+Our BnB procedure (Algorithm 1) iteratively partitions the search space. By using the tight lower bound derived in (6), we e ffi ciently prune sub-optimal regions. 
+
+4. Applications 
+
+We apply the DC-Reg framework to two specific regis-tration scenarios. 
+
+4.1. Case I: 2D Similarity Registration 
+
+For 2D similarity registration, we parameterize the transformation by θ ∈ R4, where [ θ3, θ 4]⊤ is the transla-tion vector and {θ1, θ 2} encode the scale s and rotation an-gle ϕ via θ1 = s cos ϕ and θ2 = s sin ϕ. Under this model, we adopt the coupled linear assignment-least squares ob-jective [5]: 
+
+E(P, θ) =
+
+X 
+
+> i,j
+
+pi j ∥Jiθ − y j∥2
+
+| {z }
+
+> Ei j (θ)
+
+(7) where Ei j (θ) represents the residual error under the spa-tial mapping for source point xi and target point y j. The Jacobian matrix is defined as Ji ≜
+
+"x1 
+
+> i
+
+−x2 
+
+> i
+
+1 0
+
+x2 
+
+> i
+
+x1 
+
+> i
+
+0 1
+
+#
+
+.Since Ei j (θ) is inherently convex in θ, its Di ff erence of Convex (DC) decomposition is straightforward, with the concave component being zero ( Ei j  
+
+> cav
+
+= 0). Consequently, a concave underestimator mi j (θ) can be obtained via the 
+
+Algorithm 1: A BnB algorithm for minimizing 
+
+E(θ) 
+
+> 1
+
+Initialization: Set tolerance error ϵ > 0 and initial box Minit = [θ, θ]. Let M1 = N1 = {M}. 
+
+> 2
+
+for k = 1, 2, . . . do  
+
+> 3
+
+Bounding: For each M ∈ Nk, compute lower bound LB (M) and solution θ(M) via Eq. (6).  
+
+> 4
+
+Update Upper Bound: Let 
+
+θk = arg min {E(θk−1), E(θ(M), M ∈ Nk}. 
+
+> 5
+
+Pruning: Delete all M ∈ Mk such that 
+
+LB (M) ≥ E(θk) − ϵ. Let Rk be the remaining collection of boxs.  
+
+> 6
+
+Termination: If Rk = ∅, terminate: θk is the global ϵ−minimum solution.  
+
+> 7
+
+Branching: Let 
+
+M∗ = arg min {LB (M)|M ∈ Rk}. Divide M∗
+
+into M1, M2 by bisecting the longest edge.  
+
+> 8
+
+Iteration: Let Nk+1 = {M1, M2} and 
+
+Mk+1 = (Rk\M) ∪ Nk+1. 
+
+> 9
+
+end 
+
+first-order Taylor expansion of Ei j (θ) at a reference point 
+
+θ0 ∈ M :
+
+mi j (θ) : = Ei j (θ0) + ∇Ei j (θ0)⊤(θ − θ0) (8) where the gradient is derived as ∇Ei j (θ0) = 2J⊤ 
+
+> i
+
+(Jiθ0 −y j). While this formulation is highly robust to outliers and noise, extending it directly to 3D a ffi ne cases ( θ ∈
+
+R12 ) is computationally prohibitive. The exponential growth of the search space—requiring 2 12 = 4096 ver-tex evaluations and a corresponding number of Lin-ear Assignment Problems (LAP) per Branch-and-Bound iteration—renders the global search intractable for such high-dimensional parameters. 
+
+4.2. Case II: E ffi cient 3D Registration via RIFs 
+
+To handle 3D registration e ffi ciently, we decouple the problem using Rotation-Invariant Features (RIFs) [12], specifically point norms, to solve for translation t ∈ R3
+
+first. 
+
+Objective. To achieve global optimality in 3D trans-lation estimation independently of rotation, we mini-mize the mismatch between the norms of translated 4source points and target points. The resulting coupled translation-assignment objective is formulated as: 
+
+E(P, t) =
+
+X 
+
+> i,j
+
+pi j 
+
+∥xi + t∥ − ∥ y j∥2
+
+| {z }
+
+> Ei j (t)
+
+(9) where Ei j (t) represents the residual error in the RIF (Rotation-Invariant Feature) space. 
+
+DC Decomposition. Expanding Ei j (t) reveals a natural DC structure: 
+
+Ei j 
+
+> cvx
+
+(t) = ∥xi + t∥2 (10a) 
+
+Ei j 
+
+> cav
+
+(t) = −2∥y j∥ · ∥ xi + t∥ + ∥y j∥2 (10b) 
+
+Bounding. We linearize Ei j 
+
+> cvx
+
+(t) at a point t0 ∈ M:
+
+Ei j 
+
+> cvx
+
+(t) ≥ Ei j 
+
+> cvx
+
+(t0) + ∇Ei j 
+
+> cvx
+
+(t0)⊤(t − t0) (11) with gradient ∇Ei j 
+
+> cvx
+
+(t0) = 2( xi +t0). Combining this linear underestimator with the concave term Ei j 
+
+> cav
+
+(t) yields the concave underestimator mi j (t): 
+
+mi j (t) : = Ei j 
+
+> cvx
+
+(t0) + 2( xi + t0)⊤(t − t0)
+
+| {z } 
+
+> Linear Underestimator of Ei j
+> cvx
+
++Ei j 
+
+> cav
+
+(t) (12) Calculating LB (M) now requires checking only 2 3 = 8vertices, which is computationally highly e ffi cient. 
+
+Rotation Recovery. Once the optimal translation t∗ is recovered, the remaining rotation R can be estimated us-ing any rotation search algorithm. In this work, we adopt the method from [11] for its robustness to non-rigid de-formations. 
+
+5. Implementation Details Linearization Point: We consistently set θ0 (or t0) as the geometric center of the current box M, which mini-mizes the maximum approximation error over the domain. 
+
+Constraints: We enforce one-to-one matching with a fixed inlier count np: P = {P ∈ { 0, 1}N×M | P1 ≤ 1, 1⊤P ≤
+
+1⊤, P pi j = np}. The resulting vertex evaluation in Eq. (6) is an np−cardinality Linear Assignment Problem (LAP), which we solve e ffi ciently using the Jonker-Volgenant al-gorithm. 
+
+6. Experiments and Results 
+
+We implement the proposed DC-Reg framework in Matlab R2023b. All experiments are conducted on a workstation equipped with a 6-core 3.2 GHz CPU. The registration performance is evaluated using the Root Mean Square Error (RMSE) between the transformed source inliers and their corresponding target inliers. 
+
+6.1. 2D Registration Experiments 
+
+We evaluate DC-Reg against state-of-the-art global solvers: RPM-HTB [10], RPM-PA [42], and RPM-CAV [9]. These methods share our ability to handle partial overlap and recover arbitrary similarity transformations via global optimization, making them suitable for direct comparison. 
+
+6.1.1. 2D Synthetic Data Analysis 
+
+Using "fish" and "character" shapes, we assess the pro-posed algorithm’s resilience to five distinct disturbances: (1) Deformation : Non-rigidly deforming the prototype to create the target set; (2) Noise : Adding positional noise to the prototype; (3) Mixed Outliers : Superim-posing random outliers on both source and target sets; (4) Separate Outliers : Adding outliers to di ff erent sides of the prototype to generate distinct sets; (5) Occlusion 
+
++ Outliers : Occluding the prototype and adding ran-dom outliers (fixed 0.5 ratio) to di ff erent sides of each set. All datasets include random rotations and scalings in the range [0 .5, 1.5]. We evaluate two DC-Reg variants: 
+
+np = 1/1 (ground truth inliers) and np = 1/2 (half of ground truth) to analyze parameter sensitivity. These tests are visually illustrated in Fig. 3, with alignment examples in Fig. 5. Statistical results are summarized in Fig. 4. 
+
+Robustness to Noise and Deformation. As shown in the top two rows of Fig. 4, DC-Reg demonstrates excep-tional stability in both deformation and noise tests. No-tably, competing methods such as RPM-HTB and RPM-PA exhibit a sharp increase in registration error once the positional noise level exceeds 0.03. In contrast, DC-Reg maintains a low-error trajectory even under substantial de-formation. Furthermore, even with an underestimated in-lier count ( np = 1/2), our method remains highly compet-itive, consistently outperforming the baseline methods. 
+
+Outlier Handling and Partial Overlap. In the "sep-arated outliers" and "mixed outliers" scenarios, DC-Reg 5maintains near-zero error while all baseline methods scale poorly with increasing outlier ratios. This showcases the strength of our holistic bounding strategy in suppressing the influence of non-corresponding points. In the most challenging "Occlusion + Outlier" test, DC-Reg remains the most stable solver. While reducing np to 1 /2 naturally increases the residual error, the performance still matches or exceeds the best baseline results even at high occlusion ratios ( > 0.2). 
+
+Computational E ffi ciency. The bottom row of Fig. 4 illustrates the average run times. In "Deformation" and "Noise" tests, DC-Reg maintains an e ffi cient and stable execution time (around 10 0 to 10 1 seconds). However, in high outlier or occlusion regimes, the run time ex-hibits an upward trend, reaching approximately 10 2 sec-onds. This is a predictable trade-o ff : as the objective land-scape becomes more cluttered with outliers, the Branch-and-Bound (BnB) search tree requires more iterations to prune the expanded feasible region and guarantee global optimality. 
+
+Bounding Tightness. The significant performance gap between DC-Reg and RPM-HTB—which relies on loose, term-wise relaxations—validates that our holistic con-cave underestimator more e ff ectively captures the cou-pling between transformation and correspondence vari-ables. This theoretical advantage ensures superior global convergence, even when inlier counts are inaccurately es-timated. 
+
+6.1.2. 2D Real-World Image Registration 
+
+Point sets extracted from natural images provide a re-alistic and demanding testbed for evaluating registration robustness, as they inherently contain noise and com-plex structural features. We generate point sets using the Canny edge detector on images sourced from the Caltech-256 [43] and VOC2007 [44] datasets. To rigorously eval-uate rotational invariance, each source point set is sub-jected to a 180 ◦ rotation prior to registration. The source sets are visualized in Fig. 6 (a), while the target sets and corresponding alignment results are presented in Fig. 6(b). As illustrated in Fig. 6 (b), DC-Reg achieves supe-rior performance in complex scenarios: i) Alignment Ac-curacy: DC-Reg achieves near-perfect overlap between transformed source (red) and target (blue) sets. This is most pronounced in the "bicycle" tests where contours are intricate. ii) Clutter and Occlusion: In cases with heavy background clutter (e.g., motorbikes) or significant occlu-sion (e.g., Ei ff el Tower), baselines frequently converge to incorrect local minima. DC-Reg successfully recov-ers the global optimum, demonstrating the e ff ectiveness of the proposed underestimator in capturing global spatial relationships. 
+
+6.2. 3D Registration 6.2.1. Evaluation on 3D Synthetic Data 
+
+We compare DC-Reg ( np = 1/1 and np = 1/2) against several state-of-the-art 3D registration methods, includ-ing RPM-HTB, GO-ICP, FRS, GORE, and TEASER ++ .Similar to the 2D experimental setup, we utilize "horse" and "dino" shapes to assess resilience to five disturbances: 
+
+i) Deformation, ii) Noise, iii) Mixed outliers, iv) Separate outliers, and v) Occlusion + Outlier tests. Fig. 7 provides a visual illustration of these tests, Fig. 8 presents statis-tical results, while Fig. 9 shows examples of registration results. 
+
+Resilience to Geometric Distortions. As shown in the first two columns of Fig. 8, DC-Reg ( np = 1/1) (red solid cross) consistently yields the lowest registration er-rors across all levels of deformation and noise. In contrast, TEASER ++ (black right-pointing triangle) and FRS (blue inverted triangle) exhibit increasing sensitivity and sharp error rises as the degree of disturbance intensifies. This performance degradation is primarily because these meth-ods are strictly designed for rigid transformations; signif-icant non-rigid deformations and high positional noise vi-olate their underlying assumptions of distance-invariance, whereas DC-Reg’s holistic bound better accommodates such geometric distortions. 
+
+Outlier and Occlusion Handling. The performance of DC-Reg varies depending on the outlier distribution: i) Mixed Outliers: DC-Reg ( np = 1/1) exhibits out-standing robustness in this scenario, maintaining the low-est error trajectory among all tested methods even as the outlier ratio reaches 0.5. This confirms that our global bound is highly e ff ective at capturing global structure amidst uniformly distributed noise. ii) Separated Out-liers: For clustered outliers, DC-Reg shows moderate performance. While it remains significantly more sta-ble than RPM-HTB, it is occasionally outperformed by GO-ICP or GORE in absolute precision. This suggests 6that concentrated outlier clusters pose a greater challenge to rotation-invariant feature (RIF) descriptors than scat-tered noise. iii) Occlusion + Outliers: Under signifi-cant occlusion, DC-Reg remains stable but is not the top performer. Its error rises more sharply at high occlusion ratios compared to robust solvers like TEASER ++ and GORE, which demonstrate superior resilience to large-scale missing data. 
+
+Parameter Sensitivity. Despite an underestimated in-lier count ( np = 1/2, red dashed square), DC-Reg demon-strates remarkable robustness. The np = 1/2 variant re-mains significantly more accurate than RPM-HTB and achieves performance comparable to or better than GO-ICP. This stability validates that our holistic concave un-derestimator e ff ectively captures the global spatial cou-pling, ensuring convergence even with poor cardinality estimates. 
+
+Computational E ffi ciency. The bottom row of Fig. 8 summarizes the average run times. While DC-Reg (red curves) is generally slower than TEASER ++ and GO-ICP, it exhibits remarkable computational stability. Specifically, GORE (blue star) and RPM-HTB (magenta star) maintain consistently high computational costs, whereas DC-Reg operates at a lower time complexity in "Deformation", "Noise", and "Mixed Outliers" scenarios. Notably, in the "Separated Outliers" and "Occlusion +
+
+Outlier" tests, the run time of FRS (blue inverted triangle) escalates sharply as disturbances intensify, eventually ex-ceeding that of DC-Reg in the later stages. This indicates that our method possesses superior resilience to extreme clutter. Furthermore, the e ffi ciency of DC-Reg is nearly identical for both np = 1/1 (solid cross) and np = 1/2(dashed square) variants, highlighting a consistent search complexity that is far less sensitive to inlier count priors than GO-ICP. 
+
+6.2.2. Evaluation on the 3DMatch Dataset 
+
+To evaluate the performance of our framework in real-world scenarios, we conduct experiments on the 3DMatch benchmark [45], which comprises 62 scenes from five distinct RGB-D reconstruction datasets (sun3d, 7-scenes, rgbd-scenes-v2, bundlefusion, and analysis-by-synthesis). Following the standard evaluation protocol, we utilize the specific scan pairs established by D3Feat [46] to to evaluate the performance of di ff erent methods. The registration errors relative to di ff erent overlap ratios are illustrated in Fig. 10. Examples of registration results are presented in Fig. 11. As illustrated in Fig. 10, DC-Reg (red solid line) demonstrates exceptional robustness and consistently maintains a low registration error. In the 7-scenes and analysis-by-synthesis datasets, DC-Reg maintains a nearly horizontal error trajectory near zero, indicating high stability regardless of the overlap ratio. Even in chal-lenging low-overlap regimes (overlap < 0.4), DC-Reg ef-fectively avoids local minima that trap other solvers like FRS or Go-ICP. 
+
+DC-Reg vs. RPM-HTB : Our method significantly out-performs RPM-HTB (magenta), across every test case. This confirms that our holistic concave underestimator provides a much tighter lower bound than the term-wise relaxations used in RPM-HTB, particularly when process-ing real-world scan noise. 
+
+DC-Reg vs. TEASER ++ and GORE : DC-Reg achieves performance parity with leading robust solvers like TEASER ++ (black) and GORE (blue). In the sun3d dataset, DC-Reg exhibits a competitive downward error trend as overlap increases, similar to TEASER ++ .
+
+7. Conclusion 
+
+In this paper, we presented DC-Reg, a globally op-timal framework for simultaneous pose and correspon-dence estimation. By reformulating the registration ob-jective through the lens of Di ff erence of Convex (DC) programming, we derived a holistic concave underesti-mator that captures the structural coupling between trans-formation and matching variables. This approach over-comes the fundamental limitations of previous Branch-and-Bound (BnB) solvers that rely on loose, term-wise relaxations. Our extensive evaluations on 2D and 3D synthetic datasets, as well as real-world benchmarks, demonstrate that DC-Reg achieves superior convergence and robust-ness. Notably, unlike existing high-performance solvers strictly designed for rigid transformations, our method maintains exceptional precision under significant non-rigid deformations and high positional noise by e ff ectively accommodating violations of distance-invariance. Furthermore, experimental results confirm that DC-Reg provides not only a significantly tighter lower bound 7for global convergence but also remarkable computational stability. While the integration of Rotation-Invariant Fea-tures (RIF) involves a trade-o ff in absolute speed com-pared to decoupled solvers, DC-Reg’s execution time re-mains highly consistent even with inaccurate inlier count estimates ( np), showcasing a predictable search complex-ity that is essential for reliable deployment in cluttered environments. Future work will explore the extension of this DC pro-gramming paradigm to more complex non-rigid deforma-tion models and the further acceleration of the BnB search using GPU-parallelized pruning strategies to mitigate the computational overhead in high-dimensional scenarios. 
+
+References 
+
+[1] P. J. Besl, N. D. McKay, A method for registration of 3-d shapes, IEEE Trans. Pattern Analysis and Machine Intelli-gence 14 (2) (1992) 239–256. [2] A. Myronenko, X. Song, Point set registration: Coherent point drift, IEEE Transactions on Pattern Analysis and Ma-chine Intelligence 32 (12) (2010) 2262–2275. [3] D. Scholz, Deterministic Global Optimization: Geomet-ric Branch-and-bound Methods and Their Applications, Springer Science & Business Media, 2011. [4] J. Yang, H. Li, D. Campbell, Y. Jia, Go-icp: A glob-ally optimal solution to 3d icp point-set registration, IEEE Transactions on Pattern Analysis and Machine Intelligence 38 (11) (2016) 2241–2254. doi:10.1109/TPAMI.2015. 2513405 .[5] H. Chui, A. Rangarajan, A new point matching algorithm for non-rigid registration, Computer Vision and Image Un-derstanding 89 (2-3) (2003) 114–141. [6] W. Lian, L. Zhang, Robust point matching revisited: a con-cave optimization approach, in: European conference on computer vision, 2012. [7] W. Lian, L. Zhang, M.-H. Yang, An e ffi cient globally optimal algorithm for asymmetric point matching, IEEE Transactions on Pattern Analysis and Machine Intelligence 39 (7) (2017) 1281–1293. [8] W. Lian, L. Zhang, Point matching in the presence of out-liers in both point sets: A concave optimization approach, in: IEEE Conference on Computer Vision and Pattern Recognition, 2014, pp. 352–359. [9] W. Lian, L. Zhang, A concave optimization algorithm for matching partially overlapping point sets, Pattern Recog-nition 103 (2020) 107322. doi:https://doi.org/10. 1016/j.patcog.2020.107322 .[10] W. Lian, W. Zuo, Hybrid trilinear and bilinear pro-gramming for aligning partially overlapping point sets, Neurocomputing 551 (2023) 126482. doi:https: //doi.org/10.1016/j.neucom.2023.126482 .URL https://www.sciencedirect.com/science/ article/pii/S0925231223006057 
+
+[11] W. Lian, F. Ma, Z. Cui, H. Pan, HBSP: a hybrid bilinear and semidefinite programming approach for aligning par-tially overlapping point clouds, Scientific Reports 14 (1) (2024) 30044. doi:10.1038/s41598-024-79744-x .URL https://doi.org/10.1038/ s41598-024-79744-x 
+
+[12] Y. Liu, C. Wang, Z. Song, M. Wang, E ffi cient global point cloud registration by matching rotation invariant fea-tures through translation search, in: V. Ferrari, M. Hebert, C. Sminchisescu, Y. Weiss (Eds.), Computer Vision – ECCV 2018, Springer International Publishing, Cham, 2018, pp. 460–474. [13] J. Ma, X. Jiang, A. Fan, J. Jiang, J. Yan, Image matching from handcrafted to deep features: A sur-vey, Int. J. Comput. Vision 129 (1) (2021) 23–79. 
+
+doi:10.1007/s11263-020-01359-2 .URL https://doi.org/10.1007/ s11263-020-01359-2 
+
+[14] P. J. Besl, N. D. McKay, A method for registration of 3D shapes, IEEE Transactions on Pattern Analysis and Ma-chine Intelligence 14 (2) (1992) 239–256. [15] S. Rusinkiewicz, M. Levoy, E ffi cient variants of the ICP algorithm, in: Proceedings of the International Conference on 3-D Digital Imaging and Modeling, 2001, pp. 145–152. [16] K. Aftab, R. Hartley, Convergence of iteratively re-weighted least squares to robust M-estimators, in: Pro-ceedings of the IEEE Winter Conference on Applications of Computer Vision, 2015, pp. 313–320. [17] L. Peng, R. Vidal, Block coordinate descent on smooth manifolds, arXiv preprint arXiv:2305.14744. [18] L. Peng, C. Kümmerle, R. Vidal, Global linear and local superlinear convergence of IRLS for nonsmooth robust re-gression, in: Advances in Neural Information Processing Systems (NeurIPS), 2022, pp. 26262–26275. 
+
+8[19] Q.-Y. Zhou, J. Park, V. Koltun, Fast global registration, in: Proceedings of the European Conference on Computer Vision (ECCV), 2016, pp. 766–782. [20] H. Yang, P. Antonante, V. Tzoumas, L. Carlone, Graduated non-convexity for robust spatial perception: From non-minimal solvers to global outlier rejection, IEEE Robotics and Automation Letters 5 (2) (2020) 1127–1134. [21] H. Li, R. Hartley, The 3D-3D registration problem revis-ited, in: Proceedings of the IEEE International Conference on Computer Vision, 2007, pp. 1–8. [22] C. Olsson, F. Kahl, M. Oskarsson, Branch-and-bound methods for Euclidean registration problems, IEEE Trans-actions on Pattern Analysis and Machine Intelligence 31 (5) (2008) 783–794. [23] J. Yang, H. Li, D. Campbell, Y. Jia, Go-ICP: A globally optimal solution to 3D ICP point-set registration, IEEE Transactions on Pattern Analysis and Machine Intelligence 38 (11) (2016) 2241–2254. [24] Y. Liu, C. Wang, Z. Song, M. Wang, E ffi cient global point cloud registration by matching rotation invariant features through translation search, in: European Conference on Computer Vision, 2018, pp. 445–461. [25] Á. Parra Bustos, T.-J. Chin, A. Eriksson, H. Li, D. Suter, Fast rotation search with stereographic projections for 3D registration, IEEE Transactions on Pattern Analysis and Machine Intelligence 38 (11) (2016) 2227–2240. [26] W. Chen, H. Li, Q. Nie, Y.-H. Liu, Deterministic point cloud registration via novel transformation decomposition, in: Proceedings of the IEEE /CVF Conference on Com-puter Vision and Pattern Recognition, 2022, pp. 17343– 17351. [27] C. Wang, Y. Liu, Y. Wang, X. Li, M. Wang, E ffi cient and outlier-robust simultaneous pose and correspondence de-termination by branch-and-bound and transformation de-composition, IEEE Transactions on Pattern Analysis and Machine Intelligence 44 (10) (2022) 6924–6938. [28] J. Briales, J. Gonzalez-Jimenez, Convex global 3D reg-istration with Lagrangian duality, in: Proceedings of the IEEE Conference on Computer Vision and Pattern Recog-nition (CVPR), 2017, pp. 4960–4969. [29] J. P. Iglesias, C. Olsson, F. Kahl, Global optimality for point set registration using semidefinite programming, in: Proceedings of the IEEE /CVF Conference on Computer Vision and Pattern Recognition (CVPR), 2020, pp. 8287– 8295. [30] H. Yang, L. Carlone, A quaternion-based certifiably opti-mal solution to the Wahba problem with outliers, in: Pro-ceedings of the IEEE /CVF International Conference on Computer Vision (ICCV), 2019, pp. 3105–3114. [31] L. Peng, M. Fazlyab, R. Vidal, Semidefinite relaxations of truncated least-squares in robust rotation search: Tight or not, in: European Conference on Computer Vision (ECCV), Springer, 2022, pp. 135–151. [32] Á. Parra Bustos, T.-J. Chin, Guaranteed outlier removal for point cloud registration with correspondences, IEEE Transactions on Pattern Analysis and Machine Intelligence 40 (12) (2018) 2868–2882. [33] T.-J. Chin, Y. H. Kee, A. Eriksson, F. Neumann, Guaran-teed outlier removal with mixed integer linear programs, in: Proceedings of the IEEE Conference on Computer Vi-sion and Pattern Recognition (CVPR), 2016, pp. 4458– 4466. [34] H. Yang, J. Shi, L. Carlone, TEASER: Fast and certifiable point cloud registration, IEEE Transactions on Robotics 37 (2) (2021) 314–333. [35] P. C. Lusk, K. Fathian, J. P. How, CLIPPER: Agraph-theoretic framework for robust data association, in: Proceedings of the IEEE International Conference on Robotics and Automation (ICRA), 2021, pp. 13828– 13834. [36] Z. Chen, K. Sun, F. Yang, L. Guo, W. Tao, SC2-PCR ++ :Rethinking the generation and selection for e ffi cient and robust point cloud registration, IEEE Transactions on Pat-tern Analysis and Machine Intelligence. [37] X. Zhang, J. Yang, S. Zhang, Y. Zhang, 3D registration with maximal cliques, in: Proceedings of the IEEE /CVF Conference on Computer Vision and Pattern Recognition (CVPR), 2023, pp. 17745–17754. [38] Y. Wang, J. M. Solomon, Deep closest point: Learning rep-resentations for point cloud registration, in: Proceedings of the IEEE /CVF International Conference on Computer Vi-sion (ICCV), 2019, pp. 3523–3532. [39] C. Choy, W. Dong, V. Koltun, Deep global registration, in: Proceedings of the IEEE /CVF Conference on Computer Vision and Pattern Recognition (CVPR), 2020, pp. 2514– 2523. 
+
+9[40] R. Yao, S. Du, W. Cui, A. Ye, F. Wen, H. Zhang, Z. Tian, Y. Gao, Hunter: Exploring high-order consistency for point cloud registration with severe outliers, IEEE Trans-actions on Pattern Analysis and Machine Intelligence. [41] Z. Qin, H. Yu, C. Wang, Y. Peng, K. Xu, Deep graph-based spatial consistency for robust non-rigid point cloud regis-tration, in: Proceedings of the IEEE /CVF Conference on Computer Vision and Pattern Recognition (CVPR), 2023, pp. 5394–5403. [42] W. Lian, W. Zuo, Z. Cui, A polyhedral annexation algorithm for aligning partially overlapping point sets, IEEE Access 9 (2021) 166750–166761. doi:10.1109/ ACCESS.2021.3135863 .[43] G. Gri ffi n, A. Holub, P. Perona, Caltech-256 object cate-gory dataset, technical report, California Inst. of Technol-ogy (2007). [44] M. Everingham, L. Van Gool, C. K. I. Williams, J. Winn, A. Zisserman, The PASCAL Visual Object Classes Challenge 2007 (VOC2007) Results, http: // www.pascal-network.org /challenges /VOC /voc2007 /workshop /index.html. [45] A. Zeng, S. Song, M. Nießner, M. Fisher, J. Xiao, T. Funkhouser, 3dmatch: Learning local geometric de-scriptors from rgb-d reconstructions, in: CVPR, 2017. [46] X. Bai, Z. Luo, L. Zhou, H. Fu, L. Quan, C.-L. Tai, D3feat: Joint learning of dense detection and description of 3d lo-cal features, arXiv:2003.03164 [cs.CV]. 
+
+10 Figure 3: a) to (c): source point sets and examples of target point sets in the deformation and noise tests, respectively. (d) to (i): Examples of source and target point sets in the mixed outliers and inliers test ((d), (e)), separate outliers and inliers test ((f), (g)), and occlusion +outlier test ((h), (i)), respectively. In all cases, source points are indicated by red circles, while scene points are represented by blue crosses. 0.01 0.02 0.03 0.04 0.05 
+
+0.1 0.2 0.3 
+
+> Mean Error
+
+fish (deformation) 
+
+0.01 0.02 0.03 0.04 0.05 
+
+0.1 0.2 0.3 
+
+> Mean Error
+
+character (deformation) 
+
+0.01 0.02 0.03 0.04 0.05 
+
+degree of deformation 
+
+10 0
+
+> Time (s)
+
+character (deformation) 0.01 0.02 0.03 0.04 0.05 
+
+0.1 0.2 0.3 
+
+fish (noise) 
+
+0.01 0.02 0.03 0.04 0.05 
+
+0.1 0.2 0.3 
+
+character (noise) 
+
+0.01 0.02 0.03 0.04 0.05 
+
+noise level 
+
+10 0
+
+character (noise) 0.2 0.4 0.6 0.8 
+
+0.1 0.2 0.3 0.4 0.5 
+
+fish (mixed outliers) 
+
+0.2 0.4 0.6 0.8 
+
+0.2 0.4 0.6 0.8 1
+
+character(mixed outliers) 
+
+0.2 0.4 0.6 0.8 
+
+outlier to data ratio 
+
+10 2
+
+character(mixed outliers) 0.2 0.4 0.6 0.8 
+
+0.2 0.4 0.6 0.8 
+
+fish (separated outliers) 
+
+0.2 0.4 0.6 0.8 
+
+0.2 0.4 0.6 
+
+character(separated outlier) 
+
+0.2 0.4 0.6 0.8 
+
+outlier to data ratio 
+
+10 1
+
+character(separated outlier) 0.1 0.2 0.3 
+
+0.1 0.2 0.3 0.4 0.5 
+
+fish (occlusion+outlier) 
+
+0.1 0.2 0.3 
+
+0.2 0.4 0.6 0.8 
+
+character(occlusion+outlier) 
+
+0.1 0.2 0.3 
+
+occlusion to data ratio 
+
+10 1
+
+character(occlusion+outlier) 
+
+Figure 4: Average registration errors (top 2 rows) and run times (bottom row) by various methods under various np values (ranging from 1 /2 to 1 /1of the ground truth value) over 100 random trials for 2D deformation, positional noise, mixed outliers and inliers, separate outliers and inliers, and occlusion +outlier tests. -1.5 -1 -0.5 0 0.5 1 1.5 2                                             
+
+> -2 -1.5 -1 -0.5 00.5 1
+> Fish
+> DC-Reg
+> -1.5 -1 -0.5 00.5 11.5 2
+> -2 -1.5 -1 -0.5 00.5 1RPM-HTB
+> -1.5 -1 -0.5 00.5 11.5
+> -1 -0.5 00.5 1RPM-PA
+> -1.5 -1 -0.5 00.5 1
+> -1 -0.5 00.5 1RPM-CAV
+> -2 -1 0123
+> -2 -1.5 -1 -0.5 00.5 1
+> Character
+> -2 -1 012345
+> -2 -1 01234
+> -1.5 -1 -0.5 00.5 11.5 2
+> -3 -2 -1 01
+> -1.5 -1 -0.5 00.5 1
+> -2 -1.5 -1 -0.5 00.5 1
+
+Figure 5: Example of registration results from di ff erent methods in the occlusion +outlier test, with np chosen as ground truth for all methods. 
+
+11 (a) 
+
+(b) 
+
+Figure 6: (a) Source images with source point sets superimposed. (b) For each category: target images with target point sets superimposed, registration results by DC-Reg, RPM-HTB [10], RPM-PA [42] and RPM-CAV [9] using similarity transformation. The np value for each method is chosen as 0 .9 the minimum of the cardinalities of two point sets. 12 Figure 7: (a) to (c): Source point sets and examples of target point sets in the deformation and noise tests, respectively. (d) to (i): Examples of source and target point sets in the mixed outliers and inliers test ((d), (e)), separate outliers and inliers test ((f), (g)), and occlusion +outlier test ((h), (i)), respectively. In all cases, source points are indicated by red circles, while target points are represented by blue crosses. 0.01 0.02 0.03 0.04 0.05 
+
+0.1 0.2 0.3 0.4 
+
+> Mean Error
+
+horse (deformation) 
+
+0.01 0.02 0.03 0.04 0.05 
+
+0.1 0.2 0.3 
+
+> Mean Error
+
+dino (deformation) 
+
+0.01 0.02 0.03 0.04 0.05 
+
+degree of deformation 
+
+10 0
+
+> Time (s)
+
+dino (deformation) 0.01 0.02 0.03 0.04 0.05 
+
+0.1 0.2 0.3 
+
+horse (noise) 
+
+0.01 0.02 0.03 0.04 0.05 
+
+0.1 0.2 0.3 
+
+dino (noise) 
+
+0.01 0.02 0.03 0.04 0.05 
+
+noise level 
+
+10 0
+
+dino (noise) 0.1 0.2 0.3 0.4 
+
+0.1 0.15 0.2 0.25 0.3 
+
+horse(mixed outliers) 
+
+0.1 0.2 0.3 0.4 
+
+0.1 0.15 0.2 0.25 
+
+dino(mixed outliers) 
+
+0.1 0.2 0.3 0.4 
+
+outlier to data ratio 
+
+10 0
+
+dino(mixed outliers) 0.1 0.2 0.3 0.4 
+
+0.1 0.15 0.2 0.25 0.3 
+
+horse(separated outliers) 
+
+0.1 0.2 0.3 0.4 
+
+0.1 0.15 0.2 0.25 0.3 
+
+dino(separated outliers) 
+
+0.1 0.2 0.3 0.4 
+
+outlier to data ratio 
+
+10 0
+
+dino(separated outliers) 0.1 0.2 0.3 0.4 
+
+0.1 0.2 0.3 
+
+horse(occlusion+outlier) 
+
+0.1 0.2 0.3 0.4 
+
+0.1 0.15 0.2 0.25 0.3 
+
+dino(occlusion+outlier) 
+
+0.1 0.2 0.3 0.4 
+
+occlusion to data ratio 
+
+10 0
+
+dino(occlusion+outlier) 
+
+Figure 8: Average registration errors (top 2 rows) and run times (bottom row) of various methods under varying np values (1 /2 or 1 /1 of the ground truth value) across 100 random trials for 3D deformation, positional noise, mixed outliers and inliers, separate outliers and inliers, and occlusion +outlier tests. -0.5 0 0.5                             
+
+> -0.8 -0.6 -0.4 -0.2 00.2 0.4 0.6
+> horse
+> cav (1/1)
+> -0.5 00.5
+> -0.8 -0.6 -0.4 -0.2 00.2 0.4 0.6
+> RPM-HTB(1/1)
+> -0.5 00.5
+> -0.8 -0.6 -0.4 -0.2 00.2 0.4 0.6
+> Go-ICP(1/1)
+> -1 -0.5 00.5
+> -0.5 00.5
+> FRS
+> -0.5 00.5 1
+> -1 -0.5 00.5
+> GORE
+> -0.5 00.5 1
+> -0.5 00.5
+> TEASER++
+> -1 -0.5 00.5 1
+> -1 -0.5 00.5
+> dino
+> -0.5 00.5
+> -0.8 -0.6 -0.4 -0.2 00.2 0.4 0.6
+> -0.5 00.5
+> -0.8 -0.6 -0.4 -0.2 00.2 0.4 0.6
+> -0.5 00.5
+> -0.8 -0.6 -0.4 -0.2 00.2 0.4 0.6 0.8
+> -0.5 00.5 1
+> -0.8 -0.6 -0.4 -0.2 00.2 0.4 0.6 0.8
+> -0.5 00.5
+> -0.8 -0.6 -0.4 -0.2 00.2 0.4 0.6
+
+Figure 9: Examples of registration results from di ff erent methods in the separate outliers and inliers test, where the np values of RPM-HTB and Go-ICP are both chosen as the ground truth. 
+
+13 0.4 0.6 0.8 
+
+Overlap 
+
+00.1 0.2 
+
+> Error
+
+sun3d 
+
+0.4 0.6 0.8 
+
+Overlap 
+
+00.2 
+
+7-scenes 
+
+0.4 0.6 0.8 
+
+Overlap 
+
+00.1 0.2 
+
+rgbd-scenes-v2 
+
+0.4 0.6 0.8 
+
+Overlap 
+
+00.1 0.2 
+
+bundlefusion 
+
+0.4 0.6 0.8 
+
+Overlap 
+
+00.5 
+
+analysis-by-synthesis      
+
+> DC-Reg (1/1) RPM-HTB (1/1) Go-ICP (1/1) FRS GORE TEASER++
+
+Figure 10: Average registration errors from various methods across five RGB-D reconstruction datasets. 
+
+Figure 11: Examples of registration results generated by di ff erent methods on the five RGB-D reconstruction datasets, arranged from top to bottom: sun3d, 7-scenes, rgbd-scenes-v2 (repeated), and analysis-by-synthesis. 
+
+14

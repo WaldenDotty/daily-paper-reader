@@ -1,0 +1,26795 @@
+Title: Beyond Matching to Tiles: Bridging Unaligned Aerial and Satellite Views for Vision-Only UAV Navigation
+
+URL Source: https://arxiv.org/pdf/2603.22153v2
+
+Published Time: Wed, 25 Mar 2026 01:12:01 GMT
+
+Number of Pages: 21
+
+Markdown Content:
+Beyond Matching to Tiles: Bridging Unaligned Aerial and Satellite Views for Vision-Only UAV Navigation 
+
+Kejia Liu 1∗, Haoyang Zhou 1∗, Ruoyu Xu 1∗, Peicheng Wang 1*, Mingli Song 1,2,3, Haofei Zhang 2,3 †
+
+> 1
+
+College of Computer Science and Technology, Zhejiang University, 
+
+> 2
+
+State Key Laboratory of Blockchain and Data Security, Zhejiang University, 
+
+> 3
+
+Hangzhou High-Tech Zone (Binjiang) Institute of Blockchain and Data Security 
+
+Abstract 
+
+Recent advances in cross-view geo-localization (CVGL) methods have shown strong potential for supporting un-manned aerial vehicle (UAV) navigation in GNSS-denied environments. However, existing work predominantly fo-cuses on matching UAV views to onboard satellite tiles, which introduces an inherent trade-off between accuracy and storage overhead, and overlooks the importance of the UAV’s heading during navigation. Moreover, the substan-tial discrepancies and varying overlaps in cross-view sce-narios have been insufficiently considered, limiting their generalization to real-world scenarios. In this paper, we present Bearing-UAV, a purely vision-driven cross-view navigation method that jointly predicts UAV absolute lo-cation and heading from neighboring features, enabling accurate, lightweight, and robust navigation in the wild. Our method leverages global and local structural features and explicitly encodes relative spatial relationships, mak-ing it robust to cross-view variations, misalignment, and feature-sparse conditions. We also present Bearing-UAV-90K, a multi-city benchmark for evaluating cross-view local-ization and navigation. Extensive experiments show encour-aging results that Bearing-UAV yields lower localization errors than previous matching/retrieval paradigms across diverse terrains. Our code is publicly available at https: //github.com/liukejia121/bearinguav .
+
+1. Introduction 
+
+Recent years have witnessed the widespread deployment of unmanned aerial vehicles (UAVs) across critical domains such as the low-altitude economy [ 17 , 36 ], emergency re-sponse [ 27 ], and industrial applications [ 24 ]. However, cur-rent UAV localization and navigation systems, which rely heavily on wireless signals and manual operation, remain 
+
+> *These authors contributed equally.
+> †Corresponding author, email: haofeizhang@zju.edu.cn
+
+Figure 1. Bearing-UAV overview. Given a UAV-view patch (UVP) and four adjacent remote-sensing tile (RST) features with relative coordinates ( C), the model jointly regresses position and heading. 
+
+vulnerable to interference and face persistent challenges in ensuring both safety and autonomy [12, 20, 21, 55, 56]. Cross-view geo-localization (CVGL), a set of purely vision-based UAV navigation approaches [ 3, 11 , 19 , 22 ], has been proposed to address these challenges by match-ing UAV-captured views with geo-referenced satellite tiles encoded by deep models [28, 46, 52]. Current methods following the matching-to-tile (M2T) paradigm fall into two major classes. One class of methods predicts the UAV’s position by matching UAV views to on-board satellite tiles [ 13 , 22 , 23 , 26 , 49 ]. These approaches repeatedly encode tiles, leading to significant computational overhead and carrying complete satellite imagery makes stor-age scale quadratically. The other class of approaches pre-encodes satellite tiles into lightweight and discretized feature vectors using deep models [ 6 , 18 , 52 , 55 , 56 ]. While con-ducting similarity search to retrieve current location greatly improves storage and computational efficiency, the localiza-tion accuracy is constrained by the grid density. 
+
+> arXiv:2603.22153v2 [cs.CV] 24 Mar 2026
+
+However, supporting UAV navigation requires not only accurate localization but also reliable heading information, which is largely overlooked by current methods, limiting their ability to drive end-to-end navigation. Recently, An-gleRobust [ 44 ] directly predicts azimuth from a sequence of UAV views, but its applicability is confined to a single, densely sampled corridor. More importantly, existing navi-gation models are typically trained on datasets that overlook the inherent differences and misalignment between UAV views and satellite tiles, making them difficult to generalize well to real-world scenarios. Therefore, bridging unaligned aerial-satellite views for vision-only UAV navigation beyond tile matching remains an open problem. Towards this end, we propose a novel cross-view position-and-heading regression network for learning visual bearing, termed Bearing-UAV , along with a dataset Bearing-UAV-90K, containing 90k cross-view image pairs for training and evaluation. The proposed Bearing-UAV jointly estimates the precise coordinates beyond M2T resolution and the heading angle under cross-view conditions, while remaining robust to variations in misalignment, weather and M2T density, thereby supporting UAV autonomous navigation in the wild. As shown in Fig. 1, Bearing-UAV takes features of four adjacent remote-sensing tiles (RSTs, i.e ., satellite-view tiles) and one UAV-view patch (UVP) as inputs, and directly re-gresses absolute position and heading angle. Instead of M2T paradigm, which ties localization accuracy to tile density, Bearing-UAV exploits surrounding information to regress UAV position beyond the M2T’s resolution. Furthermore, to bridge the aerial-satellite view gap, we leverage relative positional cues from adjacent tiles to provide localization guidance and employ cross-attention to focus on overlapping regions, hence improving the accuracy of both position and heading regression under misalignment and feature sparsity. Extensive experiments on our proposed Bearing-UAV-90K demonstrate that: (1) the localization accuracy of Bearing-UAV surpasses existing matching/retrieval paradigms by a large margin; (2) thanks to the heading branch, Bearing-UAV enables end-to-end navigation with a high success rate under the cross aerial-satellite view condition; (3) Bearing-UAV remains robust to various weather effects. Our main contributions are summarized as: • We propose a novel geo-localization paradigm beyond M2T, achieving higher localization accuracy. • We introduce a lightweight, multi-task model which en-ables efficient localization and heading prediction, thereby supporting reliable long-range navigation. • To address viewpoint-induced parallax, misalignment, and feature sparsity in UAV-satellite cross-view settings, we construct Bearing-UAV-90K dataset to ensure that our paradigm can be applied to more realistic scenarios. 
+
+2. Related Work 
+
+As a core component of remote-sensing-based vision naviga-tion, CVGL aims to solve geo-localization between UAV’s low-altitude oblique imagery and high-altitude, orthorecti-fied satellite references. A key challenge is the significant viewpoint-induced parallax at the same geographic location due to different viewpoints. 
+
+2.1. Cross-View Geo-Localization 
+
+By enabling cross-view matching between ground-view and satellite-view (G-S) images [ 16 , 21 , 30 , 52 , 56 ], CVGL has been a very important alternative for localization in GNSS-denied environments [ 11 ]. Inspired by advances in G-S cross-view localization, researchers are introducing CVGL for UAV vision-based localization [ 3 ]. University-1652 [ 52 ]constructed and publicly released the first cross-view dataset for UAV and satellite (U-S) and successfully localized build-ings from the UAV perspective via feature retrieval, which in turn motivated more UAV CVGL datasets [ 6, 15 , 55 ] and re-lated algorithms [ 2 , 4, 48 ]. Further, several works [ 6 , 18 , 55 ]adopt discrete but spatially contiguous satellite tiles to better approximate real scenes. However, this shift exacerbates spatial misalignment and feature sparsity, ultimately degrad-ing retrieval/matching accuracy. To address these issues, some approaches improve feature discrimination via feature segmentation [ 5 ], multi-scale feature [ 15 ], or local-feature aggregation [ 10 , 51 ]. Others introduce attention mecha-nisms [ 2, 4, 48 ] or new models and schemes [ 18 , 48 ]. At a broader level, CurBench [ 54 ] and CurML [ 53 ] provide the first benchmark and library for curriculum learning. It still remains an open question of robust cross-view localiza-tion under misalignment and low feature density, especially with varying IoUs. To this end, we build an end-to-end net-work that fuses cross-view features via skip connections and directly regresses UAV position. 
+
+2.2. Purely Vision-based Orientation Awareness 
+
+Most existing CVGL methods focus solely on localization in urban scenes and fail to suppress UAV rotational drift. Be-yond cross-view appearance gaps and misalignment, heading estimation is further constrained by visual-geometric ambi-guities, rotational symmetries, and the lack of an absolute ori-entation reference. Consequently, many works pursue purely vision-based heading perception [ 19 , 34 , 41 , 43 ]. Among them, Wang et al. [32 ] first achieve G-S cross-view local-ization and orientation of ground-view images by retriev-ing the geographic location and then estimating orientation. Nevertheless, purely vision-based UAV orientation remains underexplored [ 47 ]. Although [ 1, 31 ] report high accuracy, their datasets are idealized and they rely on visual odometry for on-board camera poses. Existing purely vision-based approaches are predominantly two-stage: localize first, then orient. For instance, methods estimate heading via mutual in-Figure 2. Bearing-UAV in training mode. Given four adjacent RSTs with their relative coordinates ( C) and one UVP within the same remote-sensing block (RSB), Bearing-UAV predicts the UAV’s absolute position and heading angle. Two GLUF submodules with shared parameters extract UVP/RST features. RCE encodes the relative coordinate of each RST. CA captures overlap-aware cross-view correspondences via cross-attention between UVP and RST features. PSG estimates a weighted position vector by aggregating UVP-RSTs patch similarities. We then fuse these output features via a residual-style connection, and apply two independent heads to jointly regress position and heading. 
+
+formation [ 38 ], motion-matrix rotation, or feature-geometry cues [ 25 , 38 ]; multi-rotation matching is also common [ 45 ]. These methods require the localization result as a global pose anchor, thereby propagating localization errors to orientation. [ 39 ] uses single-stage pure vision pose estimation but has large heading errors in cross-view scenarios. To address this challenge, we augment our model with parallel regression heads that use four adjacent satellite tiles to simultaneously estimate the UAV’s position and heading. Moreover, PnP-based methods estimate 6-DoF poses via geometric solvers [ 8, 29 , 50 ], while sensor-fusion methods use onboard sensors [ 1 , 14 ]. We focus on vision-only U-S cross-view localization rather than G-S setting [ 33 , 35 , 40 ]. 
+
+3. Method 
+
+We present Bearing-UAV and its navigation scheme Bearing-Naver in this section. Acronyms are listed in Suppl. A.1. 
+
+3.1. Cross-View Position-Heading Regression 
+
+As shown in Fig. 2, the overall procedure of Bearing-UAV includes a feature extraction module that extracts compre-hensive cross-domain features and positional cues, a fusion module that captures cross-domain correspondences, and dual regression heads that predict position and heading. We group four adjacent RSTs into a remote-sensing block (RSB). Leveraging four RSTs per UVP and modeling their interac-tions via cross-attention and similarity improves robustness to misalignment and sparse-feature conditions. 
+
+3.1.1. Feature Extraction Module 
+
+Building on the preceding discussion of cross-view localiza-tion, we target robustness under cross-view misalignment and varying IoUs. As shown in Fig. 3, we propose a Global-Local Unity Feature (GLUF) submodule that jointly encodes global contextual similarity and clustered local segments, enabling correspondences even when cross-domain images           
+
+> Figure 3. Global-Local Unity Feature (GLUF). A VGG-16 extracts feature map Ffrom input image I, a Non-local Block produces semi-global feature map Xcomposed of local descriptors xp. Two clustering branches compute cluster weights and similarities with learnable centers akto obtain feature X∗
+> k,p , which are aggregated across spatial sites and concatenated to form the GLUF vector u.
+
+overlap only partially. Moreover, the Relative Coordinate En-coder (RCE) encodes the relative coordinates of four RSTs into embeddings for the corresponding GLUF vectors. 
+
+Global-Local Unity Feature (GLUF). To jointly exploit global and local cues for accurate UAV localization, we first extract a feature map using a backbone network ( e.g ., VGG-16 [ 37 ]), a non-local block [ 42 ] is then applied to cap-ture long-range dependencies and enhance local responses. Following SGMNet [ 10 ], a clustering scheme generates mul-tiple semi-global descriptors, which are aggregated into a unified representation termed the GLUF vector. The GLUF-enhanced features provide global similarity cues for inter-tile matching while maintaining ordered, position-aware local feature segments for cross-attention. Such patch clustering module ( e.g. , SGMNet) can be replaced by other suitable feature extractors with only minor performance degradation. Let F ∈ RH×W ×D = backbone( I) be the encoded feature of the UVP or RST, the semi-global feature map is obtained by a non-local block: 
+
+X = NLConv( F ) ∈ RH×W ×D . (1) Let Ω = {(i, j ) : i = 1 , . . . , H, j = 1 , . . . , W } be the spatial sites ( i.e ., index set) for X. For position p ∈ Ω, let 
+
+xp ∈ RD be the site-level local descriptor , and let {ak}Kk=1 
+
+be K learnable cluster centers of site-level local features. Then, the cluster weight wp determines the assignment of 
+
+xp to the cluster centers ak as follows: 
+
+wp = softmax 
+
+a⊤ 
+
+> k
+
+xp − ∥ ak∥2
+
+Kk=1 
+
+
+
+. (2) The similarity score ρk,p = ReLU( a⊤ 
+
+> k
+
+xp) measures the affinity between xp and the center vector ak. The clustered feature X∗ ∈ RK×D×HW can be calculated by: 
+
+X∗ 
+
+> k,p
+
+= wk,p ρk,p xp. (3) Aggregating X∗ 
+
+> k,p
+
+∈ RD over space Ω yields the cluster-level local features dk ∈ RD and its normalized vector: 
+
+dk = X 
+
+> p∈Ω
+
+X∗
+
+> k,p
+
+, ˜dk = dk
+
+∥dk∥2
+
+. (4) Concatenating K normalized cluster descriptors and re-normalizing gives the GLUF vector u:
+
+u := norm 
+
+
+
+[ ˜d1 : ˜dK ]
+
+
+
+∈ RKD . (5) 
+
+Relative Coordinate Encoder (RCE). Bearing-UAV re-gresses the UVP’s position and heading from four adjacent RSTs. RCE is a lightweight multilayer perceptron (MLP) of depth L, the dimension of each layer is [d1, . . . , d L] with 
+
+d0 = 2 and dL = KD . Let C = {cj }4
+
+> j=1
+
+, cj ∈ R2, denote the 2D relative coordinates of the four RSTs w.r.t. the RSB center, where y(0)  
+
+> j
+
+= cj and σ(·) = ReLU( ·). The layer ℓ
+
+of RCE computes: 
+
+y(ℓ) 
+
+> j
+
+:= σ
+
+
+
+W RCE ℓ y(ℓ−1)  
+
+> j
+
++ bRCE ℓ
+
+
+
+, (6) where W RCE ℓ ∈ RDℓ×Dℓ−1 , bRCE ℓ ∈ RDℓ . The coordinate embedding is the output from the final layer ej = y(L) 
+
+> j
+
+.
+
+3.1.2. Cross-View Feature Fusion Module 
+
+The feature fusion module first injects tile positional cues for fusion using a ViT-style positional embedding [ 9], it then extracts cross-view feature via Cross-Attention (CA) sub-module and estimates a similarity-weighted guidance coor-dinate using the Patch Similarity-Guided (PSG) submodule. Finally, the cross-correlation feature, UVP descriptor, and guidance coordinate are concatenated to construct the fused representation for prediction. Let the GLUF vector of UVP be u ∈ RKD , the GLUF vectors {tj ∈ RKD }4 
+
+> j=1
+
+of the four RSTs form a tensor B ∈
+
+R2×2×KD , and the corresponding four relative-coordinate embeddings {ej }4 
+
+> j=1
+
+form a tensor E ∈ R2×2×KD . Since the GLUF vector is already normalized, we simply define 
+
+˜B := B + E as the position-injected RST features, which expose relative layout to the fusion stage and helps the net-work learn position-angle relationships under supervision. 
+
+Patch Similarity-Guided (PSG). Under our regression set-ting, the UVP mostly overlaps four adjacent RSTs. We leverage the U-S cross-view cosine similarity between the UVP and RSTs to compute a weighted guidance coordinate, providing a strong prior for position regression by emphasiz-ing RST regions corresponding to the UVP location. Reshape ˜B into {˜bj ∈ RKD }4
+
+> j=1
+
+, then we compute co-sine similarities across the four neighbors: 
+
+α = softmax 
+
+h
+
+cos( u, ˜bj )
+
+i4
+
+> j=1
+
+
+
+∈ R4. (7) Then, by taking a weighted sum of the RSTs’ relative coor-dinates cj , we obtain the similarity-guided coordinate: 
+
+q := X4 
+
+> j=1
+
+αj cj ∈ R2. (8) 
+
+Cross-Attention (CA). As the UVP generally overlaps the four RSTs to different degrees, we apply lightweight cross-attention submodule to extract overlap-aware associations, enabling the model to learn essential cross-view correspon-dences between the UVP and RSTs under misalignment and sparse-feature conditions. Thus, the resulting cross-view features support the joint regression of position and heading. Let Q = W Qu ∈ Rd, K = [ W K ˜b1, . . . , W K ˜b4] ∈
+
+R4×d, and V = [W V ˜b1, . . . , W V ˜b4] ∈ R4×d be the queries from UVP and keys/values from four adjacent RSTs, accordingly. The scaled dot-product attention computes the cross-view feature: 
+
+f := softmax 
+
+ QK ⊤
+
+√d
+
+
+
+V ∈ RKD . (9) The fused feature ϕ is the concatenated vector from the UVP descriptor u, the cross-attended feature f , and the similarity-guided coordinate q:
+
+ϕ := concat( u, f , q) ∈ RKD +KD +2 . (10) 
+
+3.1.3. Position-Heading Regression Module 
+
+Both regression heads take the same fused feature ϕ as input. Each head is an M -layer MLP with ReLU activations, where the final layer maps the intermediate features to position coordinate and heading angle. For the m-th layer, position feature p(m) and heading feature h(m) are computed as: 
+
+p(m) = σ
+
+
+
+W P R m p(m−1) + bP R m
+
+
+
+h(m) = σ
+
+
+
+W HR m h(m−1) + bHR m
+
+, (11) Figure 4. Bearing-Naver’s operating mode. At each step, we first collect the UVP and its corresponding RST features, use Bearing-UAV to regress the position and heading, and then compute the azimuth from the current position to the next waypoint, aligning the heading with this azimuth to update UAV state for the next step. 
+
+where p(0) = h(0) = ϕ; ˆp = p(M ) ∈ R2 represents the relative coordinates and ˆh = h(M ) = (cos ˆθ, sin ˆθ) ∈ R2
+
+represents the heading directional vector. We would like to point out that the heading angle is represented as a vector rather than a raw angle ˆθ to resolve the periodicity ambiguity and provide a continuous, well-behaved regression target. 
+
+3.2. Bearing-Naver 
+
+By modeling the satellite image as a set of overlapping RSBs and using the proposed Bearing-UAV method, we construct a purely vision-driven point-to-point navigation scheme along specified waypoints in urban scenes, termed Bearing-Naver .Initialized from a known start position in a certain RSB, this navigation scheme can be summarized as sequentially searching for the next step as shown in Fig. 4. Bearing-Naver supports pre-converting the onboard RSTs into a com-pact feature table, enabling lightweight and efficient lookup-based UAV flight. During training, the RSTs are instead encoded by the backbone to produce GLUF vectors. Let ri ∈ R2 be the real position at step i and ni ∈ R2
+
+be the nominal position (the UAV “believes” where it is and indexes RSB with ni), i.e ., the one-step-ahead location predicted by Bearing-UAV. Then, we obtain current UVP 
+
+IUi using ri from the UAV-view satellite image, while the corresponding RSB is simultaneously retrieved in the form of onboard RST features Bi = {ti,j }4 
+
+> j=1
+
+according to index 
+
+ni. We then perform cross-view regression by: 
+
+( ˆ pi, ˆhi) := FBearing −UAV 
+
+ IUi , Bi, C . (12) Given the current waypoint, we compute the azimuth ai
+
+from the UAV to the next waypoint for the next step, adjust the UAV’s heading to align with azimuth ai, and update 
+
+(ri+1 , ni+1 ) accordingly and proceed to the next iteration. Accurate heading alignment is crucial for purely vision-based navigation because horizontal rotational drift often occurs during long-range flights, and without reliable head-ing estimation, the UAV heading is difficult to align with the reference azimuth, leading to navigation drift.                                     
+
+> Table 1. Comparison between Bearing-UAV-90K and other geo-localization datasets. Existing datasets rarely consider unaligned scenarios. Ours focuses on arbitrary rotations (with varying IoUs and challenging misalignment) between UVPs and RSTs, and pro-vides heading-aware annotations, forming a more comprehensive testbed for UAV localization and navigation. SUES = SUES-200, Dense = DenseUAV, Contiguous *: RSTs form a contiguous map.
+> Datasets Uni-1652 SUES Dense GTA-UAV Ours
+> #UAV 37,854 24,210 18,198 33,763 90k ×2#Satellite 1,652 200 9,096 9,096 1,024 Scene Building Campus Campus City Multi-city GeoTag Fine Coarse Fine Synthetic Fine Contiguous *✗✗✓✓✓
+> Unaligned ✗✗✗✓✓
+> Heading ✗✗✗✗✓
+
+4. Experiments 
+
+4.1. Dataset 
+
+To evaluate purely vision-based UAV localization and navi-gation under unaligned U-S cross-view settings, we construct a new dataset, Bearing-UAV-90K , as shown in Tab. 1. We collect samples from Google Earth under two modes. In Google Earth 2D mode (satellite-view mode), we first download four contiguous satellite images from four cities and crop them into RSTs. Each image (4096 ×4096 pixels at 0.25 m/px) is partitioned into 16 × 16 RSTs. Any 2 ×2 block of adjacent RSTs forms an RSB, yielding 15 ×15 indexed RSBs. In Google Earth 3D mode (UAV-view mode), we directly sample UVPs over the same area. For each RSB, we sample 100 random camera positions and yaw angles via viewpoint roaming, resulting in 90k UVPs. Each UVP is paired with a JSON file containing geographic information. We also collect 90k satellite-view patches as an ideal refer-ence. See Suppl. A.3.1 and Fig. 7 therein for more details on satellite images, dataset construction, and data licensing. To the best of our knowledge, there is no public U-S cross-view, multi-city dataset with contiguous satellite tiles and abundant unaligned UAV views, that is specifically designed for purely vision-based UAV localization and navigation, as shown in Tab. 1. In contrast, Bearing-UAV-90K offers U-S cross-view discrete samples for retrieval/matching-based localization, heading annotations for orientation evaluation, and a navigation benchmark. Based on the multi-city maps, we design eight curved navigation routes with multiple way-points, and leverage contiguous cross-city overhead imagery together with Google Earth 3D mode to provide a realistic platform for evaluating purely vision-based UAV navigation. 
+
+4.2. Implementation 
+
+Network Configuration. We adopt VGG-16 [ 37 ] pretrained on ImageNet [ 7 ] as the visual backbone for all experiments Table 2. The geo-localization and navigation performance in satellite views and UAV views (U-S cross-view). WA: weather augmentation. 
+
+Geo-Localization Navigation Method Recall@1 ↑ LSR@15 ↑ HSR@15 ↑ MLE ↓ MHE ↓ SR@20 ↑ SPL ↑ NE ↓
+
+Sat. UAV Sat. UAV Sat. UAV Sat. UAV Sat. UAV Sat. UAV Sat. UAV Sat. UAV University-1652 [52] 63.29 60.20 16.31 15.11 – – 31.78 33.15 – – 0.00 0.00 0.00 0.00 546.33 602.96 SUES-200 [55] 71.96 66.60 16.78 15.76 – – 29.09 30.83 – – 0.00 0.00 0.00 0.00 439.50 618.85 DenseUAV [6] 80.04 73.43 17.23 16.54 – – 26.82 28.79 – – 0.00 0.00 0.00 0.00 627.64 651.93 GTA-UAV [18] 76.99 70.71 31.33 27.96 – – 25.24 28.43 – – 0.00 0.00 0.00 0.00 666.51 661.91 Ours VGG-16 90.76 83.17 98.33 89.36 98.12 77.21 5.66 8.61 4.15 12.90 62.50 50.00 45.18 29.82 25.61 275.61 Ours VGG-16 + WA 91.07 86.52 98.63 92.88 98.21 86.02 5.40 7.48 4.21 9.63 37.50 25.00 27.57 16.71 325.00 248.77 
+
+unless otherwise specified. We set the number of clusters in the GLUF to K = 4 and base feature dimension to D = 256 .For RCE, we adopt a layer configuration [d1, . . . , d L] = [2 , 64 , 256 , KD ], and the dual regressor branches use an MLP with dimensions [2050 , 1024 , 256 , 64 , 2] .We set C = {(−1, 1) , (−1, −1) , (1 , 1) , (1 , −1) } as the relative coordinates of four RSTs in each RSB, such that, given the RSB index, the absolute geo-localization can be re-covered deterministically, while the network only regresses a bounded, dimensionless target. This parameterization stabi-lizes optimization and circumvents the difficulties of directly regressing high-precision latitude/longitude values. 
+
+Training Setup. The dataset is split 7:2:1 for training, vali-dation, and test. We use Adam (lr=5×10 −5, batch size 16) for 100 epochs with Smooth L1 loss: Lsum = 0 .8Lp + 0 .2Lh,without weight decay. A ReduceLROnPlateau scheduler halves the learning rate upon a validation plateau, and the best model is selected by validation loss. Training and evaluation are conducted on an NVIDIA H100 GPU, while Bearing-Naver runs on a laptop with an RTX 4000 GPU. 
+
+4.3. Experimental Results 
+
+4.3.1. Evaluation Protocol and Setup 
+
+For localization/heading estimation, we report Recall@K, LSR/HSR, and MLE/MHE. For navigation, we report SR, SPL, and NE. We also report model size, inference time, and GFLOPs. See Suppl. A.1 for metric definitions. Experiments include comparisons with existing CVGL approaches, backbone replacements, analysis of dataset scale and city diversity, evaluation of weather augmentation, and long-range navigation with multiple waypoints. We also conduct parallel satellite-view localization and navigation experiments as an ideal-case reference benchmark. 
+
+4.3.2. Localization and Heading Performance 
+
+We summarize the Geo-Localization results in the first five columns of Tab. 2. The localization performance of four representative CVGL baselines improves from University-1652 to GTA-UAV, but our method consistently achieves the 10 20 30 40 50 60 70 80 90 100                                
+
+> Dataset Scale (%)
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> LSR (%)
+> @15 (Sat.)
+> @10 (Sat.)
+> @5 (Sat.)
+> @15 (UAV)
+> @10 (UAV)
+> @5 (UAV)
+> 10 20 30 40 50 60 70 80 90 100
+> Dataset Scale (%)
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> HSR (%)
+> @15 (Sat.)
+> @10 (Sat.)
+> @5 (Sat.)
+> @15 (UAV)
+> @10 (UAV)
+> @5 (UAV)
+> 10 20 30 40 50 60 70 80 90 100
+> Dataset Scale (%)
+> 0
+> 5
+> 10
+> 15
+> 20
+> 25
+> MLE (m)  MLE (Sat.)
+> MedLE (Sat.)
+> MLE (UAV)
+> MedLE (UAV)
+> 10 20 30 40 50 60 70 80 90 100
+> Dataset Scale (%)
+> 0
+> 15
+> 30
+> 45
+> 60
+> MHE (°)
+> MHE (Sat.)
+> MedHE (Sat.)
+> MHE (UAV)
+> MedHE (UAV)
+
+Figure 5. Localization and heading performance both consistently improve with increasing dataset scale and gradually begin to satu-rate once the dataset scale exceeds 60% of Bearing-UAV-90K. 
+
+best results. All baselines lack heading estimation ability and exhibit localization errors around 30 m, far larger than our regression error of 8.6 m. This is mainly because they treat the retrieved or matched tile center as the final position, which struggles under cross-view misalignment and varying IoUs. Our method improves SR@1 by ∼10% and LSR@15 by ∼60%, demonstrating a stronger ability to identify the RST closest to the UVP and accurately localize the UVP, reflecting the benefit of the regression paradigm. Notably, weather-augmented training improves perfor-mance, reducing MLE by 1.1 m and MHE by 3.3◦, see Sec. 4.3.5 for details. We also extensively evaluate addi-tional backbones (ResNet, ViT, MobileNet) in Suppl. A.2, and analyze the localization/heading error distribution and their causal factors at three granularity levels in Suppl. A.5. 
+
+4.3.3. Effect of Dataset Scale on Bearing-UAV 
+
+Bearing-UAV-90K provides 100 samples per RSB, resulting in 90k UAV-view patches. To study the impact of dataset size to our model, we vary the sampling rate and construct ten datasets of increasing scale for both satellite and UAV views. As shown in Fig. 5, localization and heading performance improve consistently with more training data. When the Table 3. Effect of multi-city diversity on model generalization per-formance. We design four distinct city combinations for training. 
+
+Cities Recall@1 ↑ LSR@15 ↑ MLE ↓ MHE ↓
+
+Sat. UAV Sat. UAV Sat. UAV Sat. UAV A 89.43 79.92 97.20 80.36 6.14 10.29 4.92 12.07 B 88.76 83.39 96.36 88.14 6.44 8.97 4.28 10.27 
+
+C 90.40 85.43 98.22 88.01 5.54 8.67 4.00 17.15 D 88.18 78.90 96.18 82.72 6.62 10.20 4.90 15.71 AD 89.58 80.54 97.96 83.14 6.03 10.00 4.97 14.65 BC 90.22 85.23 98.47 91.02 5.46 8.21 4.70 13.08 ABD 89.93 81.57 97.97 86.44 5.91 9.20 5.01 12.82 BCD 90.24 84.44 98.36 90.62 5.70 8.32 4.56 13.86 ABCD 90.76 83.17 98.33 89.36 5.66 8.61 4.15 12.90 dataset size reaches 54k (60% of the full dataset), the gains begin to saturate: in the UAV-view setting, MLE falls below 10 m and MHE below 17 ◦, while in the satellite-view setting, the model achieves below 7 m MLE and 7 ◦ MHE. Corre-spondingly, LSR and HSR also show a gradual convergence trend. For example, at 15 m/ ◦ success radius, they exceed 80% and 65% respectively once the dataset scale surpasses 60%, with the satellite-view curve exhibiting a higher and smoother trend. 
+
+4.3.4. Effect of City Combinations on Bearing-UAV 
+
+Unlike simply scaling the dataset size, this experiment fo-cuses on how well the model adapts to diverse urban terrains and layouts. See Suppl. Fig. 7 for satellite imagery details. We train our model on datasets constructed from different combinations of these cities. The results are summarized in Tab. 3 and Suppl. Fig. 9. From top to bottom, the four groups correspond to datasets of 1, 2, 3, and 4 cities respec-tively, with increasing diversity. In the single-city group, the satellite-view setting is relatively stable across cities, since there is no spatial visual discrepancy, only misalignment. In contrast, the UAV-view setting orientation performance varies significantly. City C shows the largest errors, fol-lowed by D, while B performs best. This is mainly because tall buildings in City C induce strong cross-view appear-ance changes, and the river region provides limited texture. City D combines mountainous areas with many similarly structured small buildings, resulting in limited visual dis-tinctiveness and thus larger localization and heading errors. City B offers rich, distinctive building patterns, while City A, although vegetation-dominant, still contains more diverse textures than City D, yielding slightly better results. These trends are consistent in the two-city combinations: the BC pair outperforms the AD pair, supporting the above observations. For three-city combinations, mixing hetero-geneous cities reduces variance, and the performance gap 
+
+> Table 4. Weather robustness. Rows 1–6: augmented model under six conditions; Baseline: no augmentation under normal weather.
+
+Weather LSR@15 ↑ HSR@15 ↑ MLE ↓ MHE ↓
+
+Sat. UAV Sat. UAV Sat. UAV Sat. UAV 
+
+Rain 95.63 89.75 93.65 79.06 6.70 8.41 6.15 12.04 Snow 94.80 88.79 94.33 79.28 6.95 8.64 6.04 12.04 Fog 95.61 89.02 93.86 78.72 6.68 8.55 6.36 12.56 Bright 98.02 92.25 97.59 83.71 5.72 7.69 4.68 10.31 Mixed 96.34 90.33 95.44 81.29 6.35 8.19 5.59 11.24 Normal 98.63 92.88 98.21 86.02 5.40 7.48 4.21 9.63 
+
+Baseline 98.33 89.36 98.12 77.21 5.66 8.61 4.15 12.90 between different triplets becomes smaller, similar to the results observed between City A and City C. Further details are discussed in Suppl. A.3.2. Most notably, as the number of cities increases from 1 to 4, the overall performance does not degrade despite larger inter-city variations and increased scene complexity; the averaged metrics even show a slight improvement. This indicates that our model generalizes well across diverse multi-city environments and benefits from richer geographic diversity. 
+
+4.3.5. Weather Augmentation Test 
+
+To assess weather effects, we augment Bearing-UAV-90K with illumination, fog, rain, and snow (20% each), as shown in Suppl. Fig. 10, to train a weather-augmented model, which we evaluate on six weather conditions and compare against the non-augmented baseline in Tab. 4 and Suppl. Fig. 11. Across all four metrics, especially in the U-S cross-view, the augmented model consistently outperforms the non-augmented baseline across various weather conditions in both localization and heading estimation. This indicates that expanding the training distribution via weather augmentation improves generalization. More importantly, it suggests that the model learns a shared, weather-robust representation, benefiting from diverse weather exposure rather than overfit-ting to a single appearance pattern. It is also worth noting that illumination augmentation yields the most significant performance gain. Given the large brightness discrepancy between UAV and satellite views, such augmentation effec-tively reduces the cross-view illumination gap for cross-view localization. See Suppl. A.4 for further discussion. 
+
+4.3.6. Bearing-Naver Navigation Test 
+
+We design two routes per city, each with a length between 500 m and 1200 m and more than ten waypoints covering diverse scene types. Assume the UAV uses a step size of 25 m, and the threshold radius for reaching a waypoint is 20 m. The test results are reported in Tab. 2. Most baseline methods fail to complete the full route, their localization errors cause drift or dithering, especially in feature-sparse or Figure 6. Navigation performance comparison. The purple dashed line here denotes the predefined navigation trajectory #1 in City D.                         
+
+> ■start, ⋆end, × failure, ▲success. The corresponding UAV-view frames across the 45 navigation steps are shown in Suppl. Fig. 17. Table 5. Model efficiency. MS: model size; IT: inference time. GFLOPs are computed at 256 ×256 or 384 ×384 as in prior work.
+> Metric Uni-1652 SUES Dense GTA-UAV Ours
+> MS ↓(MB) 102 658 86 326 68
+> IT ↓(ms) 10.1 1907.5 593.6 246.5 133.5 GFLOPs ↓16.4 @256 98.7 @384 8.5 @256 20.1 @384 10.5 @256
+
+visually confusing regions. In contrast, our method achieves high-precision localization and completes nearly half of the challenging, tortuous routes. Compared with Ours VGG-16, the reduced SR and SPL of the weather-augmented model are partly due to several highly deviated trajectories. Yet the NE drops from 275 m to 248 m, indicating that the UAV reaches the target more closely in more cases and thus has an improved ability to reach the goal. In Fig. 6, trajectory #1 in City D is about 720 m long and contains 13 waypoints. It starts from the square marker in a feature-sparse open area, passes over dozens of similar-looking buildings and green spaces along a tortuous path, and ends at the star marker over a typical white rooftop. On this challenging route, only our method successfully reaches the final waypoint within 45 steps. DenseUAV com-pletes roughly half of the path, SUES-200 hovers over a row of rooftops near the beginning and then drifts away, while University-1652 and GTA-UAV deviate from the correct heading almost immediately after takeoff. During naviga-tion, the UAV views and the satellite views contain many unaligned U-S scenes with rapidly changing IoUs, com-pounded by cross-view parallax and feature-sparse regions, so methods with lower localization accuracy are much more likely to fail under this setting. The remaining seven trajec-tories and analysis are shown in Suppl. A.6. We report on-disk model size, single-step inference time, and GFLOPs for the five models in Tab. 5. Bearing-UAV is lightweight, achieves near real-time performance, and scales in constant time to larger maps and longer paths. 
+
+> Table 6. Ablation study of the Bearing-UAV on the UAV-view data.
+
+GLUF RCE PSG CA R@1 ↑ LSR ↑ HSR ↑ MLE ↓ MHE ↓
+
+✗ ✓ ✓ ✓ 67.19 57.29 61.10 14.90 21.62 
+
+✓ ✗ ✓ ✓ 82.66 87.77 70.80 8.93 14.99 
+
+✓ ✓ ✗ ✓ 83.97 88.68 75.28 8.67 13.44 
+
+✓ ✓ ✓ ✗ 83.70 89.06 76.68 8.59 13.20 
+
+✓ ✓ ✓ ✓ 83.17 89.36 77.21 8.61 12.90 
+
+4.4. Ablation Study 
+
+In this section, we conduct ablation studies on the key sub-modules of our model: GLUF, RCE, PSG, and CA. As summarized in Tab. 6, we report five metrics on UAV-view setting, with the satellite-view setting reported in Suppl. A.7. Removing GLUF causes a significant drop in performance, indicating that clustering and recombining feature maps helps extract more robust local and global structures, which is crucial for localization and heading estimation under cross-view misalignment. RCE has a clear impact on orientation: it reduces MHE by approximately 2◦ and improves HSR@15 by about 6.5%, showing that injecting positional embeddings into RSTs benefits heading regression. PSG and CA each contribute an additional 1–2 percentage points to localization and heading success rates, demonstrating that they further strengthen feature alignment. 
+
+5. Conclusion and Future Work 
+
+In this paper, we go beyond standard CVGL by jointly es-timating accurate geo-localization and reliable heading for GNSS-denied UAV navigation. Our goal is to jointly infer position and heading under cross-view, non-aligned, and ar-bitrarily rotated U-S image pairs, using only vision, without any auxiliary sensors or additional geometric reasoning. To this end, we propose a single-stage regression network that captures both global and local structural cues and explicitly encodes relative spatial relationships, enabling robustness to viewpoint-induced parallax, misalignment, varying IoUs, and sparse visual features. Besides, a benchmark cross-view, multi-city dataset and comprehensive evaluation metrics are constructed. Extensive experiments have shown encouraging results that the regression framework can reliably perform cross-view localization and heading estimation in complex scenarios. Limitations are discussed in Suppl. A.8. 
+
+6. Acknowledgements 
+
+This work is supported by the Hangzhou Joint Fund of the Zhejiang Provincial Natural Science Foundation of China (Grant No. LHZSD24F020001), and Zhejiang Province High-Level Talents Special Support Program “Leading Tal-ent of Technological Innovation of Ten-Thousands Talents Program” (No.2022R52046). References 
+
+[1] Long Chen, Bo Wu, Ran Duan, and Zeyu Chen. Real-time cross-view image matching and camera pose determination for unmanned aerial vehicles. Photogrammetric Engineering & Remote Sensing , 90(6):371–381, 2024. 2, 3 [2] Nanxing Chen, Jiqi Fan, Jiayu Yuan, and Enhui Zheng. Obtpn: A vision-based network for uav geo-localization in multi-altitude environments. Drones , 9(1):33, 2025. 2 [3] Andy Couturier and Moulay A. Akhloufi. A review on deep learning for uav absolute visual localization. Drones , 8(11): 622, 2024. 1, 2 [4] Zhuofan Cui, Pengwei Zhou, Xiaolong Wang, Zilun Zhang, Yingxuan Li, Hongbo Li, and Yu Zhang. A novel geo-localization method for uav and satellite images using cross-view consistent attention. Remote Sensing , 15(19):4667, 2023. 2[5] Ming Dai, Jianhong Hu, Jiedong Zhuang, and Enhui Zheng. A transformer-based feature segmentation and region alignment method for uav-view geo-localization. IEEE Transactions on Circuits and Systems for Video Technology , 32(7):4376–4389, 2022. 2 [6] Ming Dai, Enhui Zheng, Zhenhua Feng, Lei Qi, Jiedong Zhuang, and Wankou Yang. Denseuav2:vision-based uav self-positioning in low-altitude urban environments. IEEE Transactions on Image Processing , 33:493–508, 2024. 1, 2, 6 [7] Jia Deng, Wei Dong, Richard Socher, Li-Jia Li, Kai Li, and Li Fei-Fei. Imagenet: A large-scale hierarchical image database. In CVPR , pages 248–255, 2009. 5 [8] Oussema Dhaouadi, Riccardo Marin, Johannes Meier, Jacques Kaiser, and Daniel Cremers. Ortholoc: Uav 6-dof localization and calibration using orthographic geodata. arXiv preprint arXiv:2509.18350 , 2025. 3 [9] Alexey Dosovitskiy, Lucas Beyer, Alexander Kolesnikov, Dirk Weissenborn, Xiaohua Zhai, Thomas Unterthiner, Mostafa Dehghani, Matthias Minderer, Georg Heigold, Syl-vain Gelly, Jakob Uszkoreit, and Neil Houlsby. An image is worth 16x16 words: Transformers for image recognition at scale. In ICLR , 2021. 4 [10] Ran Duan, Long Chen, Zhaojin Li, Zeyu Chen, and Bo Wu. Sgmnet:a scene graph encoding and matching network for uav visual localization. IEEE Journal of Selected Topics in Applied Earth Observations and Remote Sensing , 17:9890– 9902, 2024. 2, 3 [11] Abhilash Durgam, Sidike Paheding, Vikas Dhiman, and Vijay Devabhaktuni. Cross-view geo-localization: A survey. IEEE Access , 12:192028–192050, 2024. 1, 2 [12] Marius-Mihail Gurgu, Jorge Pe ˜na Queralta, and Tomi Wester-lund. Vision-based gnss-free localization for uavs in the wild. In ICMERR , pages 7–12, 2022. 1 [13] Jing He and Qian Wu. A localization method for uav aerial im-ages based on semantic topological feature matching. Remote Sensing , 17(10):1671, 2025. 1 [14] Yao He, Ivan Cisneros, Nikhil Keetha, Jay Patrikar, Zelin Ye, Ian Higgins, Yaoyu Hu, Parv Kapoor, and Sebastian Scherer. Foundloc: Vision-based onboard aerial localization in the wild. arXiv preprint arXiv:2310.16299 , 2023. 3 [15] Kaiji Hou, Qiang Tong, Na Yan, Xiulei Liu, and Shoulu Hou. Mcfa: Multi-scale cascade and feature adaptive alignment network for cross-view geo-localization. Sensors , 25(14): 4519, 2025. 2 [16] Sixing Hu, Mengdan Feng, Rang M. H. Nguyen, and Gim Hee Lee. Cvm-net: Cross-view matching network for image-based ground-to-aerial geo-localization. In CVPR , pages 7258–7267. IEEE, 2018. 2 [17] Imen Jarraya, Abdulrahman Al-Batati, Muhammad Bilal Kadri, Mohamed Abdelkader, Adel Ammar, Wadii Boulila, and Anis Koubaa. Gnss-denied unmanned aerial vehicle navi-gation: Analyzing computational complexity, sensor fusion, and localization methodologies. Satellite Navigation , 6(1):9, 2025. 1 [18] Yuxiang Ji, Boyong He, Zhuoyue Tan, and Liaoni Wu. Game4loc: A uav geo-localization benchmark from game data. AAAI , 39(4):3913–3921, 2025. 1, 2, 6 [19] Christopher Klammer and Michael Kaess. Bevloc: Cross-view localization and matching via birds-eye-view synthesis. In IROS , pages 5656–5663, 2024. 1, 2 [20] Haoling Li, Jiuniu Wang, Zhiwei Wei, and Wenjia Xu. Jointly optimized global-local visual localization of uavs. arXiv preprint arXiv:2310.08082 , 2023. 1 [21] Liu Liu and Hongdong Li. Cvact:lending orientation to neural networks for cross-view geo-localization. In CVPR , pages 5624–5633, 2019. 1, 2 [22] Andreas Masselli, Richard Hanten, and Andreas Zell. Local-ization of unmanned aerial vehicles using terrain classification from aerial images. In Intelligent Autonomous Systems 13 ,pages 831–842. Springer International Publishing, 2016. 1 [23] Muhammad Hamza Mughal, Muhammad Jawad Khokhar, and Muhammad Shahzad. Assisting uav localization via deep contextual image matching. IEEE Journal of Selected Topics in Applied Earth Observations and Remote Sensing , 14:2445– 2457, 2021. 1 [24] Parham Nooralishahi, Clemente Ibarra-Castanedo, Shakeb Deane, Fernando L ´opez, Shashank Pant, Marc Genest, Nico-las P. Avdelidis, and Xavier P. V. Maldague. Drone-based non-destructive inspection of industrial sites: A review and case studies. Drones , 5(4):106, 2021. 1 [25] Xiong Qiu, Shouyi Liao, Dongfang Yang, Yongfei Li, and Shicheng Wang. High-precision visual geo-localization of uav based on hierarchical localization. Expert Systems with Applications , 267:126064, 2025. 3 [26] Yan Ren, Guohai Dong, Tianbo Zhang, Meng Zhang, Xinyu Chen, and Mingliang Xue. Uavs-based visual localization via attention-driven image registration across varying texture levels. Drones , 8(12):739, 2024. 1 [27] Maurizio Rossi, Davide Brunelli, Andrea Adami, Leandro Lorenzelli, Fabio Menna, and Fabio Remondino. Gas-drone: Portable gas sensing system on uavs for gas leakage local-ization. In 2014 IEEE SENSORS , pages 1431–1434, 2014. 1[28] Paul-Edouard Sarlin, Daniel DeTone, Tsun-Yi Yang, Armen Avetisyan, Julian Straub, Tomasz Malisiewicz, Samuel Rota Bulo, Richard Newcombe, Peter Kontschieder, and Vasileios Balntas. Orienternet: Visual localization in 2d public maps with neural matching. In CVPR , pages 21632–21642. IEEE, 2023. 1 [29] Michael Schleiss, Fahmi Rouatbi, and Daniel Cremers. Vpair - aerial visual place recognition and localization in large-scale outdoor environments. arXiv preprint arXiv:2205.11567 ,2022. 3 [30] Scott Workman, Richard Souvenir, and Nathan Jacobs. Cvusa:wide-area image geolocalization with aerial reference imagery. In ICCV , pages 3961–3969, 2015. 2 [31] Akshay Shetty and Grace Xingxin Gao. Uav pose estimation using cross-view geolocalization with satellite imagery. In 
+
+ICRA , pages 1827–1833, 2019. 2 [32] Yujiao Shi, Xin Yu, Dylan Campbell, and Hongdong Li. Where am i looking at? joint location and orientation estima-tion by cross-view matching. In CVPR , pages 4063–4071. IEEE, 2020. 2 [33] Yujiao Shi, Xin Yu, Liu Liu, Dylan Campbell, Piotr Koniusz, and Hongdong Li. Accurate 3-dof camera geo-localization via ground-to-satellite image matching. IEEE transactions on pattern analysis and machine intelligence , 45(3):2682–2697, 2022. 3 [34] Yujiao Shi, Fei Wu, Akhil Perincherry, Ankit Vora, and Hong-dong Li. Boosting 3-dof ground-to-satellite camera localiza-tion accuracy via geometry-guided cross-view transformer. In 
+
+ICCV , pages 21459–21469. IEEE, 2023. 2 [35] Yujiao Shi, Hongdong Li, Akhil Perincherry, and Ankit Vora. Weakly-supervised camera localization by ground-to-satellite image registration. In ECCV , pages 39–57. Springer, 2024. 3 [36] ASM Shihavuddin, Xiao Chen, Vladimir Fedorov, Anders Nymark Christensen, Nicolai Andre Brogaard Riis, Kim Bran-ner, Anders Bjorholm Dahl, and Rasmus Reinhold Paulsen. Wind turbine surface damage detection by deep learning aided drone inspection analysis. Energies , 12(4):676, 2019. 1 [37] Karen Simonyan and Andrew Zisserman. Very deep convo-lutional networks for large-scale image recognition. ICLR ,2015. 3, 5 [38] Jian Sun, Kangdao Liu, Chi Zhang, Chuangquan Chen, Junge Shen, and Chi-Man Vong. Pfed-cross-view uav geo-localization with precision-focused efficient design: A hierar-chical distillation approach with multi-view refinement. arXiv preprint arXiv:2510.22582 , 2025. 3 [39] Hanyu Wang, Qiang Shen, Zilong Deng, Xinyi Cao, and Xiaokang Wang. Absolute pose estimation of uav based on large-scale satellite image. Chinese Journal of Aeronautics ,37(6):219–231, 2024. 3 [40] Shan Wang, Yanhao Zhang, Akhil Perincherry, Ankit Vora, and Hongdong Li. View consistent purification for accurate cross-view localization. In ICCV , pages 8197–8206, 2023. 3 [41] Shan Wang, Chuong Nguyen, Jiawei Liu, Yanhao Zhang, Sundaram Muthu, Fahira Afzal Maken, Kaihao Zhang, and Hongdong Li. View from above: Orthogonal-view aware cross-view localization. In CVPR , pages 14843–14852. IEEE, 2024. 2 [42] Xiaolong Wang, Ross Girshick, Abhinav Gupta, and Kaiming He. Non-local neural networks. In CVPR , pages 7794–7803. IEEE, 2018. 3 [43] Xiaolong Wang, Runsen Xu, Zhuofan Cui, Zeyu Wan, and Yu Zhang. Fine-grained cross-view geo-localization using a correlation-aware homography estimator. In NeurIPS , pages 5301–5319. Curran Associates, Inc., 2023. 2 [44] Yuxin Wang, Zunlei Feng, Haofei Zhang, Yang Gao, Jie Lei, Li Sun, and Mingli Song. Angle robustness unmanned aerial vehicle navigation in gnss-denied scenarios. AAAI , 38(9): 10386–10394, 2024. 2 [45] Zhen Wang, Dianxi Shi, Chunping Qiu, Songchang Jin, Tongyue Li, Ziteng Qiao, and Yang Chen. Vecmaplocnet: Vision-based uav localization using vector maps in gnss-denied environments. ISPRS Journal of Photogrammetry and Remote Sensing , 225:362–381, 2025. 3 [46] Jiaping Xiao, Rangya Zhang, Yuhang Zhang, and Mir Fer-oskhan. Vision-based learning for drones: A survey. IEEE Transactions on Neural Networks and Learning Systems ,pages 1–21, 2025. 1 [47] Jianxing Yang, Enhui Zheng, Jiqi Fan, and Yuwen Yao. 3d positioning of drones through images. Sensors , 24(17):5491, 2024. 2 [48] Kaiqian Yang, Yujin Zhang, Li Wang, A. A. M. Muzahid, Ferdous Sohel, Fei Wu, and Qiong Wu. Vimgeo: An efficient visual model for cross-view geo-localization. Electronics , 14 (19):3906, 2025. 2 [49] Yuwen Yao, Cheng Sun, Tao Wang, Jianxing Yang, and Enhui Zheng. Uav geo-localization dataset and method based on cross-view matching. Sensors , 24(21):6905, 2024. 1 [50] Yibin Ye, Xichao Teng, Shuo Chen, Zhang Li, Leqi Liu, Qifeng Yu, and Tao Tan. Exploring the best way for uav visual localization under low-altitude multi-view observation condition: A benchmark. arXiv preprint arXiv:2503.10692 ,2025. 3 [51] Xiangkai Zhang, Xiang Zhou, Mao Chen, Yuchen Lu, Xu Yang, and Zhiyong Liu. Hierarchical image matching for uav absolute visual localization via semantic and structural constraints. arXiv preprint arXiv:2506.09748 , 2025. 2 [52] Zhedong Zheng, Yunchao Wei, and Yi Yang. University-1652: A multi-view multi-source benchmark for drone-based geo-localization. In ACM MM , pages 1395–1403, 2020. 1, 2, 6[53] Yuwei Zhou, Hong Chen, Zirui Pan, Chuanhao Yan, Fanqi Lin, Xin Wang, and Wenwu Zhu. Curml: A curriculum machine learning library. In ACM MM , pages 7359–7363, 2022. 2 [54] Yuwei Zhou, Zirui Pan, Xin Wang, Hong Chen, Haoyang Li, Yanwen Huang, Zhixiao Xiong, Fangzhou Xiong, Peiyang Xu, Wenwu Zhu, et al. Curbench: curriculum learning benchmark. In ICML , 2024. 2 [55] Runzhe Zhu, Ling Yin, Mingze Yang, Fei Wu, Yuncheng Yang, and Wenbo Hu. Sues-200: A multi-height multi-scene cross-view image benchmark across drone and satellite. IEEE Transactions on Circuits and Systems for Video Technology ,33(9):4825–4839, 2023. 1, 2, 6 [56] Sijie Zhu, Taojiannan Yang, and Chen Chen. Vigor: Cross-view image geo-localization beyond one-to-one retrieval. In 
+
+CVPR , pages 3640–3649, 2021. 1, 2 Beyond Matching to Tiles: Bridging Unaligned Aerial and Satellite Views for Vision-Only UAV Navigation 
+
+Supplementary Material 
+
+A.1. List of Acronyms 
+
+For clarity, the main acronyms used in this paper are grouped into four categories and summarized in Tab. 7. 
+
+> Table 7. List of main acronyms used in this paper.
+
+Type Acronym Description 
+
+Concept UAV Unmanned Aerial Vehicle GNSS Global Navigation Satellite System CVGL Cross-View Geo-Localization M2T Match-to-Tile Data UVP UAV-View Patch RST Remote-Sensing Tile RSB Remote-Sensing Block U-S UAV-Satellite G-S Ground-Satellite Module GLUF Global-Local Unity Feature RCE Relative Coordinate Encoder PSG Patch Similarity-Guided CA Cross-Attention Metric Recall@1 Recall at 1 LSR Localization Success Rate HSR Heading Success Rate MLE Mean Localization Error MHE Mean Heading Error MedLE Median Localization Error MedHE Median Heading Error SR@20 Success Rate at 20 m SPL Success Weighted by Path Length NE Navigation Error 
+
+A.2 . Localization and Heading Performance with Different Backbones 
+
+We evaluate Bearing-UAV with four different backbone net-works, as shown in Tab. 8. Here, we define Recall@1 as the accuracy of retrieving the RST whose location is closest to the UVP from the four adjacent RSTs. Each metric is reported in two forms, “Sat.” and “UAV”, denoting perfor-mance under the satellite view (Sat.) and the UAV view (U-S cross-view), respectively. The former serves as a near-ideal reference benchmark, while the latter corresponds to our target cross-view localization task. By comparing the four rows in Tab. 8, we observe that using ResNet18 or ViT-Small as the backbone leads to no-ticeably worse performance, MobileNet-V3-Small is slightly better than ViT-Small, whereas VGG-16 achieves a clear advantage on all metrics. With comparable model sizes, ViT-Small and ResNet18 are better at capturing high-level global semantics, which is advantageous when features are well aligned, but less suitable under misaligned cross-view conditions where fine local cues are critical. In our localization and navigation setting, the feature maps produced by the backbone are fur-ther processed by the GLUF module to extract local features for misalignment-robust retrieval and localization. The re-duced low-level structural information in these deeper, more global backbones limits their localization accuracy and thus constrains the overall performance. Moreover, ViT-Small is known to be data-hungry; given the moderate scale of our dataset and the domain gap between ImageNet-style pre-training and overhead/aerial imagery, its potential is not fully realized. In contrast, simpler CNN backbones such as VGG-16 (and MobileNet-V3S) preserve richer fine-grained spatial details, supplying the GLUF module with stronger local structural cues that are essential for robust UAV-satellite feature matching, especially under misaligned and varying-IoU conditions. This suggests that classical convolutional backbones can still offer distinct advantages in cross-view localization-orientation scenarios. Another noteworthy observation is that MedLE and MedHE are consistently lower than the corresponding MLE and MHE, and this gap is more pronounced in the cross-view setting, where the median localization error is 1.3 m lower than the mean and the median heading error is 5.7 ◦ lower than the mean. This phenomenon is closely related to the long-tailed distribution of localization and heading errors, especially for heading, where a small portion of unseen sam-ples with large errors substantially inflates the mean, and the trend is as illustrated in Fig. 12. 
+
+A.3. Cross-view Multi-city Dataset Design 
+
+A.3.1. Dataset Construction Process 
+
+We construct our dataset from four cities, each represented by a square, contiguous satellite image, their details are illustrated in Fig. 7. Our use of Google Earth maps strictly follows its terms for non-commercial academic research, consistent with prior datasets such as DOTA (CVPR 2018) and OmniCity (CVPR 2023). We will publicly release the Table 8. Comparison of localization and heading performance with four different backbones in both satellite views and UAV views (U-S cross-view). Bearing-UAV with the VGG-16 backbone achieves the best overall results. Mobile-V3S = MobileNet-V3-Small. 
+
+Method Recall@1 ↑ LSR@15 ↑ HSR@15 ↑ MLE ↓ MedLE ↓ MHE ↓ MedHE ↓
+
+Sat. UAV Sat. UAV Sat. UAV Sat. UAV Sat. UAV Sat. UAV Sat. UAV Ours ResNet18 83.88 75.34 88.38 71.83 73.20 46.83 8.83 12.09 7.89 10.56 14.59 26.52 8.54 16.16 Ours ViT-Small 86.38 81.39 93.35 85.47 77.58 51.57 7.53 9.46 6.73 8.02 12.02 24.89 7.69 14.45 Ours Mobile-V3S 86.41 79.76 93.52 81.20 83.25 64.94 7.49 10.34 6.73 8.72 10.57 19.53 6.28 10.14 Ours VGG-16 90.76 83.17 98.33 89.36 98.12 77.21 5.66 8.61 5.05 7.30 4.15 12.90 2.96 7.20 DCBA
+
+> Figure 7. Satellite imagery of four cities with distinct landscapes. Below the satellite imagery are their selected U-S cross-view image pairs (UAV views left). City A is dominated on the right side by vegetation; City B consists mainly of densely packed low-rise build-ings; City C contains many tall buildings and a wide river; City D lies in mountainous terrain with sparse, highly similar buildings. They exhibit prominent cross-view appearance gaps, illumination variations, and scene changes, covering diverse landforms such as buildings, roads, forests, mountains, and rivers.
+
+dataset and all data sources will be properly attributed. 
+
+Sampling Process. For each city, we first download the entire satellite image in satellite-view and then extract cross-view samples block by block from the corresponding remote-sensing blocks (RSBs). As illustrated in Fig. 8, the top row shows an example RSB in City B indexed by (13 , 13) . The X-axes and Y-axes passing through the block center partition this RSB into four adjacent RSTs. The process of constructing cross-view samples can be summarized in the following two steps: (1) In Google Earth 2D mode (satellite-view mode), within the effective sam-pling area (green dashed box) defined in the local XOY 
+
+coordinate system of the RSB, we randomly sample relative coordinates and headings to obtain a satellite-view patch (the 32nd sample). The selected patch, shown as the dark 
+
+> Figure 8. Two examples of UAV-satellite cross-view UVP sampling during dataset construction. In each row, the left panel shows the sampled patch in the RSB, and the middle and right panels show the corresponding satellite-view patch and UAV-view UVP.
+
+patch with a green border centered at the green dot (the top-middle panel), serves as an ideal reference. (2) Using the same geodetic coordinates and heading angle, we then query Google Earth 3D mode (UAV-view mode) and extract the corresponding UAV-view patch (UVP), as illustrated by the blue-bordered image in the top-right panel. The second row shows an analogous process for the RSB indexed by (2 , 1) in City C, where we obtain the four RSTs together with the 9th satellite-view patch and its paired 9th UVP. Unlike satellite-view, the UAV-view mode in Google Earth renders a photogrammetry-based 3D reconstruction of the entire city. All buildings, vegetation, and terrain are rep-resented as textured 3D meshes, enabling oblique viewpoints that closely approximate what a real UAV camera would ob-serve at the same position. Consequently, UVPs provide a more realistic approximation of true UAV perspectives compared with satellite-view patches. 
+
+Basic Composition of the Dataset. Following this proce-dure, we sample 100 cross-view pairs from every RSB. Each city’s image contains 15 ×15 overlapping RSBs whose ef-fective sampling areas are designed to seamlessly tile the A B C D AD BC ACD BCD ABCD                             
+
+> City Combinations
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> LSR (%)
+> @15 (Sat.)
+> @10 (Sat.)
+> @5 (Sat.)
+> @15 (UAV)
+> @10 (UAV)
+> @5 (UAV)
+> ABCDAD BC ACD BCD ABCD
+> City Combinations
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> HSR (%)
+> @15 (Sat.)
+> @10 (Sat.)
+> @5 (Sat.)
+> @15 (UAV)
+> @10 (UAV)
+> @5 (UAV)
+> ABCDAD BC ACD BCD ABCD
+> City Combinations
+> 4
+> 5
+> 6
+> 7
+> 8
+> 9
+> 10
+> MLE (m)
+> MLE (Sat.)
+> MedLE (Sat.)
+> MLE (UAV)
+> MedLE (UAV)
+> ABCDAD BC ACD BCD ABCD
+> City Combinations
+> 0
+> 3
+> 6
+> 9
+> 12
+> 15
+> 18
+> MHE (°)
+> MHE (Sat.)
+> MedHE (Sat.)
+> MHE (UAV)
+> MedHE (UAV)
+
+Figure 9. Localization and orientation performance under different city combinations. 
+
+satellite image (except for an outer margin of 128 pixels that cannot be fully covered). As a result, the four city imagery yield a total of 90k samples per view (i.e., 90k satellite-view patches and 90k UVPs). For each sample, we use a UAV-view patch (UVP), a corresponding satellite-view patch at the same location, and the relative coordinates and heading. For each sample, the basic metadata include one UVP (paired with the corresponding satellite-view patch), its rel-ative coordinates and heading angle (encoded as a cosine-sine vector), the four adjacent RSTs which are shared by all samples in the same RSB block, and the file paths to all associated image tiles. These fields are stored in a sin-gle metadata.csv file, which can be directly used for training and evaluation. In addition, every satellite image, RST, and UVP is asso-ciated with a JSON file that records auxiliary information such as the image name, center latitude and longitude, pixel resolution, spatial extent, camera height, tilt angle, and basic conversion factors, ensuring that the dataset is well docu-mented and easily reusable. 
+
+A.3.2. Impact of Different City Combinations 
+
+We employ more fine-grained metrics to evaluate the effect of city combinations on UAV bearing estimation. As shown in Fig. 9, the combinations include four single-city settings, two two-city pairs, two three-city mixtures, and one four-city configuration that exposes the model to the entire set. The models trained on single-city subsets exhibit notice-able differences in localization and heading performance on their corresponding satellite images, especially in the UAV-view setting. This suggests that variations in urban morphology have a non-negligible impact on purely vision-based localization and navigation. Specifically, City B achieves relatively strong overall per-formance: it features a dense, nearly grid-like street network and a large number of small buildings, providing rich fine-
+
+Figure 10. Four types of weather augmentations. The first row shows four original cross-view sample pairs from the four cities, where the green and blue boxes denote the UVP and its corre-sponding satellite-view patch. The four rows below visualize the corresponding illumination, fog, rain, and snow augmentations. 
+
+grained structural information and strong, consistent cues for both localization and orientation. Although City C also contains many buildings that offer abundant structural tex-ture, the tall high-rise buildings induce larger cross-view appearance discrepancies, and the presence of a long river corridor with relatively sparse visual features is likely a ma-jor factor behind the degradation in heading accuracy. City A and City D show comparatively worse localization and heading performance, which correlates with the presence of large green areas, mountainous terrain, and many visually similar buildings. From a global perspective, a particularly noteworthy trend is that the LSR and MLE do not degrade when the number of cities increases and the sample diversity grows; instead, they exhibit a clear upward trend. Meanwhile, the heading success rate and heading accuracy remain roughly at an average, stable level. This indicates that, as more cities are included and the training data become more diverse, Bearing-UAV is able to learn more generic orientation cues that generalize across heterogeneous city layouts, rather than overfitting to any single satellite image. 
+
+A.4. Effect of Weather Augmentation 
+
+We apply weather augmentation to 20% of the training samples for each of the four weather types and evaluate the augmented model under six test settings (four single-weather conditions, a mixed-weather condition, and a no-augmentation normal condition). Four types of weather augmentation are shown in Fig. 10, and the fine-grained metric curves are shown in Fig. 11. Overall, the augmented model consistently improves both success rate and localization/heading accuracy on unseen samples. More importantly, the performance curves exhibit Rain Snow Fog Bright Mixed Normal                    
+
+> Augmentation Type
+> 20
+> 40
+> 60
+> 80
+> 100
+> LSR (%)
+> @15 (Sat.)
+> @10 (Sat.)
+> @5 (Sat.)
+> @15 (UAV)
+> @10 (UAV)
+> @5 (UAV)
+> Rain Snow Fog Bright Mixed Normal
+> Augmentation Type
+> 20
+> 40
+> 60
+> 80
+> 100
+> HSR (%)
+> @15 (Sat.)
+> @10 (Sat.)
+> @5 (Sat.)
+> @15 (UAV)
+> @10 (UAV)
+> @5 (UAV)
+> Rain Snow Fog Bright Mixed Normal
+> Augmentation Type
+> 5
+> 6
+> 7
+> 8
+> 9
+> MLE (m)
+> MLE (Sat.)
+> MedLE (Sat.)
+> MLE (UAV)
+> MedLE (UAV)
+> Rain Snow Fog Bright Mixed Normal
+> Augmentation Type
+> 3
+> 6
+> 9
+> 12
+> MHE (°)
+> MHE (Sat.)
+> MedHE (Sat.)
+> MHE (UAV)
+> MedHE (UAV)
+
+Figure 11. Effect of Weather Augmentation on Bearing-UAV. Mixed-weather training further boosts and stabilizes performance compared with the non-augmented setting. 
+
+similar trends across different weather settings, indicating that the model learns a shared, weather-robust representation rather than overfitting to a specific appearance pattern. Among the four types, illumination augmentation pro-vides the most significant gain. Considering the large bright-ness discrepancies between UAV and satellite views, this suggests that illumination augmentation effectively mitigates cross-view appearance gaps and is particularly beneficial for cross-view localization and navigation. 
+
+A.5 . Visual Analysis of Localization and Orien-tation Performance 
+
+To more comprehensively analyze the factors that affect the localization and orientation performance of Bearing-UAV at different levels, and to provide more intuitive support for this analysis, we perform multi-granularity visualization and statistical analysis of the evaluation metrics at three levels: city-level, RSB-level, and sample-level. 
+
+A.5.1. City-level Statistical Analysis 
+
+For the VGG-16 backbone version of Bearing-UAV, the localization error (LE) and heading error (HE) distributions and scatter plots for the 9k unseen test samples (accounting for 10% of all samples) in the satellite and UAV views are shown in Fig. 12. The two left columns show the localization and heading errors in the satellite view, while the two right columns cor-respond to the UAV view. The first row presents the error distributions, and the second row shows the error scatter plots. We can first observe that, in both views, the localiza-tion and heading errors follow a long-tailed distribution that is highly concentrated around small values, with the median errors consistently lower than the corresponding means. This effect is particularly pronounced for the heading errors in the UAV-view setting. Moreover, compared with the satellite view, the UAV view (U-S cross-view) setting exhibits notice-ably more outliers, which is closely related to the increased complexity of cross-view localization. In the bottom row, the scatter plots show that the vast majority of samples stay close to the horizontal median-error lines, and large-error outliers are relatively sparse and dispersed across the sample index, without obvious structural bias or drift. Distance errors rarely exceed 20–25 m, whereas heading errors exhibit a few extreme outliers above 45 ◦,suggesting that heading estimation is more susceptible to rare failure cases than localization. Overall, Fig. 12 indicates that Bearing-UAV achieves stable and accurate localization and orientation on most unseen samples in both views, with only a small fraction of challenging cases contributing to the long tails of the error distributions. 
+
+A.5.2. RSB-level Statistical Analysis 
+
+During our evaluation, we observed that the accuracy of UAV localization and orientation is significantly influenced by terrain, and that this effect differs between the satellite view and the UAV view. To analyze this phenomenon, we compute the mean lo-calization and heading errors for each RSB and visualize them as RSB-level heatmaps, as shown in Fig. 13, which depict the spatial distribution of the model’s accuracy across different terrain types. From top to bottom, the rows show the RSB-level MLE heatmaps in the satellite view and UAV view, satellite imagery of the four cities, and the RSB-level MHE heatmaps in the satellite view and UAV view. From left to right, the four columns correspond to City A–D. To enhance the visualization, we center the color scale of each heatmap at the mean error and set a symmetric range around this mean value. We mainly analyze the relationship between terrain and errors under the UAV-view setting. From the RSB-level lo-calization error heatmaps, we observe that dark-blue regions in the lower-left of City A, the right side of City B, and light-blue region in City C mostly correspond to tall build-ing areas; these regions also exhibit relatively large heading errors, indicating that strong cross-view perspective changes increase both localization and orientation errors. In contrast, the central-upper area of City B and the central area of City A show lower localization and heading errors; these regions are dominated by low-rise buildings and small green spaces with rich fine-grained structural textures and small appearance differences, which are favorable for accurate localization and orientation. By comparison, the upper-right region of City A and the lower-left region of City D are mainly cov-ered by forests or open fields, where sparse features make localization and orientation more difficult. Regions with highly similar building appearances can also cause degrade performance, such as the plaza on the central-right of City C and the building cluster in the upper-right of City D. In addition, the satellite-view heading-error heatmap of 0 5 10 15 20 25 30                                        
+
+> Distance Error (meters)
+> 0
+> 100
+> 200
+> 300
+> 400
+> 500
+> 600
+> 700
+> 800
+> Frequency
+> MLE: 5.52m
+> MedLE: 4.96m
+> 020 40 60 80 100 120 140 160
+> Angle Error (degrees)
+> 0
+> 1000
+> 2000
+> 3000
+> 4000
+> 5000
+> Frequency
+> MHE: 4.03°
+> MedHE: 2.84°
+> 02000 4000 6000 8000
+> Sample Index
+> 0
+> 5
+> 10
+> 15
+> 20
+> 25
+> 30
+> Distance Error (meters)
+> MLE: 5.52m
+> 02000 4000 6000 8000
+> Sample Index
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> 120
+> 140
+> 160
+> Angle Error (degrees)
+> MHE: 4.03° 010 20 30 40 50 60 70 80
+> Distance Error (meters)
+> 0
+> 200
+> 400
+> 600
+> 800
+> 1000
+> 1200
+> Frequency
+> MLE: 8.55m
+> MedLE: 7.23m
+> 025 50 75 100 125 150 175
+> Angle Error (degrees)
+> 0
+> 500
+> 1000
+> 1500
+> 2000
+> 2500
+> Frequency
+> MHE: 12.47°
+> MedHE: 6.55°
+> 02000 4000 6000 8000
+> Sample Index
+> 0
+> 10
+> 20
+> 30
+> 40
+> 50
+> 60
+> 70
+> 80
+> Distance Error (meters)
+> MLE: 8.55m
+> 02000 4000 6000 8000
+> Sample Index
+> 0
+> 25
+> 50
+> 75
+> 100
+> 125
+> 150
+> 175
+> Angle Error (degrees)
+> MHE: 12.47°
+
+Figure 12. Localization and heading error distributions and scatter plots of 9k unseen test samples in satellite and UAV views. 
+
+Figure 13. Heatmaps of mean localization and heading errors aggregated per RSB in two views across four cities. 
+
+City C shows that the central river is associated with larger heading errors, consistent with the fact that rivers provide very limited texture cues. Moreover, since UVP samples are collected in different seasons and at different times than the satellite imagery, illumination changes, color shifts, and scene changes also affect localization and orientation. Com-paring the two views, the spatial distributions of large er-rors vary, reflecting cross-view appearance gaps, especially perspective distortion around tall buildings, illumination dis-crepancies, and changes in surface objects. Overall, these observations confirm that large cross-view visual discrepancies, regions with sparse structural textures, and areas with highly similar appearances all have a signifi-cant influence on the performance of the proposed algorithm. 
+
+A.5.3. Sample-level Visual Analysis 
+
+To support the analysis from a finer-grained perspective, we perform two types of sample-level visualization of localiza-tion and heading errors. Pure LE and HE visualization : We perform a macro-to-micro error analysis on 9k unseen sam-ples from both views, revealing detailed error patterns and enabling intuitive visualization of localization errors (LE) and heading vectors (HE), as shown in Fig. 14. Map-based visualization of LE and HE : For each of the four cities (A–D), the LE and HE visualizations on their corresponding satellite imagery are shown in Fig. 15. To facilitate reading and cross-referencing with the figure, we include the relevant details in the caption. 
+
+A.6. More Navigation Experiments 
+
+We further comprehensively compare Bearing-UAV (red tra-jectories) with four baselines on seven additional navigation routes across four cities, as shown in Fig. 16. The eight routes (City A–D, Route #1 and #2) have lengths of 771, 1119, 644, 757, 524, 821, 721, and 1115 m, respectively, with 10–13 waypoints each and diverse scene types. While not covering the full satellite image, these routes span a wide range of scene types and scales ( e.g. , large/small buildings, similar building clusters, roads, rivers, open fields, forests, and playgrounds), thus reflecting the model’s navigation performance under different scene layouts. 
+
+A.6.1. Analysis of Multiple Flight Trajectories 
+
+From these visualizations, Bearing-UAV shows the strongest adaptability to multi-city scenarios and complex navigation routes, consistently achieving stable performance across di-verse scenes, such as dense urban blocks, irregular river boundaries, and mixed residential–commercial areas. It suc-cessfully completes four routes and, on the remaining ones, still follows most segments before failure. These failures typ-ically occur at later stages and are mainly caused by severe appearance ambiguities or rapid structural changes, rather than early-stage drifts. This suggests that Bearing-UAV maintains stronger long-horizon consistency under cross-view misalignment. In contrast, baseline methods struggle in structurally com-plex scenes or along routes with tight curves and multi-directional turns. GTA-UAV (green) trajectories are often longer but frequently diverge from the intended path and continue advancing in an incorrect direction, indicating un-stable behavior. Uni-1652 (orange), DenseUAV (yellow), and SUES-200 (blue) exhibit more severe issues, often drift-ing shortly after the starting point. In several cases, they fall into local loops, circling within a small region instead of progressing along the intended route. 
+
+A.6.2. Analysis of Flight Frame Sequences 
+
+To provide an intuitive illustration of the cross-view UAV navigation process, we visualize step-by-step trajectories for two representative routes, including the sequence of vis-ited satellite-view RSBs and corresponding UVP frames, enabling analysis of how the system progressively adjusts heading, updates relative position, and aligns with the target route under varying scene structures and cross-view discrep-ancies (see Figs. 17 and 18). Corresponding to trajectory # 1 of City D in Fig. 6 of the main paper, Fig. 17 shows a successful navigation case, in which Bearing-UAV completes the route in 45 steps while maintaining stable alignment with the designated trajectory. Frames 10–14 and 30–35 show smooth transitions. Notice-able heading changes occur at frames 8–9, 14–15, 24–25, 35–36, and 44–45, which are near waypoints and correspond to normal turns, demonstrating that the model can effectively handle turning maneuvers. In contrast, consecutive large heading changes appear at frames 28–30 and 38–40. At these positions, the field of view contains repeated patterns (e.g. , rows of similar buildings and vegetation), indicating that feature similarity or repetition can introduce stochastic disturbances to heading estimation. Fig. 18 shows a more challenging case from trajectory #2 of City A, where navigation eventually fails, but the UAV still manages to follow a substantial portion of the planned path before drifting away. Together, these visualizations offer insights into the model’s decision-making behavior, the challenges caused by viewpoint inconsistencies, and the contrast between successful and near-successful trajectories. .
+
+> Table 9. Ablation study under satellite-view settings.
+
+GLUF RCE PSG CA R@1 ↑ LSR ↑ HSR ↑ MLE ↓ MHE ↓
+
+✗ ✓ ✓ ✓ 67.33 58.56 83.67 14.55 10.41 
+
+✓ ✗ ✓ ✓ 90.55 98.10 95.11 5.74 5.51 
+
+✓ ✓ ✗ ✓ 90.65 98.40 96.96 5.70 4.72 
+
+✓ ✓ ✓ ✗ 89.88 98.28 96.30 5.68 5.12 
+
+✓ ✓ ✓ ✓ 90.76 98.33 98.12 5.65 4.15 
+
+A.7. More Ablation Experiments 
+
+We also take ablation study under the satellite-view settings. As shown in Tab. 9, the satellite-view results follow the same trend as in the UAV view: adding the GLUF module yields a clear performance gain in both views. Moreover, the RCE and PSG modules further enhance localization and heading accuracy, with particularly strong improvements in heading estimation. The RCE, PSG, and CA exhibit slightly better orientation than localization performance. 
+
+A.8. Limitations 
+
+Vision-only UAV localization remains an open problem and is still far from mature. Vision-only performance is a critical complement to sensor–vision fusion under GNSS denial or long-term inertial drift, and also underpins geometric rea-soning methods (e.g., PnP) that estimate multi-DoF UAV poses. However, M2T/retrieval paradigms are limited by grid density and typically ignore heading estimation, re-stricting long-range localization and autonomous navigation. Moreover, repeated encoding of satellite tiles makes M2T-based methods time-consuming even when with onboard satellite imagery. In contrast, our paradigm avoids this cost and achieves state-of-the-art vision-only localization while jointly estimating heading, enabling more complete condi-tions for long-distance autonomous navigation. Nevertheless, although our method focuses on challeng-ing scenarios such as misalignment, sparse features, and varying IoUs, real-world flight environments involve many additional temporal and spatial variations. Thus, our ap-proach still has several limitations. First, its generaliza-tion to unseen cities remains underexplored. The model is trained and evaluated on satellite imagery from four cities, where supervised learning allows effective regression of po-sition and heading. However, its cross-city transfer ability requires further validation and improvement. Second, the current framework does not explicitly address dynamic scene changes, such as moving vehicles, seasonal vegetation varia-tion, or disaster-induced appearance changes. Handling such dynamic factors will be the focus of future work. 0 1000 2000 3000 4000             
+
+> X Pixel Coordinates
+> 0 1000  2000  3000  4000
+> Y Pixel Coordinates
+> GT. Pos.
+> Pos. Err.
+> 01000 2000 3000 4000
+> X Pixel Coordinates
+> 0 1000  2000  3000  4000
+> Y Pixel Coordinates
+> Pos. Err.
+> GT. Head.
+> Pred. Head. 01000 2000 3000 4000
+> X Pixel Coordinates
+> 0 1000  2000  3000  4000
+> Y Pixel Coordinates
+> GT. Pos.
+> Pos. Err.
+> 01000 2000 3000 4000
+> X Pixel Coordinates
+> 0 1000  2000  3000  4000
+> Y Pixel Coordinates
+> Pos. Err.
+> GT. Head.
+> Pred. Head.
+
+Figure 14. Visualization of Bearing-UAV localization/heading errors on 9K unseen samples in both views. The top panels : satellite view, the bottom panels : UAV view. The left column panels visualize the position error (Pos. Err.). The blue dots denote the ground-truth UAV positions (GT Pos.), the green arrows originate from GT Pos., with their tips indicating the predicted positions and lengths representing the model’s position error (Pos. Err.). The right column panels visualize the ground-truth heading (GT Head.), predicted heading(Pred. Head.), and position error (Pos. Err.). The blue/red dots denote GT Pos. / Pred. Pos., the blue/red arrows represent the ground-truth/predicted heading vectors (GT Head. / Pred. Head.), respectively, and green segments indicate the position error (Pos. Err.). A shorter green segment indicates smaller position errors, and perfect alignment between the red and blue arrows represents the ideal scenario. The yellow dashed lines mark the boundaries between neighboring RSTs. The 9k unseen test samples provide good coverage of the satellite imagery. Comparing the upper and lower panels, the satellite-view results serve as an ideal reference, showing smaller localization errors and higher consistency between predicted and ground-truth headings, whereas the U–S cross-view setting exhibits larger position and heading errors with more large-error cases. From a local perspective, this visualization enables fine-grained inspection within individual RSTs: for the same location, some regions show consistent errors across views, while others exhibit large discrepancies, revealing geographically sensitive areas. Zooming into local regions further allows direct comparison of predicted and ground-truth position–heading pairs at the sample level, uncovering detailed error patterns. 256 512 768 1024 1280 1536 1792 2048 2304 2560 2816 3072 3328 3584 3840 
+
+X Pixel Coordinates 
+
+256 
+
+512 
+
+768 
+
+1024 
+
+1280 
+
+1536 
+
+1792 
+
+2048 
+
+2304 
+
+2560 
+
+2816 
+
+3072 
+
+3328 
+
+3584 
+
+3840 
+
+> Y Pixel Coordinates
+
+79
+
+43
+
+3 12 
+
+6
+
+7
+
+8 44 
+
+8
+
+25 
+
+3 11 
+
+96
+
+14 5
+
+2
+
+9
+
+17 
+
+1
+
+9
+
+2
+
+5 52 
+
+31
+
+14
+
+2
+
+1
+
+4 16 
+
+66
+
+4
+
+0
+
+9
+
+61 
+
+17 12 
+
+7 135 
+
+7
+
+2
+
+9 6
+
+10 
+
+2
+
+10 
+
+27 
+
+16 2
+
+8 1
+
+611 
+
+8 10 
+
+10 4
+
+5
+
+17 
+
+56
+
+416 
+
+46
+
+4 31 
+
+3 2
+
+10 
+
+7
+
+420 4 4
+
+10 
+
+13 
+
+629 
+
+4
+
+17 
+
+10
+
+42 
+
+19 
+
+48
+
+1 25 
+
+7
+
+5
+
+6 3
+
+14 2
+
+44
+
+56
+
+922 
+
+7
+
+3
+
+5 14 
+
+86
+
+15 10 
+
+10 
+
+1
+
+4 11 
+
+94
+
+6 21 
+
+40 5
+
+13 
+
+1
+
+11 8
+
+14 39 
+
+12 
+
+10 
+
+9 30 
+
+210 
+
+84
+
+53
+
+3 9
+
+4
+
+1
+
+10 40 
+
+21
+
+43
+
+3
+
+19 
+
+72
+
+914 
+
+7
+
+5
+
+31
+
+3
+
+12 
+
+3 8
+
+4 104 
+
+13 
+
+6
+
+9
+
+35 
+
+657 
+
+16 
+
+10 
+
+612 
+
+5 46 
+
+3
+
+4
+
+74
+
+20 24 
+
+11 
+
+1
+
+9 11 
+
+10 
+
+9
+
+8
+
+15 
+
+218 
+
+13 
+
+10 
+
+7
+
+4
+
+5
+
+6
+
+99
+
+215 
+
+7
+
+9
+
+5
+
+4
+
+3
+
+82 
+
+6 2
+
+4
+
+43 
+
+13 5
+
+7
+
+4
+
+10 0
+
+843 
+
+4 56 
+
+7 7
+
+10 
+
+22 
+
+11 2
+
+5
+
+4
+
+23
+
+13 
+
+15 
+
+6
+
+19 
+
+65
+
+917 
+
+15 1
+
+3 41 
+
+12 4
+
+4 6
+
+17 
+
+5
+
+6 11 
+
+5 2
+
+3 20 
+
+721 
+
+13 48 
+
+47
+
+8 12 
+
+29
+
+65
+
+26
+
+5
+
+18 
+
+84
+
+11 
+
+2
+
+111 
+
+10 1
+
+1
+
+6
+
+7 29 
+
+8 128 
+
+2
+
+7
+
+529 
+
+127 
+
+5 6
+
+11 7
+
+533 
+
+17 20 
+
+4
+
+4
+
+48
+
+9 5
+
+620 
+
+10 4
+
+411 
+
+75
+
+17 13 
+
+68
+
+7
+
+8
+
+4 3
+
+7177 
+
+3
+
+39 
+
+3 2
+
+4
+
+9
+
+12 
+
+2
+
+1
+
+1
+
+4 14 
+
+6 2
+
+43
+
+12 8
+
+8 20 
+
+51
+
+7 3
+
+69
+
+10 
+
+24 14 
+
+5
+
+7 2
+
+12 11 
+
+12 
+
+2
+
+9 12 
+
+216 
+
+717 
+
+4
+
+10 
+
+417 
+
+15 9
+
+14 5
+
+2
+
+4
+
+10 14 
+
+411 
+
+14 0
+
+88
+
+1
+
+0
+
+67
+
+14 5
+
+88
+
+10 
+
+1
+
+6 5
+
+620 
+
+5 19 
+
+23
+
+8
+
+11 
+
+8 31 
+
+14 2
+
+63
+
+4 7
+
+5
+
+3
+
+715 
+
+61
+
+114 
+
+234 
+
+9 11 
+
+8 19 
+
+812 
+
+3
+
+14 
+
+333 
+
+310 
+
+11 7
+
+4 105 
+
+53
+
+2
+
+9
+
+16 
+
+16 
+
+71
+
+316 
+
+12 
+
+8
+
+5
+
+8
+
+14 23 
+
+5
+
+31 
+
+3 31 
+
+83
+
+3 8
+
+6 13 
+
+8 13 
+
+32
+
+49 2
+
+4 1
+
+96
+
+14 
+
+24 
+
+842 
+
+8 3
+
+11 
+
+23 
+
+126 
+
+21
+
+10 11 
+
+9 10 
+
+64
+
+10 
+
+24 
+
+12 
+
+1
+
+70
+
+10 19 
+
+11 3
+
+13 2
+
+6 8
+
+15 2
+
+11 2
+
+4 5
+
+18 1
+
+10 
+
+163 
+
+18 0
+
+2
+
+1
+
+51
+
+9
+
+4
+
+99
+
+3 87 
+
+5
+
+4
+
+7
+
+19 
+
+23 5
+
+432 
+
+16 18 
+
+16 1
+
+8
+
+19 
+
+12 
+
+2
+
+5
+
+0
+
+15 2
+
+8 3
+
+13 
+
+1
+
+3 9
+
+5
+
+49 
+
+9
+
+17 
+
+215 
+
+21
+
+643 
+
+64
+
+8
+
+0
+
+7
+
+5
+
+5 16 
+
+84
+
+15 8
+
+7
+
+8
+
+5 5
+
+68
+
+4
+
+6
+
+612 
+
+412 
+
+5
+
+12 
+
+612 
+
+37
+
+2
+
+3
+
+7
+
+37 
+
+10 3
+
+3
+
+27 
+
+4 15 
+
+30
+
+7
+
+8
+
+41
+
+4 13 
+
+4
+
+8
+
+11 
+
+42 
+
+11 4
+
+27
+
+82
+
+47
+
+6
+
+22 
+
+6 2
+
+10 8
+
+414 
+
+2
+
+77 
+
+34
+
+2 21 
+
+332 
+
+410 
+
+21 0
+
+4 12 
+
+820 
+
+5
+
+10 
+
+47
+
+6
+
+8
+
+10 1
+
+2 0
+
+5 7
+
+26
+
+35
+
+10 4
+
+65
+
+50
+
+10 6
+
+62
+
+3 26 
+
+9
+
+4
+
+9 1
+
+5 7
+
+20 37 
+
+17 4
+
+12 5
+
+11
+
+9 8
+
+99
+
+8 22 
+
+3 17 
+
+4 1
+
+2 0
+
+14 76 
+
+15 10 
+
+47
+
+9
+
+7
+
+12 7
+
+29
+
+1
+
+9
+
+910 
+
+11 
+
+11 
+
+7
+
+4
+
+93
+
+917 
+
+4
+
+28 
+
+715 
+
+6 6
+
+12 1
+
+28
+
+16 6
+
+714 
+
+3 2
+
+17
+
+6
+
+19 
+
+4
+
+20 
+
+10 
+
+5
+
+10 6
+
+25
+
+17 4
+
+68
+
+634 
+
+78
+
+0
+
+18 
+
+5 10 
+
+12 144 
+
+73
+
+5 7
+
+2
+
+5
+
+98
+
+9 173 
+
+0
+
+3
+
+517 
+
+41
+
+16 20 
+
+92
+
+9
+
+3
+
+3 31 
+
+4
+
+14 
+
+8 3
+
+20 5
+
+20 
+
+1
+
+0
+
+12 
+
+4 11 
+
+2
+
+6
+
+7
+
+0
+
+211 
+
+31
+
+16 2
+
+925 
+
+212 
+
+48
+
+5
+
+9
+
+5 3
+
+8
+
+1
+
+9
+
+038
+
+10 2
+
+6
+
+4
+
+714 
+
+412 
+
+81
+
+821 
+
+9
+
+11 
+
+88
+
+8 2
+
+7
+
+8
+
+13 0
+
+44
+
+3 1
+
+50
+
+12
+
+246 
+
+9 7
+
+7 0
+
+811 
+
+62
+
+8
+
+1
+
+13 3
+
+920 
+
+6
+
+2
+
+6
+
+1
+
+12 19 
+
+6
+
+3
+
+66
+
+9 11 
+
+2
+
+4
+
+14 
+
+7
+
+323 
+
+69
+
+10 13 
+
+95
+
+10 
+
+61 
+
+13 4
+
+19 3
+
+50
+
+10 
+
+7
+
+79
+
+227 
+
+10 17 7 15 
+
+11 32 
+
+6
+
+16 
+
+12 9
+
+50
+
+20 
+
+6
+
+12 55 
+
+8
+
+5
+
+43
+
+7
+
+78 
+
+3
+
+13 
+
+86
+
+8
+
+13 
+
+30
+
+62
+
+61
+
+8
+
+31 
+
+5210 6
+
+10 15 
+
+92
+
+312 
+
+337 
+
+9
+
+10 
+
+62
+
+10 
+
+7
+
+310 
+
+13 
+
+6
+
+2 38 
+
+3
+
+4
+
+0
+
+15 
+
+92
+
+10 12 
+
+12 
+
+9
+
+14 
+
+8
+
+26
+
+9 5
+
+3
+
+1
+
+320 
+
+8 8
+
+97
+
+5 15 
+
+5
+
+40 
+
+3 5
+
+92
+
+11 19 
+
+12 0
+
+96
+
+16 
+
+25 
+
+5 8
+
+3
+
+4
+
+5 25 
+
+6 9
+
+10 5
+
+15 2
+
+8
+
+1
+
+85
+
+3
+
+9
+
+93
+
+7
+
+38 
+
+816 
+
+7 13 
+
+23
+
+615 
+
+16 28 
+
+22 19 
+
+3 5
+
+43
+
+2 3
+
+612 
+
+10 13 
+
+3 10 
+
+4
+
+7
+
+31
+
+13 
+
+3
+
+45 0
+
+5 3
+
+21
+
+12 28 
+
+10 21 
+
+4
+
+8
+
+22
+
+9 3
+
+6
+
+110 
+
+910 
+
+64
+
+28
+
+22
+
+14 11 
+
+49
+
+20 10 
+
+9
+
+16 
+
+14
+
+313 
+
+93
+
+14 44 
+
+13 8
+
+43
+
+74
+
+14 13 
+
+11 
+
+156 
+
+15
+
+13 
+
+9
+
+20 0
+
+4
+
+8
+
+46
+
+114 
+
+14 
+
+1
+
+6
+
+27 
+
+7
+
+7
+
+11 1
+
+514 
+
+4
+
+39 
+
+21
+
+83
+
+55
+
+9
+
+3
+
+913 
+
+5
+
+22 
+
+3
+
+15 
+
+4 10 
+
+53
+
+8
+
+1
+
+416 
+
+10 5
+
+5
+
+13 
+
+88
+
+16 15 
+
+7
+
+7
+
+12 45 
+
+6 4
+
+6
+
+5
+
+10 5
+
+10 12 
+
+6
+
+5
+
+3
+
+23 
+
+9 11 
+
+93
+
+8 74 
+
+25 
+
+15 
+
+11 33 
+
+17 
+
+4
+
+12 148 
+
+14 
+
+4
+
+3 7
+
+15 3
+
+7 18 
+
+13 6
+
+8 4
+
+12 
+
+6
+
+621 
+
+52
+
+2 12 
+
+15 11 
+
+6
+
+28 
+
+34
+
+2
+
+7
+
+5 2
+
+3 22 
+
+11 3
+
+38 7
+
+84
+
+912 
+
+23 0
+
+13 1
+
+20 4
+
+8 7
+
+15 8
+
+1
+
+4
+
+8 11 
+
+84
+
+7 34 
+
+9 9
+
+4 8
+
+8
+
+110 
+
+3 4
+
+76
+
+511 
+
+8
+
+5
+
+6 4
+
+3
+
+1
+
+7
+
+1
+
+7
+
+9
+
+15 2
+
+24
+
+3
+
+3
+
+12 1
+
+18 33 
+
+7
+
+0
+
+25 4
+
+8 0
+
+38 6
+
+11 3
+
+7 4
+
+92
+
+8
+
+1
+
+810 
+
+12 0
+
+4
+
+9
+
+5 34 
+
+11 
+
+10 
+
+3 0
+
+72
+
+23 
+
+39 
+
+13 46 
+
+5
+
+3
+
+8 7
+
+19 
+
+11 
+
+8
+
+9
+
+12 
+
+12 
+
+5175 
+
+15 
+
+7
+
+12 28 
+
+3
+
+19 
+
+27
+
+28
+
+13 4
+
+3
+
+7
+
+24 1
+
+2
+
+15 
+
+65
+
+3
+
+12 
+
+19 
+
+3
+
+25 4
+
+17 4
+
+38 
+
+3
+
+59
+
+39 0
+
+515 
+
+2
+
+1
+
+89
+
+6
+
+63 
+
+311 
+
+10 15 
+
+71
+
+4 7
+
+3
+
+1
+
+49
+
+6 4
+
+11 27 
+
+277 
+
+66
+
+3 12 
+
+88
+
+26 
+
+1
+
+42
+
+9
+
+2
+
+12 
+
+20 
+
+14
+
+52
+
+5
+
+74 
+
+10 14 
+
+2 8
+
+7
+
+1
+
+10 128 
+
+71
+
+11 19 
+
+56
+
+220 
+
+10 20 
+
+9 2
+
+61
+
+18 
+
+26 
+
+10 1
+
+035 
+
+26 1
+
+511 
+
+9
+
+6
+
+50
+
+2
+
+106 
+
+73
+
+99
+
+12 8
+
+20 
+
+14 
+
+20
+
+2
+
+95 
+
+812 
+
+70
+
+15 5
+
+14 
+
+6
+
+4
+
+2
+
+314 
+
+730 
+
+13 1
+
+16 
+
+54 
+
+610 
+
+19 
+
+5
+
+826 
+
+8 18 
+
+7 0
+
+4
+
+3
+
+34
+
+57
+
+15 13 
+
+68
+
+15 1
+
+10 
+
+6
+
+5 10 
+
+8 1
+
+5
+
+6
+
+41
+
+313 
+
+12 
+
+31 
+
+15 
+
+0
+
+24 
+
+2
+
+19 13 
+
+19 3
+
+5
+
+12 
+
+10 5
+
+3
+
+5
+
+9
+
+11 
+
+10
+
+11 
+
+19 
+
+3 8
+
+5
+
+36 
+
+12 5
+
+3
+
+3
+
+11 
+
+18 
+
+5 5
+
+38
+
+12 7
+
+3
+
+7
+
+9 4
+
+10 11 
+
+11 
+
+0
+
+11 
+
+3
+
+5
+
+3
+
+979 
+
+15 2
+
+427 
+
+3 4
+
+8 1
+
+11 7
+
+4 9
+
+16 6
+
+13 
+
+6
+
+05
+
+9
+
+132 
+
+16 
+
+11 
+
+7085
+
+44
+
+3
+
+1
+
+36
+
+8 4
+
+11 13 
+
+6
+
+3
+
+611 
+
+4
+
+5
+
+21
+
+3
+
+0
+
+60
+
+10 2
+
+8 7
+
+14 1
+
+31
+
+337 
+
+9
+
+33 
+
+2
+
+6
+
+14 0
+
+16 26 
+
+444 
+
+18 0
+
+53
+
+19 
+
+9
+
+7 5
+
+2
+
+2
+
+110 
+
+65
+
+98
+
+14 2
+
+16 29 
+
+16 12 
+
+42 8
+
+36 1
+
+611 
+
+512 
+
+13 
+
+3
+
+7 2
+
+11 3
+
+8
+
+161 
+
+10 
+
+6
+
+10 2
+
+15 5
+
+13 
+
+11 
+
+53
+
+22 1
+
+8 8
+
+218 
+
+2 1
+
+17 
+
+1
+
+3
+
+4
+
+12 7
+
+62
+
+37
+
+913 
+
+84
+
+34
+
+16 
+
+2
+
+85
+
+16 
+
+8
+
+3 5
+
+45
+
+70
+
+12 
+
+0
+
+19 21 
+
+50
+
+92
+
+91
+
+12 9
+
+91
+
+5
+
+10 
+
+5
+
+1
+
+8
+
+12 
+
+24 
+
+2
+
+5 1
+
+11 11 
+
+83
+
+7
+
+9
+
+95
+
+17 
+
+3
+
+16 
+
+9
+
+210 
+
+17 169 
+
+410 
+
+11 
+
+46 
+
+3
+
+4
+
+58
+
+34
+
+18 
+
+24 
+
+2 15 
+
+89
+
+4
+
+6
+
+15 
+
+6
+
+5 2
+
+82
+
+511 
+
+99
+
+8 2
+
+3
+
+8
+
+10 
+
+2
+
+5
+
+8
+
+6
+
+7
+
+10 1
+
+9 49 
+
+2
+
+13 
+
+346 
+
+14 12 
+
+11 
+
+5
+
+2
+
+4
+
+55
+
+9 6
+
+713 
+
+4
+
+5
+
+86
+
+11 0
+
+82
+
+69
+
+81
+
+5
+
+3
+
+93
+
+6
+
+3
+
+3 2
+
+11 
+
+1
+
+71
+
+6
+
+87 
+
+6
+
+6
+
+9
+
+1
+
+20 
+
+69 
+
+8
+
+17 
+
+8 146 
+
+11 8
+
+7
+
+6
+
+37 
+
+0
+
+11 2
+
+6
+
+0
+
+14 
+
+1
+
+4 7
+
+16 
+
+32 
+
+11 142 
+
+7 7
+
+11 
+
+0
+
+612 
+
+13 3
+
+2
+
+11 
+
+18 17 
+
+4
+
+30 
+
+6
+
+6
+
+9 25 
+
+210 
+
+441 
+
+10 1
+
+6
+
+2
+
+18 1
+
+8
+
+13 
+
+5 18 7
+
+2
+
+10 
+
+2
+
+17 91 
+
+27 22 
+
+6
+
+4
+
+12 
+
+11 
+
+43 2
+
+427 
+
+4
+
+5
+
+16 
+
+29 
+
+3
+
+19 
+
+5
+
+22 
+
+91
+
+12 3
+
+54
+
+95
+
+66
+
+11 
+
+17 
+
+15 20 
+
+11 10 
+
+10 15 
+
+4 16 
+
+3
+
+1
+
+19 8
+
+5
+
+4
+
+7
+
+4
+
+12 17 13 3
+
+12 14 
+
+8 12 
+
+10 3
+
+10 11 
+
+10 4
+
+12 11 
+
+36
+
+5
+
+6
+
+9
+
+9
+
+410 
+
+16
+
+45
+
+1 0
+
+19 24 
+
+8
+
+15 
+
+34 5
+
+10 2
+
+45
+
+72
+
+9
+
+35 
+
+7 7
+
+5 1
+
+411 
+
+10 1
+
+98
+
+45
+
+45
+
+61
+
+6
+
+3
+
+13 6
+
+4
+
+4
+
+516 
+
+9
+
+2
+
+10 
+
+2
+
+54
+
+5
+
+12 
+
+5
+
+14 
+
+47
+
+16 
+
+9
+
+11 1
+
+83
+
+2 143 
+
+5
+
+76 
+
+85
+
+48
+
+0 25 
+
+2 45 
+
+25 9
+
+8
+
+6
+
+16 3
+
+11 0
+
+6 14 
+
+10 
+
+13 
+
+14 14 
+
+4
+
+145 
+
+3
+
+3
+
+29
+
+7
+
+15 
+
+11 1
+
+02
+
+4
+
+7
+
+13 
+
+9
+
+24 
+
+44 
+
+3
+
+4
+
+3 5
+
+85
+
+10 61 
+
+99
+
+36
+
+74
+
+2
+
+1
+
+11 
+
+9
+
+11
+
+82
+
+12 
+
+14 
+
+76
+
+13 6
+
+14 
+
+8
+
+16 3
+
+51
+
+8 3
+
+12 3
+
+19 4
+
+7
+
+1
+
+47
+
+5
+
+5
+
+7 8
+
+9
+
+2
+
+74
+
+4
+
+7
+
+12 19 
+
+28
+
+10 10 
+
+5 4
+
+10 3
+
+13 5
+
+4 4
+
+1
+
+6
+
+1
+
+5
+
+17 3
+
+10 7
+
+10 7
+
+23 4
+
+89
+
+66
+
+92
+
+13 2
+
+4
+
+3
+
+417 
+
+21 
+
+135 
+
+97
+
+52
+
+12 10 
+
+720 
+
+5 5
+
+66
+
+55
+
+11 5
+
+6
+
+9
+
+10 4
+
+9 1
+
+3 13 
+
+14 6
+
+6
+
+6
+
+12 
+
+1
+
+11 5
+
+15 5
+
+5 17 
+
+723 
+
+13 9
+
+7
+
+8
+
+32
+
+61
+
+12 
+
+1
+
+7
+
+45 
+
+73
+
+910 
+
+92
+
+3 2
+
+5 1
+
+88
+
+11 
+
+33 
+
+3 13 
+
+17 1
+
+56
+
+43
+
+3 4
+
+68
+
+11 1
+
+33 
+
+3
+
+922 
+
+88
+
+4
+
+3
+
+61
+
+81
+
+11 14 
+
+17 2
+
+13 
+
+12 
+
+8
+
+0
+
+21 
+
+10 
+
+23 20 
+
+11
+
+9
+
+5
+
+7
+
+10 
+
+7 119 
+
+22
+
+7 7
+
+49
+
+9
+
+5
+
+61
+
+510 
+
+8
+
+6
+
+74
+
+120 
+
+10 99 
+
+94
+
+12 3
+
+41
+
+79
+
+10 5 28 31 
+
+70
+
+11 6
+
+14 7
+
+17 3
+
+218 
+
+15 27 
+
+11 
+
+5
+
+820 
+
+10 12 
+
+6
+
+15 
+
+20 18 
+
+24 
+
+4
+
+26 5
+
+41 
+
+16 
+
+64
+
+34
+
+20 6
+
+52
+
+23 1
+
+9
+
+20 
+
+5 2
+
+6 2
+
+14 
+
+1
+
+111 
+
+11 
+
+5
+
+12 
+
+5
+
+9 15 
+
+7
+
+1
+
+18 4
+
+3
+
+5
+
+39
+
+8
+
+32 
+
+6
+
+3
+
+91
+
+9
+
+3
+
+70
+
+9
+
+1
+
+10 123 
+
+16 8
+
+8
+
+4
+
+6
+
+4
+
+13 3
+
+6 7
+
+8 4
+
+8
+
+5
+
+2
+
+36 7
+
+23 
+
+21 10 
+
+43
+
+7 37 
+
+15 
+
+45 
+
+81
+
+12 0
+
+32 6
+
+93
+
+19 
+
+8
+
+11 43 
+
+56
+
+21 3
+
+35
+
+20 4
+
+515 
+
+42 12 
+
+7
+
+0
+
+4
+
+26 
+
+77
+
+7
+
+5
+
+13 6
+
+10 7
+
+63
+
+18 4
+
+10 5
+
+320 
+
+13 
+
+4
+
+8
+
+3
+
+5 2
+
+65
+
+10 12 9
+
+2
+
+11 3
+
+17 3
+
+6 11 
+
+20 0
+
+8 29 
+
+3
+
+4
+
+714 
+
+3165 
+
+19 
+
+29 
+
+20 6
+
+14 5
+
+9
+
+0
+
+316 
+
+6 2
+
+10 3
+
+50
+
+3
+
+27 
+
+18 8
+
+5 23 
+
+9 3
+
+6 12 
+
+14 3
+
+26 2
+
+14 
+
+2
+
+31
+
+5
+
+3
+
+15 5
+
+12 12 
+
+10 
+
+18 
+
+13 
+
+23 
+
+14 6
+
+16 0
+
+910 
+
+2 10 
+
+74
+
+6 38 
+
+8 1
+
+61
+
+120 
+
+15
+
+20 9
+
+78
+
+9 4
+
+3 142 
+
+4
+
+20 
+
+18 1
+
+8 6
+
+8 8
+
+9 4
+
+927 
+
+57
+
+11 16 
+
+73
+
+8 19 
+
+95
+
+70
+
+13 
+
+3
+
+43 80 
+
+10 
+
+6
+
+814 82
+
+21 0
+
+2
+
+12 
+
+16 
+
+2
+
+82
+
+6
+
+31 
+
+15 1
+
+310 
+
+13 17 
+
+5
+
+2
+
+1 6
+
+9
+
+2
+
+21 4
+
+4 14 
+
+72
+
+13 
+
+12 
+
+4 11 
+
+225 
+
+89
+
+20
+
+24
+
+9
+
+4
+
+12 
+
+5
+
+3
+
+8
+
+5
+
+1
+
+6
+
+5
+
+13 7
+
+922 
+
+16 
+
+22 
+
+43
+
+16 4
+
+21 
+
+55 
+
+614 
+
+4
+
+1
+
+4130 
+
+3
+
+8
+
+14 
+
+4
+
+3 10 
+
+015 
+
+110 
+
+12 2
+
+911 
+
+4
+
+22 
+
+16 48 
+
+814 
+
+4
+
+18 
+
+12 15 
+
+12 12 
+
+11 2
+
+19
+
+18 1
+
+11 
+
+16 
+
+18 
+
+4
+
+11 2
+
+9 3
+
+4 126 
+
+88
+
+82
+
+50
+
+27 16 
+
+17 
+
+4
+
+10 
+
+3
+
+40 6
+
+2
+
+22 
+
+7
+
+99 
+
+19 3
+
+6
+
+6
+
+54 3
+
+7
+
+5
+
+12 0
+
+84
+
+17 1
+
+85
+
+19 26 
+
+11 4
+
+5 2
+
+5
+
+3
+
+8 1
+
+9 8
+
+17
+
+111 
+
+7
+
+8
+
+2 3
+
+341 
+
+5
+
+3
+
+6
+
+7
+
+10 
+
+2
+
+13 6
+
+53
+
+12 0
+
+37 31 
+
+6 10 
+
+7
+
+3
+
+22
+
+19 3
+
+11 
+
+4
+
+5 2
+
+72
+
+8
+
+151 
+
+12 19 
+
+4 5
+
+710 
+
+11 9
+
+5
+
+3
+
+5
+
+17 
+
+13 0
+
+13
+
+77
+
+511 
+
+36 0
+
+6
+
+2
+
+16 
+
+4
+
+10 4
+
+56
+
+12 
+
+12 
+
+12 2
+
+7 17 
+
+38 
+
+8
+
+3
+
+3
+
+40
+
+3
+
+5
+
+9
+
+15 
+
+5 1
+
+15 
+
+1
+
+2 15 
+
+11 
+
+8
+
+9
+
+19 
+
+4
+
+9
+
+217 
+
+17 
+
+2
+
+5
+
+2
+
+62
+
+10 18 
+
+8
+
+13 
+
+5
+
+15 
+
+10 6
+
+749 
+
+7
+
+10 
+
+243 
+
+15
+
+84
+
+34
+
+11 13 
+
+15 1
+
+346 
+
+5
+
+6
+
+689 
+
+7 3
+
+716 
+
+12 2
+
+15 
+
+12 
+
+30
+
+4 7
+
+10 5
+
+616 
+
+11 
+
+10 
+
+25
+
+4
+
+31 
+
+72
+
+51
+
+27
+
+9
+
+1
+
+17 
+
+4
+
+62
+
+615 
+
+3
+
+3
+
+11 1
+
+14 3
+
+25
+
+6 8
+
+6
+
+5
+
+15 4
+
+9
+
+4
+
+18 3
+
+41
+
+14 16 4 34 
+
+11 1
+
+20 2
+
+47
+
+6 19 
+
+2
+
+15 
+
+5 3
+
+1
+
+27 
+
+7 8
+
+33
+
+10 
+
+138 
+
+11 
+
+40 
+
+3
+
+10 
+
+9 58 
+
+81
+
+7
+
+6
+
+10 
+
+3
+
+18 
+
+5
+
+415 
+
+7 5
+
+5
+
+4
+
+9
+
+12 
+
+5
+
+6
+
+3
+
+4
+
+13 4
+
+12 
+
+1
+
+212 
+
+4 3
+
+8
+
+1
+
+2
+
+2
+
+13 10 
+
+17 
+
+54 
+
+16 
+
+97 
+
+21 7
+
+11 
+
+9
+
+15 
+
+12 
+
+44
+
+13 8
+
+33
+
+5
+
+24 
+
+26 1
+
+15 3
+
+17 
+
+17 
+
+85
+
+59
+
+11
+
+9
+
+1
+
+38
+
+8
+
+1
+
+74
+
+913 
+
+1 8
+
+14 22 
+
+16 
+
+2
+
+10 10 
+
+5
+
+2
+
+13 4
+
+2
+
+19 
+
+9 4
+
+6
+
+7
+
+26
+
+8 4
+
+93
+
+52
+
+5
+
+6
+
+10 10 
+
+71
+
+13 6
+
+12 20 
+
+33
+
+74
+
+18 
+
+8
+
+6 11 
+
+69
+
+81
+
+48
+
+417 
+
+2 2
+
+91
+
+9
+
+6
+
+11
+
+34
+
+7
+
+3
+
+10 10 
+
+14 
+
+3
+
+510 
+
+73
+
+89
+
+3
+
+3
+
+1
+
+12 
+
+8 7
+
+3 2
+
+21
+
+6
+
+4
+
+65
+
+3 27 
+
+78
+
+29 2
+
+46
+
+14 4
+
+11 7
+
+4
+
+5
+
+47
+
+6
+
+1
+
+14 5
+
+21 
+
+0
+
+313 
+
+8 49 
+
+13 16 
+
+2
+
+3
+
+52
+
+413 
+
+92
+
+8 4
+
+6
+
+4
+
+2 3
+
+56
+
+16 165 
+
+70
+
+2 0
+
+22 2
+
+9
+
+1
+
+66
+
+4 1
+
+71
+
+5
+
+12 
+
+2
+
+5
+
+3 118 
+
+6 2
+
+71
+
+10 16 
+
+5 4
+
+59
+
+9
+
+15 
+
+4
+
+47 
+
+412 
+
+9
+
+6
+
+4 13 
+
+824 
+
+7
+
+5
+
+12 
+
+54 
+
+5
+
+11 
+
+2
+
+30 
+
+6 118 
+
+11 15 
+
+510 
+
+6
+
+8
+
+7 3
+
+16 7
+
+11 4
+
+6 1
+
+17 
+
+8
+
+5 47 
+
+8 1
+
+12 9
+
+38
+
+13 
+
+4
+
+28
+
+11 39 
+
+9 35 
+
+8
+
+11 
+
+815 
+
+99
+
+73
+
+10 0
+
+10 6
+
+27 6
+
+313 
+
+44
+
+10 10 
+
+11 35 
+
+42
+
+9 46 
+
+5
+
+1
+
+55
+
+37
+
+10 7
+
+9 9
+
+12 13 
+
+11 
+
+10 
+
+4
+
+12 
+
+412 
+
+11 1
+
+6
+
+17 
+
+25
+
+8 15 
+
+2 13 
+
+322 
+
+81
+
+22 
+
+15 
+
+10 5
+
+812 
+
+4
+
+6
+
+530 
+
+421 
+
+8 10 
+
+22
+
+0
+
+4
+
+11 2
+
+413 
+
+46
+
+31
+
+13 18 
+
+510 
+
+32
+
+13 4
+
+10 
+
+39 
+
+12 2
+
+73
+
+822 
+
+11 
+
+5
+
+31 
+
+0
+
+414 
+
+6 5
+
+412 
+
+12 
+
+15 
+
+39 2
+
+20 
+
+17 
+
+6 17 
+
+17 2
+
+2 9
+
+6
+
+1
+
+14 11 
+
+010 
+
+525 
+
+81
+
+15 1
+
+23 
+
+21 
+
+14 9
+
+11 4
+
+16 13 
+
+36
+
+5 16 
+
+68
+
+57
+
+54
+
+2 19 
+
+3
+
+0
+
+7 2
+
+10 
+
+2
+
+16 
+
+0
+
+4
+
+6
+
+13 
+
+4
+
+54
+
+16 4
+
+612 
+
+62
+
+13 1
+
+9
+
+6
+
+5 0
+
+514 
+
+91
+
+714 
+
+1 4
+
+8 2
+
+6115 
+
+3
+
+15 
+
+5
+
+15 
+
+5 3
+
+23
+
+20
+
+9
+
+12 
+
+65
+
+4
+
+6
+
+3
+
+107 
+
+7 14 
+
+57
+
+18 
+
+4
+
+93
+
+18 
+
+11 
+
+8
+
+6
+
+21
+
+10 3
+
+14 
+
+6
+
+89
+
+728 
+
+16 
+
+4
+
+95
+
+6 3
+
+13 7
+
+3 9
+
+4 5
+
+4 9
+
+2 3
+
+2 1
+
+17 
+
+58 
+
+5 8
+
+11 11 
+
+6 8
+
+63
+
+420 
+
+5
+
+10 
+
+30 47 
+
+6
+
+4
+
+4 10 
+
+11 11 
+
+853 
+
+6
+
+4
+
+6
+
+1
+
+5
+
+3
+
+614 
+
+37
+
+15 81 
+
+4 5
+
+16 7
+
+12 11 
+
+15 
+
+1
+
+7 6
+
+514 
+
+52
+
+11 
+
+25 
+
+17
+
+13 
+
+9
+
+74
+
+34
+
+1
+
+7
+
+7
+
+8
+
+10 
+
+12 
+
+4
+
+1
+
+6
+
+4
+
+18 7
+
+9 14 
+
+67
+
+416 
+
+3
+
+5
+
+28
+
+47
+
+15 6
+
+12 
+
+10 
+
+11 1
+
+6
+
+5
+
+811 
+
+49
+
+12 
+
+6
+
+4 4
+
+2 4
+
+13 12 
+
+12 
+
+72 
+
+14 11 
+
+22 
+
+2
+
+10 0
+
+16 3
+
+12 14 
+
+63
+
+13 7
+
+52
+
+8 7
+
+32
+
+10 1
+
+14 5
+
+13 
+
+6
+
+16 1
+
+5 14 
+
+812 
+
+85
+
+15 
+
+2
+
+31
+
+2
+
+4
+
+7 5
+
+10 
+
+5
+
+12 11 
+
+53
+
+5
+
+11 
+
+519 
+
+724 
+
+5
+
+4
+
+9 12 
+
+41
+
+17
+
+969 
+
+15 
+
+2
+
+10 5
+
+12 6
+
+17 
+
+12 
+
+16 3
+
+13 
+
+5
+
+64
+
+40
+
+10 2
+
+6
+
+6
+
+34
+
+16 15 
+
+7
+
+32 
+
+11 2
+
+717 
+
+4
+
+12 
+
+34
+
+81
+
+61 12 
+
+10 12 
+
+12 6
+
+23 16 
+
+72
+
+9
+
+2
+
+816 
+
+12 0
+
+811 
+
+11 7
+
+4
+
+9
+
+88
+
+2 1
+
+5 2
+
+8 3
+
+5
+
+31 
+
+5 9
+
+82
+
+43
+
+2 12 
+
+11 
+
+4
+
+11 
+
+53 
+
+59
+
+5 2
+
+4
+
+4
+
+5
+
+4
+
+42
+
+14 0
+
+11 6
+
+7
+
+25 
+
+28
+
+6
+
+23 
+
+814 
+
+13
+
+6
+
+1
+
+1
+
+25 
+
+4
+
+127 
+
+3 3
+
+12 12 
+
+11 12 
+
+7 12 
+
+11 16 
+
+77
+
+11 14 
+
+12 
+
+2
+
+62
+
+8
+
+13 
+
+5 22 
+
+51
+
+66
+
+334 
+
+46
+
+4 7
+
+52
+
+17 6
+
+3
+
+6
+
+4
+
+27 
+
+17 24 
+
+411 
+
+18 23 
+
+25
+
+6
+
+0
+
+14 
+
+4
+
+6
+
+4
+
+7
+
+4
+
+618 
+
+10 1
+
+8
+
+6
+
+4
+
+2
+
+210 
+
+627 
+
+12 2
+
+40
+
+12 
+
+28 
+
+752 
+
+93
+
+88
+
+60
+
+15 
+
+6
+
+12 3
+
+2
+
+1
+
+2
+
+11 
+
+12 29 
+
+11 
+
+4
+
+612 
+
+98
+
+8165 
+
+99
+
+72
+
+6
+
+4
+
+74
+
+2 6
+
+712 
+
+11 9
+
+9
+
+75 
+
+71
+
+11 0
+
+512 
+
+47
+
+2
+
+28 
+
+10 8
+
+9
+
+1
+
+4 16 
+
+4
+
+6
+
+312 
+
+30 
+
+20 
+
+64
+
+45
+
+88
+
+8
+
+9
+
+13 
+
+4
+
+17 5
+
+19 4
+
+9 8
+
+6
+
+2
+
+13 10 
+
+85
+
+2
+
+103 
+
+12 
+
+7
+
+323 
+
+6 5
+
+46
+
+16 4
+
+18
+
+10 10 
+
+51 8
+
+42 16 
+
+16 
+
+2
+
+69
+
+818 
+
+7
+
+4
+
+66
+
+5
+
+11 
+
+8 14 
+
+5 19 
+
+12 3
+
+94
+
+14 5
+
+13
+
+6 16 
+
+5 5
+
+79
+
+715 
+
+611 
+
+90
+
+66
+
+16 
+
+26 
+
+4
+
+82 
+
+13 
+
+2
+
+6 9
+
+3
+
+7
+
+20 
+
+2
+
+914 
+
+7 0
+
+15 5
+
+21
+
+21 18 
+
+26 18 
+
+820 
+
+4
+
+1
+
+49 
+
+12 
+
+17
+
+22
+
+6
+
+5
+
+41
+
+3
+
+26 
+
+16 10 
+
+62
+
+4 14 
+
+615 
+
+10 49 
+
+84
+
+11 6
+
+4
+
+8
+
+7
+
+3
+
+7
+
+18 
+
+3
+
+2
+
+3
+
+30 
+
+15 5
+
+71
+
+41
+
+73
+
+78
+
+72
+
+10 5
+
+52
+
+15 
+
+2
+
+9
+
+7
+
+11 12 
+
+5
+
+21 
+
+14 0
+
+10 7
+
+13 7
+
+2
+
+21 
+
+20 
+
+1
+
+4
+
+7
+
+3
+
+1
+
+3 3
+
+85
+
+5 1
+
+2
+
+0
+
+2 10 
+
+7 2
+
+4
+
+28 
+
+714 
+
+17 8
+
+13 9
+
+216 
+
+611 
+
+46
+
+12 9
+
+23
+
+4
+
+4
+
+85
+
+4
+
+5
+
+5
+
+0
+
+7
+
+23 
+
+624 
+
+94
+
+6 4
+
+53
+
+86
+
+99
+
+33
+
+20 
+
+11 
+
+8
+
+1
+
+80
+
+11 7
+
+513 
+
+12 5
+
+43
+
+11 4
+
+21 
+
+20 
+
+1 1
+
+613 
+
+34
+
+11
+
+18 
+
+12 
+
+22 174 
+
+43 5
+
+5 1
+
+4 2
+
+46
+
+611 
+
+52
+
+3 45 
+
+15 6
+
+11 
+
+7
+
+216 
+
+3 1
+
+21 8
+
+9
+
+105 
+
+12 
+
+1
+
+10 5
+
+64
+
+14 9
+
+25
+
+413 
+
+3
+
+4
+
+92
+
+2 8
+
+18 3
+
+729 
+
+35
+
+14 
+
+5
+
+22 5
+
+10 2
+
+7 4 11
+
+60
+
+15 5
+
+75
+
+6
+
+5
+
+25
+
+734 
+
+2
+
+1
+
+21
+
+44
+
+4
+
+2
+
+94
+
+10 
+
+8
+
+17 58 3 3
+
+4 23 
+
+3 14 
+
+76
+
+10
+
+10 10 
+
+13 
+
+9
+
+14 
+
+82 
+
+7
+
+111 
+
+11 
+
+57 
+
+17 
+
+8
+
+12 9
+
+29
+
+12 0
+
+41
+
+4 2
+
+1
+
+1
+
+82
+
+2
+
+32 
+
+6
+
+17 
+
+911 
+
+16 6
+
+2
+
+25 
+
+8 4
+
+10 4
+
+12 5
+
+34
+
+35
+
+6
+
+1
+
+15 
+
+3
+
+2 26 
+
+3
+
+77 
+
+14 17 
+
+6
+
+9
+
+7
+
+26 
+
+21 3
+
+325 
+
+6 1
+
+93
+
+5
+
+42 
+
+618 
+
+17 11 
+
+3
+
+3
+
+40
+
+3 1
+
+64
+
+5
+
+15 
+
+36
+
+13 
+
+1
+
+4
+
+4
+
+5
+
+14 
+
+29 6
+
+5 97 
+
+62
+
+3
+
+57 
+
+715 
+
+11 
+
+5
+
+25
+
+515 
+
+413 
+
+17
+
+8 9
+
+15 4
+
+2 28 
+
+83
+
+4
+
+21 
+
+6 36 
+
+11 12 
+
+73
+
+3
+
+9
+
+38
+
+34
+
+51
+
+14 8
+
+1 25 
+
+11 
+
+7
+
+5
+
+23 
+
+30
+
+21
+
+99
+
+55
+
+30 3
+
+4
+
+14 
+
+337 
+
+4
+
+5
+
+93
+
+3
+
+1
+
+92
+
+2 4
+
+8 13 
+
+6
+
+6
+
+3 0
+
+47
+
+210 
+
+24
+
+5162 
+
+79
+
+16 
+
+10 
+
+7
+
+10 
+
+6
+
+10 
+
+9
+
+1
+
+16 
+
+0256 512 768 1024 1280 1536 1792 2048 2304 2560 2816 3072 3328 3584 3840 
+
+X Pixel Coordinates 
+
+256 
+
+512 
+
+768 
+
+1024 
+
+1280 
+
+1536 
+
+1792 
+
+2048 
+
+2304 
+
+2560 
+
+2816 
+
+3072 
+
+3328 
+
+3584 
+
+3840 
+
+> Y Pixel Coordinates
+
+2
+
+7
+
+12 11 
+
+123 
+
+413 
+
+8
+
+2
+
+24
+
+2 1
+
+8 1
+
+56
+
+7 6
+
+43
+
+60
+
+13
+
+7 5
+
+90
+
+54
+
+5 2
+
+32
+
+12 6
+
+8
+
+9
+
+11 
+
+73 
+
+36
+
+6
+
+9
+
+9
+
+3
+
+28 1
+
+4
+
+16 
+
+18 0
+
+311 
+
+11 5
+
+7
+
+7
+
+31
+
+41
+
+3
+
+10 
+
+5
+
+2
+
+88
+
+75
+
+54
+
+7 1
+
+39
+
+11
+
+37
+
+4 2
+
+32
+
+8 21 
+
+2
+
+1
+
+65
+
+11 3
+
+86
+
+86
+
+13 11 
+
+13 1
+
+1
+
+2
+
+38
+
+7 7
+
+52
+
+10 23 
+
+113 
+
+13 17 
+
+62
+
+12 16 
+
+93
+
+70
+
+61
+
+410 61
+
+610 
+
+3 2
+
+67
+
+3
+
+19 
+
+10 15 
+
+10 0
+
+45
+
+5
+
+2
+
+15 0
+
+51
+
+9 5
+
+41
+
+4 0
+
+9
+
+4
+
+3 1
+
+1 0
+
+126 
+
+33
+
+83
+
+14 
+
+42 
+
+13 
+
+12 
+
+15 
+
+28 
+
+511 
+
+1
+
+4
+
+511 
+
+63
+
+811 
+
+5 155 
+
+9 4
+
+43 5
+
+10 
+
+27 
+
+25
+
+4 5
+
+18 0
+
+88
+
+10 12 
+
+35
+
+516 
+
+6 0
+
+635 
+
+2
+
+10 
+
+6
+
+19 
+
+45
+
+6 6
+
+10 15 
+
+5
+
+6
+
+15 1
+
+14 3
+
+61
+
+47
+
+338 
+
+07
+
+3
+
+14 
+
+10 6
+
+24
+
+7 0
+
+47 11 
+
+12 13 
+
+43
+
+35
+
+19 
+
+0
+
+43
+
+4 21 
+
+8
+
+2
+
+6
+
+7
+
+61
+
+3 7
+
+43
+
+612 
+
+10 
+
+10 
+
+50
+
+7 3
+
+29
+
+03
+
+91
+
+8
+
+18 
+
+821 1
+
+8
+
+2
+
+53
+
+21
+
+65
+
+88
+
+82
+
+10 0
+
+91
+
+53
+
+18 
+
+13 
+
+71
+
+4 4
+
+6 10 
+
+12 1
+
+54
+
+9
+
+3
+
+8
+
+11 
+
+68
+
+16 1
+
+6
+
+91 
+
+2
+
+6
+
+12 4
+
+19
+
+11 12 
+
+74
+
+14 8
+
+20
+
+78
+
+917 
+
+6
+
+2
+
+6 3
+
+8
+
+6
+
+3 9
+
+2
+
+11 
+
+4 12 
+
+316 
+
+64
+
+12 8
+
+6 1
+
+8 1
+
+10 1
+
+63
+
+5 9
+
+52
+
+42
+
+6 2
+
+9
+
+4
+
+2 8
+
+11 4
+
+5 14 
+
+58
+
+611 
+
+7
+
+4
+
+6
+
+14 
+
+16 
+
+4
+
+14 5
+
+7 71 
+
+4 1
+
+510 
+
+7
+
+7
+
+12 
+
+6
+
+8 8
+
+5 20 
+
+20 
+
+2
+
+21 10 
+
+5
+
+9
+
+72
+
+310 
+
+8 10 
+
+9 8
+
+7 0
+
+14 10 
+
+19 
+
+3 49
+
+5
+
+40 
+
+11 
+
+1
+
+32
+
+7
+
+8
+
+16 6
+
+5
+
+2
+
+10 4
+
+75
+
+42
+
+63
+
+510 
+
+64
+
+20 4
+
+2 4
+
+3 6
+
+15 3
+
+71
+
+16 3
+
+10 8
+
+4 62 
+
+11 
+
+63 
+
+10 
+
+4
+
+63
+
+7 19 
+
+80
+
+11 2
+
+5
+
+36 
+
+812 
+
+11 1
+
+310 
+
+68
+
+9
+
+8
+
+2
+
+4
+
+76
+
+46
+
+48
+
+6
+
+10 
+
+1
+
+5
+
+6 7
+
+14 
+
+8
+
+21 9
+
+11 12 
+
+7
+
+3
+
+23
+
+38
+
+8
+
+11 
+
+3 4
+
+3 8
+
+6 25 
+
+18
+
+74
+
+11 
+
+1
+
+1 7
+
+10 4
+
+6
+
+7
+
+91
+
+14 2
+
+5 14 
+
+29
+
+911 
+
+61
+
+10 6
+
+10 7
+
+3
+
+4
+
+67
+
+10 7
+
+12 21 
+
+65
+
+12 
+
+75 
+
+8 15 
+
+4
+
+3
+
+10 3
+
+42
+
+84
+
+3
+
+5
+
+16 5
+
+910 
+
+14 4
+
+11 3
+
+78
+
+5
+
+6
+
+50
+
+12 2
+
+9
+
+14 
+
+1
+
+0
+
+12 
+
+10 
+
+12 
+
+5
+
+1
+
+10 
+
+66
+
+47
+
+26 2
+
+714 
+
+4 3
+
+144 
+
+6
+
+10 
+
+8 2
+
+6
+
+6
+
+612 
+
+7
+
+8
+
+6
+
+50 
+
+518 
+
+25
+
+20
+
+7
+
+3
+
+2115 
+
+11 4
+
+92
+
+7 4
+
+64
+
+51
+
+330 
+
+12 11 
+
+515 
+
+57
+
+11 5
+
+27
+
+52
+
+7 6
+
+943 
+
+12 3
+
+210 
+
+10 1
+
+413 
+
+3
+
+8
+
+721 
+
+76
+
+9
+
+3
+
+64
+
+7
+
+1
+
+6
+
+3
+
+69
+
+8
+
+7
+
+7
+
+174 
+
+89
+
+98
+
+64
+
+91
+
+12 
+
+159 
+
+2
+
+1
+
+85
+
+10 4
+
+80
+
+13 7
+
+12 17 
+
+40
+
+46
+
+14 5
+
+10 6
+
+5
+
+4
+
+8
+
+7
+
+62
+
+312 
+
+10 4
+
+6 15 
+
+59
+
+2
+
+4
+
+829 
+
+518 
+
+78
+
+3
+
+1
+
+61
+
+60
+
+23 
+
+411 3
+
+615 
+
+22 
+
+3
+
+8
+
+111 
+
+27
+
+410 
+
+3 1
+
+10 14 
+
+5 3
+
+48
+
+17
+
+743 
+
+8 15 
+
+823 
+
+44
+
+13 1
+
+7 10 
+
+5
+
+2
+
+9 1
+
+10 7
+
+32
+
+5 14 
+
+4
+
+40 
+
+7
+
+1
+
+4 5
+
+811 
+
+512 
+
+9 3
+
+4
+
+14 
+
+512 
+
+1
+
+1
+
+4
+
+4
+
+6
+
+41 
+
+25
+
+2
+
+2
+
+6 8
+
+7
+
+42 
+
+21
+
+12
+
+6 0 12 0
+
+87
+
+98
+
+14 0
+
+4
+
+30 
+
+2
+
+2
+
+2
+
+7
+
+3
+
+136 
+
+7 7
+
+3
+
+2
+
+17 5
+
+11 
+
+1
+
+3
+
+5
+
+12 
+
+4
+
+339 
+
+22
+
+5 23 4 3
+
+8
+
+25 
+
+4 5
+
+11 11 
+
+34
+
+8 5
+
+5 36 
+
+52
+
+19 7
+
+3 7
+
+50
+
+66
+
+16 34 
+
+10 21 
+
+712 
+
+212 
+
+96
+
+7
+
+4
+
+7
+
+150 
+
+32
+
+3
+
+14 
+
+81
+
+14 5
+
+40
+
+10 13 
+
+13 5
+
+2
+
+4
+
+18 
+
+5
+
+71
+
+7
+
+6
+
+12 11 
+
+8 4
+
+6
+
+7
+
+3
+
+6
+
+75
+
+11 0
+
+4 12 
+
+91
+
+11 
+
+18 
+
+21
+
+14 5
+
+10 15 
+
+944 
+
+610 
+
+10 4
+
+5
+
+8
+
+62
+
+5 10 
+
+10 2
+
+12 
+
+7
+
+10 
+
+28 
+
+20 2
+
+10 
+
+7
+
+87
+
+88
+
+15 
+
+7
+
+912 
+
+984 
+
+3
+
+3
+
+5
+
+5
+
+21
+
+56
+
+11 5
+
+6
+
+46 
+
+10 
+
+1
+
+66
+
+71
+
+16 
+
+1
+
+72
+
+8 1
+
+15 11 
+
+9 4
+
+568 
+
+01
+
+7 27 
+
+10 
+
+8
+
+97
+
+83
+
+4 0
+
+12 2
+
+11 6
+
+59
+
+8
+
+13 
+
+6
+
+7
+
+94
+
+12 
+
+11 
+
+23
+
+47
+
+12 13 
+
+3
+
+2
+
+72
+
+23
+
+2
+
+2
+
+28
+
+22 1
+
+6 10 
+
+19 
+
+10 
+
+81
+
+10 1
+
+17 1
+
+13 4
+
+2
+
+9
+
+1 11 
+
+53
+
+2 21 
+
+10 6
+
+2 0
+
+13 6
+
+6
+
+9
+
+17 2
+
+8 3
+
+65
+
+316 
+
+15 7
+
+9
+
+7
+
+11 3
+
+52
+
+35
+
+4 3
+
+57
+
+82
+
+34
+
+6 13 
+
+713 
+
+11 0
+
+36 9
+
+4 2
+
+3
+
+9
+
+5
+
+3
+
+77
+
+12 
+
+31 
+
+21 3
+
+19 
+
+5
+
+24
+
+80
+
+7
+
+6
+
+97
+
+12 4
+
+8
+
+7
+
+7
+
+6
+
+3
+
+11 
+
+36
+
+8 4
+
+54
+
+12 
+
+2 5
+
+13 
+
+5 12 
+
+44
+
+614 
+
+13 
+
+13 
+
+4
+
+2
+
+9 144 
+
+12 
+
+3
+
+6 8
+
+18 10 
+
+30
+
+1
+
+0
+
+53
+
+9 39 
+
+4
+
+14 
+
+5
+
+8
+
+6
+
+8
+
+717 
+
+47
+
+7 12 
+
+64
+
+10 3
+
+5 13 
+
+419 
+
+39
+
+11 3
+
+5 9
+
+10 24 
+
+8
+
+0
+
+719 
+
+4
+
+1
+
+12 5
+
+2 2
+
+9
+
+2
+
+2 1
+
+51 10 
+
+412 
+
+8 5
+
+83
+
+21
+
+10 1
+
+4 0
+
+0 19 
+
+82
+
+15 
+
+6
+
+915 
+
+9
+
+3
+
+20 121 
+
+24 25 
+
+13 
+
+141 
+
+54
+
+77
+
+96
+
+12 
+
+1
+
+7 0
+
+520 
+
+21
+
+810 
+
+4 0
+
+12 0
+
+35 2
+
+42
+
+922 
+
+37 
+
+11 
+
+11 
+
+1
+
+16 0
+
+24
+
+19 1
+
+77
+
+52
+
+10 2
+
+7
+
+5
+
+2
+
+2
+
+21 1
+
+821 
+
+318 
+
+12 
+
+74 
+
+914 
+
+5
+
+11 
+
+51
+
+15 
+
+2
+
+35
+
+361 
+
+4
+
+4
+
+89
+
+10 19 
+
+11 4
+
+2 5
+
+4
+
+18 
+
+03
+
+6
+
+3
+
+18 
+
+16 
+
+4
+
+3
+
+6 2
+
+14 4
+
+14 
+
+2
+
+11 
+
+3
+
+83
+
+10 33 
+
+4
+
+36 
+
+811 
+
+32
+
+5 4
+
+678 
+
+6
+
+0
+
+83
+
+17 0
+
+5
+
+15 
+
+86
+
+9 10 
+
+6
+
+2
+
+10 
+
+6
+
+6 1
+
+6
+
+2
+
+21 9
+
+26 23 
+
+15
+
+11 7
+
+12 3
+
+47 4
+
+15 1
+
+11 0
+
+11 10 
+
+5 12 
+
+21
+
+32
+
+63
+
+84
+
+19 2
+
+39 
+
+2
+
+9 8
+
+13
+
+8 0
+
+10 
+
+3
+
+11 
+
+9
+
+4
+
+8
+
+12 6
+
+16 4
+
+9
+
+5
+
+36 6
+
+4 0
+
+517 
+
+7
+
+0
+
+6
+
+4
+
+94
+
+7
+
+4
+
+74
+
+12 6
+
+43
+
+5 1
+
+9 12 
+
+55
+
+10 5
+
+4
+
+2
+
+20 3
+
+2 14 
+
+4 0
+
+50 14 
+
+312 
+
+111 
+
+9 3
+
+85
+
+4 29 
+
+39
+
+11 6
+
+10 5
+
+41
+
+21 
+
+7
+
+8
+
+5
+
+848 
+
+9
+
+6
+
+12 8
+
+59
+
+12 
+
+8
+
+9
+
+3 8
+
+31 
+
+7
+
+9
+
+31
+
+13 6
+
+9 4
+
+73
+
+16 
+
+11 14
+
+22 4
+
+33
+
+8
+
+7
+
+33 7
+
+38 6
+
+9 7
+
+11 0
+
+11 2 12 616 3
+
+4 16 
+
+43
+
+13 1
+
+52
+
+614 
+
+22 5
+
+5
+
+2
+
+4
+
+1
+
+5
+
+7
+
+516 
+
+87
+
+32 
+
+0
+
+11 9
+
+216 
+
+91
+
+92
+
+811 
+
+7 8
+
+55
+
+1 3
+
+510 
+
+3
+
+9
+
+1
+
+10 
+
+21 
+
+1
+
+1
+
+7
+
+33
+
+14 8
+
+8
+
+7
+
+38
+
+81
+
+15 2
+
+8
+
+4
+
+6
+
+16 
+
+17
+
+18 13 
+
+24
+
+7
+
+2
+
+12 3
+
+5
+
+62 
+
+12 
+
+4
+
+5
+
+0
+
+13 3
+
+2
+
+4
+
+115 
+
+82
+
+46
+
+71
+
+42
+
+12 1
+
+412 
+
+6 7
+
+73
+
+3
+
+12 
+
+46
+
+17 2
+
+13 1
+
+410 
+
+923 
+
+12 
+
+3
+
+614 
+
+20 10 
+
+12 15 
+
+14 12 
+
+14 4
+
+1
+
+2
+
+4 1
+
+14 
+
+5
+
+4
+
+11 
+
+4
+
+3
+
+31 13 
+
+93
+
+11 7
+
+3
+
+12 
+
+18 
+
+0
+
+12 
+
+5
+
+8 9
+
+3
+
+8
+
+84
+
+78
+
+4 0
+
+8 10 
+
+13 1
+
+14 8
+
+80
+
+40
+
+610 
+
+29 3 5
+
+2
+
+10 1
+
+2 1
+
+14 8
+
+4
+
+3
+
+80
+
+839 
+
+11 1
+
+14 0
+
+6
+
+88 
+
+414 
+
+5
+
+7
+
+12 
+
+8
+
+3 10 
+
+4 2
+
+31
+
+95
+
+517 
+
+63
+
+11 8
+
+7
+
+4
+
+14 1
+
+6 5
+
+64
+
+97
+
+5 57 
+
+56
+
+12 14 
+
+2 5
+
+64
+
+56
+
+13 
+
+6
+
+7
+
+8
+
+910 
+
+6
+
+1
+
+6
+
+7
+
+13 2
+
+38
+
+11 4
+
+86
+
+410 
+
+4 3
+
+46
+
+12 2
+
+61 15 1
+
+11 0
+
+50
+
+13 11 
+
+7 1
+
+12 7
+
+21 37 
+
+10 
+
+3
+
+81
+
+11 12 
+
+10 2
+
+17 
+
+8
+
+39 1
+
+45
+
+17 6
+
+16 13 
+
+63
+
+21 
+
+1
+
+74
+
+7
+
+6
+
+14 2
+
+4 6
+
+7
+
+5
+
+72
+
+19 6
+
+8
+
+4
+
+36
+
+84
+
+29 7
+
+12 
+
+1
+
+13 9
+
+83
+
+14 3
+
+53
+
+51
+
+15 9
+
+834 
+
+12 
+
+16 
+
+18 
+
+3
+
+86
+
+70
+
+13 7
+
+75
+
+11 5
+
+10 5
+
+4
+
+4
+
+14 
+
+17 
+
+11 4
+
+1
+
+4
+
+11
+
+2 2
+
+15 5
+
+16 10 
+
+14 
+
+3
+
+12 3
+
+10 
+
+8
+
+49
+
+810 
+
+13 
+
+6 68
+
+14 7
+
+7 5
+
+9 27 
+
+13 12 
+
+97
+
+25 15 
+
+8 9
+
+9 17 
+
+7
+
+9
+
+14 3
+
+7
+
+147 
+
+6 4
+
+17 
+
+2
+
+11 5
+
+5
+
+16 
+
+6 7
+
+11 3 11 8
+
+24
+
+25
+
+7
+
+35 
+
+11 
+
+2
+
+5 1
+
+4 5
+
+4
+
+3
+
+10 2
+
+98
+
+91
+
+63
+
+11 
+
+0
+
+34
+
+10 0
+
+8 1
+
+3
+
+10 
+
+3 1
+
+22
+
+528 
+
+5 9
+
+64
+
+8 2
+
+10 1
+
+10 4
+
+42
+
+412 
+
+5 1
+
+13 7
+
+512 
+
+5
+
+4
+
+93
+
+24 0
+
+212 
+
+16 
+
+7
+
+94
+
+35 2
+
+10 3
+
+5 2
+
+2 16 
+
+10 19 
+
+6
+
+2
+
+10 1
+
+8 9
+
+8 58 
+
+13 
+
+6
+
+932 
+
+17 7
+
+18 6
+
+5
+
+154 
+
+41
+
+2
+
+3
+
+48
+
+12 3
+
+10 1
+
+16 7
+
+3
+
+4
+
+77
+
+61
+
+10 22 
+
+28 9
+
+12 
+
+2
+
+14 
+
+12 
+
+4
+
+6
+
+4
+
+1
+
+11 17 
+
+41
+
+12 32 
+
+3 10 
+
+5
+
+1
+
+70
+
+11 
+
+7
+
+7 6
+
+20 2
+
+8 3
+
+5
+
+8
+
+83
+
+27
+
+4 4
+
+8
+
+18 
+
+34
+
+13 1
+
+6 15 
+
+74
+
+5
+
+11 
+
+5
+
+1
+
+16 
+
+1
+
+23 
+
+1
+
+34
+
+5
+
+36 
+
+10 
+
+4
+
+5 10 
+
+72
+
+11 
+
+2
+
+5
+
+2
+
+73
+
+8
+
+6
+
+5
+
+1
+
+8
+
+7
+
+512 
+
+16 4
+
+96
+
+66
+
+7 19 
+
+10 
+
+4
+
+30 14 
+
+2 0
+
+14 25 
+
+61
+
+38
+
+813 
+
+5
+
+9
+
+27
+
+72 15
+
+11 6
+
+13 3
+
+84
+
+18 
+
+8
+
+52
+
+7
+
+60 
+
+11 
+
+3
+
+12 
+
+8
+
+31 0
+
+12 
+
+0
+
+16 10 
+
+15 
+
+9
+
+3
+
+20 
+
+16 
+
+5
+
+45
+
+29 2
+
+82
+
+12 2
+
+18 17 
+
+911 
+
+3
+
+6
+
+58
+
+7
+
+11 
+
+8
+
+21 
+
+15 
+
+10 
+
+13 2
+
+10 
+
+18 
+
+9
+
+23 
+
+6
+
+22 
+
+70
+
+64
+
+320 
+
+17 4
+
+14 4
+
+714 
+
+88
+
+4
+
+3
+
+12 1
+
+12 10 
+
+18 3
+
+13
+
+83
+
+810 
+
+85
+
+5 2
+
+1 5
+
+21
+
+1
+
+3
+
+23
+
+11 9
+
+11 4
+
+98
+
+12 
+
+0
+
+2 0
+
+94
+
+115 
+
+8
+
+7
+
+79
+
+7
+
+2
+
+11 
+
+4
+
+24 8
+
+10 
+
+7
+
+23 17 
+
+8
+
+16 
+
+95
+
+46
+
+710 
+
+8 54 
+
+64
+
+95
+
+715 
+
+610 
+
+1 2
+
+12 6
+
+53
+
+12 
+
+3
+
+23 1
+
+14 12 
+
+6
+
+19 
+
+14 
+
+4
+
+68
+
+20 13 
+
+8
+
+0
+
+5
+
+4
+
+14 3
+
+75
+
+7 9
+
+11 5
+
+16 0
+
+24 1
+
+21
+
+11 7
+
+5 0
+
+11 
+
+5
+
+4
+
+55 
+
+10 6
+
+5
+
+128 
+
+10 1
+
+631 
+
+10 6
+
+11 11 
+
+13 8
+
+32
+
+2 5
+
+4
+
+81 
+
+311 
+
+16 3
+
+10 9
+
+44
+
+10 
+
+2
+
+6 2
+
+21 5
+
+23 6
+
+11 
+
+8
+
+12 6
+
+10 5
+
+25 1
+
+38
+
+76
+
+10 
+
+3
+
+46
+
+15 3
+
+20 
+
+4
+
+4 6
+
+72
+
+8
+
+11 
+
+95
+
+1
+
+10 
+
+1 2
+
+911 
+
+4
+
+5
+
+15 4
+
+27 88 
+
+712 
+
+7
+
+25 
+
+51
+
+86
+
+11 
+
+4
+
+12 12 
+
+14 2
+
+2 0
+
+9
+
+71 
+
+11 
+
+20 
+
+15 
+
+3
+
+16 17 
+
+515 
+
+61
+
+71
+
+36
+
+21 24 
+
+5
+
+2
+
+3 17 
+
+6 5
+
+22
+
+3
+
+0
+
+2 2
+
+3
+
+24 
+
+8 7
+
+11 27 
+
+13 
+
+7
+
+5
+
+8
+
+13 43 
+
+18 
+
+6
+
+6 6
+
+10 
+
+8
+
+5 1
+
+7 6
+
+38 7
+
+6
+
+1
+
+18 5
+
+338 
+
+62
+
+2
+
+16 
+
+615 
+
+4
+
+3
+
+75
+
+7 6
+
+14 19 
+
+5
+
+0
+
+6 3
+
+8
+
+67 
+
+80
+
+9
+
+4
+
+77
+
+22 11 
+
+33
+
+12 9
+
+9 16 
+
+9
+
+5
+
+14 
+
+11 
+
+12 6
+
+4 4
+
+49
+
+29 68 
+
+9
+
+3
+
+5
+
+2
+
+6
+
+110 
+
+7 0
+
+10 
+
+1
+
+15 
+
+0
+
+27
+
+10 12 
+
+4
+
+0
+
+84
+
+8 8
+
+97
+
+49
+
+10 
+
+4
+
+8
+
+4
+
+12 5
+
+8 11 
+
+60
+
+9 5
+
+6
+
+4
+
+60
+
+52
+
+5
+
+17 
+
+18 4
+
+9
+
+9
+
+14 
+
+81 
+
+12 
+
+129 
+
+412 
+
+310 
+
+11 1
+
+32
+
+79
+
+1 4
+
+81
+
+116 
+
+70
+
+15 
+
+5
+
+4
+
+3
+
+4
+
+57 
+
+85
+
+2 2
+
+4 3
+
+3
+
+12 
+
+833 
+
+2 2
+
+6
+
+1
+
+10 
+
+8
+
+4
+
+95 
+
+11 12 
+
+80
+
+9 1
+
+9 0 55
+
+98
+
+13 
+
+1
+
+10 
+
+1
+
+10 22 
+
+6 10 
+
+11 
+
+4
+
+411 
+
+78
+
+67
+
+37
+
+724 
+
+86
+
+4 10 
+
+05
+
+5 1
+
+8
+
+6
+
+510 
+
+28 2
+
+4 4
+
+4 5
+
+9
+
+8
+
+52
+
+30 3
+
+14 8
+
+3
+
+1
+
+18 8
+
+4 2
+
+78
+
+40
+
+12 
+
+8
+
+11 1
+
+98
+
+11 12 
+
+62
+
+93
+
+9 3
+
+6 13 
+
+6
+
+6
+
+2
+
+3
+
+13 
+
+7
+
+6
+
+4
+
+1 3
+
+6
+
+2
+
+35
+
+7
+
+5
+
+910 
+
+15 
+
+2
+
+5
+
+19 
+
+11 7
+
+19 2
+
+72
+
+14 3
+
+5153 
+
+15 3
+
+11 1
+
+4 3
+
+11 5
+
+10 
+
+12 
+
+16 0
+
+99
+
+5
+
+13 
+
+22 11 
+
+60
+
+314 
+
+31
+
+4 3
+
+9 2
+
+10 
+
+4
+
+17 
+
+9
+
+42
+
+12
+
+5
+
+14 
+
+4
+
+8
+
+8 8
+
+4 8
+
+8
+
+67 
+
+37
+
+50 
+
+20 
+
+55
+
+1
+
+12 
+
+22
+
+66 12 1
+
+9
+
+3
+
+15 10 
+
+72
+
+8
+
+13 
+
+6 1
+
+9
+
+8
+
+16 17 
+
+9 1
+
+79
+
+32 5
+
+15 5
+
+22
+
+31
+
+10 12 
+
+11 
+
+18 
+
+3 9
+
+6
+
+6
+
+32
+
+18 25 
+
+30 
+
+2
+
+7
+
+1
+
+417 
+
+48
+
+49
+
+13 20 
+
+12 3
+
+41
+
+18 4
+
+3 7
+
+21 7
+
+417 
+
+613 
+
+713 
+
+9 9
+
+6
+
+9
+
+26 
+
+59 
+
+15 
+
+9
+
+9
+
+18 
+
+13 7
+
+52
+
+12 6
+
+3
+
+4
+
+33
+
+5
+
+0
+
+7 3
+
+28
+
+11 4
+
+20
+
+32
+
+15 8
+
+71
+
+11 2
+
+20 16 
+
+4
+
+1
+
+2 6
+
+93
+
+720 
+
+9 38 
+
+2 3
+
+711 
+
+72
+
+8
+
+1
+
+22
+
+11 
+
+6
+
+3
+
+2
+
+3 0
+
+46
+
+38
+
+61
+
+4 3
+
+11 
+
+12 
+
+14 1
+
+3
+
+56 
+
+12 2
+
+27
+
+72
+
+11 8
+
+39 458 
+
+85
+
+713 
+
+6 23 
+
+16 
+
+3
+
+3
+
+4
+
+9106 
+
+18 7
+
+13 8
+
+10 4
+
+10 
+
+14 
+
+35
+
+56
+
+5 47 
+
+11 
+
+2
+
+213 
+
+12 
+
+102 
+
+87
+
+7
+
+1
+
+53
+
+6 6
+
+5 10 
+
+723 
+
+7 1
+
+8
+
+3
+
+9 0
+
+8 2
+
+10 6
+
+72
+
+15 
+
+11 
+
+91
+
+7
+
+11 
+
+2 5
+
+7 19 
+
+2
+
+82 
+
+59
+
+11 7
+
+11 19 
+
+63
+
+10 4
+
+20 9
+
+11 
+
+6
+
+448 
+
+6
+
+0
+
+2 11 
+
+11 
+
+5
+
+6
+
+9
+
+83
+
+10 
+
+5
+
+16 4
+
+6
+
+1
+
+918 
+
+12 7
+
+53
+
+711 
+
+47
+
+22 4
+
+80
+
+212 
+
+11 
+
+36 
+
+60
+
+6
+
+17 
+
+10 
+
+4
+
+19 
+
+20 
+
+74
+
+10 5
+
+6 1
+
+16 5
+
+10 3
+
+1
+
+7
+
+8
+
+3
+
+5 4
+
+13 
+
+7
+
+37
+
+513 
+
+51
+
+10 26 
+
+22 14 
+
+37
+
+6 13 
+
+40
+
+17 6
+
+712 
+
+11 9
+
+1 0
+
+5 3
+
+410 
+
+23 9
+
+55
+
+44
+
+4 1
+
+3
+
+13 
+
+14 1
+
+2
+
+12 
+
+5
+
+6
+
+27 1
+
+4
+
+18 
+
+54
+
+72
+
+10 
+
+2
+
+3
+
+12 
+
+11 4
+
+32 
+
+6
+
+15 12 
+
+7
+
+86 
+
+14
+
+418 
+
+6 9
+
+34
+
+5 4
+
+4 16 
+
+11 
+
+1
+
+10 0
+
+39
+
+52
+
+17
+
+21 
+
+7
+
+8 5
+
+26
+
+4 7
+
+4
+
+40 
+
+61
+
+5
+
+161 
+
+10 6
+
+67
+
+10 
+
+18 
+
+8
+
+11 
+
+11 0
+
+13 6
+
+10 
+
+5
+
+39 6
+
+18 15 
+
+12 
+
+16 
+
+13
+
+22
+
+627 
+
+15 11 
+
+28 11 
+
+12 5
+
+62
+
+31
+
+3 9
+
+4 4
+
+4
+
+4
+
+5
+
+3
+
+12 4
+
+19 
+
+5
+
+12 1
+
+11 3
+
+14 122 
+
+9 5
+
+22 6
+
+6
+
+9
+
+820 
+
+4 3
+
+11 4
+
+7 8
+
+10
+
+44
+
+3
+
+13 
+
+6
+
+4
+
+41
+
+10 6
+
+5
+
+2
+
+93
+
+14 24 
+
+510 
+
+10 3
+
+2
+
+8
+
+62
+
+10 3
+
+7 1
+
+422 
+
+40 
+
+55 
+
+6
+
+66 
+
+50
+
+64
+
+15 7
+
+14 29 
+
+35
+
+412 
+
+6
+
+4
+
+76
+
+4
+
+1
+
+6
+
+56 
+
+54
+
+13 8
+
+17 14 
+
+21 8
+
+7 3
+
+45
+
+5 8
+
+5
+
+156 
+
+43
+
+9
+
+12 
+
+1
+
+132 
+
+13 2
+
+12 4
+
+10 5
+
+15 2
+
+4
+
+4
+
+8
+
+3
+
+18 
+
+6
+
+54
+
+11 
+
+23 
+
+3
+
+2
+
+14 3
+
+29
+
+32
+
+33
+
+3
+
+5
+
+10 1
+
+10 9
+
+10 5
+
+6
+
+67 
+
+72
+
+1
+
+4
+
+92
+
+4
+
+5
+
+33 12 
+
+92
+
+1
+
+5
+
+7
+
+16 
+
+74
+
+9 11 
+
+80 1
+
+4
+
+0
+
+10 6
+
+9 11 
+
+37 0
+
+4
+
+5
+
+1 10 
+
+2
+
+28 
+
+62
+
+50
+
+5
+
+6
+
+4 14 
+
+11 1
+
+35 10 
+
+56
+
+96
+
+9 3
+
+5 9
+
+711 
+
+5 2
+
+45
+
+11 3
+
+12 
+
+3
+
+92
+
+10 7
+
+14 8
+
+13 3
+
+14 
+
+3
+
+11 
+
+5
+
+86
+
+32 6
+
+31 3
+
+11 18 
+
+73
+
+910 
+
+21 0
+
+54 0
+
+43
+
+10 5
+
+44
+
+18 
+
+171 
+
+12 3
+
+217 
+
+10 
+
+0
+
+17 7
+
+42 5
+
+712 
+
+2
+
+13 
+
+10 9
+
+3 13 
+
+7 4
+
+10 12 
+
+6
+
+7
+
+18 11 
+
+11 52 
+
+12 10 
+
+8
+
+9
+
+11 12 
+
+12 4
+
+6
+
+3
+
+6 0
+
+3823 
+
+3
+
+11 
+
+0
+
+42
+
+34
+
+12 
+
+3
+
+1
+
+9
+
+16 3
+
+4
+
+21 
+
+7
+
+3
+
+4 12 
+
+9 5
+
+7
+
+133 
+
+3
+
+27 
+
+3 9
+
+11 30 
+
+13 1
+
+20 
+
+13 
+
+6
+
+1
+
+10 5
+
+9
+
+3
+
+53
+
+10 1
+
+6 7
+
+13 16 
+
+41
+
+3 1
+
+910 
+
+38
+
+11 3
+
+13 
+
+3
+
+10 
+
+90 
+
+7 5
+
+33
+
+4 11 
+
+8
+
+4
+
+10 
+
+130 
+
+19 13 
+
+22 
+
+1
+
+10 
+
+11 
+
+5
+
+2
+
+2
+
+2
+
+4
+
+0
+
+14 0
+
+6
+
+0
+
+6
+
+11 
+
+36
+
+12 6
+
+5 7
+
+33 
+
+96 
+
+15 1
+
+62
+
+82
+
+813 
+
+18 
+
+5
+
+14 8
+
+34
+
+56
+
+11 7
+
+60
+
+6
+
+1
+
+2
+
+8
+
+22 5
+
+1
+
+50 
+
+20 3
+
+21 1
+
+7
+
+12 
+
+8
+
+5
+
+14 
+
+10 
+
+410 
+
+15 14 
+
+43
+
+345 
+
+1
+
+2
+
+110 
+
+21
+
+17 10 
+
+3 24 
+
+11 
+
+2
+
+7 2
+
+42
+
+22 0
+
+8
+
+19 
+
+12 7
+
+10 6
+
+91
+
+5 2
+
+9 15 
+
+11 1
+
+11 2
+
+63
+
+411 
+
+18 2
+
+44
+
+8 156 
+
+8
+
+6
+
+63
+
+810 
+
+4
+
+18 
+
+5 5
+
+10
+
+8 1
+
+2
+
+2
+
+3 0
+
+615 
+
+77
+
+13 15 
+
+7
+
+9
+
+8 7
+
+12 2
+
+412 
+
+10 8
+
+10 21 
+
+75
+
+413 
+
+45
+
+73
+
+4 6
+
+48 4
+
+13 11 
+
+62
+
+29 7
+
+7 31 
+
+17 3
+
+18 2
+
+81
+
+10 2
+
+64
+
+12 7
+
+30 8
+
+12 
+
+6
+
+9
+
+3
+
+10 4
+
+31
+
+7 9
+
+14 9
+
+5 6
+
+87
+
+51
+
+10 0
+
+42
+
+18 16 
+
+79
+
+7
+
+2
+
+7 1
+
+8 9
+
+5 1
+
+4
+
+53 
+
+12 17 
+
+95
+
+41
+
+6
+
+7
+
+31 
+
+2
+
+54
+
+7
+
+15 
+
+120 
+
+74
+
+17 
+
+1
+
+72
+
+3
+
+2
+
+37
+
+621 
+
+17 5
+
+12 11 
+
+58
+
+4
+
+7
+
+3
+
+2
+
+19 1
+
+54
+
+712 
+
+36 81 
+
+812 
+
+6 0
+
+75
+
+68
+
+47
+
+62
+
+151 19 8
+
+52
+
+95
+
+3
+
+5
+
+11 8
+
+17 
+
+0
+
+14 0
+
+14 
+
+4
+
+6
+
+0
+
+21
+
+614 
+
+7 14 
+
+17 3
+
+8 3
+
+99
+
+12 1
+
+4
+
+20 
+
+8
+
+8
+
+6 4
+
+17 1
+
+15 7
+
+6
+
+2
+
+44
+
+75
+
+11 1
+
+24 1
+
+4
+
+11 
+
+7
+
+2
+
+10 1
+
+6
+
+4
+
+32
+
+8 3
+
+10 14 
+
+25 5
+
+72
+
+81
+
+11 
+
+1
+
+7
+
+3
+
+71
+
+52
+
+10 5
+
+5 11 
+
+620 
+
+17 23 
+
+4 0
+
+41
+
+710 
+
+70
+
+8
+
+3
+
+8
+
+4
+
+320 
+
+13 1
+
+22
+
+715 
+
+53
+
+2 14 
+
+14 
+
+55 
+
+6 19 
+
+19 
+
+13 
+
+26
+
+0 4
+
+15 8
+
+20 4
+
+19
+
+51
+
+6
+
+4
+
+24
+
+34
+
+56
+
+22 0
+
+7
+
+0
+
+13
+
+581 
+
+96
+
+46
+
+816 
+
+4
+
+6
+
+17 4
+
+17 
+
+2
+
+32 
+
+5
+
+56
+
+22 9
+
+5142 
+
+4 9
+
+82
+
+10 
+
+5
+
+13 1
+
+44
+
+10 4
+
+1 1
+
+12 9
+
+13
+
+9
+
+4
+
+35
+
+20 5
+
+6
+
+3
+
+11 11 
+
+4 6
+
+62
+
+31
+
+15 34 
+
+30 2
+
+94
+
+49
+
+16 
+
+15 
+
+18 6
+
+92
+
+5 3
+
+8
+
+6
+
+11 0
+
+610 
+
+61
+
+5
+
+4
+
+10 7
+
+11 16 
+
+11 1
+
+75
+
+70
+
+5
+
+0
+
+9 4
+
+5 2
+
+6
+
+12 
+
+20 
+
+19 
+
+4
+
+17 
+
+41
+
+1
+
+3
+
+13 12 
+
+44 2
+
+28 1
+
+9
+
+5
+
+8
+
+1
+
+31
+
+53
+
+20 1
+
+14 5
+
+15 9
+
+9 8
+
+10 
+
+3
+
+23
+
+910 
+
+15
+
+55
+
+4 0
+
+17
+
+910 
+
+8
+
+4
+
+14 8
+
+51
+
+910 
+
+12 1
+
+10 
+
+7
+
+74
+
+95
+
+28 13 
+
+4
+
+8
+
+14 6
+
+35 
+
+8
+
+7
+
+17 
+
+7
+
+0
+
+711 
+
+21 11 
+
+6 23 
+
+9
+
+1
+
+48
+
+815 
+
+3 14 
+
+6 10 
+
+6
+
+4
+
+61
+
+16 1
+
+11 2
+
+1
+
+5
+
+31
+
+55
+
+73
+
+13 
+
+28 
+
+77
+
+7
+
+103 
+
+536 
+
+9 4
+
+40
+
+45
+
+13 
+
+5
+
+10 3
+
+17 
+
+12 
+
+10 12 
+
+53 2
+
+19 15 
+
+81
+
+710 
+
+31
+
+6 3
+
+50
+
+13 9
+
+16 0
+
+10 150 
+
+6
+
+1
+
+6 33 
+
+3121 
+
+11 4
+
+8
+
+12 
+
+3 4
+
+3
+
+11 
+
+333 
+
+16 
+
+10 
+
+4
+
+7
+
+20 5
+
+410 
+
+2 3
+
+13 7
+
+28 
+
+2
+
+20 4
+
+13 16 
+
+81
+
+11 
+
+5
+
+21 1
+
+12 3
+
+11 7
+
+61
+
+9 3
+
+4
+
+149 
+
+17 7
+
+17 1
+
+16 3
+
+813 
+
+22 2
+
+3
+
+12 
+
+2 0
+
+14 9
+
+94
+
+98
+
+13 4
+
+14 7
+
+8
+
+60 
+
+81
+
+38 7
+
+10 1
+
+81
+
+5 4
+
+6
+
+28 
+
+8 2
+
+6
+
+1
+
+22 
+
+143 
+
+14 1
+
+12 
+
+4
+
+9
+
+3
+
+45
+
+13 
+
+1
+
+51
+
+13 1
+
+623 
+
+51 2
+
+8
+
+5
+
+3 8
+
+91
+
+91
+
+76
+
+20 4
+
+10 
+
+3
+
+10 
+
+0
+
+4
+
+5
+
+80
+
+420 
+
+9 10 
+
+86
+
+61
+
+92256 512 768 
+
+256 
+
+512 
+
+768 
+
+1024 
+
+1280 
+
+1536 
+
+1792 
+
+2048 
+
+2304 
+
+2560 
+
+2816 
+
+3072 
+
+3328 
+
+3584 
+
+3840 
+
+> Y Pixel Coordinates
+
+12 21 
+
+7 17 
+
+10 18 
+
+633 
+
+6 1
+
+13 
+
+36 
+
+843 
+
+13 
+
+8
+
+1
+
+10 
+
+13 9
+
+9 18 
+
+11 7
+
+23 14 
+
+217 
+
+44
+
+12 16 
+
+210 
+
+51
+
+79
+
+63
+
+84
+
+10 6
+
+833 
+
+812 
+
+18 3
+
+14 25 
+
+410 
+
+32
+
+5 4
+
+18 3
+
+17 0
+
+11 11 
+
+527 
+
+16 
+
+13 
+
+10 
+
+9
+
+627 
+
+52
+
+446 
+
+716 
+
+4 11 
+
+3 0
+
+15 
+
+4
+
+9 7
+
+82
+
+22 44 
+
+15 1
+
+311 
+
+2
+
+12 
+
+17 19 
+
+7 19 
+
+41
+
+78
+
+916 
+
+10 
+
+9
+
+25
+
+69
+
+8 1
+
+8
+
+13 
+
+4
+
+0
+
+565 
+
+54
+
+6 22 
+
+7
+
+10 
+
+5
+
+30 
+
+11 0
+
+15 
+
+43 
+
+837 
+
+19 
+
+17 
+
+221 
+
+5
+
+0
+
+80
+
+75
+
+8 9
+
+0
+
+2
+
+42
+
+416 
+
+13 2
+
+9 59 
+
+12 
+
+18 
+
+10 2
+
+36
+
+7 10 
+
+17
+
+41
+
+412 
+
+43
+
+5
+
+5
+
+17
+
+10 12 
+
+6 2
+
+17 10 
+
+11 24 
+
+821 
+
+314 
+
+5 4
+
+2
+
+1
+
+10 6
+
+413 
+
+7
+
+28 
+
+13 
+
+7
+
+410 
+
+5
+
+115 
+
+718 
+
+61
+
+7 14 
+
+10 8
+
+11 3
+
+10 5
+
+4 4
+
+7
+
+31 
+
+3 6
+
+14 164 
+
+742 
+
+263 
+
+14 2
+
+10 0
+
+817 
+
+10 0
+
+416 
+
+10 7
+
+11 12 
+
+23
+
+4 0
+
+25
+
+6 8
+
+4 14 
+
+14 
+
+19 
+
+8 128 
+
+59
+
+3 120 
+
+13 
+
+7
+
+3
+
+9
+
+12 2
+
+4 10 
+
+87
+
+29 
+
+118 
+
+319 
+
+8 9
+
+75
+
+21 16 
+
+14 
+
+2
+
+11 
+
+8
+
+12 0
+
+75
+
+13 141 
+
+11 1
+
+57
+
+5
+
+7
+
+15 5
+
+12 20 
+
+9
+
+19 1
+
+22 8
+
+13 
+
+23 
+
+15 4
+
+11 28 49
+
+38
+
+7
+
+56 
+
+3
+
+18 
+
+11 34 
+
+31 0
+
+5
+
+13 
+
+65
+
+11 
+
+6
+
+72
+
+787 
+
+4 20 
+
+7
+
+2
+
+19 12 
+
+22
+
+10 3
+
+10 18 
+
+62
+
+16 16 
+
+14 145 
+
+8
+
+21 
+
+17 9
+
+10 13 
+
+59
+
+6
+
+67 
+
+8
+
+4
+
+13 9
+
+71
+
+58 6
+
+65
+
+7 3
+
+21 5
+
+34
+
+11 
+
+26 
+
+12 10 
+
+5
+
+16 
+
+16 
+
+15 
+
+64
+
+2
+
+17 
+
+816 
+
+616 
+
+16 
+
+4
+
+14 
+
+15 
+
+91
+
+5
+
+43 
+
+10 14 
+
+14 4
+
+9 10 
+
+15 
+
+7
+
+15 
+
+46 
+
+3
+
+17 
+
+33
+
+39 33 
+
+13 5
+
+28 6
+
+58
+
+715 
+
+12 12 
+
+61
+
+312 
+
+46
+
+9 4
+
+67
+
+623 
+
+50
+
+12 
+
+10 
+
+30
+
+9 1
+
+2 8
+
+51
+
+10 
+
+28 
+
+10 2
+
+10 53 
+
+5
+
+58 
+
+13 3
+
+13 8
+
+4
+
+5
+
+56
+
+3
+
+10 
+
+8
+
+7
+
+820 
+
+13
+
+12 9
+
+3
+
+7
+
+11 1
+
+6
+
+4
+
+83
+
+14 
+
+19 
+
+16 
+
+12 
+
+3
+
+9
+
+11 8
+
+82
+
+51
+
+66
+
+10 
+
+28 
+
+4
+
+33 
+
+90
+
+65
+
+3 30 
+
+11 6
+
+727 
+
+4 6
+
+13 5
+
+35 34 
+
+336 
+
+8 8
+
+238 
+
+12 6
+
+3 7
+
+12 11 
+
+8
+
+5
+
+10 
+
+18 
+
+11 3
+
+24 16 
+
+27 6
+
+8 11 
+
+2 8
+
+13 57 
+
+17 14 
+
+12 1
+
+11 
+
+51 
+
+3 28 
+
+12 
+
+64 
+
+528 
+
+1
+
+13 5
+
+9
+
+15 
+
+10 6
+
+12 9
+
+5
+
+3
+
+20
+
+10 
+
+6
+
+24 
+
+6
+
+10 49 
+
+15 
+
+1
+
+67
+
+68
+
+438 
+
+11 10 
+
+8
+
+24 
+
+13 4
+
+714 
+
+511 
+
+25
+
+30
+
+14 8
+
+13 12 
+
+911 9
+
+6
+
+19 
+
+14 
+
+38 
+
+711 
+
+8 30 
+
+11 5
+
+5 19 
+
+591 
+
+19 23 
+
+825 
+
+6
+
+7
+
+12 6
+
+16 
+
+30 
+
+4 14 
+
+35 5
+
+45
+
+12 18 
+
+21 14 
+
+6 12 
+
+92
+
+6
+
+1
+
+44
+
+922 
+
+20 
+
+1
+
+3 0
+
+4 6
+
+12 15 
+
+4
+
+33 
+
+512 
+
+10 11 
+
+11 
+
+92 
+
+51
+
+3 31 
+
+9 1
+
+8 9
+
+22 6
+
+6 15 
+
+5
+
+3
+
+2
+
+3
+
+3
+
+4
+
+613 
+
+217 
+
+99
+
+312 
+
+1
+
+7 15 
+
+10 9
+
+7 1
+
+112 
+
+15 7
+
+72
+
+19 14 
+
+731 
+
+6
+
+8
+
+9
+
+2
+
+622 
+
+715 
+
+15 12 
+
+19 8
+
+12 
+
+9
+
+15 
+
+2
+
+12 13 
+
+1
+
+11 
+
+11 
+
+16 
+
+23 
+
+9
+
+32
+
+713 
+
+4 15 
+
+8
+
+10 
+
+17 
+
+81 
+
+53
+
+14 6
+
+328 
+
+93
+
+93
+
+713 
+
+1 13 
+
+7 5
+
+324 
+
+14 5
+
+4
+
+36 
+
+34 16 
+
+25 100 
+
+9 35 
+
+610 
+
+12 4
+
+13 9
+
+10 
+
+9
+
+1 0
+
+26 3
+
+21 30 
+
+913 
+
+834 
+
+12 26 
+
+51
+
+12 5
+
+8 8
+
+10 31 
+
+15 40 
+
+9
+
+8
+
+4
+
+1
+
+8 1
+
+57 
+
+10 
+
+11 63 
+
+510 
+
+1
+
+40 
+
+69
+
+12 
+
+9
+
+19 6
+
+4 10 
+
+267 
+
+17 
+
+553 
+
+94
+
+6 5
+
+938 
+
+8 4
+
+2
+
+5
+
+64
+
+29
+
+13 4
+
+230 
+
+60
+
+49
+
+10 
+
+3
+
+1
+
+10 
+
+97
+
+6 12 
+
+5
+
+3
+
+8 2
+
+7 18 
+
+9 4
+
+61
+
+420 
+
+10 2
+
+15 6
+
+12 4
+
+76
+
+20 5
+
+919 
+
+2 31 
+
+7
+
+3
+
+11 
+
+6
+
+3 5
+
+9
+
+26 
+
+4 4
+
+13 13 
+
+9 9
+
+10 12 
+
+6 40 
+
+810 
+
+7
+
+5
+
+22 11 
+
+6 6
+
+11 7
+
+8
+
+21 
+
+42
+
+2 0
+
+12 51 
+
+92
+
+632 
+
+8 6
+
+9
+
+15 
+
+631 
+
+14
+
+4
+
+130 
+
+511 
+
+79
+
+53 
+
+11 
+
+12 
+
+124 
+
+66
+
+20 17 
+
+9
+
+3
+
+14 4
+
+5
+
+67 
+
+1
+
+32
+
+5154 
+
+12 
+
+1
+
+4
+
+7
+
+7
+
+63
+
+11 17 
+
+4
+
+13 
+
+10 12 
+
+5
+
+23 
+
+11 
+
+3
+
+16 10 
+
+555 
+
+815 
+
+10 8
+
+13 
+
+18 
+
+10 
+
+17 
+
+61
+
+712 
+
+6
+
+16 
+
+914 
+
+7
+
+3
+
+30
+
+31 0
+
+5139 
+
+5
+
+4
+
+4
+
+3
+
+132 
+
+14 3
+
+43
+
+7 0
+
+62
+
+75
+
+63
+
+11 14 
+
+8 7
+
+1 11 
+
+16 1
+
+8 2
+
+3
+
+7
+
+59
+
+38
+
+12 
+
+7
+
+615 
+
+2 11 3072 3328 3584 3840 
+
+2 1
+
+12 6
+
+11 
+
+73 
+
+36
+
+28 1
+
+4
+
+16 
+
+11 5
+
+31
+
+5
+
+2
+
+88
+
+39
+
+8 21 
+
+2
+
+1
+
+86
+
+7 7
+
+52
+
+10 23 
+
+13 17 
+
+62
+
+61
+
+610 
+
+10 15 
+
+15 0
+
+51
+
+9
+
+4
+
+14 
+
+42 
+
+15 
+
+28 
+
+5 155 
+
+43 5
+
+10 
+
+27 
+
+25
+
+10 12 
+
+2
+
+10 
+
+6
+
+19 
+
+47
+
+338 
+
+47 11 
+
+6
+
+7
+
+612 
+
+50
+
+29
+
+91
+
+8
+
+18 
+
+82
+
+8
+
+2
+
+88
+
+12 1
+
+9
+
+3
+
+16 1
+
+6
+
+91 
+
+74
+
+917 
+
+3 9
+
+2
+
+11 
+
+12 8
+
+6 1
+
+63
+
+5 9
+
+52
+
+9
+
+4
+
+2 8
+
+58
+
+7
+
+4
+
+16 
+
+4
+
+7 71 
+
+20 
+
+2
+
+21 10 
+
+5
+
+9
+
+8 10 
+
+9 8
+
+5
+
+40 
+
+32
+
+63 64
+
+3 6
+
+15 3
+
+10 8
+
+4 62 
+
+11 
+
+63 
+
+10 
+
+4
+
+19 
+
+11 2
+
+5
+
+36 
+
+11 1
+
+310 
+
+1
+
+5
+
+14 
+
+8
+
+25 
+
+11 
+
+1
+
+1 7
+
+91
+
+14 2
+
+10 6
+
+12 
+
+75 
+
+3
+
+5
+
+14 4
+
+78
+
+5
+
+6
+
+1
+
+66
+
+714 
+
+4 3
+
+144 
+
+8 2
+
+6
+
+6
+
+612 
+
+6
+
+50 
+
+2115 
+
+943 
+
+10 1
+
+413 
+
+7
+
+174 
+
+98
+
+12 
+
+159 
+
+12 17 
+
+10 4
+
+6 15 
+
+829 
+
+3
+
+1
+
+23 
+
+411 3
+
+22 
+
+3
+
+8
+
+111 
+
+48
+
+17
+
+743 
+
+823 
+
+9 1
+
+07
+
+5 14 
+
+4
+
+40 
+
+512 
+
+1
+
+1
+
+4
+
+4
+
+6
+
+41 
+
+25
+
+2
+
+2
+
+2
+
+7
+
+3
+
+136 
+
+17 5
+
+11 
+
+1
+
+3
+
+5
+
+12 
+
+4
+
+339 
+
+8
+
+25 
+
+4 5
+
+34
+
+36 
+
+19 7
+
+66
+
+96
+
+7
+
+4
+
+12 11 
+
+11 0
+
+5
+
+8
+
+12 
+
+7
+
+10 
+
+28 
+
+20 2
+
+15 
+
+7
+
+984 
+
+5
+
+5
+
+56
+
+10 
+
+1
+
+66
+
+568 
+
+11 6
+
+59
+
+8
+
+13 
+
+6
+
+7
+
+19 
+
+10 
+
+1 11 
+
+17 2
+
+8 3
+
+15 7
+
+34
+
+6 13 
+
+11 0
+
+12 
+
+31 
+
+5
+
+13 
+
+5 12 
+
+614 
+
+13 
+
+13 
+
+9 144 
+
+18 10 
+
+9 39 
+
+4
+
+14 
+
+717 
+
+7 12 
+
+64
+
+10 24 
+
+8
+
+0
+
+19 
+
+82
+
+9
+
+3
+
+20 121 
+
+35 2
+
+922 
+
+37 
+
+11 
+
+16 0
+
+821 
+
+318 
+
+5
+
+11 
+
+89
+
+11 4
+
+2 5
+
+4
+
+18 
+
+18 
+
+16 
+
+6 2
+
+10 33 
+
+4
+
+36 
+
+32
+
+5 4
+
+678 
+
+83
+
+86
+
+6 1
+
+21 9
+
+32
+
+92
+
+4
+
+8
+
+12 6
+
+7
+
+4
+
+74
+
+12 6
+
+43
+
+9 12 
+
+55
+
+10 5
+
+2 14 
+
+4 29 
+
+8
+
+5
+
+848 
+
+16 
+
+11 14
+
+38 6
+
+614 
+
+92
+
+55
+
+1 3
+
+1
+
+7
+
+8
+
+7
+
+38
+
+6
+
+16 
+
+24
+
+12 3
+
+5
+
+62 
+
+12 
+
+4
+
+5
+
+0
+
+115 
+
+14 4
+
+1
+
+2
+
+4 1
+
+4
+
+3
+
+11 7
+
+3
+
+12 
+
+3
+
+8
+
+78
+
+5
+
+2
+
+14 8
+
+839 
+
+12 
+
+8
+
+3 10 
+
+31
+
+517 
+
+6 5
+
+12 14 
+
+56
+
+910 
+
+15 1
+
+12 7
+
+63
+
+72
+
+84
+
+83
+
+14 3
+
+13 7
+
+11 4
+
+1
+
+4
+
+14 
+
+3
+
+68
+
+14 7
+
+13 12 
+
+97
+
+25 15 
+
+7
+
+147 
+
+6 4
+
+7
+
+35 
+
+4
+
+3
+
+63
+
+10 4
+
+512 
+
+94
+
+5 2
+
+8 9
+
+8 58 
+
+18 6
+
+10 22 
+
+5
+
+1
+
+70
+
+7 6
+
+5
+
+1
+
+5
+
+36 
+
+10 
+
+4
+
+0
+
+5
+
+1
+
+66
+
+7 19 
+
+10 
+
+4
+
+30 14 
+
+14 25 
+
+813 
+
+5
+
+9
+
+52
+
+16 
+
+5
+
+3
+
+6
+
+7
+
+11 
+
+15 
+
+10 
+
+10 
+
+18 
+
+714 
+
+18 3
+
+21
+
+11 
+
+4
+
+10 
+
+7
+
+8
+
+16 
+
+14 12 
+
+20 13 
+
+5
+
+4
+
+21
+
+11 
+
+5
+
+5
+
+128 
+
+631 
+
+4
+
+81 
+
+311 
+
+10 5
+
+76
+
+46
+
+4
+
+5
+
+15 4
+
+27 88 
+
+7
+
+25 
+
+86
+
+11 
+
+4
+
+2 0
+
+9
+
+71 
+
+15 
+
+3
+
+36
+
+22
+
+3
+
+24 
+
+8 7
+
+11 27 
+
+18 
+
+6
+
+4
+
+3
+
+14 19 
+
+80 27
+
+84
+
+97
+
+8 11 
+
+6
+
+4
+
+60
+
+18 4
+
+14 
+
+81 
+
+12 
+
+129 32
+
+81
+
+4
+
+57 
+
+4
+
+95 
+
+13 
+
+1
+
+78
+
+510 
+
+30 3
+
+3
+
+1
+
+9 3
+
+2
+
+3
+
+3
+
+6
+
+2
+
+35
+
+910 
+
+11 7
+
+5153 
+
+42
+
+5
+
+14 
+
+4 8
+
+55
+
+12 1
+
+22
+
+10 12 
+
+11 
+
+18 
+
+6
+
+6
+
+32
+
+48
+
+21 7
+
+713 
+
+9 9
+
+26 
+
+59 
+
+20 16 
+
+4
+
+1
+
+2 6
+
+8
+
+1
+
+38
+
+27
+
+72
+
+39 458 
+
+6 23 
+
+9106 
+
+10 
+
+14 
+
+56
+
+12 
+
+102 
+
+87
+
+53
+
+23 
+
+9 0
+
+10 6
+
+72
+
+7
+
+11 
+
+7 19 
+
+2
+
+82 
+
+20 9
+
+448 
+
+918 
+
+80
+
+11 
+
+36 
+
+6
+
+17 
+
+8
+
+3
+
+22 14 
+
+712 
+
+3
+
+4 1
+
+5
+
+6
+
+11 4
+
+15 12 
+
+34
+
+17
+
+8 5
+
+4
+
+40 
+
+61
+
+5
+
+161 
+
+10 
+
+18 
+
+39 6
+
+15 11 
+
+5
+
+3
+
+14 122 
+
+820 
+
+11 4
+
+6
+
+4
+
+510 
+
+10 3
+
+50
+
+4
+
+1
+
+5
+
+156 
+
+9
+
+12 
+
+1
+
+132 
+
+13 2
+
+4
+
+4
+
+8
+
+3
+
+10 9
+
+6
+
+67 
+
+2
+
+28 
+
+56
+
+96
+
+92
+
+10 7
+
+13 3
+
+31 3
+
+11 18 
+
+7 7
+
+712 
+
+18 11 
+
+11 52 
+
+11 
+
+0
+
+42
+
+1
+
+9
+
+16 3
+
+4
+
+21 
+
+3 9
+
+11 30 
+
+20 
+
+13 
+
+53
+
+13 16 
+
+10 
+
+30 
+
+2
+
+2
+
+14 0
+
+12 6
+
+33 
+
+96 
+
+62
+
+82
+
+18 
+
+5
+
+14 8
+
+22 5
+
+345 
+
+21
+
+3 24 
+
+5 2
+
+5
+
+8
+
+6
+
+810 
+
+4
+
+18 
+
+5 5
+
+615 
+
+77
+
+10 21 
+
+73
+
+4 6
+
+13 11 
+
+7 31 
+
+81
+
+12 7
+
+30 8
+
+5 6
+
+7
+
+2
+
+12 17 
+
+41
+
+7
+
+15 
+
+17 
+
+1
+
+621 
+
+47
+
+95
+
+3
+
+5
+
+7 14 
+
+17 3
+
+12 1
+
+8
+
+8
+
+75
+
+24 1
+
+10 1
+
+25 5
+
+72
+
+11 
+
+1
+
+52
+
+5 11 
+
+620 
+
+710 
+
+14 
+
+55 
+
+0 4
+
+6
+
+4
+
+24
+
+34
+
+581 
+
+4
+
+6
+
+10 
+
+5
+
+13 1
+
+10 4
+
+13
+
+6
+
+3
+
+49
+
+18 6
+
+11 0
+
+10 7
+
+11 16 
+
+1
+
+4
+
+17 
+
+41
+
+44 2
+
+9
+
+5
+
+20 1
+
+15 9
+
+15
+
+55
+
+910 
+
+8
+
+4
+
+28 13 
+
+35 
+
+8
+
+711 
+
+815 
+
+6
+
+4
+
+16 1
+
+7
+
+103 
+
+19 15 
+
+16 0
+
+6 33 
+
+16 
+
+10 
+
+13 7
+
+21 1
+
+1 7
+
+61
+
+3
+
+12 
+
+2 0
+
+14 9
+
+13 4
+
+14 7
+
+38 7
+
+13 
+
+1
+
+51
+
+13 1
+
+623 
+
+51 2
+
+8
+
+5
+
+91
+
+20 4
+
+420 256 512 768 1024 1280 1536 1792 2048 2304 2560 2816 3072 3328 3584 3840 
+
+X Pixel Coordinates 
+
+256 
+
+512 
+
+768 
+
+1024 
+
+1280 
+
+1536 
+
+1792 
+
+2048 
+
+2304 
+
+2560 
+
+2816 
+
+3072 
+
+3328 
+
+3584 
+
+3840 
+
+> Y Pixel Coordinates
+
+12 21 
+
+10 2
+
+13 2
+
+95
+
+7 17 
+
+10 18 
+
+511 
+
+13 1
+
+10
+
+633 
+
+21
+
+51
+
+30
+
+8
+
+1
+
+10 21 
+
+210 
+
+7 5
+
+98
+
+4
+
+7
+
+9
+
+6
+
+3 0 412 
+
+13 
+
+2
+
+937 
+
+6 12 
+
+117 
+
+15 1
+
+48
+
+9 8
+
+18 5
+
+11 1
+
+6 1
+
+321 
+
+15 7
+
+418 
+
+713 
+
+3
+
+11 
+
+34
+
+13 
+
+36 
+
+843 
+
+56
+
+5
+
+3
+
+922 
+
+13 
+
+8
+
+1
+
+10 
+
+342 
+
+917 
+
+8 9
+
+26
+
+22 
+
+20 
+
+76
+
+13 9
+
+9 18 
+
+5
+
+17 
+
+91
+
+46
+
+11 7
+
+41
+
+2
+
+18 
+
+63
+
+81
+
+23 14 
+
+76
+
+8 17 
+
+917 
+
+48
+
+217 
+
+2
+
+13 
+
+20 
+
+3
+
+89
+
+113 
+
+32
+
+44
+
+15 
+
+21 
+
+12 16 
+
+210 
+
+9 3
+
+7
+
+1
+
+521 
+
+8 14 
+
+31
+
+73
+
+29
+
+90
+
+514 
+
+5
+
+14 
+
+41 172 
+
+11 
+
+5
+
+29
+
+7 0
+
+7
+
+5
+
+7 1
+
+4
+
+32 
+
+13 41 
+
+827 
+
+225 
+
+7
+
+8
+
+515 
+
+11 7
+
+519 
+
+2
+
+50 
+
+68
+
+79
+
+8 18 
+
+3 4
+
+11 1
+
+5 8
+
+7 21 
+
+63
+
+13 
+
+8
+
+51
+
+56
+
+4 28 
+
+60
+
+8 15 
+
+949 
+
+4 10 
+
+10 16 
+
+15 14 
+
+1 7
+
+67
+
+84
+
+7
+
+24 
+
+9 1
+
+516 
+
+1 19 
+
+423 
+
+71
+
+9 9
+
+3
+
+1
+
+824 
+
+10 6
+
+61
+
+72
+
+17 5
+
+720 
+
+149 
+
+22 29 
+
+7
+
+41 
+
+833 
+
+15 5
+
+61
+
+1 5
+
+7 53 
+
+31
+
+812 
+
+520 
+
+11 4
+
+3 2
+
+717 
+
+14 
+
+8
+
+18 3
+
+10 
+
+7
+
+311 
+
+3 13 
+
+9
+
+24 
+
+14 25 
+
+5
+
+10 
+
+71
+
+11 11 
+
+410 
+
+12 19 
+
+10 13 
+
+16 14 
+
+14
+
+67
+
+321 
+
+5 4
+
+18 3
+
+811 
+
+838 
+
+17 0
+
+57
+
+15 5
+
+4 9
+
+516 
+
+18 
+
+37 
+
+6126 
+
+11 11 
+
+739 
+
+527 
+
+75
+
+4 2
+
+16 
+
+13 
+
+17 18 
+
+02
+
+3 16 
+
+10 
+
+9
+
+11 5
+
+5
+
+4
+
+10 0
+
+3
+
+27 
+
+4 0
+
+627 
+
+9
+
+10 
+
+96
+
+11 
+
+10 
+
+11 4
+
+6
+
+4
+
+6 3
+
+8
+
+1
+
+52
+
+913 
+
+114 
+
+11 
+
+79 
+
+446 
+
+716 
+
+7 4
+
+316 
+
+410 
+
+25
+
+14 
+
+10 
+
+4 11 
+
+5
+
+67 
+
+3 0
+
+15 
+
+4
+
+2
+
+4
+
+2 5
+
+1 4
+
+11 4
+
+9 7
+
+512 
+
+9
+
+5
+
+14 5
+
+8 15 
+
+82
+
+416 
+
+10 13 
+
+8 6
+
+5 16 66
+
+7 3
+
+22 44 
+
+41
+
+13 
+
+5
+
+15 12 
+
+11 14 
+
+5
+
+47 
+
+311 
+
+21
+
+2
+
+12 
+
+619 
+
+7 8
+
+2 21 
+
+12 0
+
+51
+
+5 14 
+
+6
+
+21 
+
+9 4
+
+7
+
+46 
+
+81
+
+56
+
+12 
+
+25 
+
+20
+
+11 13 
+
+82
+
+711 
+
+7
+
+14 
+
+5 6
+
+17 19 
+
+3 3
+
+74
+
+7 19 
+
+26
+
+10 0
+
+13 8
+
+612 
+
+9
+
+18 
+
+17
+
+230 
+
+33
+
+14 20 
+
+115 
+
+4 6
+
+6
+
+4
+
+429 
+
+41
+
+78
+
+812 
+
+2
+
+2
+
+21
+
+13 5
+
+911 
+
+72
+
+9 1
+
+734 
+
+02
+
+13 19 
+
+2
+
+5
+
+12 
+
+4
+
+71
+
+13
+
+81
+
+72
+
+916 
+
+10 
+
+9
+
+97
+
+510 
+
+16 25 
+
+84
+
+75
+
+25
+
+318 
+
+489 
+
+13 9
+
+715 
+
+6 3
+
+14 2
+
+11 16 
+
+5
+
+10 
+
+14 8
+
+52
+
+88
+
+16 74 
+
+5
+
+2
+
+3 31 
+
+69
+
+75
+
+8 1
+
+18 
+
+3
+
+7
+
+1
+
+8
+
+13 
+
+4
+
+0
+
+71
+
+8 6
+
+94
+
+9
+
+21 
+
+953 
+
+415 
+
+565 
+
+54
+
+6 22 
+
+10 2
+
+11 
+
+25 
+
+4
+
+6
+
+1 3
+
+11 9
+
+7
+
+10 
+
+5
+
+30 
+
+11 0
+
+15 
+
+43 
+
+4
+
+48 
+
+837 
+
+19 
+
+17 
+
+221 
+
+2
+
+6
+
+97
+
+8 4
+
+333 
+
+52
+
+4 27 
+
+714 
+
+3
+
+15 
+
+911 
+
+8 8
+
+11 6
+
+10 1
+
+5
+
+0 33
+
+1
+
+6
+
+80
+
+75
+
+58
+
+64
+
+8 9
+
+635 
+
+10 
+
+1
+
+80
+
+0
+
+2
+
+8
+
+6
+
+73
+
+41
+
+15 
+
+9
+
+42
+
+10 9
+
+931 
+
+10 4
+
+816 
+
+10 
+
+4
+
+416 
+
+316 
+
+11 3
+
+13 2
+
+11 
+
+6
+
+719 
+
+75
+
+8
+
+12 
+
+1 2
+
+414 
+
+12 11 
+
+4
+
+99 
+
+9 5
+
+3
+
+15 
+
+46
+
+9 59 
+
+12 
+
+18 
+
+25 4
+
+19 21 
+
+35
+
+710 
+
+10 2
+
+33
+
+36
+
+116 
+
+16 26 
+
+1
+
+5
+
+34
+
+7 10 
+
+664 
+
+14 1
+
+41 
+
+4
+
+10 
+
+5
+
+17 723 
+
+41
+
+10 8
+
+412 
+
+77
+
+43
+
+5
+
+5
+
+9 18 
+
+63
+
+2
+
+16 
+
+612 
+
+18 5
+
+64
+
+70
+
+17
+
+11 6
+
+12 5
+
+10 12 
+
+54
+
+625 
+
+2
+
+11 
+
+16 0
+
+37
+
+2 15 
+
+13 23 
+
+5
+
+43 
+
+6 2
+
+13 9
+
+7 3
+
+6 10 
+
+314 
+
+612 
+
+35
+
+37
+
+11 9
+
+2
+
+1
+
+05
+
+1
+
+8
+
+14 
+
+4
+
+10 1
+
+37
+
+17 10 
+
+11 24 
+
+4
+
+84 
+
+821 
+
+314 
+
+17 7
+
+12 2
+
+8
+
+19 
+
+8 8
+
+13 7
+
+5 4
+
+33
+
+96
+
+11 17 
+
+411 
+
+22
+
+2
+
+1
+
+6 29 
+
+5 18 
+
+10 6
+
+23 3
+
+712 
+
+14 
+
+4
+
+14 34 
+
+72
+
+734 
+
+316 
+
+66
+
+413 
+
+29 57 
+
+720 
+
+5
+
+18 
+
+7
+
+28 
+
+217 
+
+11 2
+
+13 
+
+7
+
+2 8
+
+319 
+
+410 
+
+5
+
+115 
+
+7
+
+8
+
+411 
+
+42
+
+53
+
+718 
+
+89
+
+613 
+
+04
+
+7 14 
+
+3 18 
+
+7 39 
+
+3 14 
+
+11 6
+
+6
+
+2
+
+66
+
+56
+
+7 9
+
+3 28 
+
+6 10 
+
+10 8
+
+42
+
+11 3
+
+6 15 
+
+7
+
+84 
+
+9
+
+7
+
+10 12 
+
+10 5
+
+36
+
+4 4
+
+15 
+
+35 
+
+32
+
+7
+
+31 
+
+3 6
+
+24 22 
+
+72
+
+523 
+
+4
+
+7
+
+63
+
+63
+
+621 
+
+14 164 
+
+3
+
+18 
+
+742 
+
+12 9
+
+10 8
+
+8 4
+
+4
+
+66 
+
+13 6
+
+263 
+
+69
+
+10 
+
+2
+
+3 10 
+
+10 14 
+
+11 6
+
+14 20 
+
+321 
+
+10 
+
+2
+
+613 
+
+10 0
+
+16 
+
+25 
+
+8
+
+60 
+
+11 
+
+12 
+
+94
+
+817 
+
+444 
+
+10 0
+
+416 
+
+62
+
+5 5
+
+5
+
+1
+
+10 7
+
+11 12 
+
+23
+
+714 
+
+61
+
+14 15 
+
+4 0
+
+25
+
+1
+
+10 
+
+6 8
+
+4 14 
+
+16 5
+
+2 13 
+
+14 
+
+19 
+
+8
+
+15 
+
+830 
+
+8 128 
+
+59
+
+10 7
+
+33
+
+21 
+
+4
+
+3 120 
+
+13 4
+
+3
+
+11 
+
+61
+
+62
+
+13 
+
+7
+
+3
+
+9
+
+56
+
+12 2
+
+819 
+
+4
+
+28 
+
+4 10 
+
+66
+
+56
+
+535 
+
+56
+
+15 35 
+
+5 4
+
+11 9
+
+32 3
+
+20 27 
+
+87
+
+518 
+
+16 29 
+
+919 
+
+10 8
+
+6
+
+14 
+
+415 
+
+29 
+
+118 
+
+17 8
+
+319 
+
+312 
+
+8 9
+
+25
+
+760 
+
+22
+
+712 
+
+4
+
+5
+
+75
+
+3 6
+
+20 25 
+
+5 2
+
+5
+
+31 
+
+8
+
+2
+
+88
+
+71
+
+29 6
+
+422 
+
+21 16 
+
+18 
+
+21 
+
+18 
+
+5
+
+914 
+
+717 
+
+812 
+
+11 0
+
+14 
+
+2
+
+9
+
+25 
+
+83
+
+11 
+
+8
+
+16 6
+
+4
+
+13 
+
+25 6
+
+12 0
+
+10 9
+
+913 
+
+79
+
+83
+
+13 2
+
+528 
+
+19 
+
+18 
+
+810 
+
+75
+
+17
+
+13 2
+
+73
+
+10 85 
+
+8
+
+26 
+
+12 29 
+
+29 9
+
+50
+
+3
+
+14 
+
+8 6
+
+12 8
+
+4
+
+6
+
+17 
+
+10 
+
+4 3
+
+13 
+
+3
+
+13 141 
+
+5
+
+44 
+
+10 9
+
+8 0
+
+16 5
+
+11 1
+
+57
+
+176 
+
+617 
+
+3
+
+8
+
+6
+
+1
+
+13 
+
+18 
+
+5
+
+7
+
+15 5
+
+7 17 
+
+3
+
+174 
+
+8
+
+38 
+
+1 15 
+
+326 
+
+730 
+
+74
+
+8
+
+1
+
+12 20 
+
+7 15 
+
+9 10 37
+
+13 9
+
+19 1
+
+9 14 
+
+10 
+
+5
+
+17 
+
+6
+
+247 
+
+8 18 
+
+812 
+
+4
+
+11 
+
+22 8
+
+3
+
+9
+
+8 10 
+
+6
+
+9
+
+33
+
+912 
+
+421 
+
+17 
+
+17 
+
+930 
+
+13 
+
+23 
+
+13 0
+
+86
+
+15 4
+
+11 28 49
+
+14
+
+84
+
+853 
+
+8 28 
+
+2 11 
+
+810 
+
+21 0
+
+54
+
+713 
+
+7
+
+30 
+
+38
+
+915 
+
+13 5
+
+911 
+
+7
+
+56 
+
+5
+
+15 
+
+14 
+
+13 
+
+3 5
+
+3
+
+18 
+
+213 
+
+884 
+
+11 34 
+
+34
+
+31 0
+
+710 
+
+4
+
+12 
+
+634 
+
+422 
+
+10 2
+
+5
+
+13 
+
+10 8
+
+5
+
+10 
+
+35
+
+65
+
+13 
+
+12 
+
+13 
+
+6
+
+5 18 
+
+1 25 
+
+3
+
+36 
+
+73
+
+18 9
+
+11 0
+
+65
+
+10 6
+
+4
+
+10 
+
+11 45 
+
+10 71 
+
+11 
+
+6
+
+713 
+
+12 4
+
+60
+
+72
+
+511 
+
+6 5
+
+787 
+
+11 
+
+2
+
+54
+
+4 20 
+
+51 4 15 
+
+35
+
+12 3
+
+21 12 
+
+27 
+
+10 
+
+59 42 
+
+11 1
+
+16 12 
+
+74
+
+95
+
+6
+
+25 
+
+7 14 
+
+81
+
+8 5
+
+99
+
+7
+
+2
+
+524 
+
+211 
+
+5
+
+8
+
+19 12 
+
+40
+
+5
+
+5
+
+11 
+
+49 
+
+16 53 
+
+22
+
+4
+
+18 
+
+4
+
+3
+
+10 3
+
+812 
+
+534 
+
+16 3
+
+10 18 
+
+60
+
+62
+
+16 16 
+
+10 9
+
+11 
+
+5
+
+415 
+
+12 
+
+7
+
+14 145 
+
+6 3
+
+9 73 
+
+8
+
+21 
+
+7 4
+
+13 20 
+
+361 
+
+17 9
+
+10 17 
+
+8123 
+
+10 13 
+
+11 1
+
+15 2
+
+8
+
+2
+
+5
+
+43 
+
+15 32 
+
+11 24 
+
+11 3
+
+12 4
+
+12 47 
+
+14 2
+
+7
+
+15 
+
+3
+
+9
+
+59
+
+439 
+
+716 
+
+40
+
+6
+
+67 
+
+4 10 
+
+813 
+
+8
+
+4 9
+
+3
+
+619 
+
+16
+
+31
+
+13 9
+
+18 
+
+10 
+
+724 
+
+1
+
+12 
+
+14 6
+
+811 
+
+12 44 
+
+11 18 
+
+10 20 
+
+79
+
+14 
+
+14 
+
+10 8
+
+10 0
+
+71 3
+
+22 
+
+21 5
+
+27 9
+
+58 6
+
+3 1
+
+19 8
+
+2 2
+
+6
+
+5
+
+211 
+
+91
+
+65
+
+23 4
+
+5 48 
+
+7 3
+
+49
+
+213 
+
+21 5
+
+719 
+
+5
+
+6
+
+418 
+
+97
+
+619 
+
+71
+
+76
+
+212 
+
+3
+
+41 
+
+8 0
+
+76
+
+30 3
+
+95
+
+34
+
+19 
+
+42 
+
+11 
+
+26 
+
+712 
+
+14 26 
+
+12 10 
+
+62
+
+4
+
+14 
+
+2
+
+4
+
+9 17 
+
+21 0
+
+13 3
+
+5
+
+16 
+
+16 
+
+15 
+
+6
+
+0
+
+12 12 
+
+3 24 
+
+64
+
+52
+
+318 
+
+89
+
+9 37 
+
+553 
+
+11 4
+
+14 8
+
+2
+
+39 
+
+518 
+
+4
+
+4
+
+29 4
+
+10 5
+
+13 2
+
+22 3
+
+2
+
+17 
+
+5
+
+10 
+
+816 
+
+616 
+
+812 
+
+16 
+
+4
+
+3 6
+
+14 414 
+
+15 
+
+16 
+
+0
+
+10 0
+
+420 
+
+91
+
+10 
+
+11 
+
+54
+
+5
+
+43 
+
+52
+
+3 60 
+
+10 14 
+
+14 4
+
+1 8
+
+9 10 
+
+16 
+
+101 
+
+48
+
+8 6
+
+81
+
+15 
+
+7
+
+92
+
+26 13 
+
+11 4
+
+15 
+
+46 
+
+8
+
+22 
+
+3
+
+17 
+
+210 
+
+11 1
+
+5
+
+0
+
+14 2
+
+2 12 
+
+33
+
+7 6
+
+2
+
+19 
+
+8
+
+24 
+
+39 33 
+
+13 5
+
+8
+
+36 
+
+28 6
+
+58
+
+715 
+
+5
+
+1
+
+621 
+
+4 13 
+
+315 
+
+7 0
+
+12 7
+
+3 1
+
+51
+
+12 12 
+
+15 
+
+0
+
+61
+
+13 10 
+
+9 15 
+
+312 
+
+12 10 
+
+46
+
+9 4
+
+3 1
+
+35 36 
+
+10 7
+
+2 8
+
+13 
+
+8
+
+97
+
+86
+
+67
+
+60
+
+10 4
+
+10 4
+
+15
+
+14 10 
+
+77
+
+10 
+
+60 
+
+623 
+
+68
+
+93
+
+50
+
+732 
+
+30
+
+16 10 
+
+12 
+
+10 
+
+25 11 
+
+30
+
+13 15 
+
+9 1
+
+2 8
+
+7
+
+1
+
+75
+
+3
+
+37 
+
+491 
+
+6
+
+10 
+
+93
+
+5 10 
+
+14 4
+
+7 2
+
+10 
+
+3
+
+13 10 
+
+8
+
+13 
+
+51
+
+97
+
+10 
+
+28 
+
+1
+
+4
+
+10 2
+
+8
+
+26 
+
+28
+
+8
+
+8
+
+10 3
+
+10 53 
+
+11 1
+
+11 11 
+
+5
+
+58 
+
+81
+
+84
+
+65
+
+16 15 
+
+214 
+
+21 0
+
+6
+
+8
+
+7 8
+
+13 3
+
+47
+
+17 28 
+
+13 8
+
+4
+
+5
+
+95
+
+56
+
+12 
+
+5
+
+3
+
+10 
+
+47
+
+8
+
+7
+
+21 5
+
+820 
+
+81
+
+7
+
+8
+
+13 8
+
+2
+
+2
+
+63
+
+95
+
+13
+
+12 9
+
+7
+
+86 
+
+3
+
+7
+
+11 1
+
+9 37 
+
+5
+
+25 
+
+97
+
+14 11 
+
+6
+
+4
+
+83
+
+14 
+
+19 
+
+826 
+
+823 
+
+10 4
+
+75
+
+16 
+
+12 
+
+66
+
+14 16 
+
+5
+
+17 
+
+3
+
+9
+
+11 
+
+16 
+
+16 23 
+
+11 8
+
+17 212 0
+
+17 
+
+78 
+
+82
+
+51
+
+66
+
+87
+
+618 
+
+57
+
+5
+
+62 
+
+6 2
+
+10 
+
+28 
+
+54
+
+14 
+
+2
+
+617 
+
+97
+
+12 15 
+
+31 4
+
+3 9
+
+94
+
+4
+
+33 
+
+9
+
+8
+
+217 
+
+11 7
+
+90
+
+58
+
+9
+
+7
+
+13 
+
+8
+
+13 4
+
+728 
+
+920 
+
+8 1
+
+65
+
+8
+
+18 
+
+42
+
+867 
+
+12 2
+
+11 
+
+0
+
+65
+
+10 10 
+
+14 19 
+
+7
+
+11 
+
+11 59 
+
+52
+
+66
+
+11 2
+
+3 30 
+
+55
+
+73
+
+15 13 
+
+914 
+
+8 1
+
+8
+
+25 
+
+12 
+
+12 
+
+36
+
+3
+
+6
+
+11 6
+
+727 
+
+8 9
+
+4 6
+
+6 23 
+
+7
+
+2
+
+912 
+
+16 
+
+6
+
+63 
+
+0
+
+32 7
+
+64
+
+3 23 
+
+7
+
+3
+
+13 5
+
+35 34 
+
+4 2
+
+10 9
+
+7
+
+11 
+
+3 1
+
+37
+
+14 
+
+4
+
+33
+
+47
+
+218 
+
+43
+
+18 2
+
+7
+
+2
+
+9 10 
+
+6 70 
+
+13 2
+
+336 
+
+0 5
+
+8 8
+
+238 
+
+12 6
+
+10 6
+
+73
+
+3
+
+1
+
+24
+
+620 
+
+47
+
+10 
+
+19 
+
+17 25 
+
+93
+
+8
+
+0
+
+510 
+
+12 4
+
+3 7
+
+12 11 
+
+12 0
+
+10 
+
+1
+
+8
+
+5
+
+7 3
+
+27 
+
+22 
+
+13 17 
+
+41
+
+4
+
+6
+
+12 1
+
+7
+
+0
+
+118 
+
+26
+
+10 
+
+18 
+
+64
+
+11 3
+
+15 4
+
+19 
+
+85 
+
+2 16 
+
+716 
+
+11 1
+
+24 16 
+
+27 6
+
+82
+
+8 11 
+
+2 8
+
+97
+
+12 
+
+2
+
+10 
+
+25 
+
+22 18 
+
+91
+
+78
+
+95
+
+5
+
+1
+
+11 4
+
+10 
+
+0
+
+13 57 
+
+011 14 20 
+
+51
+
+16 7
+
+11 16 
+
+17 14 
+
+12 1
+
+4
+
+40 
+
+22
+
+10 2
+
+11 
+
+51 
+
+3
+
+15 
+
+62
+
+8 4
+
+813 
+
+18 3
+
+8 21 
+
+30
+
+25 4
+
+16 10 
+
+622 
+
+510 
+
+3 28 
+
+12 
+
+64 
+
+528 
+
+62
+
+14 3
+
+7 22 
+
+13 74 
+
+25 14 
+
+87
+
+16 
+
+59 
+
+17 17 
+
+8
+
+15 
+
+72
+
+13 5
+
+9
+
+15 
+
+710 
+
+8 15 
+
+10 6
+
+6 4
+
+12 9
+
+61
+
+94
+
+5
+
+3
+
+47
+
+22
+
+13 
+
+11 
+
+23
+
+214 
+
+5 27 
+
+75
+
+9 1
+
+6 3
+
+5
+
+3
+
+81
+
+11 73 
+
+616 
+
+16 
+
+22 
+
+9
+
+5
+
+27 
+
+7
+
+11 
+
+12 
+
+20
+
+10 
+
+6
+
+30 9
+
+13 
+
+13 
+
+89
+
+42
+
+11 7
+
+82
+
+24 
+
+6
+
+19 31 
+
+6
+
+27 
+
+10 12 
+
+10 49 
+
+15 
+
+1
+
+2
+
+15 
+
+99
+
+67
+
+68
+
+11 
+
+2
+
+7
+
+4
+
+49
+
+8 4
+
+1
+
+5
+
+10 21 
+
+82
+
+20 8
+
+48
+
+38
+
+213 
+
+88
+
+10 5 810 
+
+438 
+
+21
+
+14 2
+
+12 1
+
+5
+
+5
+
+13 4
+
+921 
+
+11 10 
+
+25 1 2
+
+9
+
+51 
+
+12 1
+
+90
+
+13 4
+
+5
+
+26 
+
+1 11 
+
+8
+
+24 
+
+93
+
+30 21 
+
+5
+
+29 
+
+513 
+
+14 2
+
+11 1
+
+91
+
+13 32 
+
+11 
+
+15 
+
+13 4
+
+714 
+
+213 
+
+13 6
+
+72
+
+511 
+
+115 
+
+23 
+
+12 
+
+12 3
+
+846 
+
+3 11 
+
+7 5
+
+25
+
+12 5
+
+36
+
+865 
+
+10 
+
+8
+
+32 43 
+
+671 
+
+30
+
+52
+
+7 9
+
+9
+
+12 
+
+8 7
+
+3
+
+5
+
+614 
+
+14 
+
+3
+
+76
+
+14 8
+
+12 
+
+38 
+
+16 12 
+
+10 45 
+
+13 12 
+
+10 3
+
+8
+
+8
+
+14 30 
+
+26 
+
+22 
+
+43
+
+68
+
+911 
+
+76
+
+9
+
+18 
+
+6
+
+19 
+
+3 9
+
+5 19 
+
+10 2
+
+33
+
+9
+
+78 
+
+510 
+
+14 
+
+38 
+
+5
+
+8
+
+516 
+
+18 5
+
+14 30 
+
+22
+
+98
+
+12 1
+
+216 
+
+711 
+
+13 4
+
+8
+
+9
+
+8 30 
+
+18 6
+
+5 71 1
+
+8
+
+50 
+
+10 
+
+12 
+
+11 
+
+14 
+
+12 21 
+
+11 5
+
+914 
+
+620 
+
+24 9
+
+3
+
+115 
+
+7
+
+11 
+
+11 
+
+3 12 
+
+11 
+
+17 
+
+5 8
+
+419 
+
+10 6
+
+17 19 
+
+10 15 
+
+14 21 
+
+12 18 
+
+713 
+
+20 11 
+
+17 
+
+5
+
+8
+
+8
+
+14 10 
+
+5 19 
+
+591 
+
+87
+
+15 
+
+38 
+
+62
+
+8
+
+14 
+
+19 23 
+
+47
+
+410 
+
+825 
+
+6
+
+7
+
+12 6
+
+10 1
+
+16 
+
+30 
+
+13 16 
+
+4 14 
+
+15 0
+
+35 5
+
+45
+
+18 8
+
+45
+
+64
+
+12 18 
+
+27
+
+21 14 
+
+10 12 
+
+6 12 
+
+13
+
+33
+
+12 10 
+
+92
+
+11 2
+
+11 
+
+23 
+
+9 11 
+
+4 27 
+
+6
+
+1
+
+44
+
+515 
+
+422 
+
+49
+
+3 2
+
+20 12 
+
+8
+
+14 
+
+11 13 
+
+922 
+
+15 
+
+8
+
+520 
+
+9
+
+4
+
+20 
+
+1
+
+3 0
+
+8 13 
+
+4 6
+
+12 15 
+
+4
+
+33 
+
+512 
+
+4 4
+
+4 12 
+
+12 
+
+11 
+
+614 
+
+10 11 
+
+79
+
+11 48 
+
+18 9
+
+11 
+
+92 
+
+68
+
+917 
+
+51
+
+617 
+
+3 31 11 14 
+
+11
+
+23 10 
+
+16 23 
+
+62
+
+12 3
+
+9 1
+
+15 
+
+9
+
+8 9
+
+62
+
+22 6
+
+77
+
+11 56 
+
+9
+
+6
+
+53
+
+6 15 
+
+11 6
+
+8 0
+
+677 
+
+5
+
+3
+
+510 
+
+9
+
+6
+
+12 
+
+1
+
+213 
+
+10 2
+
+2
+
+3
+
+3
+
+4
+
+7 6
+
+613 
+
+10 
+
+136 
+
+17 9
+
+24 
+
+22 
+
+7
+
+5
+
+217 
+
+5
+
+27 
+
+512 
+
+611 
+
+12 15 
+
+12 21 
+
+13 3
+
+716 
+
+70
+
+15 
+
+35 
+
+55
+
+336 
+
+2
+
+14 
+
+11 17 
+
+4 3
+
+99
+
+2
+
+15 
+
+327 
+
+11 1
+
+12 3
+
+82
+
+28 82 
+
+4 3
+
+312 
+
+16 117 
+
+12 
+
+4
+
+24 26 
+
+66
+
+7 15 
+
+92
+
+22 9
+
+10 9
+
+9 5
+
+7 1
+
+23
+
+9
+
+5
+
+339 
+
+10 3
+
+112 
+
+30
+
+69
+
+512 
+
+15 7
+
+10 
+
+2
+
+35
+
+72
+
+4 18 
+
+4
+
+19 
+
+85
+
+39
+
+1
+
+2
+
+12 4
+
+19 14 
+
+2
+
+30 
+
+731 
+
+6 1
+
+6
+
+8
+
+4 3
+
+648 
+
+15 12 
+
+23 
+
+4
+
+9
+
+2
+
+91
+
+63
+
+622 
+
+48
+
+715 
+
+5 12 
+
+931 
+
+4
+
+78 
+
+910 
+
+10 
+
+2
+
+742 
+
+15 12 
+
+19 8
+
+12 
+
+9
+
+13
+
+369 
+
+15 
+
+2
+
+15 
+
+5
+
+6
+
+62 
+
+318 
+
+12 13 
+
+88
+
+8
+
+13 
+
+6
+
+1
+
+4 2
+
+16 
+
+1
+
+313 
+
+11 
+
+11 
+
+97
+
+12 10 
+
+91
+
+5
+
+11 
+
+16 
+
+23 
+
+9 47 
+
+4 150 
+
+32
+
+57
+
+713 
+
+17 2
+
+9
+
+24 
+
+3 6
+
+16 
+
+2
+
+23 2
+
+15 20 
+
+48
+
+5 2
+
+20 
+
+6
+
+10 
+
+31 
+
+13 
+
+6
+
+412 
+
+5
+
+3
+
+23
+
+46
+
+4 15 
+
+7 3
+
+46
+
+8
+
+14 
+
+27 3
+
+48
+
+15 11 
+
+9
+
+48 
+
+8
+
+10 
+
+10 7
+
+81
+
+7 22 
+
+423 
+
+228 
+
+1 2
+
+17 
+
+81 
+
+49
+
+8
+
+14 
+
+53
+
+11 1
+
+14 6
+
+23 29 
+
+328 
+
+8 10 
+
+64
+
+3
+
+2
+
+93
+
+18 
+
+11 
+
+66
+
+93
+
+9
+
+17 
+
+328 
+
+14 2
+
+12 66 
+
+6
+
+8
+
+15 6
+
+713 
+
+29 36 
+
+8
+
+66 
+
+211 
+
+7
+
+11 
+
+1 13 
+
+62 21 
+
+73
+
+7 5
+
+8 6
+
+324 
+
+14 5
+
+4
+
+36 
+
+34 16 
+
+49 17 
+
+25 100 
+
+910 
+
+9 35 
+
+12 7
+
+118 
+
+20 
+
+32 
+
+910 
+
+63
+
+2
+
+18 
+
+5 21 
+
+610 
+
+12 4
+
+19 
+
+2
+
+12 9
+
+8
+
+8
+
+26 18 
+
+7 39 
+
+31
+
+15 26 
+
+2 1
+
+6
+
+17 
+
+2
+
+30 
+
+6 9
+
+13 9
+
+813 
+
+6 4
+
+6 22 
+
+8
+
+16 
+
+8 3
+
+57
+
+30
+
+7
+
+5
+
+9
+
+1
+
+73
+
+10 
+
+9
+
+719 
+
+49
+
+718 
+
+10 2
+
+1 0
+
+4
+
+22 
+
+26 3
+
+12 1
+
+6 4
+
+710 
+
+40
+
+24 13 
+
+4
+
+13 
+
+6 1
+
+7 57 
+
+10 19 
+
+16 398
+
+10 9
+
+825 
+
+9 5
+
+11 15 
+
+15 
+
+17 
+
+11 7
+
+17 4
+
+3
+
+0
+
+413 
+
+8
+
+11 
+
+5
+
+4
+
+4 10 
+
+21 30 
+
+913 
+
+47
+
+834 
+
+12 26 
+
+20 
+
+6
+
+71
+
+4 33 
+
+20 29 
+
+74
+
+5
+
+22 
+
+16 13 
+
+10 5
+
+518 
+
+12 5
+
+4 16 
+
+13 1
+
+18 16 
+
+8 8
+
+10 31 
+
+15 40 
+
+9
+
+8
+
+6
+
+61 
+
+4
+
+1
+
+8 1 8 3
+
+8
+
+2
+
+534 
+
+519 
+
+6
+
+10 
+
+7 3
+
+8
+
+6 017 
+
+13
+
+57 
+
+10 
+
+7 3
+
+816 
+
+11 63 
+
+510 
+
+1
+
+40 
+
+4
+
+13 
+
+4 2
+
+5
+
+7
+
+69
+
+7
+
+6
+
+49
+
+7 18 
+
+19 11 
+
+51
+
+94
+
+19 2
+
+12 
+
+9
+
+15 6
+
+6 5
+
+19 6
+
+11 
+
+13 
+
+8 14 
+
+717 
+
+2
+
+9
+
+816 
+
+4 10 
+
+815 
+
+12 8
+
+49
+
+11 14 
+
+267 8
+
+7
+
+17 9
+
+4 4
+
+31 
+
+8
+
+11 58 
+
+11 
+
+7
+
+6 16 
+
+553 
+
+75
+
+3 12 
+
+94
+
+612 
+
+6 5
+
+714 
+
+11 
+
+7
+
+16 0
+
+938 
+
+34
+
+56
+
+4 13 
+
+333 
+
+5
+
+6
+
+8 4
+
+2
+
+19 
+
+22 5
+
+4 5
+
+11 19 
+
+13 21 
+
+1 2
+
+7
+
+1
+
+213 
+
+6 7
+
+7 7
+
+3 15 
+
+10 6
+
+20 
+
+18 
+
+327 
+
+4 2
+
+739 
+
+2
+
+5
+
+44
+
+87
+
+112 
+
+23
+
+5 38 
+
+64
+
+11 7
+
+58
+
+29
+
+19 
+
+17 
+
+17 
+
+0
+
+15
+
+5 5
+
+13 4
+
+230 
+
+5
+
+31 
+
+54
+
+5 14 
+
+7 1
+
+5
+
+1
+
+4 7
+
+62
+
+15 4
+
+99
+
+27
+
+8 3
+
+60
+
+49
+
+14 10 
+
+920 
+
+62
+
+7 27 
+
+413 
+
+10 
+
+3
+
+41
+
+67
+
+66
+
+514 
+
+713 
+
+4 4
+
+12 3
+
+1 2
+
+1
+
+10 
+
+431 
+
+97
+
+6 12 
+
+713 
+
+93
+
+5
+
+3
+
+41
+
+35
+
+8
+
+25 
+
+27 14 
+
+8 2
+
+17 5
+
+33
+
+7 168 
+
+7 18 
+
+9 0
+
+73
+
+4
+
+18 
+
+7
+
+19 
+
+24
+
+8
+
+5
+
+12 23 
+
+9 4
+
+9 4
+
+2
+
+15 
+
+5 8
+
+61
+
+88
+
+7 9
+
+9
+
+17 
+
+51
+
+96
+
+420 
+
+15 
+
+52 
+
+12 0
+
+10 2
+
+65
+
+15 1
+
+11 13 
+
+14 5
+
+15 6
+
+14 
+
+13 
+
+2 7
+
+216 
+
+12 4
+
+76
+
+5 2
+
+16 
+
+43 
+
+67
+
+13 6
+
+616 
+
+20 5
+
+13 
+
+79 
+
+919 
+
+52
+
+86
+
+42
+
+14 
+
+20 
+
+53
+
+11 17 
+
+11 6
+
+2 31 
+
+57
+
+7
+
+3
+
+12 13 
+
+11 
+
+6
+
+6 14 
+
+8
+
+6
+
+5
+
+16 
+
+16 7
+
+9 13 
+
+10 19 
+
+12 2
+
+12 1
+
+3 36 
+
+12 
+
+5
+
+2
+
+12 
+
+12 6
+
+16 
+
+11 
+
+314 
+
+9 9
+
+3 5
+
+43 10 
+
+9 0
+
+9
+
+26 
+
+4 4
+
+15 
+
+22 
+
+22
+
+13 13 
+
+11 5
+
+31
+
+53
+
+10 10 
+
+2
+
+3
+
+9 9
+
+5 7
+
+5 8
+
+412 
+
+28 
+
+6
+
+5 3
+
+10 12 
+
+6 40 
+
+2
+
+6
+
+93
+
+810 
+
+10 26 
+
+7
+
+5
+
+22 11 
+
+710 
+
+12 12 
+
+13 2
+
+88
+
+81
+
+6 8
+
+2 3
+
+6 6
+
+11 7
+
+8
+
+3
+
+35 36 
+
+8
+
+21 
+
+41
+
+4 62 
+
+14 7
+
+22 
+
+20 
+
+4
+
+2
+
+6 12 
+
+4
+
+3
+
+16 29 
+
+8
+
+21 
+
+5
+
+4
+
+48
+
+6
+
+4
+
+15 
+
+20 
+
+67
+
+425 
+
+16 5
+
+3
+
+3
+
+42
+
+15 
+
+5
+
+13 10 
+
+44
+
+63
+
+14 81 
+
+39
+
+7 5
+
+2 0
+
+1
+
+7
+
+12 51 
+
+36
+
+51
+
+19 
+
+19 
+
+933 
+
+81
+
+92
+
+7
+
+8
+
+632 
+
+712 
+
+8 3
+
+5 27 
+
+21 9
+
+311 
+
+71
+
+2
+
+35 
+
+35
+
+72
+
+8 6
+
+9
+
+15 
+
+34
+
+631 
+
+12 
+
+14 
+
+413 
+
+4
+
+168 
+
+7
+
+21 
+
+4 7
+
+67
+
+826 
+
+95
+
+00
+
+14
+
+7
+
+6
+
+7
+
+3
+
+70
+
+987 
+
+4
+
+130 
+
+511 
+
+73
+
+79
+
+8
+
+109 
+
+10 17 
+
+53 
+
+11 
+
+76
+
+12 
+
+124 
+
+127 
+
+5
+
+4
+
+66
+
+41
+
+10 74 
+
+6 11 
+
+8 10 
+
+1 1
+
+23
+
+69
+
+9 3
+
+20 17 
+
+11 6
+
+58
+
+312 
+
+10 3
+
+20 28 
+
+5 15 
+
+9
+
+58 
+
+216 
+
+217 
+
+51
+
+12 28 
+
+54
+
+58
+
+5
+
+24 
+
+16 3
+
+9
+
+3
+
+16 6
+
+14 4
+
+11 9
+
+5
+
+67 
+
+8
+
+10 
+
+32
+
+5154 
+
+611 
+
+81
+
+517 
+
+7
+
+19 
+
+218 
+
+7 54 
+
+10 7
+
+81
+
+12 
+
+11 
+
+4
+
+7
+
+72
+
+63
+
+62
+
+11 12 
+
+611 
+
+22 3
+
+4 8
+
+11 
+
+0
+
+839 
+
+12 
+
+1
+
+11 17 
+
+532 
+
+4
+
+13 
+
+10 12 
+
+5
+
+23 
+
+4
+
+5
+
+20 3
+
+6 14 
+
+7
+
+9
+
+54
+
+47 14 
+
+10 1
+
+11 15 
+
+48
+
+11 
+
+3
+
+721 
+
+38
+
+16 10 
+
+555 
+
+815 
+
+3 23 
+
+16 6
+
+14
+
+25
+
+65
+
+515 
+
+48
+
+10 8
+
+7
+
+18 
+
+13 
+
+18 
+
+94
+
+8 14 
+
+17 23 
+
+15 58 
+
+10 50 
+
+10 
+
+17 
+
+61
+
+712 
+
+3 21 
+
+4 22 
+
+8
+
+7
+
+6
+
+16 
+
+914 
+
+30 
+
+1
+
+2 1
+
+111 
+
+7
+
+3
+
+4
+
+3
+
+14 
+
+9
+
+53
+
+7 6
+
+11 
+
+77 
+
+7
+
+141 
+
+30
+
+31 0
+
+5139 
+
+5
+
+4
+
+30 
+
+28 
+
+9
+
+5
+
+2
+
+2
+
+55
+
+514 
+
+14 8
+
+4
+
+3
+
+132 
+
+912 
+
+14 3
+
+12 5
+
+43
+
+7 0
+
+1
+
+11 
+
+15 
+
+13 
+
+62
+
+8 23 
+
+75
+
+63
+
+11 14 
+
+8 7
+
+46
+
+9
+
+0
+
+32 16 
+
+9
+
+9
+
+1 11 
+
+1
+
+3
+
+81
+
+94
+
+76
+
+42
+
+21 
+
+8
+
+5
+
+9
+
+63
+
+16 1
+
+611 
+
+16 5 413 
+
+11 
+
+2
+
+2
+
+157 
+
+12 3
+
+912 
+
+59
+
+8 2
+
+6 4
+
+82
+
+3
+
+7
+
+9
+
+0
+
+2 8
+
+18 55 
+
+13 
+
+4
+
+10 
+
+9
+
+3 14 
+
+7
+
+15 
+
+532 
+
+1 3
+
+325 
+
+921 
+
+61
+
+7
+
+42 
+
+617 
+
+12 65 
+
+211 
+
+59
+
+38
+
+72
+
+12 
+
+7
+
+615 
+
+11 35 
+
+13 
+
+4
+
+21 12 
+
+95
+
+2 11 
+
+93
+
+11 18 
+
+12 20 
+
+763 
+
+713 
+
+2
+
+9
+
+32 23 
+
+17 
+
+7
+
+19 5
+
+10 3
+
+10 31 
+
+613 
+
+90256 512 768 1024 1280 1536 1792 2048 2304 2560 2816 3072 3328 3584 3840 
+
+X Pixel Coordinates 
+
+256 
+
+512 
+
+768 
+
+1024 
+
+1280 
+
+1536 
+
+1792 
+
+2048 
+
+2304 
+
+2560 
+
+2816 
+
+3072 
+
+3328 
+
+3584 
+
+3840 
+
+> Y Pixel Coordinates
+
+64
+
+62
+
+14 10 
+
+17
+
+524 
+
+52
+
+52
+
+14 
+
+101 
+
+811 
+
+5 5
+
+10 2
+
+10 
+
+4
+
+58
+
+10 12 
+
+326 
+
+7
+
+17 
+
+3 6
+
+4
+
+5
+
+84
+
+4 1
+
+12 13 
+
+310 
+
+753 
+
+710 
+
+3 6
+
+4
+
+37 
+
+6
+
+42 
+
+13 25 
+
+8
+
+1
+
+4 2
+
+416 
+
+5
+
+1
+
+10 14 
+
+8
+
+10 
+
+13 3
+
+21 
+
+1
+
+77
+
+2 2
+
+215 
+
+38 12 
+
+10 
+
+21 
+
+5 6
+
+7
+
+3
+
+9
+
+14 
+
+62
+
+95
+
+3
+
+15 
+
+8 4
+
+4 4
+
+258 
+
+412 
+
+414 
+
+18 9
+
+10 5
+
+219 
+
+6 4
+
+51
+
+82
+
+13 
+
+5
+
+911 
+
+51
+
+59
+
+311 
+
+12 15 
+
+10 4
+
+98
+
+10 4
+
+3
+
+13 
+
+12 2
+
+44 7
+
+10 5
+
+3
+
+3
+
+2 2
+
+10 
+
+11 
+
+1
+
+2
+
+310 
+
+13
+
+6
+
+24 
+
+6 3
+
+68
+
+30
+
+710 
+
+5
+
+14 
+
+6 5
+
+2 1
+
+3
+
+25 
+
+9 1
+
+71
+
+5 5
+
+3
+
+0
+
+613 
+
+712 
+
+0
+
+6
+
+6
+
+7
+
+85
+
+81
+
+525 
+
+12 5
+
+9 18 
+
+6 18 
+
+63
+
+17 3
+
+310 
+
+72
+
+6 1
+
+72
+
+12 9
+
+10 
+
+175 
+
+7
+
+3
+
+66
+
+11 2
+
+8
+
+22 
+
+16 0
+
+92
+
+6
+
+174 
+
+51
+
+24 1
+
+4 14 
+
+63
+
+7
+
+4
+
+46
+
+32
+
+81
+
+84
+
+2
+
+24 
+
+63
+
+61
+
+2 1
+
+69
+
+7
+
+0
+
+653 
+
+40
+
+2 4
+
+7 7
+
+8
+
+4
+
+9
+
+9
+
+4 169 
+
+32
+
+3
+
+6
+
+54
+
+12 1
+
+511 
+
+57 
+
+12 
+
+711 
+
+86
+
+17 13 
+
+5
+
+16 
+
+6 1
+
+11 14 7
+
+10 
+
+614 
+
+323 
+
+45
+
+11 
+
+9
+
+15 
+
+36 
+
+15 
+
+9
+
+4
+
+5
+
+15 
+
+58 
+
+9
+
+7
+
+832 
+
+14 9
+
+50
+
+11 19 
+
+639 
+
+12 10 
+
+8 1
+
+21 0
+
+2
+
+34 
+
+4
+
+121 
+
+968 
+
+23
+
+7
+
+10 
+
+11 1
+
+13 
+
+4
+
+91
+
+10 
+
+10 
+
+3
+
+5
+
+18 3
+
+514 
+
+14 5
+
+1
+
+7
+
+9
+
+10 
+
+14 
+
+6
+
+92
+
+01
+
+5
+
+8
+
+11 
+
+21 
+
+1
+
+8
+
+15 
+
+3
+
+12 26 
+
+16 
+
+1
+
+20 4
+
+7
+
+1
+
+4
+
+92 
+
+5 12 
+
+8
+
+14 
+
+7
+
+11 
+
+45
+
+11 30 
+
+92
+
+73
+
+9 37 
+
+11 10 
+
+3
+
+13 
+
+610 
+
+10 
+
+33 
+
+611 
+
+510 
+
+214 
+
+815 
+
+2
+
+3
+
+5 10 
+
+10 12 
+
+417 
+
+20 24 
+
+619 
+
+8 4
+
+19 2
+
+99
+
+924 
+
+2
+
+11 
+
+8 11 
+
+6
+
+16 
+
+46
+
+20 8
+
+14 
+
+7
+
+11 
+
+7
+
+10 1
+
+12 
+
+127 
+
+15
+
+10 7
+
+5
+
+10 
+
+10 1
+
+86
+
+5
+
+13 
+
+54
+
+7 1
+
+20 
+
+4
+
+41
+
+6
+
+67 
+
+7
+
+3
+
+55
+
+6
+
+7
+
+15 5
+
+66
+
+99
+
+4 24 
+
+3 1
+
+33
+
+6 12 
+
+2
+
+6 72
+
+4
+
+19 
+
+12 
+
+3
+
+68
+
+729 
+
+7 1
+
+29
+
+3 3
+
+3 13 
+
+10 
+
+6
+
+5
+
+146 
+
+59
+
+411 
+
+71
+
+10 12 
+
+317 
+
+7 2
+
+6 15 
+
+11 1
+
+10 15 
+
+10 11 
+
+10 
+
+39 
+
+4
+
+11 
+
+70
+
+9
+
+1
+
+19 
+
+84 
+
+81
+
+213 
+
+1
+
+0
+
+710 
+
+12 40 
+
+3
+
+11 
+
+96
+
+1 10 
+
+12 6
+
+3
+
+11 
+
+10 9
+
+25
+
+91
+
+8
+
+0
+
+1123 
+
+13 2
+
+11 15 
+
+3
+
+3
+
+96
+
+11 133 
+
+16 0
+
+823 
+
+6
+
+3
+
+5
+
+15 
+
+18 6
+
+6 3
+
+711 
+
+11 4
+
+33
+
+4
+
+2
+
+4 17 
+
+99
+
+6
+
+11 
+
+3
+
+4
+
+516 
+
+15 676
+
+7 24 
+
+12 
+
+115 
+
+75
+
+588 
+
+5
+
+0
+
+14 3
+
+10 2
+
+3101 
+
+3
+
+9
+
+5 16 
+
+713 
+
+76
+
+59
+
+7
+
+147 
+
+72
+
+11 4
+
+10 19 
+
+16 1
+
+11
+
+4
+
+2
+
+3
+
+13 
+
+73
+
+14 
+
+6
+
+2 3
+
+3
+
+133 
+
+56
+
+229 
+
+10 5 6 11 
+
+10 12 
+
+528 
+
+11 10 
+
+3 5
+
+61
+
+618 
+
+514 
+
+14 6
+
+115 
+
+11 7
+
+3 20 
+
+30
+
+11 
+
+16 
+
+711 
+
+87
+
+51
+
+85
+
+5
+
+12 
+
+23 
+
+2
+
+1 6
+
+98
+
+810 
+
+9
+
+3
+
+15 7
+
+12 64 
+
+9
+
+14 
+
+24 6
+
+4
+
+6
+
+7
+
+14 
+
+63
+
+10 5
+
+15 10 
+
+6 7
+
+13 11 
+
+1
+
+18 
+
+5 7
+
+211 
+
+7 0
+
+11 35 
+
+11 
+
+61 
+
+4
+
+3
+
+17 10 
+
+525 
+
+725 
+
+12 11 
+
+55
+
+10 
+
+1
+
+5
+
+45 
+
+43
+
+3 3
+
+24 28 
+
+14 
+
+34 
+
+10 
+
+5
+
+4 2
+
+4
+
+77 
+
+715 
+
+612 
+
+622 
+
+24 10 
+
+242 
+
+10 
+
+4
+
+2 4
+
+74
+
+4 1
+
+4 3
+
+18
+
+84
+
+11 32 
+
+15 2
+
+27
+
+9 15 
+
+7 0
+
+13 14 
+
+12 15 
+
+83
+
+72
+
+66
+
+9 5
+
+6 14 
+
+12
+
+3
+
+5
+
+714 
+
+47
+
+6
+
+4
+
+12 
+
+2
+
+34
+
+10 3
+
+15 1
+
+75
+
+4
+
+6
+
+14 5
+
+810 
+
+7
+
+2
+
+5
+
+32 
+
+711 
+
+16 9
+
+62
+
+12 10 
+
+8
+
+0
+
+62
+
+6
+
+0
+
+1
+
+6
+
+10 
+
+8
+
+517 
+
+56
+
+4
+
+6
+
+52
+
+10
+
+6
+
+19 
+
+65
+
+5
+
+9
+
+820 
+
+23
+
+52
+
+72
+
+6
+
+39 
+
+8 5
+
+16 2
+
+215 
+
+12 2
+
+11 
+
+20 
+
+11 2
+
+1 4
+
+30
+
+24
+
+17 4
+
+3
+
+51 
+
+0 6
+
+12 0
+
+41
+
+71
+
+3 5
+
+6
+
+9
+
+76
+
+8
+
+9
+
+111 
+
+6 6
+
+3 2
+
+13 
+
+14 
+
+2 5
+
+12 3
+
+74
+
+17
+
+2 1
+
+61
+
+3
+
+7
+
+3
+
+5
+
+6
+
+148 
+
+2 9
+
+19 2
+
+15 31 
+
+4
+
+3
+
+11 8
+
+318 
+
+52
+
+6 32 
+
+1
+
+4
+
+11 
+
+13 
+
+8
+
+5
+
+7
+
+2
+
+5
+
+0
+
+17 
+
+4
+
+11 
+
+2
+
+3
+
+171 
+
+515 
+
+10 2
+
+66
+
+8
+
+4
+
+94
+
+13 1
+
+516 
+
+1 17 
+
+82
+
+51
+
+14 5
+
+4
+
+6
+
+720 
+
+11 8
+
+0
+
+5
+
+94
+
+14 2
+
+20 7
+
+24
+
+443 
+
+12 
+
+3821 
+
+8
+
+4
+
+711 
+
+26
+
+2 10 
+
+717 
+
+31
+
+36
+
+56
+
+23 
+
+5
+
+6
+
+5
+
+4
+
+8
+
+21
+
+5
+
+24 
+
+8
+
+18 
+
+8 9
+
+6
+
+10 
+
+5 16 
+
+32
+
+19 
+
+9
+
+45 59 
+
+5
+
+3
+
+6
+
+6
+
+9
+
+85 
+
+86
+
+33 10 
+
+13 1
+
+917 
+
+10 
+
+8
+
+14 
+
+0
+
+41
+
+3 3
+
+312 
+
+1
+
+0
+
+5
+
+6
+
+5
+
+5
+
+12 
+
+6
+
+5 5
+
+12 27 
+
+24 6
+
+12 
+
+15 
+
+323 
+
+21
+
+5
+
+32 
+
+7
+
+8
+
+27 14 
+
+20 22 
+
+34
+
+96
+
+3 1
+
+3
+
+3
+
+23 5
+
+13 3
+
+11 11 
+
+11 
+
+1
+
+9
+
+17 
+
+23
+
+1 9
+
+94
+
+04
+
+97
+
+10 13 
+
+7 2
+
+71
+
+14 2
+
+35
+
+8 4
+
+828 
+
+97
+
+14 9
+
+11 
+
+1
+
+9
+
+9
+
+30
+
+53 
+
+1
+
+3
+
+0
+
+29 
+
+4
+
+5
+
+147 
+
+19 8
+
+12 32 
+
+4
+
+0
+
+72
+
+8
+
+75 
+
+1
+
+13 
+
+73
+
+617 
+
+15 
+
+25 
+
+67
+
+9134 
+
+11 
+
+31 
+
+20 1
+
+15 
+
+6
+
+4
+
+4
+
+47 1
+
+44 
+
+3
+
+13 10 
+
+41 14 
+
+15 
+
+1
+
+16 7
+
+26 5
+
+7
+
+71 
+
+11 
+
+3
+
+55
+
+10 
+
+3
+
+19 5
+
+10 3
+
+410 
+
+8
+
+22 
+
+64
+
+9 15 
+
+6
+
+1
+
+15
+
+8
+
+7
+
+14 7
+
+17 4
+
+3 6
+
+5
+
+7
+
+9
+
+23 
+
+7
+
+2
+
+6
+
+3
+
+9
+
+6
+
+11 
+
+5
+
+3
+
+11 
+
+7
+
+7
+
+9
+
+4
+
+20
+
+616 
+
+10 2
+
+1 6
+
+11 100 
+
+864 
+
+51
+
+17
+
+16 5
+
+37 0
+
+11 5
+
+2
+
+107 
+
+614 
+
+19 12 
+
+8 1
+
+11 3
+
+10 8
+
+30 
+
+1
+
+14
+
+40
+
+5171 
+
+13 23 
+
+712 
+
+4
+
+12 
+
+10 
+
+0
+
+415 
+
+11 
+
+1
+
+10 32 
+
+341 
+
+11 
+
+26 
+
+3
+
+5
+
+33
+
+11 
+
+5
+
+49
+
+11 
+
+0
+
+92
+
+33
+
+711 
+
+83
+
+413 
+
+68
+
+10 
+
+12 
+
+14 10 
+
+1
+
+7
+
+18 4
+
+5 6
+
+8
+
+0
+
+42
+
+11 
+
+3
+
+11 1
+
+16 1
+
+10 9
+
+811 
+
+4
+
+1
+
+4
+
+3
+
+6
+
+1
+
+6
+
+7
+
+5
+
+2
+
+16 2
+
+10 
+
+12 
+
+9
+
+13 
+
+74
+
+3 15 
+
+6
+
+9
+
+216 
+
+210 
+
+5 5
+
+61
+
+814 
+
+12 
+
+1
+
+4 6
+
+1 6
+
+16 36 
+
+211 
+
+719 
+
+7 8
+
+16 7
+
+3
+
+20 
+
+4
+
+31 
+
+15 34 
+
+13 24 
+
+13 
+
+11 
+
+325 
+
+13 1
+
+10 
+
+10 
+
+17 12 
+
+97
+
+15
+
+5
+
+1
+
+6 4
+
+40
+
+8 16 
+
+18 6
+
+7
+
+3
+
+38 0
+
+3 8
+
+93
+
+9
+
+14 
+
+11 9
+
+2 24 
+
+6
+
+4
+
+7
+
+8
+
+4
+
+7
+
+521 
+
+741 
+
+15 5
+
+7 8
+
+3 22 
+
+20 
+
+1
+
+78
+
+8 2
+
+15 
+
+23 
+
+7 39 
+
+37
+
+10 
+
+4
+
+422 
+
+3
+
+18 
+
+13 18 
+
+95
+
+513 
+
+11 
+
+29 
+
+2
+
+16 
+
+8 1
+
+10 3
+
+41
+
+11 3
+
+314 
+
+18 
+
+6
+
+2
+
+26 
+
+5 81 
+
+59
+
+4
+
+56 
+
+325 
+
+9
+
+4
+
+110 
+
+3 8
+
+10 4
+
+63
+
+7 4
+
+16 20 
+
+9 9
+
+8 35 
+
+17 
+
+3
+
+13 
+
+35 
+
+11 10 
+
+22 
+
+3
+
+3
+
+2
+
+2 29 
+
+6
+
+2
+
+739 
+
+88
+
+15 11 
+
+3
+
+4
+
+3
+
+17 
+
+68
+
+2 27 
+
+5 20 
+
+5
+
+8
+
+62
+
+9 52 
+
+22
+
+21 9
+
+73
+
+82
+
+1 65 
+
+48
+
+9
+
+13 
+
+15 10 
+
+77
+
+12 7
+
+7 7
+
+2
+
+8
+
+14 8
+
+217 
+
+21 0
+
+84
+
+92
+
+5
+
+18 
+
+10 14 
+
+14 
+
+2
+
+5
+
+13 
+
+17 8
+
+15 4
+
+719 
+
+12 18 
+
+13 6
+
+5 22 
+
+5 18 
+
+310 
+
+32
+
+919 
+
+7
+
+4
+
+514 
+
+6 16 
+
+313 
+
+425 
+
+910 
+
+83
+
+23
+
+11 621 32 
+
+93
+
+3
+
+6
+
+20 65 
+
+20 10 
+
+10 
+
+6
+
+43
+
+97
+
+11 5
+
+7 14 
+
+18 12 
+
+11 5
+
+5
+
+8
+
+14 5
+
+17 
+
+7
+
+12 10 
+
+8 10 
+
+2 4
+
+17 
+
+7
+
+9
+
+0
+
+5
+
+19 
+
+5 1
+
+8 0
+
+58
+
+640 
+
+6
+
+5
+
+12 13 
+
+38 9
+
+65
+
+62
+
+710 
+
+4
+
+10 
+
+4
+
+20 
+
+17 16 
+
+220 
+
+11 13 
+
+10 9
+
+12 1
+
+9
+
+6
+
+59
+
+23
+
+5
+
+8
+
+19 7
+
+12 
+
+15 
+
+2
+
+14 
+
+14 6
+
+3 8
+
+40
+
+11 
+
+39 
+
+19 
+
+2
+
+718 
+
+47
+
+43
+
+52
+
+16 9
+
+18 1
+
+7
+
+10 
+
+8
+
+12 
+
+71
+
+22
+
+7
+
+10 
+
+4
+
+2
+
+10 10 
+
+3
+
+7
+
+6
+
+3
+
+3
+
+3
+
+12 1
+
+13 
+
+8
+
+2
+
+9
+
+8
+
+5
+
+74
+
+10 
+
+9
+
+434 
+
+24 
+
+18 
+
+14 
+
+11 
+
+10 16 
+
+13 1
+
+2
+
+10 
+
+12 
+
+1
+
+25 2 25 3
+
+8
+
+150 
+
+6
+
+0
+
+9
+
+137 
+
+345 
+
+96
+
+9
+
+4
+
+89
+
+6
+
+10 
+
+7
+
+104 
+
+515 
+
+7
+
+1
+
+4
+
+15 
+
+84
+
+35 
+
+4
+
+88
+
+86
+
+9
+
+5
+
+76
+
+11 12 
+
+79
+
+5
+
+14 
+
+9 0
+
+2 2
+
+2 2
+
+37
+
+64
+
+46 
+
+10 
+
+7 1
+
+14 9
+
+316 
+
+7
+
+6
+
+830 
+
+9 3
+
+216 
+
+9
+
+2
+
+2
+
+5
+
+5 3
+
+9
+
+10 
+
+32
+
+42
+
+217 
+
+18 54 
+
+4 14 
+
+34
+
+50
+
+25
+
+10 7
+
+810 
+
+113 
+
+710 
+
+8
+
+2
+
+5 11 
+
+2 105 
+
+11 46 
+
+80
+
+810 
+
+12 
+
+36 
+
+4
+
+3
+
+3
+
+2
+
+12 
+
+14 
+
+33
+
+4 23 
+
+19 9
+
+15 15 
+
+11 51 
+
+9 7
+
+5
+
+10 
+
+32 
+
+5
+
+29 62 
+
+54
+
+918 
+
+27 2
+
+14 5
+
+9
+
+10 
+
+14 7
+
+515 
+
+45
+
+11 20 
+
+62
+
+56 9
+
+47 
+
+1
+
+9 11 
+
+61
+
+8
+
+3
+
+5
+
+8
+
+19 11 
+
+11 0
+
+04
+
+2 3
+
+11 
+
+12 
+
+4
+
+1
+
+10 7
+
+11 12 
+
+7
+
+5
+
+14 
+
+10 
+
+14 10 
+
+2
+
+16 
+
+14 29 
+
+558 
+
+4 8
+
+47
+
+10 9
+
+15 19 
+
+8
+
+31 
+
+8
+
+2
+
+613 
+
+48
+
+97
+
+14 3
+
+23 3
+
+15 
+
+14 
+
+13 
+
+10 
+
+7
+
+5
+
+6
+
+12 
+
+850 
+
+71
+
+11 24 
+
+12 5
+
+22
+
+19 
+
+24 
+
+7 5
+
+53 
+
+4
+
+12 1
+
+11 
+
+8
+
+42
+
+7
+
+70 
+
+36
+
+8
+
+4
+
+11 0
+
+11 13 
+
+5
+
+2
+
+10 8
+
+19 0
+
+7 4
+
+25
+
+15 
+
+14 
+
+14 
+
+9
+
+7
+
+0
+
+939 
+
+51
+
+14 
+
+24 
+
+13 13 
+
+21 10 
+
+10 18 
+
+15 
+
+2
+
+18 94 
+
+15 
+
+12 
+
+8 8
+
+10 
+
+2
+
+90
+
+54
+
+3
+
+2
+
+614 
+
+6
+
+4
+
+10 9
+
+6
+
+5
+
+24 9
+
+15
+
+11 13 
+
+11 
+
+14 
+
+1
+
+18 
+
+513 
+
+11 2
+
+12 
+
+10 
+
+17 1
+
+16 
+
+0
+
+67
+
+24 8
+
+5 23 
+
+615 
+
+519 
+
+2 9
+
+9 3
+
+7
+
+7
+
+10 
+
+3
+
+12 13 
+
+13 
+
+15 
+
+7
+
+2
+
+82
+
+8 28 
+
+824 47
+
+218 
+
+13 0
+
+99
+
+87
+
+10 1
+
+43
+
+31
+
+7 0
+
+13 
+
+13 
+
+74
+
+12 8
+
+4
+
+21 
+
+10 0
+
+14 5
+
+7 16 
+
+51
+
+6 11 
+
+7
+
+51 
+
+17 0
+
+21 52 
+
+7 7
+
+96
+
+82
+
+13
+
+3 9
+
+7
+
+0
+
+20 
+
+2
+
+726 
+
+7
+
+4
+
+7 2
+
+11 5
+
+6 1
+
+22 0
+
+63
+
+6
+
+67 
+
+53
+
+39
+
+8 17 
+
+6 3
+
+22 11 
+
+64
+
+4
+
+27 
+
+10 
+
+2
+
+95
+
+15 
+
+21 
+
+12 1
+
+2
+
+1
+
+73
+
+8
+
+116 
+
+6
+
+4
+
+47
+
+2
+
+16 
+
+11 2
+
+2 12 
+
+8 30 
+
+15 
+
+9
+
+8
+
+4
+
+42
+
+2 5
+
+55
+
+8
+
+12 
+
+5 2
+
+35
+
+5
+
+7
+
+711 
+
+8
+
+9
+
+62
+
+10 1
+
+71
+
+13 7
+
+34
+
+10 7
+
+33
+
+10 1
+
+2
+
+0
+
+2
+
+34 
+
+99
+
+6
+
+1
+
+7
+
+14 
+
+11 
+
+4
+
+716 
+
+10 
+
+1
+
+4 13 
+
+11 2
+
+9 7
+
+11 2
+
+7
+
+1
+
+16 0
+
+5
+
+11 
+
+85
+
+81
+
+31 60 
+
+6 17 
+
+10 2
+
+32 3
+
+82
+
+610 
+
+11 18 
+
+9
+
+3
+
+10 13 
+
+39
+
+83
+
+912 
+
+25 
+
+3
+
+10 5
+
+410 66
+
+2
+
+3
+
+12 5
+
+5
+
+2
+
+40 9
+
+59
+
+6
+
+1
+
+26 
+
+3
+
+13 0
+
+2 8
+
+5
+
+3
+
+911 
+
+2
+
+10 
+
+10 8
+
+16 13 
+
+44
+
+6 3
+
+8
+
+5
+
+15 42 
+
+12 
+
+5
+
+633 
+
+2
+
+3
+
+530 
+
+64
+
+8
+
+12 
+
+10 1
+
+8 3
+
+89
+
+13 9
+
+9
+
+5
+
+16 8
+
+11 
+
+10 
+
+47
+
+84
+
+56
+
+13 14 
+
+26
+
+10 2
+
+714 
+
+5
+
+9
+
+624 
+
+524 
+
+7
+
+1
+
+13 15 
+
+8
+
+28 
+
+8
+
+44 
+
+418 
+
+16 
+
+2
+
+19 5
+
+9
+
+1
+
+4
+
+2
+
+47
+
+6
+
+114 
+
+47
+
+62
+
+14 3
+
+10 
+
+5
+
+12 11 
+
+22
+
+14 12 
+
+20 
+
+37 
+
+57
+
+16 
+
+21 
+
+15
+
+15 
+
+6
+
+12 7
+
+54
+
+10 5
+
+813 
+
+55
+
+5 27 
+
+8 5
+
+21
+
+9 20 
+
+12 6
+
+12 1
+
+13 3
+
+11 5
+
+637 
+
+5 16 
+
+82
+
+17 
+
+13 
+
+19 8
+
+1
+
+8
+
+8
+
+13 
+
+5 12 
+
+8 3
+
+92
+
+7
+
+20 
+
+2
+
+3
+
+4
+
+2
+
+9 4
+
+13 4
+
+9 7
+
+7 6
+
+10 28 
+
+49
+
+14 3
+
+2 3
+
+6 3
+
+11 
+
+5
+
+13 5
+
+12 9
+
+18 
+
+2
+
+75
+
+3
+
+61 
+
+8
+
+21 
+
+28
+
+51
+
+6 2
+
+8
+
+5
+
+14 2
+
+83
+
+2
+
+6
+
+20 3
+
+3
+
+29 
+
+15 9
+
+8 5
+
+6
+
+11 
+
+9
+
+37 
+
+6 1
+
+10 1
+
+4 15 
+
+75
+
+27 8
+
+3
+
+4
+
+29
+
+48
+
+13 
+
+23 
+
+32
+
+13 
+
+0
+
+5
+
+69 
+
+63
+
+8
+
+3
+
+17 11 
+
+9
+
+3
+
+15 
+
+31 
+
+10 1
+
+20 1
+
+10 35 
+
+6 91 
+
+13 6
+
+82
+
+49
+
+19 
+
+7
+
+2
+
+157 
+
+8 7
+
+3
+
+1
+
+17 
+
+73 
+
+93
+
+5
+
+61 
+
+10 
+
+9
+
+20 0
+
+53
+
+14 
+
+1
+
+622 
+
+14 14 
+
+3
+
+4
+
+23 
+
+9
+
+6 4
+
+52
+
+310 
+
+846 
+
+7
+
+19 
+
+18 1
+
+10 
+
+14 
+
+22
+
+743 
+
+7
+
+0
+
+1
+
+4
+
+7
+
+8
+
+3 1
+
+5 10 
+
+3
+
+11 
+
+65
+
+20 7
+
+5
+
+16 
+
+21
+
+5 0
+
+12 2
+
+97
+
+112 
+
+914 
+
+8 8
+
+811 
+
+11 13 
+
+9 2
+
+12 8
+
+11 
+
+2
+
+8 21 
+
+76
+
+22 20 
+
+16 
+
+6
+
+10 0
+
+12 64 
+
+51
+
+4 64 
+
+96
+
+7 13 
+
+30 10 
+
+11 7
+
+18 
+
+11 
+
+17 
+
+4
+
+11 
+
+2
+
+4 14 
+
+70
+
+8
+
+5
+
+5
+
+3
+
+31 5
+
+3 23 
+
+4
+
+4
+
+80
+
+21 19 
+
+8
+
+4
+
+914 
+
+10 
+
+2
+
+8 4
+
+22 
+
+5
+
+4 30 
+
+2 6
+
+5
+
+24 
+
+7 6
+
+6 14 
+
+10 
+
+11 
+
+14 
+
+6
+
+512 
+
+46
+
+12 14 
+
+7
+
+10 
+
+17 
+
+151 
+
+57
+
+46
+
+17 
+
+1
+
+311 
+
+23 
+
+7
+
+15
+
+10 
+
+7
+
+4
+
+39 
+
+1
+
+32 
+
+17 
+
+4
+
+44 24 
+
+16 
+
+1
+
+75
+
+14 5
+
+36 
+
+66 
+
+9 11 
+
+10 2
+
+5
+
+11 
+
+213 
+
+514 
+
+94
+
+11 10 
+
+3 1
+
+8 9
+
+68
+
+52 
+
+15 
+
+21 7
+
+9 1
+
+39
+
+7
+
+8
+
+9 15 
+
+46
+
+14 9 12 13 
+
+5
+
+4
+
+47 
+
+53 
+
+16
+
+22 
+
+8
+
+7
+
+2
+
+9 5
+
+15 
+
+177 
+
+13 8
+
+5 2
+
+15 0
+
+16 
+
+7
+
+2
+
+10 
+
+11 41 
+
+7
+
+2
+
+84
+
+8
+
+2
+
+11 
+
+10 
+
+13 11 
+
+6
+
+157 
+
+15 20 
+
+20 
+
+6
+
+9 2
+
+7 7
+
+27
+
+612 
+
+4 10 
+
+69
+
+14 28 
+
+7
+
+12 
+
+5 3
+
+13 1
+
+88
+
+210 
+
+15 
+
+18 724 
+
+8
+
+89 
+
+5 3
+
+12 15 
+
+910 
+
+10 3
+
+13 1
+
+33 9
+
+2
+
+4
+
+63
+
+5
+
+6
+
+8
+
+0
+
+5 7
+
+10 
+
+20 
+
+3 1
+
+95
+
+17 3
+
+54
+
+80
+
+4
+
+3
+
+8 3
+
+3
+
+1
+
+5
+
+9
+
+21 8
+
+622 
+
+1
+
+23 
+
+4 1
+
+8 8
+
+14 5
+
+7
+
+2
+
+79
+
+45 
+
+14 
+
+14 7
+
+11 11 
+
+13 8
+
+6
+
+6
+
+2 7
+
+8
+
+23 
+
+34
+
+24 
+
+5
+
+10 25 
+
+73
+
+516 
+
+510 
+
+10 11 
+
+14 
+
+12 
+
+33
+
+3 2
+
+989 
+
+829 
+
+5 6
+
+716 
+
+9 2
+
+215 
+
+2
+
+12 
+
+13 
+
+4
+
+510 
+
+8
+
+10 
+
+1 1
+
+4 56 
+
+2
+
+1
+
+10 3
+
+4 7
+
+15 15 3
+
+5
+
+17 10 
+
+7
+
+3
+
+6 4
+
+10 
+
+37 
+
+714 
+
+2
+
+7
+
+34 6
+
+14 
+
+22 
+
+525 
+
+1 6
+
+4 4
+
+45
+
+43
+
+9
+
+5
+
+13 2
+
+10 0
+
+13 
+
+20 
+
+37
+
+15 134 
+
+24 15 
+
+3 7
+
+42
+
+712 
+
+17 16 
+
+28 
+
+14 
+
+9
+
+2
+
+6
+
+11 
+
+428 
+
+6 5
+
+15 
+
+3
+
+211 
+
+18 29 
+
+99
+
+61
+
+14 5
+
+93
+
+1
+
+15 
+
+5 14 
+
+5 2
+
+9
+
+2
+
+52
+
+5
+
+7
+
+2
+
+6
+
+511 
+
+82
+
+76
+
+16 
+
+4
+
+17 10 
+
+13 4
+
+21 3
+
+4 6
+
+12 
+
+1
+
+19 10 
+
+7
+
+5
+
+328 
+
+13 23 
+
+6 10 
+
+22 14 
+
+9 13 
+
+3 2
+
+4 10 
+
+13 7
+
+10 0
+
+67
+
+64
+
+66
+
+10 
+
+2
+
+85
+
+71
+
+16 
+
+81 
+
+5
+
+11 
+
+44
+
+6 9
+
+50 
+
+4
+
+5
+
+5
+
+10 
+
+2
+
+11 
+
+151 
+
+30
+
+68
+
+11 1
+
+17 1
+
+3 19 
+
+12
+
+11 6
+
+514 
+
+915 
+
+16 8
+
+110 
+
+98
+
+15 4
+
+5 3
+
+63
+
+41
+
+10 9
+
+11 
+
+3
+
+9 4
+
+11 
+
+26 
+
+1
+
+6
+
+839 
+
+00
+
+727 
+
+2 5
+
+22
+
+14 
+
+11 
+
+1158 
+
+5
+
+8
+
+86
+
+17 5
+
+1
+
+8
+
+10 
+
+1
+
+47
+
+5
+
+22 
+
+313 
+
+8 5
+
+9 7
+
+415 
+
+315 7 4
+
+54
+
+6 12 
+
+12 
+
+0
+
+22
+
+10 4
+
+47
+
+6 1
+
+17 
+
+1
+
+41
+
+15 4
+
+54
+
+910 
+
+7 4
+
+9 9
+
+768 
+
+7 7
+
+62
+
+16 6
+
+55
+
+11 17 
+
+14 6
+
+7
+
+9
+
+5
+
+3
+
+12 
+
+46 
+
+9 5
+
+511 
+
+717 
+
+78
+
+5
+
+4
+
+61
+
+9 18 
+
+45
+
+68
+
+11
+
+13 
+
+4
+
+97
+
+2 6
+
+15 
+
+106 
+
+75
+
+67
+
+42
+
+12 
+
+4
+
+117 
+
+9 1
+
+5
+
+14 
+
+5 3
+
+73
+
+7 12 
+
+7 13 
+
+57
+
+11 17 
+
+66
+
+12
+
+41
+
+48
+
+16 
+
+16 
+
+12 
+
+3
+
+65
+
+11 
+
+3
+
+52
+
+8 8
+
+5 4
+
+57
+
+7
+
+7 8
+
+98 
+
+10 
+
+9
+
+812 
+
+34
+
+10 12 
+
+9
+
+1
+
+17 
+
+5
+
+6 25 
+
+17 1
+
+15 3
+
+10 
+
+27 
+
+82
+
+5
+
+22 
+
+3
+
+4
+
+2 4
+
+24
+
+818 
+
+12 14 
+
+2 14 
+
+10 2
+
+76
+
+35
+
+22 3
+
+4 9
+
+1
+
+25 
+
+6
+
+8
+
+10 8
+
+6 2
+
+15 4
+
+12 38 
+
+2
+
+15 
+
+15 5
+
+316 
+
+54
+
+24
+
+2 5
+
+54
+
+12 
+
+27 
+
+10 
+
+38 
+
+11 10 
+
+6 9
+
+36
+
+3
+
+7
+
+10 35 
+
+3
+
+2
+
+517 
+
+78
+
+11 
+
+44 
+
+10 
+
+2
+
+95
+
+15 2
+
+5 4
+
+9 23 
+
+10 
+
+15 
+
+8
+
+49 
+
+5
+
+17 
+
+610 
+
+9 53 
+
+12 10 
+
+513 
+
+10
+
+13 17 
+
+64
+
+6 0
+
+62
+
+12 11 
+
+23
+
+23 0 10 0
+
+5 3
+
+26 3
+
+527 
+
+14 2
+
+24
+
+713 
+
+417 
+
+3
+
+33 
+
+864 
+
+2 50 
+
+3
+
+6
+
+5
+
+102 
+
+60
+
+77
+
+112 
+
+43
+
+91
+
+4 11 
+
+4 49 
+
+4
+
+8
+
+81
+
+15
+
+214 
+
+410 
+
+6 6
+
+4
+
+17 
+
+7
+
+10 
+
+17 3
+
+54
+
+9 5
+
+3 19 
+
+63
+
+313 
+
+916 
+
+826 
+
+6
+
+66 
+
+46
+
+89
+
+25
+
+7 2
+
+5 6
+
+8
+
+1
+
+54
+
+12 12 
+
+10 0
+
+6
+
+3
+
+9 7
+
+21 
+
+9
+
+40 
+
+0
+
+8 11 
+
+4
+
+13 
+
+21 7
+
+2
+
+11 
+
+22
+
+9
+
+3
+
+814 
+
+2
+
+8
+
+9
+
+14 
+
+39
+
+41
+
+715 
+
+1 48 
+
+9 1
+
+15
+
+97
+
+30
+
+1
+
+9
+
+615 
+
+18 3
+
+8 17 
+
+17 6
+
+16 17 
+
+11 12 
+
+15 15 
+
+11 
+
+11 
+
+10 3
+
+516 
+
+4
+
+2
+
+73
+
+87
+
+17 
+
+6
+
+13 3
+
+24 20 
+
+21 
+
+12 
+
+9 10 
+
+6
+
+33 
+
+312 
+
+5
+
+70 
+
+5 5
+
+66
+
+34
+
+330 
+
+328 
+
+6 25 
+
+11 2
+
+511 
+
+44
+
+10 4
+
+4 12 
+
+6 2
+
+5
+
+1
+
+5 3
+
+516 
+
+48
+
+10 3
+
+12 
+
+18 
+
+8 3
+
+6 10 
+
+24
+
+811 
+
+7 7
+
+12 12 
+
+14 0
+
+922 
+
+64
+
+11 
+
+14 
+
+61
+
+7 9
+
+86
+
+11 3
+
+4
+
+0
+
+6
+
+22 
+
+13 24 
+
+12 3
+
+10 
+
+15 
+
+33
+
+4
+
+7
+
+11 85 
+
+8 4
+
+11 18 
+
+11 78 
+
+416 
+
+814 
+
+12 5
+
+9
+
+12 
+
+7
+
+1
+
+12 
+
+2
+
+50
+
+11 1
+
+11 3
+
+832 
+
+5 14 
+
+5 0
+
+72
+
+12 15 
+
+14 3
+
+11 11 
+
+7
+
+16 
+
+56
+
+53
+
+612 
+
+15 3
+
+99
+
+12 6
+
+3 12 
+
+3
+
+33 
+
+23 
+
+12 
+
+8 18 
+
+310 
+
+16 36 
+
+5 18 
+
+310 
+
+6 8
+
+12 
+
+15 
+
+4 4
+
+317 
+
+33
+
+8 7
+
+11 
+
+130 
+
+5
+
+1
+
+4
+
+3
+
+214 
+
+7
+
+1
+
+1
+
+0
+
+81
+
+612 
+
+16 3
+
+18
+
+914 
+
+20 
+
+9
+
+7
+
+5
+
+912 
+
+7
+
+2
+
+2 2
+
+16 
+
+6
+
+6 5
+
+6
+
+19 
+
+91
+
+11 0
+
+82
+
+514 
+
+83
+
+19 8
+
+5
+
+4
+
+20 
+
+25 
+
+37
+
+22
+
+2 0
+
+5
+
+166 
+
+8
+
+131 
+
+81
+
+28
+
+46
+
+7 8
+
+8 0
+
+6 16 
+
+96
+
+4 1
+
+4 3
+
+3 5
+
+12 5
+
+7
+
+55 
+
+10 28 
+
+614 
+
+19 8
+
+5
+
+16 
+
+11 1
+
+327 
+
+4
+
+1
+
+4
+
+1
+
+84
+
+9
+
+1
+
+610 
+
+98
+
+11 15 
+
+2 0
+
+61
+
+2 7
+
+13 
+
+4
+
+94
+
+14 1
+
+10 11 
+
+2 1
+
+929 
+
+18
+
+12 21 
+
+11 
+
+10 
+
+1 4
+
+917 
+
+23
+
+2
+
+56 
+
+966 
+
+11 2
+
+21 1
+
+62
+
+12 
+
+96 
+
+8
+
+77 
+
+17 9
+
+3 6
+
+5
+
+8
+
+6
+
+163 
+
+17 8
+
+23 25 
+
+58
+
+2
+
+35 
+
+14 13 
+
+3
+
+38 
+
+14 
+
+18 
+
+7
+
+1
+
+95
+
+9
+
+1
+
+9
+
+9
+
+10 51 
+
+11 6
+
+14 9
+
+10 3
+
+19 
+
+9
+
+33
+
+32
+
+10 5
+
+11 
+
+11 
+
+9
+
+19 
+
+6
+
+8
+
+74
+
+5
+
+1
+
+314 
+
+56
+
+10 9
+
+325 
+
+10 4
+
+59
+
+2
+
+20 
+
+1 28 
+
+36
+
+334 
+
+5
+
+17 
+
+12 
+
+1
+
+77
+
+11 1
+
+36
+
+5
+
+2
+
+2 16 
+
+18
+
+10 8
+
+10 1
+
+35 
+
+4
+
+5
+
+4
+
+12 
+
+10 
+
+12 
+
+9
+
+77
+
+52
+
+9
+
+164 
+
+11 17 
+
+411 
+
+15 
+
+9
+
+53
+
+94
+
+3
+
+9
+
+12 14 
+
+64
+
+9 1
+
+10 4
+
+7
+
+19 
+
+4 1
+
+11 
+
+2
+
+9
+
+51 
+
+310 
+
+613 
+
+51
+
+515 
+
+7
+
+3
+
+8 0
+
+2 3
+
+9
+
+16 
+
+821 
+
+88
+
+44
+
+5
+
+1
+
+95
+
+13 2
+
+614 
+
+72
+
+11
+
+71
+
+311 
+
+911 
+
+3
+
+16 
+
+9 5
+
+89
+
+11 
+
+12 
+
+7
+
+6
+
+420 
+
+5
+
+11 
+
+514 
+
+8
+
+10 
+
+12 
+
+4
+
+13
+
+70
+
+12 14 
+
+514 
+
+9
+
+20 
+
+222 
+
+19 24 
+
+10 1Figure 15. Visualization of U-S cross-view localization and heading errors on real satellite imagery from four cities. The four satellite images in the top-left, top-right, bottom-left, and bottom-right panels correspond to City A–D , respectively, and overlay the localization and heading results of all unseen test samples under cross-view setting. In each image, blue/red dots denote the ground-truth/predicted positions, while blue/red arrows denote the ground-truth/predicted heading vectors. The green line segment connecting the endpoints of the two arrows represents the position error, whose magnitude is annotated by green numerical values , and the purple numeric values denote the heading error; smaller values indicate better accuracy, and perfect overlap between the red and blue arrows corresponds to the ideal case. This visualization enables precise, fine-grained inspection of localization/heading errors under different scene types across all cities. The satellite images of all four cities are divided into fine-grained RSTs, such that the surrounding terrain of any sample can be examined and analyzed in detail against the real-world surroundings. For example, in the high-rise building areas (e.g., the lower-right of City A and the lower region of City C), in feature-sparse regions (e.g., forests in the upper-right of City A, green fields and the central river in City C, and open grounds in City D), as well as in dense clusters of similar buildings (e.g., City B and City D), many samples exhibit noticeably large localization and/or heading errors. These errors are likely due to the adverse effects of cross-view appearance discrepancies, feature sparsity, and feature similarity on localization and orientation. .6879 .6886 .6894 .6901 .6908 .6915 .6922 .6929 .6936 .6943 .6950 .6957 .6964 .6972 .6979 .6986 
+
+> Longitude (°E), offset = 139
+> .6749 .6744 .6738 .6732 .6726 .6721 .6715 .6709 .6703 .6698 .6692 .6686 .6680 .6675 .6669
+> Latitude (°N), offset = 35
+> Uni1652
+> SUES200
+> DenseUAV
+> GTA_UAV
+> Ours_VGG
+> City A/traj.1 .6879 .6886 .6894 .6901 .6908 .6915 .6922 .6929 .6936 .6943
+> Longitude (°E), offset = 139
+> .6749 .6744 .6738 .6732 .6726 .6721 .6715 .6709 .6703 .6698 .6692 .6686 .6680 .6675 .6669
+> Latitude (°N), offset = 35
+> Uni1652
+> SUES200
+> DenseUAV
+> GTA_UAV
+> Ours_VGG
+> City A/traj.2 .5108 .5114 .5121 .5127 .5134 .5140 .5146 .5153 .5159 .5165 .5172 .5178
+> Longitude (°E), offset = 121
+> .0338 .0333 .0327 .0321 .0315 .0309 .0304 .0298 .0292 .0286 .0281 .0275 .0269
+> Latitude (°N), offset = 25
+> Uni1652
+> SUES200
+> DenseUAV
+> GTA_UAV
+> Ours_VGG
+> City B/traj.1
+
+-.4570 -.4563 -.4555 -.4548 -.4541 -.4533 -.4526 -.4519 -.4511 -.4504 -.4497 -.4490 -.4482 
+
+Longitude (°E), offset = -122 
+
+> .7577 .7571 .7565 .7560 .7554 .7548 .7542 .7537 .7531 .7525
+> Latitude (°N), offset = 37
+
+Uni1652 
+
+SUES200 
+
+DenseUAV 
+
+GTA_UAV 
+
+Ours_VGG 
+
+City D/traj.2 .8379 .8385 .8391 .8397 .8402 .8408 .8414 .8420 .8426 .8431 .8437 .8443 .8449 
+
+Longitude (°E), offset = 103 
+
+> .2880 .2875 .2869 .2863 .2857
+> Latitude (°N), offset = 1
+
+Uni1652 
+
+SUES200 
+
+DenseUAV 
+
+GTA_UAV 
+
+Ours_VGG 
+
+City C/traj.1 .5102 .5108 .5114 .5121 .5127 .5134 .5140 .5146 .5153 .5159 .5165 
+
+Longitude (°E), offset = 121 
+
+> .0304 .0298 .0292 .0286 .0281 .0275 .0269
+> Latitude (°N), offset = 25
+
+Uni1652 
+
+SUES200 
+
+DenseUAV 
+
+GTA_UAV 
+
+Ours_VGG 
+
+City B/traj.2 .8379 .8385 .8391 .8397 .8402 .8408 .8414 .8420 .8426 .8431 .8437 .8443 .8449 .8454 .8460 
+
+Longitude (°E), offset = 103 
+
+> .2915 .2909 .2903 .2898 .2892 .2886 .2880 .2875 .2869
+> Latitude (°N), offset = 1
+
+Uni1652 
+
+SUES200 
+
+DenseUAV 
+
+GTA_UAV 
+
+Ours_VGG 
+
+City C/traj.2 Figure 16. Navigation performance comparison on seven additional routes. We further provide a comprehensive comparison between Bearing-UAV (red trajectories) and four baseline methods on seven additional navigation routes across the four cities. The UAV step size is 25 m, and the waypoint arrival threshold is 20 m. All visual elements follow Fig. 6. The eight routes across City A–D (Route #1 and #2 for each city) have lengths of 771, 1119, 644, 757, 524, 821, 721, and 1115 m, respectively. Each route contains 10–13 waypoints and covers diverse scene types, including buildings of varying scales, green areas, rivers, and playgrounds. Overall, Bearing-UAV exhibits the strongest adaptability to different urban layouts and highly winding paths. It successfully completes four of the eight routes and, for the remaining ones, still follows most of the designated path before failure. In contrast, baseline methods struggle in these complex scenes and along curved routes. The green GTA-UAV trajectories are often longer but show significant deviation from the reference path. The orange Uni-1652, yellow DenseUAV, and blue SUES-200 trajectories tend to drift away near the starting point, with some falling into local loops and circling within a small region. Notably, large positional deviations and flight drift mainly occur in vegetation areas (traj. #1 City A, traj. #2 City A, traj. #2 City D), similar building areas (traj. #1 City B, traj. #2 City D), and tall building areas (traj. #2 City C). These regions often suffer from feature sparsity, high feature similarity, and significant cross-view appearance discrepancies, all of which degrade localization and heading estimation performance. Figure 17. Visualization of cross-view navigation frames of Bearing-UAV. We present a successful case for trajectory #1 in City D from Fig. 6 of the main paper. Frames are arranged top-to-bottom and left-to-right. In each step, the left panel shows the current RSB, where the blue rectangle indicates the UAV field of view and the airplane icon indicates the heading. The top-right inset shows the UVP, and the bottom-right inset reports outputs including heading angle, relative coordinates, direction vector, geographic coordinates, and the RSB index. Figure 18. The UAV cross-view navigation process corresponding to trajectory #2 in City A is shown in Fig. 16 (middle subfigure in the first row). This is a more challenging case in which navigation eventually fails; however, the UAV still follows a substantial portion of the planned path before drifting away. We visualize the overlapping portion (first 60 steps) to highlight cross-view discrepancies. Significant spatial differences between UVP and satellite patches arise from 3D parallax and illumination variations at low altitudes. Deviations occur at frames 26–34, likely due to waypoint turns and repetitive building patterns. Despite these challenges, Bearing-UAV remains robust along winding trajectories.
