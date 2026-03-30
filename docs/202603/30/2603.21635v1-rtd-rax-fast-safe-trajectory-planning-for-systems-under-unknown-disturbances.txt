@@ -1,0 +1,307 @@
+Title: RTD-RAX: Fast, Safe Trajectory Planning for Systems under Unknown Disturbances
+
+URL Source: https://arxiv.org/pdf/2603.21635v1
+
+Published Time: Tue, 24 Mar 2026 02:17:52 GMT
+
+Number of Pages: 11
+
+Markdown Content:
+# RTD-RAX : Fast, Safe Trajectory Planning for Systems under Unknown Disturbances 
+
+Evanns Morales-Cuadrado, Long Kiu Chung, Shreyas Kousik, and Samuel Coogan ∗†‡
+
+Abstract 
+
+Reachability-based Trajectory Design (RTD) is a provably safe, real-time trajectory planning framework that combines offline reachable-set computation with online trajectory optimization. However, standard RTD implementations suffer from two key limitations: conservatism induced by worst-case reachable-set overapproximations, and an inability to account for real-time distur-bances during execution. This paper presents RTD-RAX , a runtime-assurance extension of RTD that utilizes a non-conservative RTD formulation to rapidly generate goal-directed candidate trajectories, and utilizes mixed monotone reachability for fast, disturbance-aware online safety certification. When proposed trajectories fail safety certification under real-time uncertainty, a repair procedure finds nearby safe trajectories that preserve progress toward the goal while guaranteeing safety under real-time disturbances. 
+
+Keywords: Path Planning and Motion Control, Uncertain Systems and Robust Control, Un-manned Ground and Aerial Vehicles, Nonlinear Control Systems, Control Design 
+
+# 1 Introduction 
+
+Safe motion planning for autonomous robots requires generating dynamically feasible trajectories in the presence of obstacles. In real-time receding-horizon settings and real-world deployment sce-narios, planning must be fast enough to ensure persistent feasibility, account for a priori unknown environmental disturbances, and guarantee that safe fallback maneuvers can be executed when a new safe trajectory cannot be found. One framework that aims to address this challenge is Reachability-based Trajectory Design (RTD) — a provably safe real-time motion planning frame-work that combines offline reachable-set computation with fast online trajectory optimization [5] to achieve this task. In RTD, a Forward Reachable Set (FRS) captures the behavior of a system tracking input-parameterized trajectories over a time horizon. At runtime, an online planning procedure senses obstacles, maps them onto the parameter space, and optimizes over the remaining set of safe trajectory parameters to achieve a desired objective. Moreover, all admissible trajectories are constructed such that if a new safe trajectory cannot be found quickly enough, or at all, the system can safely execute a pre-certified fallback maneuver, such as braking for ground vehicles or hovering 
+
+> ∗
+
+This work was supported in part by the National Science Foundation under awards #2333488 and #2219755 and in part by the Air Force Office of Scientific Research under Grant FA9550-23-1-0303. L.K. Chung was supported by NSF Award #2449160. 
+
+> †
+
+The authors are with the Georgia Institute of Technology, Atlanta, GA 30332, USA. E. Morales-Cuadrado and S. Coogan are with the School of Electrical and Computer Engineering; L. Chung and S. Kousik are with the School of Mechanical Engineering. S. Coogan is also with the School of Civil and Environmental Engineering. 
+
+> ‡
+
+Emails: {egm, lchung33, shreyas.kousik@me, sam.coogan }@gatech.edu 
+
+1    
+
+> arXiv:2603.21635v1 [cs.RO] 23 Mar 2026 012
+> x [m]
+> −1
+> 0
+> 1
+> y [m]
+> RTD Standard | Infeasible
+> 012
+> x [m]
+> −1
+> 0
+> 1
+> y [m]
+> RTD-RAX | Feasible & Safe
+
+Figure 1: Narrow-gap scenario; the robot is depicted as a circle in the starting position, goal as a star, obstacles as rectangles, the offline reachable set in green, and the online reachable set in blue. (a) Standard RTD: incorrectly classifies as infeasible. (b) RTD-RAX : feasible and certified safe by the mixed-monotone verifier. for quadrotors [4, 5]. The RTD framework has also been successfully applied to quadrotors [4], robotic manipulators [3], and adapted to train safe reinforcement learning agents [8]. Despite its strengths, the RTD architecture has important limitations. In particular, param-eterized reachable-set computation methods are too computationally expensive to be used with high-fidelity, high-dimensional models [5]. As a result, RTD relies on offline reachable-set computa-tion using simplified, lower-dimensional models over sets of initial conditions that are later queried at runtime. To account for the mismatch between the simplified planning model and the true system dy-namics, the FRS is inflated using a worst-case bound on tracking error, typically estimated via sampling [5]. The RTD safety certificate therefore inherits the conservatism of this bound. This worst-case treatment of tracking error leads to conservative trajectory planning [6]. Al-though it provides provable safety in scenarios for which the RTD pipeline has previously been validated, ( e.g. , in the absence of real-time disturbances), it can cause trajectories that are in fact safe—and potentially optimal with respect to the planning objective—to be incorrectly classified as unsafe, resulting in unnecessarily cautious behavior such as rejecting efficient trajectories or triggering avoidable fail-safe maneuvers. Furthermore, because the reachable sets are computed of-fline, the framework must rely on a lower-level controller to handle a priori unknown environmental disturbances [7], which further increases conservativeness. These observations motivate the use of a separate mechanism for execution-time safety verifi-cation in the RTD pipeline. By delegating safety certification to an online verification layer, the FRS used by RTD can be constructed with reduced conservatism, allowing the planner to consider trajectories that would otherwise be rejected under worst-case tracking-error inflation. Moreover, a fast-enough online verification layer may also be able to measure and account for real-time un-certainty in the system dynamics to ensure safety under bounded disturbances. As such, this paper proposes RTD-RAX , a Runtime-Assurance e Xtension of RTD that employs mixed-monotone reachability (MMR) for online safety certification and re-planning. The key idea is a complementary architecture in which RTD’s offline parameterized reachable sets are used solely for rapid candidate generation, without conservative tracking-error inflation, while safety is certified online using MMR for the specific closed-loop trajectory under current disturbance and uncertainty measurements. This enables, for the first time, safety certification for an RTD-based framework under a priori unknown disturbances at runtime. Lastly, when a candidate cannot be certified as 2safe, a repair procedure modifies it to obtain a certifiably safe alternative. We validate this architecture through three experiments: a narrow-gap scenario that the stan-dard RTD framework would classify as unsafe; an angled-obstacle scenario in which an unsafe trajectory is caught before execution and re-planned; and a scenario demonstrating robustness to 
+
+a priori unknown disturbances that the standard RTD framework does not accommodate. The remainder of the paper is organized as follows. Section 2 reviews the relevant RTD and mixed-monotone reachability literature, while Section 3 describes their proposed integration into a cohesive safe planning framework. Section 4 presents experimental results and comparisons with the traditional RTD framework, and Section 5 concludes the paper. 1
+
+# 2 Literature Review 
+
+We review details from the relevant literature in Reachability-based Trajectory Design (RTD), and Mixed Monotone Reachability (MMR). 
+
+2.1 Reachability-Based Trajectory Design 
+
+A representative RTD construction begins with a high-fidelity closed-loop system ˙xhi (t) = fhi (t, x hi (t), u (t, x hi (t))) , (1) where xhi (t) ∈ Xhi ⊆ Rnhi , u ∈ U ⊆ Rm, and fhi : [0 , T ] × Xhi × U → Rnhi . Because high-fidelity system models are generally too expensive for reachable-set computation, we introduce a lower-dimensional model on a shared state space, with state z ∈ Z ⊆ Xhi , and trajectory parameter 
+
+k ∈ K ⊆ Rnk , of the form ˙z(t) = fdes (t, z (t), k ). (2) This model generates a parameterized family of candidate trajectories, and for each k the high-fidelity system is assumed to track the corresponding desired trajectory through an associated feedback controller [5]. Note that neither (1) nor (2) can include a priori unknown disturbances for offline FRS computation. Because the planning model and the true closed-loop dynamics are not identical, RTD accounts for their mismatch through a tracking-error bound defined over the shared states [9]. We introduce a tracking-error function g(t, k ), together with a disturbance-like signal d(·) ∈ Ld, where Ld =
+
+L1([0 , T ], [−1, 1] nZ ), and define the trajectory-tracking model componentwise as ˙zi(t) = fdes ,i (t, z (t), k ) + gi(t, k ) di(t),
+
+for i = 1 , . . . , n Z . It is established in [5, Lemma 12] that for any high-fidelity trajectory tracking any k ∈ K, there exists d ∈ Ld such that the shared states satisfy the trajectory-tracking model. The FRS is then defined as an over-approximation of the set of all shared states and associated trajectory parameters reachable by the trajectory-tracking model over the planning horizon [5]: 
+
+XFRS = {(ˆ z, ˆk) ∈ Z × K | ∃ t ∈ [0 , T ], z (0) ∈ Z0, d ∈ Ld
+
+s.t. ˙zi(τ ) = fdes ,i (τ, z (τ ), ˆk) + gi(τ, ˆk) di(τ ),z(0) = z0, z(t) = ˆ z}.
+
+(3)  
+
+> 1Our code, documented results, and video demonstrations can also be found at: https://evannsm.github.io/ ws_RTD
+
+3One can then define the following projection [5] from state space to parameter space 
+
+πK (X′) = {k ∈ K | ∃ z ∈ X′ such that ( z, k ) ∈ XFRS },
+
+so that for an obstacle set Xobs ⊆ Z, the safe parameter set is 
+
+Ksafe = πK (Xobs )C
+
+, where ( ·)C denotes the set complement. The main strength of RTD is therefore that most of the difficult safety computation is shifted offline, while the online layer only solves an optimization problem over trajectory parameters. Its main limitation is equally clear: the price for safety is paid at a premium offline, where conservative tracking error bounds can cause safe, efficient trajectories to be incorrectly classified as unsafe and removed from the planner’s feasible set. 
+
+2.2 Mixed Monotone Reachability 
+
+Mixed monotone reachability provides a computationally efficient way to over-approximate reach-able sets of nonlinear dynamical systems. A detailed treatment of mixed monotonicity and its role in reachability analysis is provided in [1]. A key property of this approach is that reachable set computation reduces to integrating an augmented system whose state encodes the lower and upper bounds of the original dynamics. This yields efficient over-approximations in the form of hyper-rectangles that can be propagated forward in time using standard numerical methods. Although such a representation may be conservative, its computational simplicity makes it well suited for real-time applications. Moreover, as demonstrated in Section 4 and illustrated in Figure 1, it is significantly less conservative than the worst-case bounds used in traditional RTD frameworks. To formalize this construction, consider the nonlinear system ˙x = f (x, u, w ), (4) where x ∈ Rn is the state, u ∈ Rm the input, and w ∈ Rp a disturbance. Let ⪯ denote the componentwise order on Rn, i.e., x ⪯ y if xi ≤ yi for all i. Given x, y ∈ Rn
+
+with x ⪯ y, define the interval [ x, y ] := {z ∈ Rn | x ⪯ z ⪯ y}. For a = ( x, y ) ∈ R2n, let [[ a]] := [ x, y ]. We use the southeast order on R2n, ( x, x ′) ⪯SE (y, y ′) ⇐⇒ x ⪯ y and y′ ⪯ x′, which implies (x, x ′) ⪯SE (y, y ′) ⇐⇒ [y, y ′] ⊆ [x, x ′]. For an interval [ x, y ], denote its endpoints by ⌊[x, y ]⌋ = x
+
+and ⌈[x, y ]⌉ = y. Finally, for x, y ∈ Rn, let x[i:y] denote the vector obtained from x by replacing its 
+
+ith component with yi.Let 
+
+F = [ F, F]be an inclusion function for f . That is, for any x ∈ [x, x ], u ∈ [u, u ], and w ∈ [w, w ], 
+
+f (x, u, w ) ∈ F ([ x, x ], [u, u ], [w, w ]) .
+
+Given such an inclusion function, the mixed monotone embedding system propagates the lower and upper bounds of the state via ˙xi = F([ x, x [i:x]], [u, u ], [w, w ]) i,
+
+˙xi = F([ x[i:x], x ], [u, u ], [w, w ]) i.
+
+4This resulting 2 n-dimensional system evolves the interval bounds of the original dynamics and is monotone with respect to the southeast order. Consequently, if the initial state, inputs, and disturbances are over-approximated by intervals, the interval produced by the embedding system encloses the true reachable set. Let ΦE (t; [ x0, x 0], [u, u ], [w, w ]) denote the embedding system state at time t. If x0 ∈ [x0, x 0], u(t) ∈ [u(t), u (t)], and w(t) ∈
+
+[w(t), w (t)], then the interval produced by the embedding system over-approximates the reachable set of (4): 
+
+ϕ(T ; x0, u, w ) ⊆ [[Φ E (T ; [ x0, x 0], [u, u ], [w, w ])]] (5) for all T ≥ 0 [1]. For general nonlinear systems, inclusion functions and corresponding embedding systems always exist, although deriving them analytically can be cumbersome. In this work we use the immrax 
+
+toolbox [2], which automates the construction of inclusion functions and embedding systems and enables efficient MMR computation in real time with just-in-time (JIT) compilation. 
+
+# 3 Proposed Method: RTD-RAX 
+
+This section describes the proposed RTD-RAX architecture. The central idea is to separate fast trajectory generation from execution-time safety certification. The RTD layer is retained as a rapid candidate generator, using a non-inflated offline FRS to avoid conservative planning, while mixed-monotone reachability is used online to certify the selected trajectory under the true system’s tracking dynamics and real-time disturbances. If the candidate cannot be certified, the runtime layer either repairs it or blocks its execution. 
+
+3.1 RTD Candidate-Generation Layer 
+
+The planning layer operates on states Z and trajectory parameters K as defined above. Each 
+
+k ∈ K selects a desired trajectory and its associated control inputs. Each candidate spans a horizon T = tplan + tstop , consisting of a cruise phase followed by a fail-safe phase , ensuring that if replanning fails, the system can continue along a pre-determined safe terminating path. The offline FRS encodes the set of states reachable while tracking these trajectories. Two variants are relevant: a standard FRS, which includes tracking-error inflation, and a non-inflated 
+
+FRS, which removes that inflation. At runtime, sensed obstacles are converted into constraints 
+
+qi(k) against which we optimize over the set of possible trajectory parameters. The planner then solves min 
+
+> k∈Kadm
+
+J(k) s.t. qi(k) ≤ 0, i = 1 , . . . , N obs , (6) where J(k) is the RTD objective ( i.e., go toward a goal location), Kadm ⊆ K is the admissible parameter region, and Nobs is the number of discretized obstacle points. In standard RTD, the inflated FRS itself alongside the obstacle constraints serve as the execution-time safety certificate. In RTD-RAX , this role is reassigned: the non-inflated FRS is used to reject obviously unsafe parameters and generate a high-quality candidate quickly, while final execution is determined by an online reachable-tube computation. Thus the offline FRS no longer needs to encode all execution-time uncertainty conservatively in advance, while allowing the framework to account for disturbances in the loop. 5Candidate 
+
+> Trajectory
+> Offline Forward
+> Reachable Set
+> RTD Planner
+> RTD Planning Core
+> Mixed-Monotone
+> Verification
+> Unsafe
+> MMR Verification
+> & Re-planning Layer
+> Repair Execute
+> Safe
+
+Figure 2: RTD-RAX architecture. 
+
+3.2 Execution-Time Verification Layer 
+
+When (6) yields a candidate trajectory k⋆, the architecture transitions from the RTD planning layer into the real-time safety verification layer. The purpose of this layer is to determine whether the specific trajectory proposed by the planner can be executed safely under the current uncertainty and disturbance assumptions. The verification model takes the form ˙x = f (x, u k⋆ (t), w ), (7) where x ∈ Rn is the full system state, uk⋆ (t) is the control input prescribed by the candidate k⋆ as a function of time, and w ∈ [w, w ] ⊆ Rp represents bounded disturbance. Given the verification dynamics (7) and the candidate parameter k⋆, the runtime layer propa-gates a reachable tube using mixed-monotone reachability over the full execution horizon. 
+
+3.2.1 Initial Interval Construction 
+
+Safety verification begins from an uncertainty set X0 ⊂ Rn centered at the current state estimate ˆx0. This set captures the combined effect of state-estimation uncertainty, the volume of the robot, and any additional safety margin required by the application. We construct the uncertainty set as a hyper-rectangle 
+
+x(0) ∈ [ˆ x0 − ε, ˆx0 + ε], (8) where the vector ε ∈ Rn 
+
+> ≥0
+
+specifies componentwise bounds on the initial state uncertainty. This initial interval is the mechanism through which RTD-RAX incorporates execution-time uncertainty that would otherwise have to be conservatively encoded into the offline FRS. Disturbances acting during execution are modeled by a bounded set 
+
+w(t) ∈ [w, w ],
+
+which may represent a priori unkown environmental disturbances or otherwise unmodeled dynam-ics. Whereas traditional RTD frameworks have no mechanism through which to consider these into their notion of safe planning, by measuring these disturbances and incorporating them into the online reachable set computation, we can ensure safety in more general settings than traditional RTD. 63.2.2 Embedding System Integration 
+
+From the initial interval (8), the verifier constructs an embedding system for the system dynam-ics (7) to propagate the lower and upper bounds on each state component forward in time. Let the embedding system state be (x(t), x (t)) ∈ R2n.
+
+At each time t, this pair defines the interval 
+
+X(t) = [ x(t), x (t)] which over-approximates the set of states reachable by the true system for all initial conditions 
+
+x(0) ∈ X0 and all disturbance realizations w(·) ∈ [w, w ]. The embedding system is then integrated over the horizon using a fixed time step. At each sample time tj , the interval 
+
+Rj = [ x(tj ), x (tj )] bounds all states reachable at time tj . The ordered collection of such intervals over the horizon thus forms a reachable tube enclosing all trajectories. 
+
+3.2.3 Workspace Projection and Collision Checking 
+
+Let xpos ∈ Rnp denote the components of the state corresponding to the robot’s position in the physical workspace ( e.g. planar position for ground vehicles or spatial position for aerial systems). Projecting each reachable set Rj onto these coordinates yields a sequence of axis-aligned bounding boxes 
+
+Bj = [ xpos (tj ), x pos (tj )] ,
+
+which bound all possible robot positions at time tj .The verifier then checks the bounding boxes as well as swept interval hulls between each box for intersection with every obstacle and reports a collision at the earliest time at which any intersection is detected. If no intersection is found, the candidate is certified safe over the entire horizon. If an intersection is found, the candidate is rejected before execution, and the earliest collision time is recorded for use by the repair procedure. 
+
+3.3 Repair After Runtime Rejection 
+
+Because standard RTD formulations do not account for a priori unknown runtime disturbances settings and safety is ensured through worst-case tracking error bounds, a notion of trajectory rejection is not needed. However, in under real-time disturbances, a trajectory returned by (6) may be unsafe. In such cases, we implement a “trajectory repair” procedure that finds a similar but certifiably safe trajectory alternative in order to certify safety while still achieving the mission objective of the rejected trajectory. When a candidate generated by the non-inflated RTD layer is declared unsafe, a sequence of corrective actions is applied until a safe trajectory is found. First, a speed backoff reduces the forward velocity, thereby reducing the aggresiveness of the maneuver. If the resulting trajectory is still unsafe, a lateral push adjusts the yaw rate parameter in opposition to the estimated disturbance. If neither correction yields a safe trajectory, constraint tightening adds obstacle buffer to (6) and re-solves. If a safe alternative is not found in time, the standard fail-safe maneuver is invoked. 7−1.0 −0.5 0.0 0.5 1.0       
+
+> k₂ (speed)
+> −1.00
+> −0.75
+> −0.50
+> −0.25
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+> k₁ (yaw rate)
+> k-space
+> 0.0 0.5 1.0 1.5 2.0
+> x [m]
+> −1.00
+> −0.75
+> −0.50
+> −0.25
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+> y [m]
+> World Frame
+> Unsafe k
+> Optimal k*
+> True Obstacle
+> Buffered Obstacle
+> Obstacle Discretization
+> Goal
+> Vehicle Footprint
+> MMR Reach Tube
+> Safe Trajectory
+> Nominal FRS
+
+(a) Narrow gap scenario. Left: feasible parameter space k (safe: white, unsafe: pink) with selected trajectory k∗ in green. Right: certifiably safe trajectory through the gap. −0.5 0.0 0.5 1.0 1.5 
+
+> x [m]
+> −2.5
+> −2.0
+> −1.5
+> −1.0
+> −0.5
+> 0.0
+> 0.5
+> y [m]
+
+Angled Obstacle: RTD-RAX 
+
+> Safe Tube
+> Unsafe Tube
+> Repaired Tube
+> Executed Path
+
+(b) Angled-obstacle scenario with execution-time verification and repair. (See footnote 2 for addi-tional details.) 
+
+Figure 3: Figures for the Narrow Gap scenario on the left and Angled Obstacle scenario on the right. 
+
+# 4 Experiments 
+
+We demonstrate the utility of the proposed framework relative to traditional RTD approaches through three case studies. To evaluate these scenarios, we consider a Turtlebot-scale ground robot modeled as a unicycle with state ( x, y, h, v )⊤ ∈ R4 governed by ˙x = v cos h, ˙y = v sin h, ˙h = ω, ˙v = a, (9) where the control inputs are the yaw rate ω and the longitudinal acceleration a.Directly computing reachable sets for the full dynamics (9) over time leads to a high dimensional reachable-set problem that is computationally expensive for the offline SOS computation [5]. We instead utilize a Dubins’ car as a planning model defined on the shared state space Z ⊆ Xhi with 
+
+z = ( x, y, h )⊤ ∈ R3 and dynamics ˙x = vdes cos h, ˙y = vdes sin h, ˙h = ωdes . (10) To further reduce the size of the control input space, the desired yaw rate and speed are not allowed to vary arbitrarily over time. Instead, they are held constant over each planning horizon and determined by a compact set of trajectory parameters k = ( k1, k 2)⊤ ∈ [−1, 1] 2 which map to the commanded inputs. Because the parameters are fixed over each horizon, a single choice of k
+
+uniquely determines a desired trajectory. 
+
+4.1 Case Study 1: Narrow Gap 
+
+We isolate the effect of offline FRS conservatism by constructing a scenario in which the standard RTD framework declares all trajectory parameters unsafe. Under RTD-RAX , the reduced conser-vatism of the non-inflated FRS allows feasible candidates to be considered while safety is enforced online. 8The vehicle encounters two symmetric rectangular obstacles with a narrow gap between them. As a result, the standard RTD formulation declares the scenario infeasible. On the other hand, with 
+
+RTD-RAX , the optimizer returns a feasible parameter k⋆ corresponding to a straight-line trajectory through the gap. A mixed-monotone reachable tube is then propagated over the execution horizon, correctly certifying that this proposed path is safe. This result highlights the division of roles in RTD-RAX : the offline FRS generates candidate trajectories, while execution-time verification certifies safety under the realized uncertainty. Amaneuver rejected by standard RTD is recovered and certified safe. Figure 3a illustrates this: the left panel shows a feasible region absent under the inflated FRS; the center panel shows that the same candidate would be classified as unsafe under standard RTD; and the right panel shows the resulting safe trajectory in the world frame. 
+
+4.2 Case Study 2: Angled Obstacle with Runtime Repair 
+
+We evaluate runtime verification and repair in a receding-horizon setting. The robot starts at the origin with heading h0 = −π/ 2 and is forced to navigate around an obstacle to its goal location. At each step, RTD generates a candidate trajectory using the non-inflated FRS, which is then certified or rejected and subsequently repaired by the runtime verifier. The resulting trajectory is shown in Figure 3b. When proposed trajectories are rejected by the verifier due to predicted collisions, the trajectory repair pipeline yields new trajectories that may be certified as safe. This experiment highlights two properties of RTD-RAX . First, the runtime verifier identifies unsafe trajectories that satisfy offline FRS constraints, ensuring that safety is not compromised. Second, safe trajectory alternatives can be recovered rapidly through small adjustments. Moreover, we note that while standard RTD is capable of finding safe passage in this scenario, RTD-RAX finds shorter, more efficient trajectories. 2
+
+4.3 Case Study 3: Planning Against Disturbances 
+
+Lastly, we consider the setting that standard RTD is least equipped to handle; that is, one in which significant disturbances alter our system dynamics. The vehicle traverses a 6 m course with three offset gate obstacles. Before each gate, a disturbance patch pushes the vehicle toward the nearest obstacle. This disturbance is not known a priori to RTD but is assumed to be perfectly measured online by the verification layer. As Figure 4 demonstrates, in this scenario, the vehicle’s footprint collides with the first obstacle during the third planning cycle. In contrast, RTD-RAX plans with the non-inflated FRS, computes disturbance bounds along each candidate, and certifies the resulting closed-loop motion online. Unsafe candidates are rejected and repaired, and the robot safely reaches the goal after 19 iterations. Moreover, as Table 1 reports, standard RTD averages 9 .39 ± 0.56 ms per planning iteration over 20 trials of this scenario, whereas RTD-RAX averages 10 .63 ± 0.72 ms. This negligible difference of approximately 1 .24 ms shows that runtime certification incurs minimal overhead, while allowing us to certify safety in uncertain environments, achieve more efficient trajectory tracking, and minimize needless failsave maneuvering. This experiment highlights the role of runtime certification under disturbances. The limitation we see now is no longer conservatism in the FRS, but the inability of the offline model to account for realized disturbances. RTD-RAX addresses this by incorporating measured disturbance bounds into an online reachable-tube computation, with only modest additional computational cost. 
+
+> 2Animations of this scenario alongside comparisons with standard RTD may be seen at:
+> https://evannsm.github.io/ws_RTD/case_studies
+
+90 1 2 3 4 5 6       
+
+> x [m]
+> −1
+> 0
+> 1
+> y [m]
+> Standard RTD
+> status: collision | steps: 3
+> 0123456
+> x [m]
+> y [m]
+> RTD-RAX
+> status: goal reached | steps: 19 | repairs: 3 Obstacle
+> Disturbance patch
+> Start
+> Goal
+> Standard RTD path
+> RTD-RAX path
+> Collision footprint
+
+Figure 4: Disturbance-aware scenario. Left: standard RTD collides due to disturbances. Right: RTD-RAX with online certification accounts for disturbances and repairs unsafe candidates. Table 1: Case Study 3: Mean and standard deviation per planning cycle over 20 trials. 
+
+Pipeline Step Standard RTD (ms) RTD-RAX (ms) 
+
+Constraint setup 2.15 ± 0.31 2.41 ± 0.22 RTD solve 6.48 ± 0.38 0.54 ± 0.04 Reference rollout 0.73 ± 0.17 1.22 ± 0.10 
+
+immrax verify 0 2.23 ± 0.14 Repair loop 0 4.20 ± 0.28 
+
+Total cycle 9.39 ± 0.56 10 .63 ± 0.72 
+
+# 5 Conclusion 
+
+This paper proposes RTD-RAX , a safe trajectory design and runtime-assurance architecture for sys-tems subject to a priori unknown real-time disturbances. The central idea is a complementary architecture: an offline FRS and optimization procedure rapidly generate candidate trajectories, while online certification accounts for real-time disturbances and model mismatch. When a can-didate cannot be certified as safe, a repair procedure seeks a nearby certifiably safe alternative before reverting to a fail-safe maneuver. The added verification and repair layers incur minimal computational overhead due to JIT compilation via immrax .We evaluate the framework in three case studies. In a narrow-gap scenario, standard RTD finds no feasible trajectory and triggers fail-safe behavior, whereas RTD-RAX correctly identifies a safe path. In an angled-obstacle setting, the runtime verifier identifies candidates that would become unsafe during execution and the repair loop recovers safe alternatives. In a disturbance-aware scenario, the verifier incorporates measured disturbances to enable safe execution where standard RTD leads to crashes. Future work includes tighter coupling between the RTD optimization and the online reachable tube to enable gradient-based re-planning. Additional directions include richer disturbance and uncertainty descriptions, such as learned models or Gaussian processes, as well as validation on hardware across a broad range of robotic platforms. 10 References 
+
+[1] Samuel Coogan. Mixed monotonicity for reachability and safety in dynamical systems. In 59th IEEE Conference on Decision and Control (CDC) , pages 5090–5097, 2020. [2] Akash Harapanahalli, Saber Jafarpour, and Samuel Coogan. immrax: A parallelizable and differentiable toolbox for interval analysis and mixed monotone reachability in JAX, 2024. arXiv preprint arXiv:2401.11608. [3] Patrick Holmes, Shreyas Kousik, Bohao Zhang, Daphna Raz, Corina Barbalata, Matthew Johnson-Roberson, and Ram Vasudevan. Reachable sets for safe, real-time manipulator trajec-tory design, 2020. [4] Shreyas Kousik, Patrick Holmes, and Ram Vasudevan. Safe, aggressive quadrotor flight via reachability-based trajectory design. In ASME Dynamic Systems and Control Conference , 2019. [5] Shreyas Kousik, Sean Vaskov, Fan Bu, Matthew Johnson-Roberson, and Ram Vasudevan. Bridging the gap between safety and real-time performance in receding-horizon trajectory design for mobile robots. arXiv preprint arXiv:1809.06746 , 2020. [6] Shreyas Kousik, Sean Vaskov, Matthew Johnson-Roberson, and Ram Vasudevan. Safe trajectory synthesis for autonomous driving in unforeseen environments. In ASME Dynamic Systems and Control Conference , 2017. [7] Jonathan Michaux, Patrick Holmes, Bohao Zhang, Che Chen, Baiyue Wang, Shrey Sahgal, Tiancheng Zhang, Sidhartha Dey, Shreyas Kousik, and Ram Vasudevan. Can’t touch this: Real-time, safe motion planning and control for manipulators under uncertainty. IEEE Transactions on Robotics , 2025. [8] Yifei Simon Shao, Chao Chen, Shreyas Kousik, and Ram Vasudevan. Reachability-based trajec-tory safeguard (rts): A safe and fast reinforcement learning safety layer for continuous control, 2021. [9] Sean Vaskov, Utkarsh Sharma, Shreyas Kousik, Matthew Johnson-Roberson, and Ram Va-sudevan. Guaranteed safe reachability-based trajectory design for a high-fidelity model of an autonomous passenger vehicle. In 2019 American Control Conference (ACC) , pages 705–710, 2019. 11

@@ -6,47 +6,48 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-03-29
-- 运行时间：2026-03-29 19:27:37 UTC
+- 最新运行日期：2026-03-30
+- 运行时间：2026-03-30 20:16:27 UTC
 - 运行状态：成功
-- 本次总论文数：8
-- 精读区：0
+- 本次总论文数：9
+- 精读区：1
 - 速读区：8
 
 ### 今日简报（AI）
-今日速览 8 篇前沿论文，重点聚焦于联合状态参数估计、鲁棒因子图优化及实时跨视角地理定位。
-推荐关注 Rao-Blackwellized Stein 梯度下降法在复杂估计中的应用，以及 GeoFlow 通过迭代流预测实现的精细化定位突破。
-建议开发者深入研究可验证的 M-估计器实现，以提升复杂环境下机器人系统的鲁棒性与可靠性。
-- 详情：[/202603/29/README](/202603/29/README)
+今日聚焦地月空间暗弱目标探测，深度解析了评分高达 9.0 的二次移位叠加检测新技术。
+研究不仅突破了地基光学观测的精度瓶颈，还同步探讨了未知扰动
+- 详情：[/202603/30/README](/202603/30/README)
 
 ### 精读区论文标签
-- 本次无精读推荐。
+1. [Quadratic shift-and-stack for Ground-Based Optical Detection of Faint Cislunar Objects](/202603/30/2603.26427v1-quadratic-shift-and-stack-for-ground-based-optical-detection-of-faint-cislunar-objects)  
+   标签：评分：9.0/10、query:cislunar-dyn-nav
+   evidence：具有非线性运动校正的地基 cislunar 弱目标光学探测
 
 ### 速读区论文标签
-1. [Rao-Blackwellized Stein Gradient Descent for Joint State-Parameter Estimation](/202603/29/2603.23039v1-rao-blackwellized-stein-gradient-descent-for-joint-state-parameter-estimation)  
+1. [RTD-RAX: Fast, Safe Trajectory Planning for Systems under Unknown Disturbances](/202603/30/2603.21635v1-rtd-rax-fast-safe-trajectory-planning-for-systems-under-unknown-disturbances)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：非线性系统中的联合状态估计与参数辨识
-2. [Implementing Robust M-Estimators with Certifiable Factor Graph Optimization](/202603/29/2603.20932v1-implementing-robust-m-estimators-with-certifiable-factor-graph-optimization)  
+   evidence：不确定性下的实时轨迹规划与安全认证
+2. [A Geometric Approach to Structure-Preserving Integrators for Mechanical Systems](/202603/30/2603.25756v1-a-geometric-approach-to-structure-preserving-integrators-for-mechanical-systems)  
+   标签：评分：7.0/10、query:cislunar-dyn-nav
+   evidence：哈密顿与拉格朗日动力学的保结构积分器
+3. [Collision-Free Velocity Scheduling for Multi-Agent Systems on Predefined Routes via Inexact-Projection ADMM](/202603/30/2603.21913v1-collision-free-velocity-scheduling-for-multi-agent-systems-on-predefined-routes-via-inexact-projection-admm)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：鲁棒M估计与因子图优化
-3. [GeoFlow: Real-Time Fine-Grained Cross-View Geolocalization via Iterative Flow Prediction](/202603/29/2603.21943v1-geoflow-real-time-fine-grained-cross-view-geolocalization-via-iterative-flow-prediction)  
+   evidence：多智能体系统的轨迹优化与速度调度
+4. [Equivalence of Finite- and Fixed-time Stability to Asymptotic Stability](/202603/30/2603.22802v1-equivalence-of-finite--and-fixed-time-stability-to-asymptotic-stability)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：GPS受限区域自主导航的实时定位
-4. [Beyond Matching to Tiles: Bridging Unaligned Aerial and Satellite Views for Vision-Only UAV Navigation](/202603/29/2603.22153v2-beyond-matching-to-tiles-bridging-unaligned-aerial-and-satellite-views-for-vision-only-uav-navigation)  
+   evidence：动力学系统的有限时间和固定时间稳定性与收敛性
+5. [Integrating Deep RL and Bayesian Inference for ObjectNav in Mobile Robotics](/202603/30/2603.25366v1-integrating-deep-rl-and-bayesian-inference-for-objectnav-in-mobile-robotics)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：GNSS受限环境下的纯视觉导航
-5. [Human-Inspired Pavlovian and Instrumental Learning for Autonomous Agent Navigation](/202603/29/2603.22170v1-human-inspired-pavlovian-and-instrumental-learning-for-autonomous-agent-navigation)  
+   evidence：机器人自主导航与贝叶斯推理
+6. [BEVMAPMATCH: Multimodal BEV Neural Map Matching for Robust Re-Localization of Autonomous Vehicles](/202603/30/2603.25963v1-bevmapmatch-multimodal-bev-neural-map-matching-for-robust-re-localization-of-autonomous-vehicles)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：不确定环境下的自主智能体导航
-6. [Variable-Resolution Virtual Maps for Autonomous Exploration with Unmanned Surface Vehicles (USVs)](/202603/29/2603.22667v1-variable-resolution-virtual-maps-for-autonomous-exploration-with-unmanned-surface-vehicles-usvs)  
+   evidence：用于鲁棒重定位的多模态传感器融合
+7. [GLU: Global-Local-Uncertainty Fusion for Scalable Spatiotemporal Reconstruction and Forecasting](/202603/30/2603.26023v1-glu-global-local-uncertainty-fusion-for-scalable-spatiotemporal-reconstruction-and-forecasting)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：GNSS退化下的自主探索与定位
-7. [IntentReact: Guiding Reactive Object-Centric Navigation via Topological Intent](/202603/29/2603.25382v1-intentreact-guiding-reactive-object-centric-navigation-via-topological-intent)  
+   evidence：稀疏测量融合用于状态重建与预测
+8. [Circular orbits in spherically symmetric spacetimes and BSW effect with nonzero force](/202603/30/2603.26346v1-circular-orbits-in-spherically-symmetric-spacetimes-and-bsw-effect-with-nonzero-force)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：基于拓扑意图的自主导航
-8. [DC-Reg: Globally Optimal Point Cloud Registration via Tight Bounding with Difference of Convex Programming](/202603/29/2603.25442v1-dc-reg-globally-optimal-point-cloud-registration-via-tight-bounding-with-difference-of-convex-programming)  
-   标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：用于自主导航的全局最优点云配准
+   evidence：外力作用下圆轨道的稳定性
 
 
 <div class="dpr-home-promo-card">
