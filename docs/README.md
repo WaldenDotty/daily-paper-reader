@@ -6,48 +6,61 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-03-30
-- 运行时间：2026-03-30 20:16:27 UTC
+- 最新运行日期：2026-03-31
+- 运行时间：2026-03-31 20:07:36 UTC
 - 运行状态：成功
-- 本次总论文数：9
-- 精读区：1
-- 速读区：8
+- 本次总论文数：13
+- 精读区：2
+- 速读区：11
 
 ### 今日简报（AI）
-今日聚焦地月空间暗弱目标探测，深度解析了评分高达 9.0 的二次移位叠加检测新技术。
-研究不仅突破了地基光学观测的精度瓶颈，还同步探讨了未知扰动
-- 详情：[/202603/30/README](/202603/30/README)
+今日深度复盘 13 篇航天前沿文献，重点攻克近地天体低能往返轨道设计与太阳风暴预警模型。
+核心结论揭示了低推力技术在近地探测中的节能潜力，并为 HENON 任务提供了关键的磁场变化预测支持。
+推荐关注深空探测的动力学优化及 AI 在行星巡视器视觉系统中的实战应用。
+- 详情：[/202603/31/README](/202603/31/README)
 
 ### 精读区论文标签
-1. [Quadratic shift-and-stack for Ground-Based Optical Detection of Faint Cislunar Objects](/202603/30/2603.26427v1-quadratic-shift-and-stack-for-ground-based-optical-detection-of-faint-cislunar-objects)  
-   标签：评分：9.0/10、query:cislunar-dyn-nav
-   evidence：具有非线性运动校正的地基 cislunar 弱目标光学探测
+1. [Low-Energy Round-Trip Trajectories to Near-Earth Objects using Low Thrust](/202603/31/2603.27683v1-low-energy-round-trip-trajectories-to-near-earth-objects-using-low-thrust)  
+   标签：评分：10.0/10、query:cislunar-dyn-nav
+   evidence：圆型限制性三体问题、拉格朗日点及流形轨道
+2. [Assessing VBz variations during CME propagation: a preparatory study for the HENON mission using EUHFORIA](/202603/31/2603.27310v1-assessing-vbz-variations-during-cme-propagation-a-preparatory-study-for-the-henon-mission-using-euhforia)  
+   标签：评分：8.0/10、query:cislunar-dyn-nav
+   evidence：拉格朗日点L1与远距离逆行轨道
 
 ### 速读区论文标签
-1. [RTD-RAX: Fast, Safe Trajectory Planning for Systems under Unknown Disturbances](/202603/30/2603.21635v1-rtd-rax-fast-safe-trajectory-planning-for-systems-under-unknown-disturbances)  
+1. [Noether symmetry groups, locally conserved integrals, and dynamical symmetries in classical mechanics](/202603/31/2603.26624v1-noether-symmetry-groups-locally-conserved-integrals-and-dynamical-symmetries-in-classical-mechanics)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：不确定性下的实时轨迹规划与安全认证
-2. [A Geometric Approach to Structure-Preserving Integrators for Mechanical Systems](/202603/30/2603.25756v1-a-geometric-approach-to-structure-preserving-integrators-for-mechanical-systems)  
+   evidence：拉格朗日-哈密顿系统中守恒积分与对称性的联系
+2. [Deep Learning Aided Vision System for Planetary Rovers](/202603/31/2603.26802v1-deep-learning-aided-vision-system-for-planetary-rovers)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：哈密顿与拉格朗日动力学的保结构积分器
-3. [Collision-Free Velocity Scheduling for Multi-Agent Systems on Predefined Routes via Inexact-Projection ADMM](/202603/30/2603.21913v1-collision-free-velocity-scheduling-for-multi-agent-systems-on-predefined-routes-via-inexact-projection-admm)  
+   evidence：行星探测器视觉系统与月球图像评估
+3. [Small Body Dynamics with SBDynT: Proper Elements and Chaos Analysis](/202603/31/2603.27099v1-small-body-dynamics-with-sbdynt-proper-elements-and-chaos-analysis)  
+   标签：评分：7.0/10、query:cislunar-dyn-nav
+   evidence：小天体动力学与稳定性指标
+4. [Online Inertia Tensor Identification for Non-Cooperative Spacecraft via Augmented UKF](/202603/31/2603.27361v1-online-inertia-tensor-identification-for-non-cooperative-spacecraft-via-augmented-ukf)  
+   标签：评分：7.0/10、query:cislunar-dyn-nav
+   evidence：基于UKF的自主近距离操作与相对导航
+5. [Learning Smooth and Robust Space Robotic Manipulation of Dynamic Target via Inter-frame Correlation](/202603/31/2603.27537v1-learning-smooth-and-robust-space-robotic-manipulation-of-dynamic-target-via-inter-frame-correlation)  
+   标签：评分：7.0/10、query:cislunar-dyn-nav
+   evidence：微重力环境下动态目标的空间机器人操作
+6. [Structure-Preserving Learning of Nonholonomic Dynamics](/202603/31/2603.27580v1-structure-preserving-learning-of-nonholonomic-dynamics)  
+   标签：评分：7.0/10、query:cislunar-dyn-nav
+   evidence：受约束动力学的结构保持学习
+7. [Beyond Matching to Tiles: Bridging Unaligned Aerial and Satellite Views for Vision-Only UAV Navigation](/202603/31/2603.22153v1-beyond-matching-to-tiles-bridging-unaligned-aerial-and-satellite-views-for-vision-only-uav-navigation)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：多智能体系统的轨迹优化与速度调度
-4. [Equivalence of Finite- and Fixed-time Stability to Asymptotic Stability](/202603/30/2603.22802v1-equivalence-of-finite--and-fixed-time-stability-to-asymptotic-stability)  
+   evidence：GNSS受限环境下的纯视觉无人机导航
+8. [Integrated Multi-Drone Task Allocation, Sequencing, and Optimal Trajectory Generation in Obstacle-Rich 3D Environments](/202603/31/2603.24908v1-integrated-multi-drone-task-allocation-sequencing-and-optimal-trajectory-generation-in-obstacle-rich-3d-environments)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：动力学系统的有限时间和固定时间稳定性与收敛性
-5. [Integrating Deep RL and Bayesian Inference for ObjectNav in Mobile Robotics](/202603/30/2603.25366v1-integrating-deep-rl-and-bayesian-inference-for-objectnav-in-mobile-robotics)  
+   evidence：三维环境中的最优轨迹生成与动力学可行性
+9. [The adjoint state method for parametric definable optimization without smoothness or uniqueness](/202603/31/2603.26503v1-the-adjoint-state-method-for-parametric-definable-optimization-without-smoothness-or-uniqueness)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：机器人自主导航与贝叶斯推理
-6. [BEVMAPMATCH: Multimodal BEV Neural Map Matching for Robust Re-Localization of Autonomous Vehicles](/202603/30/2603.25963v1-bevmapmatch-multimodal-bev-neural-map-matching-for-robust-re-localization-of-autonomous-vehicles)  
+   evidence：参数化优化的伴随状态法
+10. [Motion as a Sensing Modality for Metric Scale in Monocular Visual-Inertial Odometry](/202603/31/2603.26740v1-motion-as-a-sensing-modality-for-metric-scale-in-monocular-visual-inertial-odometry)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：用于鲁棒重定位的多模态传感器融合
-7. [GLU: Global-Local-Uncertainty Fusion for Scalable Spatiotemporal Reconstruction and Forecasting](/202603/30/2603.26023v1-glu-global-local-uncertainty-fusion-for-scalable-spatiotemporal-reconstruction-and-forecasting)  
+   evidence：视觉惯性导航轨迹的可观测性分析
+11. [Data-driven discovery and control of multistable nonlinear systems and hysteresis via structured Neural ODEs](/202603/31/2603.27024v1-data-driven-discovery-and-control-of-multistable-nonlinear-systems-and-hysteresis-via-structured-neural-odes)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：稀疏测量融合用于状态重建与预测
-8. [Circular orbits in spherically symmetric spacetimes and BSW effect with nonzero force](/202603/30/2603.26346v1-circular-orbits-in-spherically-symmetric-spacetimes-and-bsw-effect-with-nonzero-force)  
-   标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：外力作用下圆轨道的稳定性
+   evidence：多稳态非线性系统的驱动发现与轨道稳定性
 
 
 <div class="dpr-home-promo-card">
