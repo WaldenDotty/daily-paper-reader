@@ -6,61 +6,58 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-03-31
-- 运行时间：2026-03-31 20:07:36 UTC
+- 最新运行日期：2026-04-01
+- 运行时间：2026-04-01 20:06:20 UTC
 - 运行状态：成功
-- 本次总论文数：13
-- 精读区：2
+- 本次总论文数：12
+- 精读区：1
 - 速读区：11
 
 ### 今日简报（AI）
-今日深度复盘 13 篇航天前沿文献，重点攻克近地天体低能往返轨道设计与太阳风暴预警模型。
-核心结论揭示了低推力技术在近地探测中的节能潜力，并为 HENON 任务提供了关键的磁场变化预测支持。
-推荐关注深空探测的动力学优化及 AI 在行星巡视器视觉系统中的实战应用。
-- 详情：[/202603/31/README](/202603/31/README)
+今日深度解析 12 篇航天动力学前沿，重点攻克了轨道不确定性传播的数学难题。
+核心成果实现了 Fokker-Planck 方程的闭式解，并同步探讨了月球轨道阵列成像与跨域任务决策。
+建议关注解析解在提升机载认知决策效率中的应用，探索复杂引力场下的精确建模。
+- 详情：[/202604/01/README](/202604/01/README)
 
 ### 精读区论文标签
-1. [Low-Energy Round-Trip Trajectories to Near-Earth Objects using Low Thrust](/202603/31/2603.27683v1-low-energy-round-trip-trajectories-to-near-earth-objects-using-low-thrust)  
-   标签：评分：10.0/10、query:cislunar-dyn-nav
-   evidence：圆型限制性三体问题、拉格朗日点及流形轨道
-2. [Assessing VBz variations during CME propagation: a preparatory study for the HENON mission using EUHFORIA](/202603/31/2603.27310v1-assessing-vbz-variations-during-cme-propagation-a-preparatory-study-for-the-henon-mission-using-euhforia)  
+1. [Closed-Form Solutions to the Fokker-Planck Equation for Orbital Uncertainty Propagation](/202604/01/2603.29388v1-closed-form-solutions-to-the-fokker-planck-equation-for-orbital-uncertainty-propagation)  
    标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：拉格朗日点L1与远距离逆行轨道
+   evidence：过程噪声下轨道不确定性传播的闭式解
 
 ### 速读区论文标签
-1. [Noether symmetry groups, locally conserved integrals, and dynamical symmetries in classical mechanics](/202603/31/2603.26624v1-noether-symmetry-groups-locally-conserved-integrals-and-dynamical-symmetries-in-classical-mechanics)  
+1. [A numerical Koopman-based framework to estimate regions of attraction for general vector fields](/202604/01/2603.28502v2-a-numerical-koopman-based-framework-to-estimate-regions-of-attraction-for-general-vector-fields)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：拉格朗日-哈密顿系统中守恒积分与对称性的联系
-2. [Deep Learning Aided Vision System for Planetary Rovers](/202603/31/2603.26802v1-deep-learning-aided-vision-system-for-planetary-rovers)  
+   evidence：基于Koopman算子的稳定性分析与吸引域估计，适用于通用向量场
+2. [A Computational Framework for Cross-Domain Mission Design and Onboard Cognitive Decision Support](/202604/01/2603.28926v1-a-computational-framework-for-cross-domain-mission-design-and-onboard-cognitive-decision-support)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：行星探测器视觉系统与月球图像评估
-3. [Small Body Dynamics with SBDynT: Proper Elements and Chaos Analysis](/202603/31/2603.27099v1-small-body-dynamics-with-sbdynt-proper-elements-and-chaos-analysis)  
+   evidence：自主任务设计与轨道导航系统
+3. [Synthesis imaging with a lunar orbit array: II. Impacts of instrument-induced phase errors](/202604/01/2603.29251v1-synthesis-imaging-with-a-lunar-orbit-array-ii-impacts-of-instrument-induced-phase-errors)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：小天体动力学与稳定性指标
-4. [Online Inertia Tensor Identification for Non-Cooperative Spacecraft via Augmented UKF](/202603/31/2603.27361v1-online-inertia-tensor-identification-for-non-cooperative-spacecraft-via-augmented-ukf)  
+   evidence：月球轨道阵列与基线确定的几何误差
+4. [Waveform degeneracy of binary systems and Lagrange three-body systems](/202604/01/2603.29991v1-waveform-degeneracy-of-binary-systems-and-lagrange-three-body-systems)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：基于UKF的自主近距离操作与相对导航
-5. [Learning Smooth and Robust Space Robotic Manipulation of Dynamic Target via Inter-frame Correlation](/202603/31/2603.27537v1-learning-smooth-and-robust-space-robotic-manipulation-of-dynamic-target-via-inter-frame-correlation)  
-   标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：微重力环境下动态目标的空间机器人操作
-6. [Structure-Preserving Learning of Nonholonomic Dynamics](/202603/31/2603.27580v1-structure-preserving-learning-of-nonholonomic-dynamics)  
-   标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：受约束动力学的结构保持学习
-7. [Beyond Matching to Tiles: Bridging Unaligned Aerial and Satellite Views for Vision-Only UAV Navigation](/202603/31/2603.22153v1-beyond-matching-to-tiles-bridging-unaligned-aerial-and-satellite-views-for-vision-only-uav-navigation)  
+   evidence：拉格朗日三体系统与引力波形
+5. [Quaternion-based Unscented Kalman Filter for Robust Wrench Estimation of Human-UAV Physical Interaction](/202604/01/2603.27328v1-quaternion-based-unscented-kalman-filter-for-robust-wrench-estimation-of-human-uav-physical-interaction)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：GNSS受限环境下的纯视觉无人机导航
-8. [Integrated Multi-Drone Task Allocation, Sequencing, and Optimal Trajectory Generation in Obstacle-Rich 3D Environments](/202603/31/2603.24908v1-integrated-multi-drone-task-allocation-sequencing-and-optimal-trajectory-generation-in-obstacle-rich-3d-environments)  
+   evidence：用于状态估计的无迹卡尔曼滤波
+6. [Topological Detection of Hopf Bifurcations via Persistent Homology: A Functional Criterion from Time Series](/202604/01/2603.27395v1-topological-detection-of-hopf-bifurcations-via-persistent-homology-a-functional-criterion-from-time-series)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：三维环境中的最优轨迹生成与动力学可行性
-9. [The adjoint state method for parametric definable optimization without smoothness or uniqueness](/202603/31/2603.26503v1-the-adjoint-state-method-for-parametric-definable-optimization-without-smoothness-or-uniqueness)  
+   evidence：动力系统分岔的拓扑检测方法
+7. [Predictive Modeling in AUV Navigation: A Perspective from Kalman Filtering](/202604/01/2603.27422v1-predictive-modeling-in-auv-navigation-a-perspective-from-kalman-filtering)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：参数化优化的伴随状态法
-10. [Motion as a Sensing Modality for Metric Scale in Monocular Visual-Inertial Odometry](/202603/31/2603.26740v1-motion-as-a-sensing-modality-for-metric-scale-in-monocular-visual-inertial-odometry)  
+   evidence：用于自主导航的多传感器融合与卡尔曼滤波
+8. [Interpretable Physics Extraction from Data for Linear Dynamical Systems using Lie Generator Networks](/202604/01/2603.27442v1-interpretable-physics-extraction-from-data-for-linear-dynamical-systems-using-lie-generator-networks)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：视觉惯性导航轨迹的可观测性分析
-11. [Data-driven discovery and control of multistable nonlinear systems and hysteresis via structured Neural ODEs](/202603/31/2603.27024v1-data-driven-discovery-and-control-of-multistable-nonlinear-systems-and-hysteresis-via-structured-neural-odes)  
+   evidence：用于线性动力系统和状态转移矩阵的李生成器网络
+9. [Spectral Decomposition of Inverse Dynamics for Fast Exploration in Model-Based Manipulation](/202604/01/2603.27796v1-spectral-decomposition-of-inverse-dynamics-for-fast-exploration-in-model-based-manipulation)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：多稳态非线性系统的驱动发现与轨道稳定性
+   evidence：利用动力学谱分解生成轨迹
+10. [Estimation of Regions of Attraction for Nonlinear Systems via Coordinate-Transformed TS Models](/202604/01/2603.27837v1-estimation-of-regions-of-attraction-for-nonlinear-systems-via-coordinate-transformed-ts-models)  
+   标签：评分：6.0/10、query:cislunar-dyn-nav
+   evidence：非线性系统的吸引域估计
+11. [Joint Time-Phase Synchronization for Distributed Sensing Networks via Feature-Level Hyper-Plane Regression](/202604/01/2603.28121v1-joint-time-phase-synchronization-for-distributed-sensing-networks-via-feature-level-hyper-plane-regression)  
+   标签：评分：6.0/10、query:cislunar-dyn-nav
+   evidence：分布式传感网络的时间-相位联合同步
 
 
 <div class="dpr-home-promo-card">
