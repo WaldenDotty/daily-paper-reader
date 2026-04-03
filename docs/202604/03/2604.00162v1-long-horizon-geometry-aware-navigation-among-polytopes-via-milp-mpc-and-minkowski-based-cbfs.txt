@@ -1,0 +1,735 @@
+Title: Long-Horizon Geometry-Aware Navigation among Polytopes via MILP-MPC and Minkowski-Based CBFs
+
+URL Source: https://arxiv.org/pdf/2604.00162v1
+
+Published Time: Thu, 02 Apr 2026 00:08:17 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# Long-Horizon Geometry-Aware Navigation among Polytopes via MILP-MPC and Minkowski-Based CBFs 
+
+Yi-Hsuan Chen 1, Salman Ghori 2, Ania Adil 2, Eric Feron 2, Calin Belta 3
+
+Abstract — Autonomous navigation in complex, non-convex environments remains challenging when robot dynamics, con-trol limits, and exact robot geometry must all be taken into account. In this paper, we propose a hierarchical planning and control framework that bridges long-horizon guidance and geometry-aware safety guarantees for a polytopic robot navigating among polytopic obstacles. At the high level, Mixed-Integer Linear Programming (MILP) is embedded within a Model Predictive Control (MPC) framework to generate anominal trajectory around polytopic obstacles while modeling the robot as a point mass for computational tractability. At the low level, we employ a control barrier function (CBF) based on the exact signed distance in the Minkowski-difference space as a safety filter to explicitly enforce the geometric constraints of the robot shape, and further extend its formulation to a high-order CBF (HOCBF). We demonstrate the proposed framework in U-shaped and maze-like environments under single- and double-integrator dynamics. The results show that the proposed archi-tecture mitigates the topology-induced local-minimum behavior of purely reactive CBF-based navigation while enabling safe, real-time, geometry-aware navigation. A video of all simulations can be found at https://youtu.be/-cm4cQ_WXDY .
+
+I. I NTRODUCTION 
+
+Autonomous navigation in cluttered, non-convex environ-ments is a challenging problem when robot dynamics, control limits, and robot-obstacle geometry must all be consid-ered simultaneously. To make collision-avoidance constraints explicit and computationally tractable, many constrained planning and control methods approximate the robot as a point mass or a sphere, which we refer to as simplified geometric models [1], [2]. While computationally efficient, these approximations can be conservative and may rule out feasible motions that exist for the true robot geometry in tight environments. To reduce this conservatism, recent work has consid-ered tighter geometric representations such as polytopes. Optimization-based approaches have long considered poly-topic constraints, particularly through mixed-integer formu-lations. Mixed-Integer Linear Programming (MILP) has been widely used to encode such constraints through binary vari-ables and disjunctive formulations explicitly [3]–[7]. More recently, an advanced framework of graphs of convex sets [8] provides more efficient formulations. However, for tractabil-
+
+> 1
+
+Y. Chen is with the Dept. of Aerospace Engineering, University of Maryland, College Park, MD, USA. yhchen91@umd.edu 
+
+> 2
+
+S. Ghori, A. Adil, and E. Feron are with Computer, Electrical and Math-ematical Science & Engineering Division (CEMSE), KAUST, Saudi Arabia. 
+
+{salman.ghori, ania.adil, eric.feron}@kaust.edu.sa 
+
+> 3
+
+C. Belta is with the Dept. Electrical and Computer Engineering and Dept. Computer Science, University of Maryland, College Park, MD, USA. 
+
+calin@umd.edu collision with MILP-MPC only Successfully reaches the goal with our method trapped in local minimum with CLF-CBF-QP   
+
+> System Dynamics (Low-rate) MILP-MPC Planner consider point-mass robot predict over horizon in (High-rate) Minkowski-CBF Safety Filter state x
+> account for robot volume constructed in geometry-aware safe control (ours)
+
+Fig. 1: Top: The proposed multi-rate framework with a MILP-MPC planner and a geometry-aware Minkowski-CBF safety filter. Bottom: A triangular robot with double-integrator dynamics navigating in a polytopic maze-like environment. It collides with an obstacle when using MILP-MPC alone with a point-mass model (pink), and becomes trapped in a local minimum using a CLF-CBF-QP approach (orange) due to its inherent reactive nature. In contrast, the proposed framework (blue) successfully guides the robot to the goal without a reference path or waypoints from an external planner .
+
+ity, these methods are typically restricted to simplified geo-metric models. Alternatively, dualization techniques [9] have been proposed to handle both robot and obstacle geometry, but often lead to nonlinear programs that are computationally demanding and rely on good warm-starts. Control Barrier Functions (CBFs) [10] and their gen-eralization for high-order systems [11] offer an efficient alternative for control-affine systems by rendering a safe set forward invariant through a sequence of pointwise Quadratic Programs (QPs) that can be solved on-the-fly. They have recently been extended to polytopic collision avoidance using both approximate [12]–[15] and exact geometric [16]– [18] representations. For reach-avoid tasks, CBFs are often paired with Control Lyapunov Functions (CLF), yielding the canonical CLF-CBF-QP framework [10]. However, without waypoint guidance or a feasible reference path, such methods remain inherently reactive and may become trapped in local minima [19], [20], especially in non-convex environments. To mitigate this myopic behavior, we present a hierar-chical navigation framework that combines a long-horizon 
+
+> arXiv:2604.00162v1 [cs.RO] 31 Mar 2026
+
+planner with a geometry-aware safety filter. At the high level, a MILP is embedded within an MPC framework to generate a long-horizon nominal trajectory around non-convex polytopic obstacles, while using simplified geometric models for tractability. At the low level, a CBF based on the signed distance between a polytopic robot-obstacle pair in the Minkowski-difference space ( MD -space), termed Minkowski-CBF [16], serves as a safety filter that enforces the exact geometric constraints. The overall architecture is inspired by the design principles of multi-rate control [21]– [23] and run-time assurance [24]–[26]. Prior work has combined MPC and discrete CBFs (DCBFs) to integrate long-horizon prediction with safety-critical control [27]–[29]. Similar ideas have also been ex-plored by combining Model Predictive Path Integral (MPPI) control with CBFs [30], [31]. While most of these formu-lations do not explicitly account for robot volume, recent extensions to obstacle avoidance among polytopes are more closely related to our setting [32], [33]. Our work differs from [32], [33] in two key aspects: (1) Rather than embed-ding DCBF constraints directly into the MPC optimization problem, our method explicitly separates long-horizon plan-ning from high-rate safety filtering. (2) Instead of relying on a reference path or waypoint sequence provided by an ex-ternal global planner, our method uses the MILP-MPC layer itself to generate long-horizon guidance. Another recent work [34] also considers a layered CBF architecture that combines occupancy-map-based Poisson safety functions with a pre-dictive safety layer and a real-time CBF-QP filter. In contrast, our framework is tailored to exact-geometry navigation with polytopic sets , combining an MILP-MPC planner with a Minkowski-CBF safety filter to reduce conservatism induced by simplified geometric models. The contributions of this paper are threefold:  
+
+> •
+
+We propose a hierarchical multi-rate navigation frame-work, referred to as MILP-MPC-CBF, that combines a low-rate MILP-MPC planner with a high-rate geometry-aware Minkowski-CBF safety filter.  
+
+> •
+
+We derive a closed-form gradient expression of the Minkowski-CBF [16] in the minimum-distance, pure-translation setting by exploiting the KKT structure of the underlying min-dist QP, and further extend the formulation to a HOCBF for double-integrator systems.  
+
+> •
+
+We validate the proposed MILP-MPC-CBF framework in non-convex U-shaped and maze-like environments under both single- and double-integrator dynamics. Comparisons with the canonical CLF-CBF-QP ap-proach show that the latter becomes trapped, whereas the proposed framework safely reaches the goal. II. P RELIMINARIES 
+
+In this section, we briefly review the background relevant to our Minkowski-CBF formulation, including configuration obstacles (II-A), HOCBF (II-B), and differentiable optimiza-tion (II-C). 
+
+A. Configuration Obstacles via Minkowski Operation 
+
+Originating from computational geometry, Minkowski op-erations have been a fundamental tool for collision detection [35], [36], and were later adopted in motion planning to define the so-called “Configuration Obstacle” (see Def. 1) [37], [38]. By taking the Minkowski difference between an obstacle and the robot, their associated CO encodes the robot’s geometry and configuration with the obstacle in a single set. Consequently, the collision checking between two sets is reduced to a set membership problem. 
+
+Definition 1 ( Configuration Obstacle (CO) [2]) : Given a robot R and an obstacle O, the associated CO is: 
+
+Oc = O ⊕ (−R ), (1) where −R is the reflection of R through the origin and ⊕
+
+denotes the Minkowski sum. 
+
+B. High-Order Control Barrier Functions (HOCBF) 
+
+Consider a control-affine system : 
+
+˙x = f (x) + g(x)u, (2) where x ∈ Rn is the state, u ∈ U ⊂ Rq is the input ( U
+
+denotes a closed control constraint set), and f : Rn → Rn,
+
+g : Rn → Rn×q are locally Lipschitz. 
+
+Definition 2 ( Forward invariant set [10]) : A set C ⊂ Rn
+
+is forward invariant for system (2) if its solutions starting at 
+
+x(t0) ∈ C satisfy x(t) ∈ C, ∀t ≥ t0.In this article, safety is guaranteed by the constraint 
+
+h(x) ≥ 0; we refer to the relative degree 1 of h as the relative degree of the constraint. For a function h(x) : Rn → R
+
+with relative degree m, we define a sequence of functions 
+
+ψi : Rn → R, i ∈ { 1, · · · , m } as 
+
+ψi(x) = ˙ψi−1(x) + αi(ψi−1(x)) , i ∈ { 1, · · · , m }, (3) where each αi is a class-K function 2 and ψ0(x) := h(x).We then define a sequence of sets Ci associated with (3): 
+
+Ci = {x ∈ Rn : ψi−1(x) ≥ 0}, i ∈ { 1, · · · , m }. (4) 
+
+Definition 3 ( HOCBF [11]) : Let C1, · · · , C m be defined in (4) and ψ1, · · · , ψ m be defined in (3). A function h : Rn →
+
+R is a High-Order Control Barrier Function (HOCBF) of relative degree m for system (2) if there exist differentiable class-K functions αi, i ∈ { 1, · · · , m } such that 
+
+sup u∈U [Lmf h(x) + Lg Lm−1 
+
+> f
+
+h(x)u + O(h(x)) +αm(ψm−1(x))] ≥ 0, ∀x ∈ C1 ∩ · · · ∩ Cm, (5) where Lf , L g denote the Lie derivatives along f and g,respectively, Lmf denotes m-th Lie derivative along f and 
+
+O(h(x)) = Pm−1 
+
+> i=1
+
+Lif (αm−i ◦ ψm−i−1)( x). It is assumed that Lg Lm−1 
+
+> f
+
+h(x)̸ = 0 on the boundary of the set C1 ∩ · · · ∩ 
+
+Cm.                
+
+> 1The relative degree of a differentiable function h(x) : Rn→Rwith respect to system (2) is the number of times we have to differentiate it along the dynamics of (2) until control uappears explicitly [39].
+> 2A class Kfunction is a Lipschitz continuous function α: [0 , a )→
+> [0 ,∞), a > 0that is strictly increasing and α(0) = 0 , see, e.g., [39].
+
+Theorem 1 (Safety Guarantee [11]) . Given a HOCBF h(x)
+
+defined by (3) with the associated sets C1, · · · , C m defined by (4), if x(0) ∈ C1∩· · ·∩ Cm, then any Lipschitz continuous controller u(t) ∈ U that satisfies (5), ∀t ≥ 0 renders C1 ∩· · · ∩ Cm forward invariant for system (2). 
+
+C. Differentiable Optimization 
+
+Recently, differentiable optimization has been increasingly adopted in robotics for collision avoidance, to compute the gradients of CBFs defined via optimization [16], [40], [41]. Consider a parameteric inequality-constrained QP: 
+
+z∗ = arg min  
+
+> z
+
+fo(z), s.t. G(x)z ≤ h(x),
+
+with fo(z) = z⊤Qz + p⊤z, Q ∈ Sk
+
+> ++
+
+, p ∈ Rk (6) where z ∈ Rk is the optimization variable, x ∈ Rp is the parameter, and G(x) ∈ Rg×k, h(x) ∈ Rg define the parameter-dependent inequality constraints. The Lagrangian of (6) is 
+
+L(z, λ, x) := fo(z) + λ⊤(G(x)z − h(x)) , (7) where λ ∈ Rg is the dual variable. The optimal primal-dual pair (z∗(x), λ∗(x)) satisfies the following compact Karush-Kuhn-Tucker (KKT) system 3:
+
+Γ( z, λ, x) := 
+
+ 2Qz + p + G(x)⊤λ
+
+D(λ)( G(x)z − h(x)) 
+
+
+
+= 0, (8) where the first and second rows correspond to the stationarity and complementary slackness conditions, respectively. Here, 
+
+D(·) creates a diagonal matrix from a vector; for brevity, we omit the dependence on x when clear from the context. The sensitivity of the optimal value of the objective function 
+
+f0(z∗) is characterized by Theorem. 2 from [42]. We will later use this result to derive the gradient of our Minkowski-CBF (detailed in Sec. IV-B), as in [41]. 
+
+Theorem 2 (Sensitivity of the optimal value of the objective function with respect to the parameter [42]) . The sensitivity of the optimal value of the objective function f0(z∗) of (6) with respect to the parameter x is given by the partial derivative of its Lagrangian function (7) with respect to 
+
+x, evaluated at the optimal primal-dual pair (z∗, λ∗), i.e., 
+
+∇xf0(z∗(x)) = ∂L 
+
+> ∂x(z∗,λ∗)
+
+.III. P ROBLEM FORMULATION 
+
+In this paper, x denotes the robot state, and p ∈ Rd
+
+denotes its position component. We adopt the same geometric assumptions for the robot, obstacles, and the associated COs as in [16], and recall only the half-space representations needed here. In particular, we assume that the robot R is con-vex and that each obstacle Oi is either convex or decomposed into convex components. Its corresponding CO, denoted as 
+
+Oci , is then used for our pairwise CBF construction. 
+
+R(x) = {y ∈ Rd | Ar (x)y ≤ br (x)}, (9a) 
+
+Oi = {y ∈ Rd | Aoi y ≤ boi }, i = 1 , . . . , N O (9b) 
+
+Oci (x) = {y ∈ Rd | Aci (x)y ≤ bci (x)}, (9c) 
+
+> 3Assuming linear independence constraint qualification (LICQ) holds.
+
+with Ar ∈ Rℓr ×d, br ∈ Rℓr , Aoi ∈ Rℓoi ×d, boi ∈ Rℓoi ,
+
+Aci ∈ Rℓci ×d, bci ∈ Rℓci . NO is the number of convex obstacle components, and d ∈ { 2, 3} for 2D and 3D spaces. 
+
+ℓr , ℓoi and ℓci denote the number of edges of the robot and the i-th obstacle and CO, respectively. We suppress the dependence on x for brevity. In general, a CO depends on both the robot’s position and orientation. However, since our high-level planner uses an MILP formulation for linear systems only, the resulting robot’s motion is purely translational; therefore, the robot orientation remains fixed, and so do the corresponding COs. 
+
+Problem 1. Consider a workspace X , obstacle space XO =SNO 
+
+> i=1
+
+Oi ⊆ X , free space Xfree = X \ X O , and a polytopic robot R with dynamics ˙x = Ax + Bu. Our goal is to generate a feedback control law u∗(x) driving the robot from a given initial state xs to a goal point xg ∈ X free ,while ensuring R(x(t)) ∩ X O = ∅ for all t ≥ 0.
+
+Remark 1. Applying the MILP-MPC planner to nonlinear systems would require linearizing along a nominal trajectory. Since the planner operates at a low rate, the resulting lin-earization error must be treated carefully over the planning horizon, which is beyond the scope of the present work. 
+
+Next we present the proposed hierarchical multi-rate planning architecture, which embeds a high-level MILP-MPC planner for long-horizon guidance with a low-level Minkowski-CBF safety filter for geometry-aware collision avoidance without geometric approximations. IV. M ULTI -RATE PLANNING ARCHITECTURE 
+
+The canonical CLF-CBF-QP framework optimizes the control input only one step ahead. Without a look-ahead horizon, the robot may become trapped in local minima and stall in non-convex environments. Motivated by this limitation, we propose a hierarchical multi-rate architecture, termed MILP-MPC-CBF, that combines long-horizon plan-ning with geometry-aware safety filtering. Specifically, the proposed architecture consists of:  
+
+> •
+
+a low-rate MILP-MPC planner that generates a long-horizon nominal control sequence using a point-robot 
+
+abstraction for computational tractability; and  
+
+> •
+
+a high-rate Minkowski-CBF safety filter that tracks the nominal command while enforcing collision avoid-ance with respect to the full robot geometry .
+
+A. High-level MPC planner via MILP 
+
+At each planning step k, the MILP-MPC planner solves a finite-horizon optimal control problem (FHOCP) over a prediction horizon of Np steps with the sampling interval 
+
+∆tp, resulting in a prediction horizon of duration Tp =
+
+Np∆tp. The FHOCP is initialized at the current state, i.e., 
+
+x0 = xk. The decision variables consist of both continuous and binary variables. Let X and U denote the predicted state and control trajectories, respectively: 
+
+X := {xi}Np 
+
+> i=0
+
+= [ x0, x1, . . . , xNp ] ∈ Rn×(Np+1) ,
+
+U := {ui}Np−1 
+
+> i=0
+
+= [ u0, u1, . . . , uNp−1] ∈ Rm×Np .To encode polytopic obstacle avoidance over the prediction horizon Np, let ℓOj denote the number of half-space in-equalities defining obstacle Oj , ∀j ∈ { 1, . . . , N O }. For each obstacle j at each prediction step i, we introduce a binary vector tji :
+
+tji := 
+
+h
+
+tji, 1, . . . , t ji,ℓ Oj
+
+i⊤
+
+∈ { 0, 1}ℓOj . (10) These vectors are then collected in T:
+
+T := {tji }j=1 ,...,N O 
+
+> i=0 ,...,N p
+
+.
+
+The vector tji is used to encode the disjunctive half-space constraints associated with obstacle Oj in W-space. For each prediction step i = 0 , . . . , N p and each obstacle j =1, . . . , N O , the corresponding obstacle-avoidance constraints are imposed using the following “Big-M” formulation: 
+
+−AOj ,r pi ≤ − bOj ,r − εobs + M t ji,r , (11a) 
+
+r = 1 , . . . , ℓ Oj ,
+
+> ℓOj
+
+X
+
+> r=1
+
+tji,r ≤ ℓOj − 1, (11b) where pi is the position at each step i, M is a sufficiently large constant and εobs > 0 is a user-defined safety margin. Constraint (11b) ensures that at least one entry of tji is zero, so at least one corresponding inequality in (11a) remains active, which enforces pi to lie outside of the obstacle Oj .The resulting MILP-MPC FHOCP is formulated as 
+
+min 
+
+> X,U,T
+> Np−1
+
+X
+
+> i=0
+
+(∥ui∥1 + β∥xi − xg ∥1) + α∥xNp − xg ∥1
+
+(12a) s.t. x0 = xk (12b) 
+
+xi+1 = Axi + Bui, i = 0 , . . . , N p − 1, (12c) 
+
+xmin ≤ xi ≤ xmax , i = 0 , . . . , N p, (12d) 
+
+umin ≤ ui ≤ umax , i = 0 , . . . , N p − 1. (12e) obstacle-avoidance constraints in (11a)–(11b) ,
+
+where α and β are positive user-defined weighting pa-rameters that penalize the terminal and running deviations from the goal, respectively. Solving (12) at each plan-ning step k yields an optimal control sequence U∗ =[u∗
+
+> 0
+
+, u∗
+
+> 1
+
+, . . . , u∗
+
+> Np−1
+
+]. As in standard receding-horizon MPC, only the first input u∗ 
+
+> 0
+
+is extracted. In our framework, this input is interpreted as the nominal guidance command, denoted by umpc := u∗
+
+> 0
+
+, and passed to the low-level Minkowski-CBF safety filter (detailed in Sec. IV-B) for geometry-aware collision avoidance. Specifically, the low-level safety filter synthesizes the control input by solving the following min-norm CBF-QP, which minimally modifies 
+
+umpc while enforcing the input and safety constraints (5): 
+
+u∗(x) = arg min  
+
+> u
+
+∥u − umpc ∥22 s.t. u ∈ U and (5) . (13) The FHOCP (12) is then re-solved at the next planning step using the updated state. An overview of the proposed framework is summarized in Algorithm. 1. 
+
+Algorithm 1 Hierarchical, multi-rate MILP-MPC-CBF  
+
+> 1:
+
+Initialize x ← x0, t ← 0, k ← 0, umpc ← 0. 
+
+> 2:
+
+Set NMPC ← round (∆ tp/∆t). 
+
+> 3:
+
+while t ≤ tfinal do  
+
+> 4:
+
+if k = 0 or mod( k, N MPC ) = 0 then  
+
+> 5:
+
+Solve MILP-MPC (12) with horizon Np and plan-ner sampling step ∆tp 
+
+> 6:
+
+if MILP feasible then  
+
+> 7:
+
+umpc ← u⋆
+
+> 0
+
+. 
+
+> 8:
+
+else  
+
+> 9:
+
+umpc ← greedy direction to goal  
+
+> 10:
+
+end if  
+
+> 11:
+
+end if  
+
+> 12:
+
+Solve the min-dist QP (14) and compute the CBF value and gradient using the minimizer z∗ and (17).  
+
+> 13:
+
+if single-integrator then  
+
+> 14:
+
+Construct the CBF constraint (22).  
+
+> 15:
+
+else if double-integrator then  
+
+> 16:
+
+Compute the Hessian using (24) in Thm. 4.  
+
+> 17:
+
+Construct the HOCBF constraint (23).  
+
+> 18:
+
+end if  
+
+> 19:
+
+u∗ ← Solve the min-norm CBF-QP (13) with ref-erence umpc and the corresponding CBF/HOCBF constraint.  
+
+> 20:
+
+x ← Propagate the system dynamics using u∗. 
+
+> 21:
+
+t ← t + ∆ t, k ← k + 1 . 
+
+> 22:
+
+end while 
+
+B. Low-level safety filter via Minkowski-CBF 
+
+We first briefly review the Minkowski-CBF introduced in [16], which is defined through the CO associated with a robot-obstacle pair in MD -space. While this CBF admits both minimum-distance and penetration-depth cases, we fo-cus here on the minimum-distance case, i.e., the collision-free case R ∩ O = ∅ (equivalently 0 /∈ O c), since the robot is initialized in the safe set and the CBF guarantees forward invariance. In this case, the signed distance (sd) reduces to the minimum distance (dist), which can be computed via the following QP (referred to as a min-dist QP): 
+
+min ∥z∥22 s.t. Ac(x)z ≤ bc(x),
+
+with dist (R(x), O) = dist (0, Oc(x)) = ∥z∗(x)∥2, (14) where the minimizer z∗ = z∗(x) ∈ Rd, referred to as a critical point, is the projection of the origin 0 onto Oc in 
+
+MD -space. The Minkowski-CBF is 
+
+h(x) = dist (R(x), O) − dsafe = ∥z∗(x)∥2 − dsafe , (15) where dsafe > 0 is the user-defined safety margin. Although we retain Ac(x) and bc(x) for generality, the CO representa-tion depends directly only on the robot position p ∈ Rd and orientation. In the pure-translation setting considered here, the orientation is fixed, so this dependence reduces to the position component p of the state x.For the QP in (14), the objective function is f0(z) = z⊤z,and the corresponding Lagrangian is 
+
+L(z, λ, x) = fo(z) + λ⊤ (Ac(x)z − bc(x)) , (16) where λ ∈ Rℓc is the dual variable. The following theorem gives a closed-form expression for the gradient of the CBF with respect to the position p.
+
+Theorem 3 (CBF Gradient with respect to Position) . For 
+
+h(x) > 0, the gradient of the CBF h in (15) with respect to the position p is: 
+
+∂h ∂p = − (z∗)⊤
+
+∥z∗∥2
+
+, (17) i.e., the unit vector pointing from the critical point z∗ toward the origin. 
+
+Proof. For h(x) > 0, we have h = ∥z∗∥2 − dsafe =pf0(z∗) − dsafe . By complementary slackness, the inactive dual variables are zero, so the stationarity condition reduces on the active set I to 2z∗ + Ac 
+
+> I
+
+(p)⊤λ∗I = 0 , where the subscript I denotes the active constraint set. Applying the chain rule together with Theorem 2, using the Lagrangian in (16), yields: 
+
+∂h ∂p = ∂h ∂f 0(z∗)
+
+∂f 0(z∗)
+
+∂p = 12∥z∗∥2
+
+∂L
+
+∂p (z∗,λ∗I )
+
+(18) In the pure-translation setting, we have ∂pAc 
+
+> I
+
+= 0, ∂ pbc 
+
+> I
+
+=
+
+−Ac 
+
+> I
+
+[16]. Hence, 
+
+∂L
+
+∂p (z∗,λ∗I )
+
+= ( λ∗I )⊤ [( ∂pAc 
+
+> I
+
+) z∗ − ∂pbc 
+
+> I
+
+] = ( λ∗I )⊤Ac
+
+> I
+
+(19) Using the stationarity condition (λ∗I )⊤Ac 
+
+> I
+
+= −2( z∗)⊤ and substitutes it into (18) and (19), we obtain: 
+
+∂h ∂p = 12∥z∗∥2
+
+ −2( z∗)⊤ = − (z∗)⊤
+
+∥z∗∥2
+
+, (20) which completes the proof. ■
+
+Remark 2. In our prior work [16], the gradient was derived from the sensitivity of the optimal solution z∗(x) via the implicit function theorem (IFT) [43]. Here, we instead use Theorem. 2 as a tool to derive the closed-form gradient expression. These two derivations are essentially equivalent, but the present derivation simplifies the proof. 
+
+Remark 3. In the minimum-distance case, the critical point 
+
+z∗ is the projection of the origin onto the convex CO, and is therefore unique. Moreover, the distance to a closed convex set is continuously differentiable outside the set [44]. Hence, in the pure-translation setting, the CBF h(x) is continuously differentiable. 
+
+We denote the transpose of the CBF gradient with respect to the position (17) as the unit normal vector: 
+
+n := 
+
+ ∂h ∂p
+
+⊤
+
+= − z∗
+
+∥z∗∥2
+
+∈ Rd (21) The resulting first-order CBF constraint with the control-affine system (2) is as follows: 
+
+n⊤f (x) + n⊤g(x)u + kh (p) ≥ 0. (22) 
+
+C. Extension to HOCBF for double-integrator dynamics 
+
+We now extend the Minkowski-CBF construction to HOCBF. Since the safety function depends only on the position component of the state, it has relative degree two with respect to the control input. Let the state be x =[p⊤, v⊤]⊤, where v ∈ Rd denotes the velocity component. Following Def. 3, we construct a HOCBF by defining 
+
+ψ0(x) := h(x) = ∥z∗∥2 − dsafe , α1(ψ0(x)) := k1ψ0(x),and α2(ψ1(x)) := k2ψ1(x), where k1, k 2 > 0 are hyper-parameters. Hereafter, we restrict ourselves to 2D W-space (d = 2 ). The resulting HOCBF constraint (5) in this case is: 
+
+v⊤Hv + n⊤u + ( k1 + k2)n⊤v + k1k2h(p) ≥ 0, (23) where H := ∂2
+
+> p
+
+h ∈ R2×2 is the Hessian matrix of the CBF with respect to position. Computing H is generally in-tractable; however, our Minkowski-based formulation admits an analytical expression via the KKT sensitivity of (14), as presented in Theorem. 4. 
+
+Theorem 4 (CBF Hessian with respect to Position) . For 
+
+h(x) > 0, the Hessian of the CBF h in (15) with respect to the position p ∈ R2 is given by: 
+
+H =
+
+( 1 
+
+> ∥z∗∥2
+
+(I − nn ⊤), if z∗ lies at a vertex, 
+
+0, if z∗ lies on an edge, (24) where I ∈ R2×2 is the identity matrix and n is the unit vector defined in (21). 
+
+Proof. By definition, the Hessian matrix of h with respect to p is H = ∂p(∂ph) = ∂p(n⊤). Using (21), the quotient rule and 
+
+∂∥z∗∥2
+
+∂p = (z∗)⊤
+
+∥z∗∥2
+
+∂z∗
+
+∂p = −n⊤ ∂z∗
+
+∂p ,
+
+we obtain the following fundamental expression: 
+
+H = 1
+
+∥z∗∥2
+
+(I − nn ⊤)
+
+
+
+− ∂z∗
+
+∂p
+
+
+
+. (25) To evaluate the last term of ∂z∗/∂ p, we perform a local sensitivity analysis on the KKT conditions of the min-dist QP in (14) using the IFT, restricted to regions where the active feature remains unchanged. Let ξ := ( z, λ) and Γ denote the KKT system in (8) with Q = 2 I, p = 0, G = Ac, h = bc.Considering only active constraints and recalling ∂pAc 
+
+> I
+
+=
+
+0, ∂ pbc 
+
+> I
+
+= −Ac 
+
+> I
+
+, we obtain the sensitivity equation: 
+
+∂p(ξ∗) = − [∂ξΓ( ξ∗)] −1 ∂pΓ( ξ∗),∂ξΓ = 
+
+ 2I (Ac 
+
+> I
+
+)⊤
+
+D(λ∗I )Ac 
+
+> I
+
+0
+
+
+
+, ∂ pΓ = 
+
+ 0
+
+D(λ∗I ) ( Ac 
+
+> I
+
+)
+
+
+
+,
+
+The inverse matrix [∂ξΓ( ξ∗)] −1 is computed using the Schur complement. Since the upper block of ∂pΓ is 0, we only need the top-right block of [∂ξΓ( ξ∗)] −1 for ∂z∗/∂ p, which analytically evaluates to (Ac 
+
+> I
+
+)⊤ Ac 
+
+> I
+
+(Ac 
+
+> I
+
+)⊤−1 [D(λ∗I )] −1.Multiplying this block by the lower component of ∂pΓ, the diagonal matrices exactly cancel out ( [D(λ∗I )] −1 D(λ∗I ) = 
+
+I) under strict complementarity, yielding the sensitivity: 
+
+∂z∗
+
+∂p = − (Ac 
+
+> I
+
+)⊤ h
+
+Ac 
+
+> I
+
+(Ac 
+
+> I
+
+)⊤i−1
+
+Ac 
+
+> I
+
+(26)  
+
+> •
+
+Case 1 (Vertex): When z∗ lies at a vertex of the CO, the active set consists of two linearly independent constraints. Consequently, the active constraint matrix Ac 
+
+> I
+
+∈ R2×2 is an invertible square matrix, so the sensitivity formula in (26) simplifies to: ∂z∗/∂ p = −I. Substituting this into (25) yields H = ( I − nn ⊤)/∥z∗∥2. 
+
+> •
+
+Case 2 (Edge): When z∗ lies on an edge of the CO, the active set reduces to a single constraint, denoted as 
+
+a := (Ac 
+
+> I
+
+)⊤ ∈ R2. Substituting this into (26) yields 
+
+−a  a⊤a−1 a⊤ = −aa ⊤/∥a∥22.Based on the KKT sta-tionarity condition 2z∗ +λ∗I a = 0, the vector a is collinear with z∗. Since n defined in (21) is also a unit vector collinear with z∗, the term aa ⊤/∥a∥22 is equivalent to 
+
+nn ⊤. Thus, ∂z∗/∂ p = −nn ⊤. Substituting this back into (25) yields H = ( I − nn ⊤)( nn ⊤)/∥z∗∥2 = 0, since 
+
+n⊤n = 1 . This completes the proof. ■
+
+Remark 4. Theorem 4 applies away from active-set switch-ing boundaries. At such boundaries, the Hessian may fail to exist. Since these boundaries form a measure-zero set in R2,the Hessian exists almost everywhere. 
+
+Intuitively, the Hessian captures the curvature of the distance field, yielding a zero matrix for straight level sets when z∗ is on an edge, and a non-zero matrix for concentric circular level sets when z∗ is at a vertex. With the above closed-form Hessian (24), the HOCBF constraint (23) can be obtained within each local active-feature region. We next validate the resulting hierarchical MILP-MPC-CBF frame-work in simulation. V. S IMULATION RESULTS 
+
+Throughout the simulations, we consider a triangular robot navigating toward a goal point xg while strictly avoiding polygonal obstacles. We evaluate our proposed framework in two distinct scenarios: a complex maze environment to demonstrate long-horizon guidance, and a specifically designed U-shaped environment for comparative evaluation against baseline methods, i.e., MILP-MPC only planner and purely reactive CLF-CBF-QP. (See video at https: //youtu.be/-cm4cQ_WXDY .) All simulations are conducted in MATLAB on a PC with an Intel i7-8700 3.2 GHz 6-core CPU and 32 GB RAM. The MILP-MPC FHOCPs (12) are solved using intlinprog ,while the min-dist (14) and CBF-filtering QPs (13) via 
+
+quadprog . The closed-loop system and the low-level QPs are both updated at 100 Hz. The high-level planner uses a discretization step of ∆tp = 0 .2 s and a prediction horizon of Np = 10 , yielding a Tp = 2 s look-ahead. The algorithm parameters are set as follows: M = 20 , ε obs = 0 .01 , α =20 , β = 0 .08 for MILP-MPC; k = 3 for the CBF; k1 =2, k 2 = 10 for the HOCBF, dsafe = 0 for safety margin; and control bounds umax = −umin = 5 .
+
+A. System Dynamics  
+
+> •
+
+Case 1 (Single-integrator): The system state is the posi-tion x = p = [ x, y ]⊤ ∈ R2, with dynamics governed by 
+
+˙x = u = [ u1, u 2]⊤, where u represents the linear velocity control inputs. These dynamics can be directly expressed in the control-affine form of (2) by defining the drift vector as f (x) = 02×1 and the control matrix as g(x) = I2. 
+
+> •
+
+Case 2 (Double-integrator): The state space is expanded to include velocity, i.e., x = [p⊤, v⊤]⊤ ∈ R4. The corresponding dynamics are ˙p = v and ˙v = u, where the control input u ∈ R2 dictates the planar acceleration. In the control-affine form of (2), this translates to f (x) = [v⊤, 0, 0] ⊤ and g(x) = [ 02×2; I2].
+
+B. Long-Horizon Predictive Guidance 
+
+The primary motivation for integrating MILP-MPC with CBFs is to leverage look-ahead predictions to improve global navigational capabilities, allowing the system to navigate without requiring predefined waypoints or a reference path from an external global planner. To maintain computational tractability, our framework adopts a hierarchical architecture: the high-level MILP-MPC executes at a low rate of 5 Hz using a point-mass model to generate a nominal reference path. The low-level Minkowski-CBF operates at a high rate of 100 Hz to account for the robot’s full geometric shape, acting as a real-time safety filter that minimally adjusts the nominal control input to guarantee strict safety. (b) Double-integrator (a) Single-integrator Goal start Goal start           
+
+> 12 2.5 4.4 12
+> Fig. 2: Long-horizon nominal predictions (dashed cyan) generated by the high-level MILP-MPC planner under (a) single- ( Top ) and (b) double-integrator ( Bottom ) dynamics, navigating the robot to the goal. Left: The actual closed-loop trajectory (solid blue) tracks the MPC predicted states (brown squares) as the robot (blue) avoids obstacles (gray). Right: Control inputs uand CBF values, verifying that strict safety h(x)≥0is guaranteed with respect to the real robot’s geometry over time.
+
+To demonstrate this predictive capability, we consider the maze navigation scenario in Fig. 2, initializing the robot at 
+
+xs = (1 .5, 5) to reach the goal xg = (13 .8, 1) . Due to the Tp = 2 s look-ahead horizon, the MILP-MPC anticipates the protruding vertex of the obstacle 2. It generates a nominal trajectory that guides the robot upward—temporarily moving away from the goal—to safely bypass the corner. In contrast, a purely reactive CLF-CBF-QP (V (x) = || x − xg || 22)controller greedily minimizes the distance to the goal based solely on instantaneous local geometry. This myopic ap-proach inevitably traps the robot in a local minimum along the slanted edge, as shown in Fig. 1. 
+
+C. Comparative Evaluation 
+
+To highlight the usefulness of our hierarchical design, we evaluate the frameworks in a U-shaped trap, see Fig. 3. We first demonstrate the crucial role of the low-level geometry-aware safety filter by comparing it against a standalone MILP-MPC planner (dashed magenta). Because the high-level planner relies on a point-mass model and enforces safety only at discrete time steps, its optimal trajectory tightly traces the obstacle boundaries. As illustrated in the left subfigures of the top row of Fig. 3, our Minkowski-CBF activates whenever the nominal control becomes unsafe (green segments). It applies minimally invasive real-time corrections (dark red arrows) to repel the full-geometry robot from the obstacle, ensuring strict safety while preserving the long-horizon guidance dictated by the MILP-MPC. Next, as shown in the right subfigures of the top row of Fig. 3, we compare our MILP-MPC-CBF (solid blue) against the purely reactive CLF-CBF-QP baseline (dotted red). Lacking a predictive horizon, the baseline is driven directly into the concavity and deadlocks at zero velocity due to conflicting goal-seeking and safety objectives. In contrast, our approach proactively bypasses this trap by tracking the long-horizon nominal path. 
+
+D. Discussion and Limitations 
+
+While our MILP-MPC-CBF framework has demonstrated improved navigational performance compared to purely re-active methods, certain limitations remain. Given a suffi-ciently long prediction horizon, it can effectively resolve topology-induced local minima. However, the hierarchical design introduces a model mismatch between the high-level point-mass planner and the low-level full-geometry safety filter. This mismatch becomes non-negligible when the robot’s actual shape deviates significantly from the simpli-fied geometry models. In such cases, the safety filter will override the nominal guidance, causing the system to be in a geometry-induced local minimum. Resolving geometry-induced deadlock caused by planner-filter mismatch remains an open problem. VI. C ONCLUSIONS AND FUTURE WORK 
+
+We presented a hierarchical navigation framework for geometry-aware safe navigation of polytopic robots in com-plex polytopic environments. By deriving the closed-form gradient and Hessian of the Minkowski-CBF, we enabled a HOCBF formulation for double-integrator dynamics. Sim-ulations demonstrate that our approach effectively resolves topology-induced local minima of purely reactive CLF-CBF-QP controllers and compensates for the actual physical volume neglected by point-mass abstractions to guarantee safety for the robot’s full geometry. Future work will ex-tend this framework to orientation-varying robots, nonlinear dynamics, and incorporate predicted states into the CBF to systematically resolve geometry-induced deadlocks. VII. A CKNOWLEDGMENT 
+
+The authors used generative AI tools [45], [46] for gram-mar polishing, manuscript organization, and limited clari-fication of derivation details. All research ideas, technical content, and analysis were developed by the authors. REFERENCES [1] J.-C. Latombe, Robot motion planning . Springer Science & Business Media, 2012, vol. 124. [2] S. M. LaValle, Planning Algorithms . Cambridge University Press, 2006. [3] T. Schouwenaars, B. De Moor, E. Feron, and J. How, “Mixed integer programming for multi-vehicle path planning,” in 2001 European Control Conference (ECC) , 2001, pp. 2603–2608. [4] A. Richards and J. P. How, “Aircraft trajectory planning with collision avoidance using mixed integer linear programming,” in Proceedings of the 2002 American control conference (IEEE Cat. No. CH37301) ,vol. 3. IEEE, 2002, pp. 1936–1941. [5] M. Vitus, V. Pradeep, G. Hoffmann, S. Waslander, and C. Tomlin, “Tunnel-MILP: Path planning with sequential convex polytopes,” in                                                  
+
+> AIAA Guidance, Navigation and Control Conference and Exhibit ,2008, p. 7132. [6] S. Lin, B. De Schutter, Y. Xi, and H. Hellendoorn, “Fast model predic-tive control for urban road networks via MILP,” IEEE Transactions on Intelligent Transportation Systems , vol. 12, no. 3, pp. 846–856, 2011. [7] R. Deits and R. Tedrake, “Efficient mixed-integer planning for UAVs in cluttered environments,” in 2015 IEEE international conference on robotics and automation (ICRA) .IEEE, 2015, pp. 42–49. [8] T. Marcucci, M. Petersen, D. Von Wrangel, and R. Tedrake, “Motion planning around obstacles with convex optimization,” Science robotics ,vol. 8, no. 84, p. eadf7843, 2023. [9] X. Zhang, A. Liniger, and F. Borrelli, “Optimization-based collision avoidance,” IEEE Trans. on Control Systems Technology , vol. 29, no. 3, pp. 972–983, 2020. [10] A. D. Ames, S. Coogan, M. Egerstedt, G. Notomista, K. Sreenath, and P. Tabuada, “Control barrier functions: Theory and applications,” in European Control Conference .IEEE, 2019, pp. 3420–3431. [11] W. Xiao and C. Belta, “High-order control barrier functions,” IEEE Transactions on Automatic Control , vol. 67, no. 7, pp. 3655–3662, 2021. [12] T. G. Molnar, “Navigating polytopes with safety: A control barrier function approach,” in 2025 IEEE Conference on Control Technology and Applications (CCTA) , 2025, pp. 179–184. [13] J. Usevitch and J. Sahleen, “Safety for time-varying parameterized sets using control barrier function methods,” in 2025 American Control Conference (ACC) , 2025, pp. 267–274. [14] S. Wu, Y. Fang, N. Sun, B. Lu, X. Liang, and Y. Zhao, “Optimization-free smooth control barrier function for polygonal collision avoidance,”
+> IEEE Transactions on Cybernetics , 2025. [15] L. Fernandez, V. H. Moreno, S. Sutjipto, and M. Carmichael, “Su-perquadric object representation as a control barrier function for obstacle avoidance,” in 2025 IEEE 21st International Conference on Automation Science and Engineering (CASE) , 2025, pp. 702–708. [16] Y.-H. Chen, S. Liu, W. Xiao, C. Belta, and M. Otte, “Control barrier functions via minkowski operations for safe navigation among polytopic sets,” in 2025 IEEE 64th Conference on Decision and Control (CDC) .IEEE, 2025, pp. 4481–4488. [17] A. Thirugnanam, J. Zeng, and K. Sreenath, “Duality-based convex optimization for real-time obstacle avoidance between polytopes with control barrier functions,” in 2022 American Control Conference (ACC) .IEEE, 2022, pp. 2239–2246. (b) Double-integrator (a) Single-integrator
+> 1.12 1.13 4.06 0.42 1.8 0.48 006MILP-MPC-HOCBF correction CBF-active CBF-active (ours) (ours) (ours) (ours) MILP-MPC 000.96 1.12 1.62 2.7 4.32 1.5 3880.6 1.13 2.33 4.5 correction
+
+Fig. 3: Top-row: Comparison of the proposed MILP-MPC-CBF framework in a U-shaped environment under single- ( Left column) and double-integrator (Right column) dynamics. In each case, the left compares the proposed framework with MILP-MPC only, where the green segment indicates the interval during which the geometry-aware Minkowski-(HO)CBF safety filter is active, while the right compares it with the reactive CLF-(HO)CBF-QP. Bottom-row: 
+
+Time histories of control inputs u and CBFs h for MILP-MPC-CBF, showing that the full-geometry robot remains in the safe set throughout the navigation. [18] H. Matias and D. Silvestre, “Safe navigation under uncertain obstacle dynamics using control barrier functions and constrained convex generators,” arXiv preprint arXiv:2601.07715 , 2026. [19] M. F. Reis, A. P. Aguiar, and P. Tabuada, “Control barrier function-based quadratic programs introduce undesirable asymptotically stable equilibria,” IEEE Control Systems Letters , vol. 5, no. 2, pp. 731–736, 2020. [20] X. Tan and D. V. Dimarogonas, “On the undesired equilibria induced by control barrier function based quadratic programs,” Automatica ,vol. 159, p. 111359, 2024. [21] U. Rosolia and A. D. Ames, “Multi-rate control design leveraging control barrier functions and model predictive control policies,” IEEE Control Systems Letters , vol. 5, no. 3, pp. 1007–1012, 2021. [22] K. Garg, R. K. Cosner, U. Rosolia, A. D. Ames, and D. Panagou, “Multi-rate control design under input constraints via fixed-time bar-rier functions,” IEEE Control Systems Letters , vol. 6, pp. 608–613, 2021. [23] N. Matni, A. D. Ames, and J. C. Doyle, “A quantitative framework for layered multirate control: Toward a theory of control architecture,” 
+
+IEEE Control Systems Magazine , vol. 44, no. 3, pp. 52–94, 2024. [24] M. Aiello, J. Berryman, J. Grohs, and J. Schierman, “Run-time assur-ance for advanced flight-critical control systems,” in AIAA Guidance, Navigation, and Control Conference , 2010, p. 8041. [25] S. Ghori, T. Khamvilai, E. Feron, and M. Pakmehr, “Runtime assur-ance for distributed avionics architecture,” in 2022 IEEE/AIAA 41st Digital Avionics Systems Conference (DASC) . IEEE, 2022, pp. 1–6. [26] K. L. Hobbs, M. L. Mote, M. C. Abate, S. D. Coogan, and E. M. Feron, “Runtime assurance for safety-critical systems: An introduction to safety filtering approaches for complex control systems,” IEEE Control Systems Magazine , vol. 43, no. 2, pp. 28–65, 2023. [27] R. Grandia, A. J. Taylor, A. D. Ames, and M. Hutter, “Multi-layered safety for legged robots via control barrier functions and model predictive control,” in 2021 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2021, pp. 8352–8358. [28] J. Zeng, B. Zhang, and K. Sreenath, “Safety-critical model predictive control with discrete-time control barrier function,” in 2021 American Control Conference (ACC) , 2021, pp. 3882–3889. [29] S. Liu, J. Zeng, K. Sreenath, and C. A. Belta, “Iterative convex optimization for model predictive control with discrete-time high-order control barrier functions,” in 2023 American Control Conference (ACC) , 2023. [30] J. Yin, C. Dawson, C. Fan, and P. Tsiotras, “Shield model predictive path integral: A computationally efficient robust MPC method using control barrier functions,” IEEE Robotics and Automation Letters ,vol. 8, no. 11, pp. 7106–7113, 2023. [31] P. Rabiee and J. B. Hoagg, “Guaranteed-safe MPPI through composite control barrier functions for efficient sampling in multi-constrained robotic systems,” in 2025 IEEE 64th Conference on Decision and Control (CDC) , 2025, pp. 5515–5520. [32] A. Thirugnanam, J. Zeng, and K. Sreenath, “Safety-critical control and planning for obstacle avoidance between polytopes with control barrier functions,” in 2022 International Conference on Robotics and Automation (ICRA) , 2022, pp. 286–292. [33] S. Liu, Z. Huang, and C. A. Belta, “Iterative convex optimization with control barrier functions for obstacle avoidance among polytopes,” 2026. [Online]. Available: https://arxiv.org/abs/2603.05916 [34] E. Yamaguchi, R. M. Bena, G. Bahati, and A. D. Ames, “Layered safety: Enhancing autonomous collision avoidance via multistage CBF safety filters,” arXiv preprint arXiv:2603.00338 , 2026. [35] E. G. Gilbert, D. W. Johnson, and S. S. Keerthi, “A fast procedure for computing the distance between complex objects in three-dimensional space,” IEEE Journal on Robotics and Automation , vol. 4, no. 2, pp. 193–203, 1988. [36] G. Van Den Bergen, “Proximity queries and penetration depth com-putation on 3D game objects,” in Game Developers Conference , vol. 170, 2001, p. 209. [37] Lozano-Perez, “Spatial planning: A configuration space approach,” 
+
+IEEE Transactions on Computers , vol. C-32, no. 2, pp. 108–120, 1983. [38] C. Ericson, Real-time collision detection . Crc Press, 2004. [39] H. K. Khalil and J. W. Grizzle, Nonlinear systems . Prentice hall Upper Saddle River, NJ, 2002, vol. 3. [40] B. Dai, R. Khorrambakht, P. Krishnamurthy, V. Gonçalves, A. Tzes, and F. Khorrami, “Safe navigation and obstacle avoidance using differ-entiable optimization based control barrier functions,” IEEE Robotics and Automation Letters , vol. 8, no. 9, pp. 5376–5383, 2023. [41] L. Fernandez, S. Sutjipto, V. H. Moreno, A. M. Tu, and M. G. Carmichael, “Differentiable obstacle avoidance framework for robot safety,” IEEE Robotics and Automation Letters , vol. 11, no. 4, pp. 5158–5165, 2026. [42] E. Castillo, A. J. Conejo, R. Mínguez, and C. Castillo, “A closed formula for local sensitivity analysis in mathematical programming,” 
+
+Engineering Optimization , vol. 38, no. 1, pp. 93–112, 2006. [43] B. Amos and J. Z. Kolter, “Optnet: Differentiable optimization as a layer in neural networks,” in International Conference on Machine Learning . PMLR, 2017, pp. 136–145. [44] R. Poliquin, R. Rockafellar, and L. Thibault, “Local differentiability of distance functions,” Transactions of the American mathematical Society , vol. 352, no. 11, pp. 5231–5249, 2000. [45] Google DeepMind, “Gemini 3.1 pro,” [Online]. Available: https:// deepmind.google/models/gemini/pro/, 2026. [46] OpenAI, “ChatGPT,” [Online]. Available: https://openai.com/chatgpt/, 2025.

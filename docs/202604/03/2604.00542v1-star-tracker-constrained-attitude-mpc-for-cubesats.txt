@@ -1,0 +1,815 @@
+Title: Star-Tracker-Constrained Attitude MPC for CubeSats
+
+URL Source: https://arxiv.org/pdf/2604.00542v1
+
+Published Time: Thu, 02 Apr 2026 00:44:38 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# Star-Tracker-Constrained Attitude MPC for CubeSats 
+
+Dominik Beˇ no 1,∗, Patrik Val´ abek 2,∗, Martin Hromˇ c´ ık 1 and Martin Klauˇ co 1
+
+Abstract — This paper presents an online linear model predic-tive control (MPC) framework for slew maneuvers that main-tains star-tracker availability during ground-target tracking. The nonlinear rigid-body dynamics and geometric exclusion constraints are analytically linearized about the current state estimate at each control step, yielding a time-varying linear MPC formulation cast as a standard quadratic program (QP). This structure is compatible with established aerospace flight-software practices and offers a computational profile with lower online complexity than comparable nonlinear MPC schemes. The controller incorporates angular-rate, actuator, and star-tracker exclusion constraints over a receding horizon. Performance is assessed in high-fidelity nonlinear model-in-the-loop simulations using NASA’s ”42” spacecraft dynamics simulator, including a Monte Carlo campaign over varying target geometries and inertia perturbations. 
+
+I. I NTRODUCTION 
+
+A. Motivation 
+
+Low-cost agile spacecraft often operate with limited on-board computation and little sensor redundancy in the At-titude and Orbit Control System (AOCS). In ground-track imaging missions, the spacecraft must continuously reorient to follow a moving target while maintaining payload line-of-sight quality. This applies to optical imagers, push-broom instruments, synthetic aperture radar (SAR), and optical communication systems, where data quality depends on both final attitude error and transient pointing behavior during the maneuver. On many small and medium platforms, attitude determination relies on a single star-tracker because of mass, power, and cost limits. As a result, star-tracker rate and exclusion limits become hard constraints on every retargeting maneuver. The sensor availability is a control constraint rather than an implementation detail. This dependence introduces an inherent rate constraint on every reorientation maneuver. Star-trackers cannot deliver reliable attitude measurements when the angular rate of the instrument exceeds a sensor-specific threshold [1]. Mission-level agility is directly bound by this limit rather than by actuator capability alone. Star-tracker slew rate limits typically range from 1◦ s−1 to 3◦ s−1, depending on sensor generation and operating mode [2]. That is often lower than the maximum angular velocity achievable by actuators on the same satellite. Furthermore, star-tracker blinding arises from the violation of exclusion constraints imposed by bright  
+
+> ∗Both authors, Dominik Beˇ no and Patrik Val´ abek, contributed equally to this work.
+> 1Dominik Beˇ no, Martin Hromˇ c´ ık and Martin Klauˇ co are with the Faculty of Electrical Engineering, Czech Technical University in Prague, Czech Republic.
+> 2Patrik Val´ abek is with the Slovak University of Technology in Bratislava, Slovakia.
+
+extended bodies, most notably Earth’s limb and the Sun. Operating inside both boundaries simultaneously is therefore a necessary condition for continuous, high-quality attitude determination. A further consideration is that reacquisition of a star-tracker fix after loss of lock is uncertain in time and may require a non-negligible recovery interval [2], [3]. For a mis-sion with a tightly scheduled ground-tracking sequence, such delays reduce useful observation time and may compromise data quality entirely. Avoiding loss of lock is therefore a primary control objective. Several solution approaches have been proposed for maneuvers subject to these constraints. The most widely deployed in operational missions is offline guidance. Constraint-satisfying attitude trajectories are computed on the ground, validated, and uploaded to the spacecraft as reference sequences [4], [5]. This approach is deterministic and well supported by flight heritage, but it relies on operator intervention and a ground-to-satellite uplink cycle for every new maneuver. This limits responsiveness to unplanned targets and reduces operational autonomy [6]. Artificial po-tential field methods steer the trajectory away from exclusion zones through repulsive potentials, but without a formal guarantee of constraint satisfaction over a finite horizon [7], [8]. Nonlinear model predictive control can encode the full constraint set and nonlinear dynamics simultaneously. Fast NMPC solvers with exclusion zone handling via penalty functions have been proposed [9], but penalty-based en-forcement provides only soft constraint satisfaction, and the iterative nonlinear program still introduces timing variability that is difficult to certify for fixed-cycle onboard software. Moreover, existing NMPC formulations have targeted rest-to-rest reorientation rather than continuous ground-target tracking with time-varying geometry. None of the reviewed approaches jointly enforces pointing, star-tracker exclusion, angular rate, and actuator constraints in an online feedback loop for continuous target tracking. This paper addresses that gap. 
+
+B. Contribution 
+
+Agile ground tracking under star-tracker availability con-straints remains an open problem for small and medium spacecraft. Single-star-tracker configurations impose a cou-pled pointing and rate constraint on every reorientation maneuver. Recent work confirms this is a binding limitation in both Earth observation [10] and laser communication missions [11]. The main contributions of this paper are:  
+
+> •
+
+A time-varying linear MPC formulation that jointly en-forces angular-rate, actuator, and star-tracker exclusion 
+
+> arXiv:2604.00542v1 [eess.SY] 1 Apr 2026
+
+constraints over a receding horizon, enabling online constraint-aware ground tracking without offline trajec-tory design or operator intervention.  
+
+> •
+
+Analytical linearization of the nonlinear rigid-body dynamics and geometric constraint outputs about the current state estimate at each control step, reducing the online problem to a standard QP.  
+
+> •
+
+A Monte Carlo characterization of the method’s op-erational envelope over varying target geometries and inertia perturbations, identifying the conditions under which the successive linearization preserves constraint satisfaction and providing concrete reliability bounds for mission design. II. P ROBLEM STATEMENT 
+
+Consider a spacecraft in Low Earth Orbit that must continuously reorient to align its instrument boresight to a ground target fixed in the terrestrial frame [10], while preserving star-tracker operability throughout the maneuver. With a single star-tracker, attitude knowledge is contingent on the sensor remaining within its operational envelope. This couples the pointing objective with constraints over the entire maneuver: minimum angular separations of the star-tracker boresight from the Sun and nadir, body angular rate within the star-tracker’s tracking capability, and actuator torque limits. The control objective is to minimize pointing error while satisfying all constraints simultaneously, without relying on precomputed trajectories or ground intervention. 
+
+A. Spacecraft model 
+
+An 8U CubeSat rigid-body model in body frame B, with the Earth-Centered Inertial J2000 frame N as the inertial reference [1], with state x = ( ω⊺, q⊺)⊺, where ω ∈ R3
+
+is the angular-rate state and q ∈ R4 is the unit, scalar-first quaternion state, is considered. The control input is body torque u ∈ R3. The term Lext embeds disturbance torques and the net effects of all moving parts within the spacecraft. Throughout the paper, In denotes the n × n identity matrix and 0m×n denotes the m × n zero matrix. The nonlinear model is then given by 
+
+˙ω = J−1 
+
+> B
+
+(u + Lext − ω × (JBω)) , (1) 
+
+˙q = 12 Q(q)
+
+ 0
+
+ω
+
+
+
+, (2) where JB ∈ R3×3 is the (non-diagonal) inertia tensor. The control input is u and Lext represents disturbance torques. The quaternion kinematics are expressed using the matrix 
+
+Q(q):
+
+Q(q) = 
+
+
+
+q0 −q1 −q2 −q3
+
+q1 q0 −q3 q2
+
+q2 q3 q0 −q1
+
+q3 −q2 q1 q0
+
+ . (3) To express constraints and error metrics, a mapping be-tween the body and inertial frames is required. The fixed body-frame boresight vectors for instrument and star-tracker 
+
+vB 
+
+> ins
+
+and vB
+
+> str
+
+, are related to inertial-frame unit vectors vN
+
+> ins
+
+,
+
+vN 
+
+> str
+
+via the direction cosine matrix (DCM) C(q) : R4 →
+
+R3×3, vB = C(q) vN , where for q = ( q0, q⊺ 
+
+> v
+
+)⊺:
+
+C(q) =  q20 − q⊺ 
+
+> v
+
+qv
+
+ I3 + 2 qv q⊺ 
+
+> v
+
++ 2 q0 [qv ]×, (4) where [qv ]× denotes the skew-symmetric cross-product ma-trix of qv .
+
+B. Geometry description 
+
+For expressing constraints and pointing error, the unit direction vectors (from spacecraft) vN
+
+> trg
+
+(t) (to target), vN
+
+> sun
+
+(t)
+
+(to Sun), and vN
+
+> nadir
+
+(t) (to nadir) are defined. These vectors evolve continuously as the spacecraft orbits and the observa-tion geometry changes. A dedicated software module evalu-ates these vectors over the entire prediction horizon at each flight software step, using ephemeris data and astronomical models [1]. 
+
+Pointing error: The pointing error θerr is defined as the angle between the instrument boresight vB 
+
+> ins
+
+and the target direction rotated into body frame vB
+
+> trg
+
+:
+
+θerr (t) = arccos 
+
+ vB
+
+> ins
+
+⊺
+
+
+
+C(q(t)) vN
+
+> trg
+
+(t)
+
+ 
+
+. (5) Because θerr depends only on the angle between two vec-tors, rotations around the boresight axis leave it unchanged. This residual degree of freedom can be used to satisfy the star-tracker exclusion constraints without degrading pointing accuracy. 
+
+Exclusion zone constraints: To maintain star-tracker op-erability, two hard geometric exclusion constraints are en-forced. The star-tracker boresight vB 
+
+> str
+
+must maintain aminimum angular separation from both the Sun and nadir directions: 
+
+ vB
+
+> str
+
+⊺
+
+
+
+C(q(t)) vN
+
+> sun
+
+(t)
+
+
+
+≤ cos( αexc ,sun ) ,
+
+ vB
+
+> str
+
+⊺
+
+
+
+C(q(t)) vN
+
+> nadir
+
+(t)
+
+
+
+≤ cos( αexc ,nadir ) ,
+
+(6) for all t during the maneuver, where αexc ,sun and αexc ,nadir 
+
+are the exclusion half-angles. 
+
+Operational limits: The satellite’s rotational speed is con-strained not to exceed a maximum angular rate in order to maintain stable star-tracker lock and attitude estimation accuracy: 
+
+−ωmax ≤ ω(t) ≤ ωmax , −umax ≤ u(t) ≤ umax , (7) where, ωmax = ωmax 13×1 is selected according to star-tracker rate capability, and umax is the per-axis actuator torque limit. III. M ODEL PREDICTIVE CONTROLLER DESIGN 
+
+The nonlinear attitude dynamics and geometric constraint outputs from Section II are analytically linearized at each sampling instant, resulting in a time-varying discrete linear model. A Kalman filter with augmented disturbance states provides state and disturbance estimates, and the MPC is implemented in a receding-horizon fashion [12]. A. Model of the Satellite 1) State dynamics: The continuous-time dynamics are linearized about the operating point xlp = ( 0⊺, ˆq⊺)⊺, where 
+
+ˆq is the current quaternion estimate. At zero angular velocity, the continuous-time Jacobians reduce to 
+
+Ac =
+
+ 03×3 03×4
+
+Aqω (ˆ q) 04×4
+
+
+
+, Bc =
+
+ J−1
+
+> B
+
+04×3
+
+
+
+, (8) with state dimension nx = 7 and input dimension nu =3. The block Aqω ∈ R4×3 is the quaternion-kinematics sensitivity 
+
+Aqω (ˆ q) = 12
+
+
+
+−ˆq1 −ˆq2 −ˆq3
+
+ˆq0 −ˆq3 ˆq2
+
+ˆq3 ˆq0 −ˆq1
+
+−ˆq2 ˆq1 ˆq0
+
+ , (9) derived from the quaternion multiplication matrix Q(q). The continuous-time pair Ac, Bc is discretized with exact zero-order hold at sampling period Ts to obtain Ad, Bd. The pair 
+
+Ad, Bd is recomputed at every control step using the latest quaternion estimate. 
+
+2) Geometric output linearization: Using the DCM de-fined in (4), the three scalar geometric outputs are 
+
+ytrg ,k =  vB
+
+> ins
+
+⊺C(qk) vN
+
+> trg
+
+(k), (10a) 
+
+ysun ,k =  vB
+
+> str
+
+⊺C(qk) vN
+
+> sun
+
+(k), (10b) 
+
+ynadir ,k =  vB
+
+> str
+
+⊺C(qk) vN
+
+> nadir
+
+(k). (10c) The first output (10a) drives the pointing objective, while (10b) and (10c) enforce the star-tracker exclusion constraints. Each output depends nonlinearly on q through the direction cosine matrix and is linearized via a first-order Taylor expansion about xlp :
+
+yk ≈ h⊺ 
+
+> k
+
+xk + ck, (11) where hk ∈ Rnx is obtained from the analytical Jacobian and ck = ˆ yk − h⊺ 
+
+> k
+
+xlp is the affine offset, with ˆyk denoting the output evaluated by the nonlinear model at the current linearization point xlp . Because (10) depends solely on q,the entries of hk corresponding to ω are identically zero. The inertial direction vectors vary along the orbit and are assumed known over the prediction horizon from ephemeris propagation, yielding a distinct row h⊺ 
+
+> k
+
+at each step k =0, . . . , N −1, where N denotes the prediction horizon length. 
+
+B. Design of the State and Disturbance Observer 
+
+A time-varying Kalman filter (TVKF) is employed to estimate the state and disturbance channels under model-plant mismatch, similarly to [13]. The state x ∈ Rnx is augmented with two disturbance channels: 
+
+z =  x⊺, d⊺ 
+
+> u
+
+, d⊺
+
+> y
+
+⊺ ∈ Rnz , nz = nx + ndu + ndy , (12) where du ∈ Rndu with ndu = nu = 3 models a persistent torque disturbance acting through the input channel, and 
+
+dy ∈ Rndy with ndy = 3 captures biases on the three geometric outputs (10). Both disturbances follow a random-walk model. The augmented prediction step is 
+
+zk+1 |k = Aaug zk|k + Baug uk + caff , (13) with 
+
+Aaug =
+
+
+
+Ad Bd 00 Indu 00 0 Indy 
+
+ , (14a) 
+
+Baug =
+
+
+
+Bd
+
+00
+
+ , (14b) 
+
+caff =
+
+
+
+(I − Ad)xlp 
+
+00
+
+ . (14c) The input disturbance du enters through the Bd block, capturing unmodeled torques such as environmental distur-bances and unmodeled actuator dynamics. The output distur-bance dy compensates for linearization errors and unmodeled dynamics in the geometric outputs. The measurement vector yk ∈ Rnx+ndy combines the full attitude state (from star-tracker quaternion and gyroscope rates) with the three geometric outputs in raw form: 
+
+yk = ( x⊺ 
+
+> k
+
+, y trg ,k , y sun ,k , y nadir ,k )⊺ , (15a) 
+
+yk = Caug ,k zk + bk, (15b) where 
+
+bk =  0⊺ 
+
+> nx
+
+, c trg ,0, c sun ,0, c nadir ,0
+
+⊺ . (16) The time-varying observation matrix Caug ,k ∈
+
+R(nx+ndy )×nz is 
+
+Caug ,k =
+
+
+
+Inx 0 0
+
+h⊺ 
+
+> trg ,0
+
+0⊺ e⊺
+
+> 1
+
+h⊺ 
+
+> sun ,0
+
+0⊺ e⊺
+
+> 2
+
+h⊺ 
+
+> nadir ,0
+
+0⊺ e⊺
+
+> 3
+
+, (17) where ei denotes the i-th canonical basis vector of Rndy and the subscript 0 indicates the current-step linearization. The upper block directly observes the state, while the lower rows relate the geometric outputs to the augmented state via the current linearization and include the output disturbance. The affine measurement term bk carries the linearization offsets. 
+
+C. MPC design 
+
+The controller is formulated in the standard receding-horizon form in deviation coordinates δxk = xk − xlp , with 
+
+xlp = ( 0⊺, ˆq⊺)⊺. The state ordering is xk = ( ω⊺ 
+
+> k
+
+, q⊺ 
+
+> k
+
+)⊺,i.e., angular rates first and quaternion states second. The decision variable U = ( u⊺ 
+
+> 0
+
+, . . . , u⊺ 
+
+> N−1
+
+)⊺ ∈ RN n u stacks the body-torque inputs over the prediction horizon. The initial condition is set from the TVKF estimate at time t
+
+as δx0 = ˆ x(t) − xlp (t). The optimization problem solved at each sampling instant is 
+
+min    
+
+> U,s
+
+J(U , s) (18a) s.t. δxk+1 = Ad δxk + Bd uk + Bd ˆdu, (18b) 
+
+ytrg ,k = h⊺
+
+> trg ,k
+
+δxk + ¯ ctrg ,k + dy, 1, (18c) 
+
+ysun ,k = h⊺
+
+> sun ,k
+
+δxk + ¯ csun ,k + dy, 2, (18d) 
+
+ynadir ,k = h⊺
+
+> nadir ,k
+
+δxk + ¯ cnadir ,k + dy, 3, (18e) 
+
+− ωmax −sω,k ≤ ωk ≤ ωmax +sω,k , (18f) 
+
+ysun ,k ≤ cos αsun + ssun ,k , (18g) 
+
+ynadir ,k ≤ cos αnadir + snadir ,k , (18h) 
+
+− umax ≤ uk ≤ umax , (18i) 
+
+s ≥ 0, (18j) 
+
+δx0 = ˆ x(t) − xlp (t), (18k) 
+
+k = 0 , . . . , N −1, (18l) where s = (s⊺ 
+
+> ω
+
+, s⊺
+
+> sun
+
+, s⊺
+
+> nadir
+
+)⊺ ∈ RN (3+2) collects slack variables introduced strictly as a feasibility safeguard: they prevent QP infeasibility when the nonlinear trajectory de-parts from the linearized admissible set. The high penalty 
+
+ws = 10 9 in (19) ensures the original constraints are satisfied whenever the linearized feasible set is non-empty. The affine offsets are corrected for the shift by xlp as 
+
+¯ctrg ,k = ctrg ,k + h⊺
+
+> trg ,k
+
+xlp , ¯csun ,k = csun ,k + h⊺
+
+> sun ,k
+
+xlp , and 
+
+¯cnadir ,k = cnadir ,k + h⊺
+
+> nadir ,k
+
+xlp .The cost function combines pointing accuracy, control regularization, and rate smoothness: 
+
+J = 
+
+> N−1
+
+X
+
+> k=0
+
+
+
+wp(ytrg ,k − 1) 2 + ω⊺
+
+> k
+
+Qω ωk
+
++ ∆ ω⊺
+
+> k
+
+Q∆ω ∆ωk + ∆ u⊺
+
+> k
+
+Q∆u ∆uk
+
++ ws
+
+ ∥sω,k ∥2 + s2sun ,k + s2nadir ,k 
+
+ 
+
+,
+
+(19) where wp(ytrg ,k − 1) 2 penalizes the squared deviation of the instrument-target cosine from unity (perfect alignment), 
+
+Qω penalizes angular velocity magnitude, Q∆ω penalizes angular-rate changes with ∆ω0 = ω0 − ωprev and ∆ωk =
+
+ωk − ωk−1 for k ≥ 1, and Q∆u suppresses input changes with ∆u0 = u0 − uprev and ∆uk = uk − uk−1 for k ≥ 1.Here ωprev and uprev denote the measured angular rate and the applied torque at the previous control step, respectively. All slack variables are penalized by the same high weight 
+
+ws to strongly discourage boundary violations while keeping the optimization feasible. For implementation, the problem (18) is condensed to a dense QP by eliminating the predicted states over the horizon, 
+
+min  
+
+> p
+> 12
+
+p⊺P p + g⊺p s.t. Aineq p ≤ b, pmin ≤ p ≤ pmax ,
+
+(20) with decision vector p = (U ⊺, s⊺ 
+
+> ω
+
+, s⊺
+
+> sun
+
+, s⊺
+
+> nadir
+
+)⊺ ∈
+
+RN (nu+3+2) . The Hessian P and linear term g are updated at every control step from the current TVKF estimates. The inequality matrix Aineq encodes the softened angular-rate bounds and exclusion constraints, while the box constraints 
+
+pmin ≤ p ≤ pmax enforce actuator limits on U and non-negativity on all slacks. Only the first optimal input u∗
+
+> 0
+
+is applied, and the procedure repeats at the next sampling instant. IV. N ONLINEAR SIMULATION 
+
+A. Simulation environment 
+
+For the nonlinear simulations, NASA’s ”42” spacecraft high-fidelity dynamics simulator is employed [14]. An 8U CubeSat with two flexible deployable solar panels is config-ured. The environmental disturbance torques for gravity gra-dient, aerodynamic, magnetic dipole, and radiation pressure torques are enabled. Ideal body torques are applied directly to the simulator without control allocation. The true simulated state is provided to the controller, i.e., no gyro, star-tracker, or attitude estimator is modeled. The observer described in Section III-B is part of the flight-software architecture but is not exercised in the present simulations, which use perfect state feedback. Observer validation under realistic sensor noise is left to future work. It is assumed that control torques in all axes can be directly commanded, generated by underlying actuator allocation. The only actuation parameter entering the MPC is the torque saturation bound umax for the given hardware configuration. The guidance and control algorithms are implemented in Python as a prototype of the on-board flight software and are coupled with ”42” in a model-in-the-loop configuration. Reference vectors for nadir, Sun, and target are generated from orbital data and ephemerides. The flight software is executed with a sampling period of Ts = 0.1 s , but the simulation step size is selected as Tsim = 0 .01 s . The MPC at each control step is solved using the Gurobi quadratic programming (QP) solver. 
+
+B. Simulation scenario description 
+
+An 8U Earth-observation CubeSat in a 550 km sun-synchronous orbit (SSO) is considered. The key parame-ters of the nonlinear simulation scenario are summarized in Table I. The payload instrument has a field of view (FOV) corresponding to a 20 km wide ground swath. With a maximum pointing-error tolerance of 1◦, proper image alignment and data quality are ensured. For targets up to 30 ◦
+
+off-nadir, a 1◦ pointing error displaces the imaged footprint by at most 11 km , so the target remains within the instrument FOV. The off-nadir angle is defined as the angle between the target direction vN 
+
+> trg
+
+and the nadir direction vN
+
+> nadir
+
+.                     
+
+> TABLE I SPACECRAFT PARAMETERS
+> Symbol Description Value
+> JBInertia tensor in body frame see (21)
+> vB
+> ins Instrument boresight direction (0 ,0,1) ⊺
+> vB
+> str Star-tracker boresight direction (0 ,0.97 ,−0.23) ⊺
+> αexc ,sun Sun exclusion half-angle 45 ◦
+> αexc ,nadir Nadir exclusion half-angle 89 ◦
+> ωmax Maximum angular rate(per axis) 3◦s−1
+> umax Maximum body torque (per axis) 0.002 N m
+
+The nonlinear simulation run is 200 s long. Each simula-tion is initialized in the same nadir-pointing attitude that is selected such that the star-tracker boresight avoids exclusion zones posed by the Sun and nadir. The spacecraft performs a slew maneuver towards the line-of-sight direction of a fixed ground location corresponding to Prague and then tracks this target until the end of the simulation. The time of closest approach to the target is t = 100 s , at which the off-nadir angle is 26 .7◦.The numerical inertia tensor used in the simulations is 
+
+JB =
+
+
+
+0.1335 −0.0015 0.0045 
+
+−0.0015 0.1545 −0.0225 0.0045 −0.0225 0.1065 
+
+ kg m 2. (21) 
+
+C. Guidance and control approaches 1) Trajectory optimization: The first benchmark approach is obtained by solving a nonlinear optimal control problem (OCP) for the full rigid-body attitude dynamics. The state and input follow the notation of Section II. Over the ma-neuver horizon t ∈ [0 , T f ] with Tf = 200 s , the OCP reads 
+
+min   
+
+> ω(·),q(·),u(·)
+
+Z Tf
+
+> 0
+
+
+
+− (vB
+
+> ins
+
+)⊺C(q(t)) vN
+
+> trg
+
+(t) (22a) 
+
++ u(t)⊺Ru (t)
+
+
+
+dt (22b) s.t. ˙ω(t) = J−1 
+
+> B
+
+(u(t) − ω(t) × (JBω(t))) ,
+
+(22c) 
+
+˙q(t) = 12 Q(q(t)) 
+
+ 0
+
+ω(t)
+
+
+
+, (22d) 
+
+∥q(t)∥2 = 1 , (22e) 
+
+∠ vB
+
+> str
+
+, C(q(t)) vN
+
+> sun
+
+(t) ≥ αexc ,sun , (22f) 
+
+∠ vB
+
+> str
+
+, C(q(t)) vN
+
+> nadir
+
+(t) ≥ αexc ,nadir ,
+
+(22g) 
+
+− ωmax ≤ ω(t) ≤ ωmax , (22h) 
+
+− umax ≤ u(t) ≤ umax , (22i) 
+
+x(0) = x0, (22j) where R = 10 4 I3 is control-effort weighting matrix. The geometric quantities and system dynamics are as defined in Section II. The OCP (22) is transcribed into a nonlinear program (NLP) using a pseudospectral method on a Chebyshev– Gauss–Lobatto (CGL) grid with 40 points. The NLP is solved offline, and the resulting optimal state and input trajectories are represented by CGL polynomial in time [15]. During nonlinear simulation, the on-board flight software evaluates these polynomials every Ts = 0 .1 s . The feed-forward body torque uf f (t), reference quaternion q(t) and rotational speed ω(t) for the inner loop are computed. The inner loop is a state-feedback controller [16]. 
+
+2) Linear MPC: An MPC described in Section III-C was discretized with period Ts = 0 .1 s . The prediction horizon was selected as N = 50 steps. The horizon choice is tightly linked to pointing performance. Increasing N increases lin-earization error over the horizon, thus increasing pointing error. A too-short horizon leads to a more aggressive input profile and an oscillatory pointing response. The objective-function weights used in this nonlinear simulation campaign are summarized in Table II.                 
+
+> TABLE II LINEAR MPC OBJECTIVE -FUNCTION WEIGHTS USED IN SIMULATION
+> (S ECTION III-C). Term in (19) Symbol Value Pointing term weight wp100
+> Angular-rate weight Qω0.05 I3
+> Rate-difference weight Q∆ωI3
+> Input-difference weight Q∆uI3
+> Slack weight (all slacks) ws10 9
+
+3) Naive solution: The third controller, referred to as the naive solution, is based on the quaternion reference-shaper approach from [17] without any optimization-based gover-nor. The same inner-loop state-feedback attitude controller as in the previous subsection is used, but its references are pre-shaped to respect only the angular-rate limits. At each flight-software step, the reference quaternion is computed using the TRIAD method [1], aligning the instrument boresight vB
+
+> ins
+
+with the target direction vN 
+
+> trg
+
+and the star-tracker boresight 
+
+vB 
+
+> str
+
+approximately opposite to the Sun direction vN
+
+> sun
+
+.At each sampling instant k, an unconstrained quaternion reference qref ,k is obtained from the ideal attitude that points the instrument boresight vB 
+
+> ins
+
+towards the ground-target direction vN
+
+> trg
+
+(tk), ignoring exclusion constraints. A rate-limited reference quaternion qlim ref ,k is then generated by spherical linear interpolation (SLERP) between the previ-ously applied limited reference qlim ref ,k −1 and the new uncon-strained reference qref ,k ,
+
+qlim ref ,k = slerp  qlim ref ,k −1, qref ,k , γ k
+
+, (23) where the interpolation factor is chosen as γk =min( αmax /α act , 1) . Here αmax = ωmax Ts is the maximum admissible rotation per sampling period and αact is the ro-tation angle between qlim ref ,k −1 and qref ,k . The corresponding rate reference ωref ,k is obtained from the finite difference of the rate-limited quaternion sequence and used together with 
+
+qlim ref ,k in the inner-loop error computation. This naive controller enforces the angular-rate constraint through reference shaping alone. It does not explicitly ac-count for Sun and nadir exclusion constraints or pointing-error tolerances, providing a baseline for comparison with the proposed MPC-based approach. 
+
+D. Single run results 
+
+The controllers described in the previous section are simulated in the scenario defined in Section IV-B. Figures 1 and 2 show the angular-rate and torque trajectories for all three approaches. Figure 3 shows the instrument and star-tracker boresight directions projected into the inertial frame. Figures 3(b), 3(c), and 3(d) show the star-tracker boresight evolution relative to the time-varying Sun and nadir exclusion −2      
+
+> 0
+> 2
+> ωx [deg/s]
+> −2
+> 0
+> 2
+> ωy [deg/s]
+> 050 100 150 200
+> Time [s]
+> −2
+> 0
+> 2
+> ωz [deg/s] Fig. 1. Angular-rate trajectories with rate limits. Solid blue: Linear MPC. Dashed green: nonlinear optimization. Dotted purple: naive solution. Black dashed lines: rate constraints.
+
+cones. After the transient, the target direction vN 
+
+> trg
+
+is tracked by all controllers. Trajectory optimization exploits the full maneuver horizon, producing smooth control profiles with both exclusion zone constraints active. The linear MPC exhibits a more aggressive input profile due to the shorter prediction horizon. The Sun exclusion zone was not active for this scenario. The larger pointing error of the MPC relative to the trajectory optimization is attributed to linearization errors over the prediction horizon. The naive solution reaches the target fastest during the transient but ignores the exclusion zones entirely. Due to inner-loop controller overshoot, the rotational speed constraint is violated by approximately 3% . Quan-titative single-run performance metrics after the settling is reached are summarized in Table III. Settling time is defined as the first time instant at which the pointing error falls and remains below 1◦ for a continuous window of three seconds. All three approaches tracked the target within the required 
+
+1◦ accuracy, although each followed a different star-tracker boresight trajectory.             
+
+> TABLE III SINGLE RUN PERFORMANCE METRICS
+> Metric Linear MPC Trajectory opt. Naive Mean pointing error [ ◦]0.188 0.031 0.035 Max pointing error [ ◦]0.412 0.110 0.112 Settling time [s] 49.7 53.7 45.4
+
+For the linear MPC controller, the number of QP iterations can be seen in Figure 4. For the trajectory optimization approach, the algorithm took 89 iterations of the NLP solver. −0.002      
+
+> −0.001
+> 0.000
+> 0.001
+> 0.002
+> ux [N ⋅m]
+> −0.002
+> −0.001
+> 0.000
+> 0.001
+> 0.002
+> uy [N ⋅m]
+> 050 100 150 200
+> Time [s]
+> −0.002
+> −0.001
+> 0.000
+> 0.001
+> 0.002
+> uz [N ⋅m]
+> Fig. 2. Body torque trajectories with actuator limits. Solid blue: Linear MPC. Dashed green: nonlinear optimization. Dotted purple: naive solution. Black dashed lines: actuator constraints.
+
+E. Monte Carlo (MC) simulations 
+
+To assess the robustness of the proposed approach with respect to target geometry and parametric uncertainty of JB,an MC campaign is carried out. The nonlinear simulation setup is the same as described in Section IV-B. The MC campaign is run only for Linear MPC, with the unchanged configuration. For each run, a ground target is sampled on the Earth’s sur-face by drawing latitude and longitude so that a wide range of geometries is excited. Only those sampled observations that satisfy two geometric validity conditions are retained: (i) the off-nadir angle between the instrument boresight and the local nadir direction at closest approach is below 30 ◦, and (ii) the observation does not occur during the night. These conditions ensure Sun and nadir exclusion zones for the star-tracker remain applicable. For each MC realization, the moments and products of inertia are perturbed by independent relative variations of up to ±30 % . The perturbed positive definite JB is used for ”42” simulator initialization. The exclusion constraints were active in 97% of the MC runs. In all of them, the exclusion zone, rotational speed, and input constraints were met. Analysis of the pointing error reveals that in 11 out of 100 MC runs, both exclusion zone constraints were simulta-neously active, causing the instrument boresight to drift away from the target. In these 11 runs, the star-tracker exclusion constraints remained satisfied, but the competing geometric demands caused the pointing error to exceed the 1◦ tolerance. These runs represent a known geometric limitation and are excluded from the pointing-error analysis. In the remaining 89 runs, the mean pointing error during the observation (a) Instrument boresight at t =200 s                         
+
+> (b) Star-tracker boresight at t=10 s
+> (c) Star-tracker boresight at t=28 s
+> (d) Star-tracker boresight at t=200 s
+> Fig. 3. Instrument vN
+> ins and star-tracker boresight vN
+> str (expressed in the inertial frame N) visualization during the maneuver. Black point represents the vector direction at the maneuver start, and the cross represents the star-tracker boresight at time t. The black dashed line stands for vN
+> trg . The red set represents the nadir exclusion zone, and the yellow set represents the sun exclusion zone. Solid blue: Linear MPC. Dashed green: nonlinear optimization. Dotted purple: naive solution. 025 50 75 100 125 150 175 200
+> Time [s]
+> 18
+> 19
+> 20
+> 21
+> 22
+> 23
+> 24
+> niter  [-]
+> Fig. 4. Number of QP solver iterations at each control step for the linear MPC controller.
+
+(after transient) remained below 1◦ in every case. In 65 of these runs, the pointing error stayed below 1◦ throughout the entire observation window. In the remaining 24 runs, the pointing error temporarily exceeded the threshold near closest approach. The root cause is the rapid change in target, Sun, and nadir directions in the body frame. It introduces linearization errors over the prediction horizon that transiently degrade pointing accuracy. The results from the MC campaign are shown in the Table IV.             
+
+> TABLE IV MONTE CARLO PERFORMANCE METRICS FOR THE LINEAR MPC
+> APPROACH OVER 89 RUNS WITH NO SIMULTANEOUS EXCLUSION ZONE CONSTRAINTS ACTIVATION .Quantity Mean Maximum Solver iterations [−]19.28 29 Pointing error [◦]0.31 2.95 Settling time [s] 44.0 72.5
+
+V. C ONCLUSION 
+
+This paper presented a time-varying linear MPC frame-work for agile ground-target tracking on CubeSats with a single star-tracker. Analytical linearization of the rigid-body dynamics and geometric constraint outputs about the current state estimate at each control step reduces the online problem to a QP. High-fidelity model-in-the-loop simulations using NASA’s ”42” simulator confirmed that the controller jointly satisfies angular-rate, actuator, and star-tracker exclusion constraints, without precomputed trajectories or ground intervention. In a representative single-run scenario, the MPC achieved sub-1◦
+
+mean pointing accuracy, comparable to an offline nonlinear trajectory optimization while providing online feedback ca-pability that the naive rate-limited baseline lacks. A Monte Carlo campaign over 100 randomized target geometries and inertia perturbations of up to 30% demonstrated robust constraint satisfaction: exclusion constraints were active in 97% of runs and satisfied in all 100. In 11 out of 100 runs, simultaneous activation of both exclusion zones caused sustained pointing drift — a characterized geometric limita-tion of the single-star-tracker configuration. Of the remaining 89 runs, 65 maintained pointing error below 1◦ throughout the observation, while 24 exhibited transient violations near closest approach due to rapid geometry changes. The mean QP iteration count of approximately 19 per control step confirms the computational regularity of the approach. Future work will focus on closing the gap between the presented design and full flight implementation, including integration of realistic gyroscope, star-tracker, and reaction wheel models to validate the observer under hardware-representative conditions. Strategies for detecting and han-dling geometrically infeasible configurations near closest ap-proach will also be investigated. Formal recursive feasibility analysis and timing certification on flight-representative pro-cessors remain open problems toward mission deployment. ACKNOWLEDGMENT 
+
+D. Beˇ no is supported by the Grant Agency of the Czech Technical University in Prague, grant No. SGS25/145/OHK3/3T/13. M. Klauˇ co is supported by the European Union project ROBOPROX (Reg. No. CZ.02.01.01/00/22 008/0004590). P. Val´ abek gratefully acknowledges the contribution of the Scientific Grant Agency of the Slovak Republic under the grants VEGA 1/0239/24 and is supported by an internal STU grant for teams of young researchers and acknowledges the contribution of the EIT Manufacturing – Slovakia – X Fund. REFERENCES [1] F. L. Markley and J. Crassidis. Fundamentals of Spacecraft Attitude Determination and Control . Springer New York, 2014. [2] Tom Dzamba and John Enright. Ground testing strategies for verifying the slew rate tolerance of star trackers. Sensors , 14(3):3939–3964, 2014. [3] Kiduck Kim and Hyochoong Bang. Algorithm with patterned singular value approach for highly reliable autonomous star identification. 
+
+Sensors , 20(2):374, 2020. [4] Mark Karpenko, Julie K. Halverson, Yohannes Tedla, Travis Lippman, Kyaw Han, I. Michael Ross, Michael K. Barker, Mark S. Robinson, Winston Carter, Aaron K. Boyd, G. Wesley Patterson, Colleen M. O’Shea, F. Scott Turner, Ryan T. Poffenbarger, Cornelius J. Dennehy, Tannen VanZwieten, and Aron A. Wolf. Fast attitude maneuvers for nasa’s lunar reconnaissance orbiter: Practical flight application of attitude guidance using birkhoff pseudospectral theory and hamiltonian programming. IEEE Control Systems Magazine , 44(2):26–54, 2024. [5] Emmanuel Sin, Murat Arcak, Sreeja Nag, Vinay Ravindra, Alan Li, and Richard Levinson. Attitude trajectory optimization for agile satellites in autonomous remote sensing constellations. In AIAA Scitech 2021 Forum , page 1470, 2021. [6] Gr´ egory Beaumet, G´ erard Verfaillie, and Marie-Claire Charmeau. Feasibility of autonomous decision making on board an agile earth-observing satellite. Computational Intelligence , 27(1):123–139, 2011. [7] Colin R Mclnnes. Large angle slew maneuvers with autonomous sun vector avoidance. Journal of guidance, control, and dynamics ,17(4):875–877, 1994. [8] Shankar Kulumani and Taeyoung Lee. Constrained geometric attitude control on so (3). International Journal of Control, Automation and Systems , 15(6):2796–2809, 2017. [9] Rohit Gupta, Uroˇ s V. Kalabi´ c, Stefano Di Cairano, Anthony M. Bloch, and Ilya V. Kolmanovsky. Constrained spacecraft attitude control on so(3) using fast nonlinear model predictive control. In 2015 American Control Conference (ACC) , pages 2980–2986, 2015. [10] Sivert Bakken, Marie B Henriksen, Roger Birkeland, Dennis D Langer, Adri¨ enne E Oudijk, Simen Berg, Yeshi Pursley, Joseph L Garrett, Fredrik Gran-Jansen, Evelyn Honor´ e-Livermore, et al. Hypso-1 cubesat: First images and in-orbit characterization. Remote Sensing ,15(3):755, 2023. [11] Jaewook Lim, Bum-Yong Park, and Dong-Hyun Cho. Attitude guidance for constraining star tracker elevation angle during cubesat-to-ground laser pointing. International Journal of Aeronautical and Space Sciences , 26(2):760–772, 2025. [12] James B Rawlings, David Q Mayne, and Moritz M Diehl. Model Predictive Control: Theory, Computation, and Design . Nob Hill Publishing, 2nd edition, 2020. [13] Gabriele Pannocchia and James B Rawlings. Disturbance models for offset-free model-predictive control. AIChE journal , 49(2):426–437, 2003. [14] E. Stoneking. 42: An open-source simulation tool for study and design of spacecraft attitude control systems. Technical report, NASA, 2018. [15] Fariba Fahroo and I Michael Ross. Direct trajectory optimization by a chebyshev pseudospectral method. Journal of Guidance, Control, and Dynamics , 25(1):160–166, 2002. [16] Y. Yang. Spacecraft Modeling, Attitude Determination, and Control Quaternion-based Approach . CRC Press, 2019. [17] Dominik Beˇ no, D´ avid Hriadel, and Juraj Wolf. Rate-limited spacecraft attitude maneuvers with linear reference governor approach. In 2025 25th International Conference on Process Control (PC) , pages 1–6, 2025.
