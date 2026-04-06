@@ -1,0 +1,1601 @@
+Title: ALIVE-LIO: Degeneracy-Aware Learning of Inertial Velocity for Enhancing ESKF-Based LiDAR-Inertial Odometry
+
+URL Source: https://arxiv.org/pdf/2604.02706v1
+
+Published Time: Mon, 06 Apr 2026 00:28:27 GMT
+
+Number of Pages: 18
+
+Markdown Content:
+> 1
+
+# ALIVE-LIO: Degeneracy-Aware Learning of Inertial Velocity for Enhancing ESKF-Based LiDAR-Inertial Odometry 
+
+Seongjun Kim 1, Daehan Lee 2, Junwoo Hong 2, Sanghyun Park 2, Hyunyoung Jo 2, and Soohee Han 3* , Senior Member, IEEE 
+
+Abstract —Odometry estimation using light detection and rang-ing (LiDAR) and an inertial measurement unit (IMU), known as LiDAR–inertial odometry (LIO), often suffers from performance degradation in degenerate environments—such as long corridors or single-wall scenarios with narrow field-of-view LiDAR. To address this limitation, we propose ALIVE-LIO, a degeneracy-aware LiDAR–inertial odometry framework that explicitly en-hances state estimation in degenerate directions. The key con-tribution of ALIVE-LIO is the strategic integration of a deep neural network into a classical error-state Kalman filter (ESKF) to compensate for the loss of LiDAR observability. Specifically, ALIVE-LIO employs a neural network to predict the body-frame velocity and selectively fuses this prediction into the ESKF only when degeneracy is detected, providing effective state updates along degenerate directions. This design enables ALIVE-LIO to utilize the probabilistic structure and consistency of the ESKF while benefiting from learning-based motion estimation. The proposed method was evaluated on publicly available datasets exhibiting degeneracy, as well as on our own collected data. Experimental results demonstrate that ALIVE-LIO substantially reduces pose drift in degenerate environments—yielding the most competitive results in 22 out of 32 sequences. The implementation of ALIVE-LIO will be publicly available 1.
+
+Index Terms —Deep Learning, degeneracy, error-state Kalman filter, LiDAR, simultaneous localization and mapping (SLAM). 
+
+I. I NTRODUCTION 
+
+Reliable localization and mapping are fundamental to au-tonomous robot navigation. To achieve these capabilities, sys-tems have integrated multiple sensors, including cameras, light detection and ranging (LiDAR), inertial measurement units (IMUs), and global positioning systems (GPSs). In particular, LiDAR sensors play a crucial role in accurately capturing the three-dimensional (3D) structure of the environment, thereby enabling reliable localization [1], [2]. Furthermore, integration of LiDAR with an IMU enables robust pose estimation even under highly dynamic motion. However, in environments with limited geometric features, such as long corridors with one 
+
+> 1
+
+S. Kim is with the Department of Electrical Engineering, POSTECH, Pohang 37673, Republic of Korea (e-mails: seongjun4527@postech.ac.kr). 
+
+> 2
+
+D. Lee, J. Hong, S. Park, and H. Jo are with the Department of Conver-gence IT Engineering, POSTECH, Pohang 37673, Republic of Korea (e-mails: daehanlee@postech.ac.kr, junwooh@postech.ac.kr, pash0302@postech.ac.kr and hyunyoungjo@postech.ac.kr, respectively). 
+
+> 3
+
+S. Han is with the Department of Electrical Engineering and Convergence IT Engineering, POSTECH, Pohang 37673, Republic of Korea (e-mails: soohee.han@postech.ac.kr). 
+
+> 1
+
+https://github.com/cocel-postech/ALIVE-LIO 
+
+side open, LiDAR measurements may be insufficient for reli-able perception, leading to a condition of LiDAR degeneracy where localization may fail even with the aid of IMUs [2]. To mitigate the impact of insufficient LiDAR measurements, numerous approaches have been proposed. Some methods focus on fully leveraging LiDAR data [3], [4]; however, these approaches may yield limited performance when LiDAR mea-surements along certain directions are sparse. Alternatively, LiDAR can be fused with other sensors, such as cameras or wheel encoders. Many studies have incorporated cameras into LiDAR–visual–inertial odometry (LVIO) systems to alleviate the aforementioned limitation by minimizing photometric er-rors [5]–[9]. However, LVIO systems remain challenged in environments that are both geometrically and photometrically sparse, which may result in odometry estimation failures. As one type of auxiliary sensor, wheel encoders can also provide velocity information for odometry, but they cannot be applied to drones, handheld devices, humanoid or quadruped robots [10]. Algorithmically, some methods place substantial weight on pose priors to mitigate degeneracy [11]–[14]. These methods detect degeneracy and perform constrained optimization along the degenerate directions, leveraging pose priors provided by sensors such as IMUs and joint encoders. However, reliance on IMU-only systems can be susceptible to bias and noise accumulation, which may hinder the mainte-nance of accurate pose priors over extended periods. Recent advances in deep learning have begun to address the degeneracy issue with data-driven approaches. ININ-LIO [15] mitigates degeneracy by leveraging deep learning to predict relative positions from bias- and gravity-compensated IMU measurements. Specifically, this method directly incorporates the deep-learning-estimated degenerate directions into the state update by fully trusting the model outputs, which can lead to performance degradation when the deep-learning outputs are unreliable. Liao et al. [14] proposed a weighting-based update instead of using them directly. Under degenerate conditions, this method assigns greater weight to the model-based IMU motion prediction according to a heuristic degeneracy ratio, rather than adopting a dynamically principled approach such as Kalman filtering. In other words, the deep-learning outputs are reflected in the state update by considering only the degeneracy information (as illustrated in Fig. 1, top), without explicitly accounting for potential correlations with other state variables, such as bias and gravity, which can result in per-formance degradation in scenarios with persistent degeneracy. 
+
+> arXiv:2604.02706v1 [cs.RO] 3 Apr 2026 2
+
+In this regard, developing LiDAR-inertial odometry (LIO) that more comprehensively integrates deep-learning outputs while accounting for their correlations with other state variables is highly valuable. To more tightly fuse data-driven and model-based LIO techniques, we propose an error-state Kalman filter (ESKF)-based approach that incorporates inertial motion predicted by deep learning from IMU data. Throughout this paper, we refer to the proposed scheme as ALIVE-LIO (degeneracy-Aware Learning of Inertial Velocity for enhancing ESKF-based LiDAR-Inertial Odometry). By restricting state updates to the degenerate directions, ALIVE-LIO maintains accurate estimates along the non-degenerate directions, similarly to ININ-LIO [15]. Specifically, before incorporating learning-based velocity estimates, we first apply constrained optimiza-tion within the conventional LIO step to prevent incorrect state updates and ensure reliable corrections along degener-ate directions [11]–[13], [16]. When degeneracy is detected, learning-based velocity estimates are appropriately weighted and systematically fused into the ESKF, enabling consistent updates of all state components while explicitly accounting for their cross-correlations. In this sense, ALIVE-LIO can be regarded as a strategic integration of a deep neural network into a classical ESKF, designed to compensate for the loss of LiDAR observability. This design allows ALIVE-LIO to fully exploit the probabilistic structure and consistency of the ESKF, while benefiting from learning-based motion estimation. To improve generalization of deep learning, the network outputs are represented in the body frame, following moti-vations from recent inertial odometry (IO) studies [17], [18]. Additionally, by excluding biases and gravity estimates from the LIO system and representing orientation in the body frame, we further enhance generalization performance. For a real-world demonstration, the proposed ALIVE-LIO was integrated with the widely used PV-LIO [19] via ONNX [20] in an online manner, illustrating effective mitigation of prolonged degen-eracy. Notably, our approach offers an effective alternative in environments with limited geometric or photometric features, where obtaining reliable external cues is challenging. In summary, our approach makes the following four key claims: (i) Degeneracy is effectively mitigated across vari-ous platforms operating in degeneracy-prone environments. (ii) The proposed ESKF-based integration of learning-based velocity estimates demonstrates greater robustness than ex-isting heuristic methods that loosely couple data-driven and model-based schemes without explicitly modeling system dy-namics. (iii) In environments that are difficult to perceive, characterized by geometrically and photometrically sparse fea-tures, ALIVE-LIO offers a viable alternative to LVIO systems. (iv) By excluding the LIO-estimated bias and gravity from the neural network inputs, we improve generalization perfor-mance. The following sections, along with our experimental evaluation, support these claims. The remainder of this study is organized as follows. Sec-tion II reviews related work, including degeneracy detection in LiDAR-based odometry, degeneracy-mitigation strategies, and deep-learning–based inertial odometry. Section III presents the ALIVE-LIO pipeline and its key components. Section IV describes the experimental setup and discusses results that support our key claims. Finally, Section V concludes the paper. II. R ELATED WORK 
+
+A. Degeneracy Detection 
+
+LiDAR odometry typically employs the iterative closest point (ICP) algorithm [21]. As noted by Tuna et al. [11] and Zhang et al. [22], LiDAR degeneracy often occurs because of a lack of sufficient constraints in specific directions during the ICP optimization process. For this reason, LION [23] detects degeneracy by performing singular value decompo-sition (SVD) on the Hessian matrix of the ICP objective, where the condition number is computed by comparing the maximum and minimum eigenvalues. Following a similar SVD-based strategy, MM-LINS [24] detects degeneracy us-ing a state covariance matrix obtained as an output of the LIO system rather than the ICP Hessian, by computing its SVD and checking whether the maximum eigenvalue exceeds a predefined threshold over a specified duration. Although these approaches are simple to implement, they have the limitation of considering degeneracy along only a single axis. In other words, they cannot detect degeneracy occur-ring simultaneously along multiple directions. In contrast, X-ICP [11] detects degeneracy along multiple axes by analyzing degeneracy independently along each axis. Specifically, this method projects the normalized Jacobians of points onto the eigenspace, filters them according to magnitude, and then evaluates strong and weak localizability to classify degener-acy along each axis as “NONE,” “PARTIAL,” or “FULL.” Numerous researchers have extended this method to perform degeneracy detection [12], [13], [15], [16]. We also adopted the same degeneracy detection framework in the present study. 
+
+B. Degeneracy Mitigation 
+
+To mitigate degeneracy, numerous approaches have been proposed, which we categorize into four main types. First, additional LiDAR features can be measured. GenZ-ICP [3] addresses the challenge that plane estimation becomes difficult in directions where points are sparse. By combining point-to-point and point-to-plane error metrics, it aims to resolve this issue and demonstrates robust performance, particularly in long-corridor environments. Additionally, COIN-LIO [4] ad-dresses the same by leveraging LiDAR intensity measurements to minimize photometric errors. Second, additional sensors, such as cameras, can be used. Most LVIO methods use camera, LiDAR, and IMU to estimate the pose of a single frame [5]–[7]. In degenerate cases, Lee et al. [8] suggested estimating the pose using only visual and inertial information while excluding LiDAR measurements. The third approach relies on pose priors along degenerate directions after detecting degeneracy. X-ICP [11] performs constrained optimization that imposes hard constraints along degenerate directions, placing greater reliance on pose pri-ors from IMUs and wheel encoders. Additionally, Tuna et al. [12] applied various techniques, including inequality con-straints and regularization. Furthermore, to directly apply con-strained optimization to LIO systems, RELEAD [13] enforces 3
+
+hard constraints within an iterative error-state Kalman filter (IESKF). However, these methods are effective only for short-term degeneracy, because the IMU motion prediction becomes increasingly inaccurate during prolonged degeneracy. As a fourth approach, ININ-LIO [15] applied learning-based IO specifically along degenerate directions. However, this approach directly relies on the deep-learning outputs, which may occasionally impede stable state updates. In contrast, Liao et al. [14] adopted a heuristic weighting strategy rather than directly applying the estimates. However, these two methods consider IMU motion estimation without explicitly accounting for correlations among state variables, which can result in odometry errors during long-term degeneracy. In particular, because ININ-LIO [15] feeds bias- and gravity-compensated IMU measurements into a deep-learning model, insufficient modeling of the correlations among state variables can lead to inaccurate compensation during prolonged degeneracy, thereby undermining the reliability of the learning-based predictions. Motivated by these findings, we propose an ESKF-based state update that tightly fuses data-driven and model-based informa-tion. The corresponding Kalman gain is computed from the combined uncertainties of the deep-learning outputs and the LIO system, enabling consistent and robust state estimation. In addition, degeneracy information is incorporated by projection along the degenerate directions, similar to ININ-LIO [15]. To provide a clear schematic illustration of our approach, we high-light the differences from the aforementioned approaches [14], [15] in Fig. 1. 
+
+C. Deep Inertial Odometry 
+
+Deep learning-based IO can be categorized into three levels: sensor, algorithm, and application [25]. Because the applica-tion level focuses on platform-specific designs, it is outside the scope of this study. At the sensor level, performance is improved through the calibration of measurement errors and noise characteristics. Ori-Net [26] generates calibrated gyroscope signals from raw inputs, whereas AirIMU [27] predicts bias and noise from raw gyroscope measurements and linear accelerations, and subsequently corrects the raw signals. At the algorithm level, inertial positioning is per-formed. TLIO [28] learns 3D location displacements and covariances from gravity-aligned inertial data and fuses them with an extended Kalman filter. Similarly, ININ-LIO [15] utilizes the same outputs while leveraging a transformer-based neural network architecture to improve performance. Further-more, several studies focus on learning inertial positioning through velocity outputs instead of relative positions [17], [18], [29]–[31]. Notably, AirIO [17] enhances generalization by representing outputs in the body frame and additionally encodes orientation to supply extra information to the neural network. Furthermore, by excluding biases and gravity, neural networks are prevented from learning unnecessary elements, which improves their generalization performance. For this reason, some existing methods exclude bias and gravity [15], [18]. TartanIMU [18] assumes constant biases and gravity. ININ-LIO [15] also omits the biases estimated from the LIO system, but assumes gravity to be constant. However, the ￚ+ +
+
+# +++Weighing 
+
+# × Partial State Update   
+
+> Uncertainty
+> Information
+> Degeneracy
+> Information
+> (a) Liao et al. [14]
+
+ￚ+ ×
+
+> Degeneracy
+> Projection
+
+# +
+
+# +++
+
+> Partial State Update
+> (b) ININ-LIO [15] Full State Update
+
+# +
+
+ￚ+ + ×
+
+> Degeneracy
+> Projection
+
+# ×
+
+> Weighing
+
+++
+
+> Compute
+> Kalman Gain
+> Eq. ( 26), ( 27)
+
++ ++             
+
+> (c) Ours Fig. 1. Comparison of state update methods. The state xand its components, such as translation t, velocity vand rotation R, are denoted as (·)LIO ,(·)NN ,and (·)NEW for the LIO state, the neural network state, and the newly updated state, respectively. (a) Degeneracy ratio-based weighted update, (b) Projection onto the degenerate space, (c) Our ESKF-based update. Note that, in contrast to (a) and (b), our approach performs a full state update by leveraging the system uncertainty PLIO and the data-driven uncertainty ΣNN , rather than updating only the velocity.
+
+assumption of constant gravity leads to discrepancies with LIO systems that estimate gravity as part of the state [19], [32], [33]. Therefore, unlike these methods [15], [18], we also omit gravity estimated from LIO, reducing such discrepancies and improving the generalization performance of the neural network. III. D EGENERACY -A WARE LEARNING OF INERTIAL 
+
+VELOCITY FOR ESKF-B ASED LIDAR-I NERTIAL 
+
+ODOMETRY 
+
+A. System Overview 
+
+The pipeline of our method is based on PV-LIO [19], as shown in Fig. 2. Our system consists of two main modules arranged in a sequential pipeline. The first module detects 4Constrained State Update in IESKF Preprocess 
+
+> Forward Propagation
+> Backward Propagation
+> Correspondence Search
+> State Update
+> Degenerate direction
+> Disallowed direction
+> Non -Degenerate direction
+> Degenerate?
+> Degeneracy Detection
+> Log mapping of
+> Rotation
+> Degenerate State
+> Update in ESKF
+> Anti -degenerate State Correction
+> State  Update
+> Degenerate?
+> Map
+> point
+> Normal
+> vector to the
+> plane
+> Plane
+> Centroid of
+> the plane
+> Inertial Buffer Update
+> Downsmapling
+> Compute Residual
+> Degeneracy Projection
+> IMU
+> 100 -400Hz
+> LiDAR
+> 10 Hz
+> Voxel map
+> (Local map)
+> Interpolate
+> Body -frame
+> Velocity Estimation
+
++ × 
+
+> ￚ+Yes
+> No
+> Yes
+> No
+> Fig. 2. Pipeline of ALIVE-LIO. TABLE I NOTATIONS USED IN THIS PAPER
+
+Notation Description  
+
+> W
+
+(·) A vector (·) in the world frame  
+
+> B
+
+(·) A vector (·) in the body frame 
+
+(·)m Measured raw sensor data 
+
+(·)NN Output of the neural network 
+
+bxκ κ-th update of x in IESKF 
+
+δx Error state in IESKF 
+
+x State of x resulting from update 
+
+degeneracy and suppresses its effects within the IESKF, producing an odometry estimate along the non-degenerate directions (upper part of Fig. 2). From this output, the sec-ond module then employs deep learning to correct the state along the degenerate directions (lower part of Fig. 2). In the first module, we begin by performing motion prediction by forward propagation using the IMU. Subsequently, backward propagation is performed for each LiDAR point according to its timestamp, transforming the points into the world frame. In the IESKF, the state is iteratively updated up to κ times or until convergence by minimizing the point-to-plane error through matching each point with the corresponding plane on the local map. To mitigate degeneracy, we detect it at each iteration, and whenever degeneracy occurs, a constrained optimization is performed in the world frame. Once the first module has completed its processing, the accelerometer and gyroscope measurements are compensated for gravity and biases, and the estimated orientation W bR is interpolated to the IMU timestamps, during which K IMU measurements are collected per LiDAR scan. These results are stored in the inertial buffer 
+
+BI . When degeneracy occurs, the velocity in the body frame is predicted using the N data points stored in BI . Specifically, the stored orientations W bR1: N are expressed in the body frame based on the most recently received value W bRN , and are represented as its Lie algebra so (3) , before being fed into the neural network trained for body-frame velocity estimation. The residual between the velocities estimated by the neural network and those estimated by the IESKF is projected onto the degenerate directions in the body frame, which are obtained at the last step of the IESKF and then rotated into the body frame for use. The ESKF then updates the state using the projected residual, thereby mitigating degeneracy. Once odometry estimation is complete, the downsampled LiDAR points are transformed into the world frame and stored in the local map. The state x is defined as 
+
+M ≜ SO(3) × R15 , dim( M) = 18 ,
+
+x = W R⊤ W t⊤ W v⊤ b⊤ 
+
+> g
+
+b⊤  
+
+> aW
+
+g⊤⊤ ∈ M ,
+
+where W R, W t, W v, and W g are the rotation, translation, velocity, and gravity in the world frame, and bg and ba
+
+denote the gyroscope and accelerometer biases, respectively. The coordinates and notations are summarized in Table I. 
+
+B. Deep Learning-Based Velocity Estimation 1) Rationale for Velocity-Based Inertial Estimation: Intu-itively, LiDAR-based odometry may diverge in degenerate scenarios because the corresponding least-squares problem of ICP becomes approximately singular, resulting in large relative translation updates along poorly constrained directions. To investigate this phenomenon, we conducted experiments using PV-LIO [19] in the long corridor scenarios of the GEODE dataset [34], distinguishing between the well-conditioned 
+
+TunnelingTunnel_1 and the ill-conditioned (degener-ate) ShieldTunnel_1 cases. Specifically, the LiDAR-only translational changes are calculated as the difference be-tween the LIO-updated pose W TLIO ∈ SE(3) and the pose 5Well-Cond. Ill-Cond. 
+
+Environment   
+
+> 0.00
+> 0.02
+> 0.04
+> 0.06
+> 0.08
+> Translation [m]
+> (a) 0200 400
+
+Time (s)    
+
+> −40
+> −20
+> 0
+> 20
+> 40
+> 60
+> Velocity (m/s)
+> BvxBvyBvz(b) Fig. 3. Comparison of motion updates. (a) Box plot of the LiDAR-only translational change in well- and ill-conditioned (degenerate) scenarios. (b) Body-frame velocity in the degenerate scenario.
+> W
+
+TIMU ∈ SE(3) predicted from IMU in translation motion, as expressed in ∥(( W TIMU )−1 · W TLIO )trans ∥2. As shown in Fig. 3(a), the actual LiDAR-only translation changes show no substantial difference between the two sequences. This result suggests that, even under degeneracy, numerical instability is not the main source of divergence. The reason for this effect is that Kalman filter–based LIO algorithms incorporate system uncertainty, which serves a role similar to that of a regularization term [35]. Furthermore, the small magnitude of the LiDAR-only translational change suggests that IMU motion predictions drive most pose updates in LIO. This result can be explained by the following formulas [36]: 
+
+ba,i +1 = ba,i , (1)  
+
+> W
+
+vi+1 = W vi + W g∆t + W Ri(B am,i − ba,i ), (2)  
+
+> W
+
+ti+1 = W ti + W vi∆t + 12 
+
+> W
+
+g∆t2
+
+| {z } 
+
+> ∆Wti+1
+> i
+
+. (3) As shown in (1)–(3), the temporal translation ∆W ti+1  
+
+> i
+
+is substantially influenced by a velocity, highlighting the crit-ical importance of accurate velocity estimation. As shown in Fig. 3(b), the body-frame velocity B v is observed to be erroneous in the degenerate scenario. Although this scenario involves forward motion only, B vx occasionally becomes neg-ative, indicating a backward motion. Furthermore, the velocity magnitude appears substantially larger than expected, suggest-ing that error accumulation prevents the IMU from accurately estimating the state alone. Although accurately estimating the bias of an IMU could mitigate this issue, obtaining calibrated bias data for constructing training datasets is challenging [25]. Therefore, we set velocities as the target output, with the expectation that updating them can help stabilize the LIO system. 
+
+2) Input Design Using LIO Outputs: Most learning-based IO methods use W R as ground truth (GT) [17], [28], [37]. In addition, to remove W g in the body frame, it is expressed as W R⊤W g, where W g is set to the well-known constant x y z 
+
+> -2.00
+> -1.50
+> -1.00
+> -0.50
+> 0.00
+> 0.50
+> 1.00
+> 1.50
+> 2.00
+> [m/s 2]
+> W
+
+g
+
+x y z
+
+> -2.00
+> -1.50
+> -1.00
+> -0.50
+> 0.00
+> 0.50
+> 1.00
+> 1.50
+> 2.00
+> [m/s 2]
+
+ba
+
+x y z
+
+> -0.30
+> -0.20
+> -0.10
+> 0.00
+> 0.10
+> 0.20
+> 0.30
+> [deg/s]
+
+bg       
+
+> Fig. 4. Distribution of gravity Wg, acceleration bias baand gyro bias bg
+> estimated by the LIO system. The z-component of gravity is shown after removing the well-known constant magnitude.
+
+9.81 m/s 2 [15], [18]. However, because many LIO systems do not know the initial roll and pitch, the rotation of the starting frame is set to the identity [19], [32], [33]. W g is initialized by remaining stationary for a few seconds and taking the mean value, which is then used as part of the state for subsequent updates. Moreover, IMUs can introduce biases, and if these are incorporated, the neural network would need to learn the bias across various scenarios, which inevitably degrades generaliza-tion performance. As shown in Fig. 4, for 50 sequences (the number of training and evaluation sequences listed in Table S2 of the Supplementary Material), the biases and gravity estimated by the LIO system at stationary states (start and end frames) are distributed quite variably. Therefore, to improve generalization, we exclude the gravity and biases estimated by the LIO system during neural network training. Additionally, AirIO [17] represents the orientation in the world frame, which introduces a mismatch with other inputs expressed in the body frame. Thus, we represent the body-frame orientations relative to the last frame of BI . Our neural network takes inputs that are preprocessed from the measurements stored in BI as follows:  
+
+> B
+
+ai = B am,i − bba,i + W bR⊤ 
+
+> i W
+
+bgi, (4)  
+
+> B
+
+wi = B wm,i − bbg,i , (5)  
+
+> B
+
+ξi = Log( W bR⊤ 
+
+> N W
+
+bRi), (6) where i indexes each sequential data point ( i = 1 , 2, . . . , N ), and Log : SO(3) → so (3) maps a rotation matrix to its cor-responding Lie algebra representation. Additionally, because the LIO system updates at 10 Hz and the IMU operates at a higher frequency, W bR is interpolated to align with the IMU measurement. Gravity and the biases are excluded from interpolation because they remain stable over short intervals. 
+
+3) Learning Framework for Velocity-Based Inertial Esti-mation: We adopted the neural network architecture from AirIO [17], which leverages bi-GRUs to learn temporal de-pendencies in the time-series data. The network is designed to output the body-frame velocity and its covariance, using the 6
+
+following loss function: 
+
+(B vNN  
+
+> 1: M
+
+, σNN  
+
+> 1: M
+
+) = fθ (B a1: N , B w1: N , B ξ1: N ), (7) 
+
+L = 1
+
+M
+
+> M
+
+X
+
+> j=1
+
+(LHuber ,j + λC LC,j ), (8) 
+
+LHuber ,j =
+
+( 12 ∥ev,j ∥22 if ∥ev,j ∥2 < δ δ(∥ev,j ∥2 − 12 δ) otherwise , (9) 
+
+LC,j = e⊤ 
+
+> v,j
+
+(ΣNN  
+
+> v,j
+
+)−1ev,j + ln (det ΣNN  
+
+> v,j
+
+), (10) where M is the number of sequential outputs, λC is ascaling factor, the j-th velocity error is defined as ev,j = 
+
+> B
+
+vGT  
+
+> j
+
+− B vNN  
+
+> j
+
+, and the corresponding covariance is given by 
+
+ΣNN  
+
+> v,j
+
+= diag( (σNN  
+
+> j
+
+)2). The M outputs are predicted at equal intervals over the total time spanned by the N frames, such that the timestamp of the last output frame coincides with that of the last input frame. Furthermore, the intervals between GT frames are relatively long across datasets; for instance, GEODE and UrbanNav provide GT at 1 s intervals [34], [38], [39]. Even with interpolation between these intervals to align the GT with the IMU timestamps, accurately capturing the motion is challenging. Therefore, we trained the network using the LIO’s outputs as GT in well-conditioned environments, which provide measurements at 0.1 s intervals. By representing all inputs and outputs in the body frame, the influence of accumulated drift errors was reduced. 
+
+C. Degeneracy Analysis 
+
+As in previous studies [11], [13], we incorporate the world-frame degeneracy into the IESKF. However, during the state update of the ESKF, we consider only the degenerate direc-tions expressed in the body frame. Moreover, as discussed in Section III-B, inaccuracies in velocity estimation are closely related to degeneracy in the translational component; therefore, the detection is performed exclusively on the translational part. 
+
+1) Degeneracy Detection in the World Frame: Here, we follow the X-ICP approach [11]. The Jacobian W J for the translation part in ICP represents the force along the corre-sponding direction and can be formulated as  
+
+> W
+
+J = W n1 ... W np .... W nNpts 
+
+⊤ ∈ RNpts ×3, (11) where W np denotes the normal vector, and Npts is the number of points in the scan matched with planes in the map, with 
+
+p = 1 , 2, . . . , N pts . The corresponding Hessian is given by  
+
+> W
+
+H = W J⊤W J. Because W H is a real symmetric matrix, performing SVD on it yields the following decomposition:  
+
+> W
+
+H = W V(W Λ)W V⊤, (12)  
+
+> W
+
+Λ = W V⊤(W H)W V
+
+= W V⊤(W J⊤W J)W V (13) 
+
+= ( W JW V)⊤(W JW V),
+
+where W Λ = diag( W λ1 W λ2 W λ3
+
+) and W V =W v1 W v2 W v3
+
+ represent the eigenvalues and eigen-vectors, respectively. The eigenvalues can be expressed as  
+
+> W
+
+λq = PNpts 
+
+> p=1
+
+ W n⊤  
+
+> pW
+
+vq
+
+2 for q ∈ { 1, 2, 3}, indicating that each point contributes to the q-th eigenvalue by projecting into the eigenspace and summing the squared projections [16]. In X-ICP [11], instead of using this method directly, the contribution of W np to the translation component is em-phasized to represent strong and weak localizability. Instead of squaring W JW V, W np is projected into the eigenspace, and the magnitude of each element is used to represent its contribution to localizability. To begin, we define  
+
+> W
+
+L = ( W JW V)|·| ∈ RNpts ×3, (14) where (·)|·| denotes the element-wise absolute operation.  
+
+> W
+
+L(p, q ) means the ( p, q)-th entry of W L in (14). Subse-quently, two localizability vectors parametrized with θc are obtained through a filtering and pointwise summation process as follows:  
+
+> W
+
+L′
+
+> c
+
+(q) = 
+
+> Npts
+
+X
+
+> p=1
+
+1(W L(p, q ) > cos( θc)) · W L(p, q ), (15) where 1(·) is the indicator function, which equals 1 if the argument is true and 0 otherwise, and c ∈ {w, s }, with 
+
+w and s denoting “weak” and “strong”, respectively. The user-defined thresholds cos ( θw) and cos ( θs) are applied to obtain strong and weak localizability vectors by performing degeneracy categorization. Although the original method [11] classifies degeneracy as “FULL,” “PARTIAL,” or “NONE,” we adopt a binary classification between well-conditioned and degenerate cases, similar to [22]. The classification is defined as  
+
+> W
+
+D(q) = 
+
+(
+
+“Degenerate” if W L′
+
+> w
+
+(q) < τ w ∧ W L′
+
+> s
+
+(q) < τ s,
+
+“Well-Cond.” otherwise ,
+
+where τw and τs are user-defined thresholds, and ∧ denotes the logical AND operator. Under this approach, the temporal frame is considered degenerate if any q exists such that  
+
+> W
+
+D(q) == “Degenerate”. Moreover, in this case, W vq repre-sents the degenerate direction, which the IESKF subsequently uses to perform constrained optimization along the degenerate direction (see Section III-D and (21)–(23)). To explicitly denote the collection of all degenerate components, we define the degenerate index set as 
+
+QD = q W D(q) == “Degenerate” }. (16) 
+
+2) Degeneracy Formulation in the Body Frame: By rotating  
+
+> W
+
+np in the body frame and constructing the corresponding Jacobian B J, degeneracy can be detected in the body frame.  
+
+> B
+
+J is given as  
+
+> B
+
+J = B n1 ... B nNpts 
+
+⊤
+
+= W R⊤W n1 ... W R⊤W nNpts 
+
+⊤ (17) 
+
+= W JW R,7
+
+where (W R⊤W np)⊤ = W n⊤ 
+
+> p W
+
+R and the Hessian B H in the body frame can be expressed as  
+
+> B
+
+H = B J⊤B J
+
+= ( W R⊤W J⊤)( W JW R) (18) 
+
+= W R⊤W HW R.
+
+The eigenvectors in the body frame can be obtained through a similar transformation relating W H and B H via W R: 
+
+> B
+
+vq = W R⊤W vq , B λq = W λq . (19) This means that the degenerate directions in the world and body frames are related by a simple rotation. Furthermore, because B λq = W λq , the localizability contributions remain unchanged. This relation can be expressed mathematically as  
+
+> B
+
+JB V = ( W JW R)( W R⊤W V)= W J W RW R⊤
+
+| {z } 
+
+> I3
+> W
+
+V = W JW V, (20) demonstrating that the magnitude of the influence is the same in both frames. Accordingly, the degenerate index set QD is frame-invariant, i.e., it takes the same form in both the world and body frames. In this respect, B V and QD are employed to project the residual between the velocities estimated by the deep learning and the LIO system onto the degenerate directions expressed in the body frame (see Section III-D and (24)–(27)). 
+
+D. Degeneracy-Aware Full State Estimation 
+
+As mentioned in Section III-A, our system mitigates the effects of degeneracy through a structured sequence of op-erations. First, at each iteration of the IESKF, degeneracy is detected as described in Section III-C. Then, when degener-acy occurs, constrained optimization is performed within the IESKF along the degenerate directions to maintain stability. Finally, after the IESKF terminates, a state update using deep-learning-based velocity estimates is applied, ensuring robustness under degenerate conditions. 
+
+1) Anti-Degeneration in LiDAR Inertial Odometry: We detect degeneracy at each iteration to perform constrained optimization within the IESKF. The reason for performing constrained optimization is that LiDAR provides insufficient information along degenerate directions [11]. Without apply-ing such constrained optimization, repeatedly updating the state along the degenerate directions would result in unac-ceptably large cumulative errors. Updating only along non-degenerate directions corresponds to enforcing the following equality constraints: 
+
+"W vκ⊤
+
+> q
+
+...
+
+#| {z }
+
+> Cκ∈Rmt×3, q ∈QD
+
+δW t = 0mt×1, (21) where δW t denotes the translational part of δx, and mt de-notes the number of degenerate directions in the translational space. Then, by applying Lagrange multipliers, constrained optimization can be formulated efficiently. The resulting state update is performed as follows: 
+
+Gκ = bPtt Cκ⊤(Cκ bPtt Cκ⊤)−1 ∈ R3×mt , (22) 
+
+δtκ+1  
+
+> κ
+
+← δtκ+1  
+
+> κ
+
+⊟ (GκCκδtκ+1  
+
+> κ
+
+),
+
+bxκ+1 = bxκ ⊞ δxκ+1  
+
+> κ
+
+, (23) where bPtt is the translational block of the state covariance matrix bP, and ⊞/⊟ are the state update operators defined in [32]. The error state at the κ-th iteration is defined as 
+
+δxκ+1  
+
+> κ
+
+= bxκ+1 ⊟bxκ, with δtκ+1  
+
+> κ
+
+denoting its translational part, and ← indicating an in-place update. Although the constrained optimization suppresses erroneous translational updates caused by insufficient LiDAR information, it does not fully resolve velocity estimation errors along the degenerate directions. For this reason, we employ a deep-learning-based velocity estima-tion method to update states along the degenerate directions, thereby avoiding reliance on corrupted LiDAR information. 
+
+2) Degeneracy-Aware State Correction with Learning-Based Velocity Estimation: After all iterations of the IESKF are completed, the state bxκ+1 is obtained, and W bRκ+1 is added to BI , followed by interpolation according to the IMU timestamps. For simplicity of notation, we represent bxκ+1 
+
+as bx in this section. Subsequently, using the accumulated N
+
+frames, the neural network predicts the velocities, whose M -th output is then incorporated into the ESKF to update the state. Although a time difference corresponding to the LiDAR scan interval exists, it is limited to 2—9 ms because the IMU operates at 100—400 Hz and the difference is thus considered negligible. We define the measurement model along degenerate directions as follows:  
+
+> B
+
+VD = X 
+
+> q∈QD
+> B
+
+vq B v⊤ 
+
+> q
+
+, (24) 
+
+eD = B VD (B vNN  
+
+> M
+
+− W bR⊤W bv), (25) where B vq is obtained by rotating W vq , obtained in the final iteration of the IESKF step, in the body frame, and B VD
+
+denotes the projection matrix onto the body-frame degenerate space. Consequently, the error state can be defined in the degenerate subspace. Moreover, the Jacobian matrix JD is computed as 
+
+JD = B VD
+
+hW bR⊤[W bv]× 03×3 W bR⊤ 03×9
+
+i
+
+∈ R3×18 ,
+
+where [·]× denotes the skew-symmetric operator. Furthermore, we need to determine the measurement noise 
+
+Σv . Because the state covariance P is affected by the scale of LiDAR measurement and IMU process noise, we consider 
+
+Σv = σv ΣNN  
+
+> v,M
+
+with a scaling factor σv . Subsequently, this measurement noise is projected onto the degenerate space. However, B VD is singular because of its rank deficiency, which leads to problems when computing its inverse in the ESKF. To prevent singularity, an additional term is introduced in the non-degenerate subspace, following the Levenberg— Marquardt regularization scheme: 
+
+ΣD = B VD Σv B V⊤D +( I3 −B VD )( σI3)( I3 −B VD )⊤, (26) where, because B VD is involved with the body-frame degener-8
+
+Algorithm 1: Degenerate-Aware State Estimation 
+
+input : Propagated state bx; propagated covariance bP;voxelized scan V; local voxel map M;convergence threshold ϵ; inertial buffer BI ;newly measured IMU B am, 1: K , B wm, 1: K .
+
+output: Updated state x; updated covariance P.
+
+// Constrained State Update in IESKF. (Upper module in Fig. 2)  
+
+> 1
+
+bx0 ← bx; κ ← − 1; 
+
+> 2
+
+repeat  
+
+> 3
+
+κ ← κ + 1 ; 
+
+> 4
+
+{W zκp , W Jκp , Rκp }Npts  
+
+> p=1
+
+←
+
+ComputePointToPlane (V, M, bxκ) 
+
+> 5
+
+Kκ ←
+
+W Jκ⊤
+
+Rκ−1 W Jκ + bP−1 −1 W Jκ⊤Rκ−1 
+
+> 6
+
+δxκ+1  
+
+> κ
+
+← −KκW zκ−(I−KκW Jκ)( Aκ)−1(bxκ ⊟bx) 
+
+> 7
+
+(W D, W V) ← DetectDegeneracy (W Jκ) 
+
+> 8
+
+if any( W D(q) == “Degenerate” ) then  
+
+> 9
+
+δxκ+1  
+
+> κ
+
+←
+
+AntiDegeneration (δxκ+1  
+
+> κ
+
+, W V, bP) 
+
+> 10
+
+end  
+
+> 11
+
+bxκ+1 ← bxκ ⊞ δxκ+1  
+
+> κ
+> 12
+
+until ∥δxκ+1  
+
+> κ
+
+∥ < ϵ  
+
+> 13
+
+bx ← bxκ+1 ; bP ← (I − Kκ W Jκ) bP
+
+// Degenerate State Update in ESKF. (Lower module in Fig. 2)  
+
+> 14
+
+(B a1: K , B w1: K ) ←
+
+CompensateIMU (B am, 1: K , B wm, 1: K , bx)  
+
+> 15 W
+
+bR1: K ← Interpolate (bx, BI ) 
+
+> 16
+
+UpdateBuffer (B a1: K , B w1: K ,W bR1: K , BI ) 
+
+> 17
+
+if any( W D(q) == “Degenerate” ) then  
+
+> 18
+
+(B a1: N , B w1: N , W bR1: N ) ← B I  
+
+> 19 B
+
+ξ1: N ← Log( W bR⊤ 
+
+> N W
+
+bR1: N ) 
+
+> 20
+
+(B vNN  
+
+> M
+
+, σNN  
+
+> M
+
+) ← fθ (B a1: N , B w1: N , B ξ1: N ) 
+
+> 21
+
+(x, P) ← ESKF (B vNN  
+
+> M
+
+, σNN  
+
+> M
+
+, bx, bP, W D, W V) 
+
+> 22
+
+else  
+
+> 23
+
+x ← bx, P ← bP; 
+
+> 24
+
+end  
+
+> 25
+
+return x, P.ate space, the projection matrix onto the non-degenerate space can be expressed as I3 − B VD , and we set σ = σv . Then, the ESKF updates the state as follows: 
+
+K = bPJ ⊤D (JD bPJ ⊤D + ΣD )−1,
+
+x = bx ⊞ KeD ,
+
+P = ( I − KJ D ) bP.
+
+(27) In this way, all state components are updated by considering the uncertainties from both the system and the neural network, thereby alleviating the effects of degeneracy and ensuring system stability. The overall degeneracy-aware procedure de-scribed here is summarized in Algorithm 1, and further details of the LIO pipeline can be found in [19], [33]. IV. P ERFORMANCE EVALUATION 
+
+Experiments were conducted to demonstrate the effective-ness of the proposed method and validate our key claims: (i) Our approach shows strong robustness across various platforms and degenerate environments, outperforming con-ventional LiDAR-based methods, including those designed for degeneracy robustness. (ii) By integrating deep-learning–based velocity into the ESKF, consistent updates of the full state variables are achieved, resulting in enhanced performance. (iii) Our method can serve as an alternative under geomet-rically and photometrically sparse conditions. (iv) By utilizing state estimates from LIO, the generalization capability of the neural network is improved. Additional evaluations, including detailed neural network performance and real-time analysis, are provided in the Sup-plementary Material A and B. 
+
+A. Experimental Setup 
+
+Following AirIO [17], we utilized IMU data collected over 5 s. Datasets using a Livox LiDAR sensor cover various platforms, including handheld devices, drones, and unmanned ground vehicles, with a 200 Hz built-in IMU, resulting in 
+
+N = 1000 . Other datasets were collected using cars as platforms, equipped with onboard IMUs operating at 100, 200, or 400 Hz, with N = 500 , 1000 , or 2000 , respectively. In addition, M was determined by the neural network, with 
+
+M = 56 , 112 , or 223 for N = 500 , 1000 , or 2000 ,respectively. The parameters of our system are summarized in Table S4, and except for σv , all other parameters were set to the same values as in [11], [17]. To train the neural network, we used open datasets and our private datasets, and GT was constructed in well-conditioned environments using PV-LIO, as mentioned in Section III-B. Furthermore, datasets collected with a Livox LiDAR sensor were used to train a single model. For cars, a separate model was trained for each dataset because of their limited degrees of freedom (DoF) and dependence on the IMU mounting pose. To evaluate the training performance, a subset of sequences from the well-conditioned dataset was used as the evaluation set, and the entire well-conditioned dataset was used to train the model before its deployment in our LIO framework. Additionally, we constructed additional degeneracy datasets using our handheld device. Our training, evaluation, and degeneracy datasets are summarized in Table S2. To evaluate the neural network, we used the absolute velocity error (AVE) and absolute translation error (ATE) as evaluation metrics. To evaluate the LIO system, datasets with GT were assessed using ATE via EVO [41]. For vehicle trajectories, the results were projected onto the X-Y plane. For datasets without GT, including our private datasets, the end-to-end error was used as the evaluation metric. Details of our handheld setup can be found in [42]. 
+
+B. Robustness under Degeneracy on Various Platforms 
+
+We evaluated the performance of the proposed method and comparison baselines to support the claim that our approach effectively mitigates degeneracy and enhances the robust-ness of the LIO system under various degenerate scenarios. 9            
+
+> TABLE II PERFORMANCE OF LIDAR-B ASED ODOMETRY ON DEGENERATE SCENARIOS (ATE ↓[M]). ×INDICATE THAT THE STATE ESTIMATION DIVERGED ,AND
+> –DENOTES THAT THE AVERAGE WAS NOT COMPUTED DUE TO DIVERGENCE IN AT LEAST ONE SEQUENCE (EXCLUDING SEQUENCES WHERE ALL ALGORITHMS DIVERGED ).
+
+Sequence 
+
+GenZ-ICP [3] CV w/ X-ICP [11] FAST-LIO2 [33] D-LIO [40] PV-LIO [19] PV-LIO w/ CO [13] Ours w/o CO Ours 
+
+Car 
+
+vehicle_highway_0 × × 1085.34 943.08 × × 377.58 375.75 
+
+vehicle_tunnel_0 510.43 × 2378.02 × 387.25 403.56 56.64 53.05 
+
+HK-CHTunnel 730.45 710.53 656.58 × × × 153.59 100.85 
+
+HK-Whaompoa 2.48 × 5.63 6.99 5.22 5.59 4.23 3.87 
+
+Urban_Tunnel_1 × × × × × × × ×
+
+Urban_Tunnel_2 383.59 × 436.84 258.46 137.27 127.86 106.41 104.50 
+
+Urban_Tunnel_3 344.55 × 1164.30 × 81.92 86.79 84.81 88.21 
+
+Bridge_2 738.79 539.65 1323.73 × 137.15 134.62 111.54 109.44 
+
+Bridge_3 373.40 × 572.04 382.29 × × 109.94 110.49 Average – – – – – – 125.59 118.27 Others 
+
+ShieldTunnel_1 × × 89.88 × × × 12.67 12.69 
+
+ShieldTunnel_2 × × 100.86 196.38 × × 21.60 22.95 
+
+ShieldTunnel_3 × × 72.64 134.60 × × 12.68 10.73 
+
+ShieldTunnel_4 × × × × × × 21.84 21.98 
+
+ShieldTunnel_5 × × × × × × 6.55 8.73 
+
+ShieldTunnel_6 × × 37.08 × × × 6.40 4.24 
+
+FlatGroundSmooth × × × × × × × ×
+
+FlatGroundAggressive × × × × × × × ×
+
+Average – – – – – – 13.62 13.55 GenZ-ICP Start FAST-LIO2 End PV-LIO Ours Ground Truth −1000 0 1000                        
+
+> 0
+> 1000
+> 2000
+> -25.0
+> 0.0
+> 0.0
+> 25.0
+> 0500
+> 0.0
+> 5.0
+> (a) vehicle_tunnel_0 −1000 01000
+> −2000
+> −1000
+> 0
+> -10.0
+> 0.0
+> 10.0
+> -25.0
+> 0.0
+> 25.0
+> 0250
+> -5.0
+> 0.0
+> 5.0 (b) HK-CHTunnel 02000 4000
+> −1000
+> 0
+> 1000
+> 2000
+> 3000
+> 0.0
+> 50.0
+> -50.0
+> 0.0
+> 0200 -5.0
+> 0.0
+> 5.0 (c) Urban_Tunnel_3 −4000 −2000 0
+> 0
+> 2000
+> 4000
+> 0250 (d) Bridge_2
+> Fig. 5. Vehicle motion: Estimated trajectory visualization under degenerate conditions (X–Y plane in meters). The symbols △and ☆denote the start and end points, respectively, of each trajectory.
+
+For comparison, we adopted several LIO algorithms: FAST-LIO2 [33] and PV-LIO [19], which employ the point-to-plane error metric; and D-LIO [40], which is based on the Generalized ICP. Furthermore, we also included algorithms designed to be robust to degeneracy, namely GenZ-ICP [3] and X-ICP [11]. Specifically, X-ICP relies on a joint encoder and IMU to obtain legged odometry as the pose prior, which limits its applicability across different platforms. For fair comparison, we re-implemented GenZ-ICP to use only the point-to-plane error metric, performing degeneracy detection and constrained optimization in the same manner as X-ICP. In this implementation, a constant velocity (CV) model was adopted as the pose prior, and we refer to this method as CV w/ X-ICP. COIN-LIO [4] is not suitable for narrow field of view (FOV) LiDARs such as the Livox Avia and was therefore not included in the comparison. Furthermore, constrained optimization (CO), as formulated in (21)–(23), was applied in PV-LIO. To analyze the impact of CO, we also evaluated a variant of our system without CO. 
+
+1) Evaluation on Car-Mounted Platforms: As listed in the upper part of Table II, our method demonstrated the best performance on the car dataset, showing the smallest errors in all but two sequences. Furthermore, Fig. 5 shows that the endpoint estimated by our method was closer to GT than those produced by the other methods. In contrast, the ICP algo-rithms rapidly failed in odometry estimation once degeneracy occurred. Although the LIO algorithms relied on IMU motion, their estimates either diverged or lagged as errors accumulated over time. In contrast, our approach successfully navigated these challenging scenarios. Furthermore, our method achieved enhanced performance on most datasets compared to the version without CO. We observed that, in these scenarios, 10         
+
+> TABLE III PERFORMANCE OF LIDAR-B ASED ODOMETRY ON DEGENERATE SCENARIOS (E ND -TO -E ND ERROR ↓[M]).
+
+Sequence 
+
+GenZ-ICP [3] CV w/ X-ICP [11] FAST-LIO2 [33] D-LIO [40] PV-LIO [19] PV-LIO w/ CO [13] Ours w/o CO Ours 
+
+degenerate_seq_0 × 23.66 7.53 8.89 5.11 5.89 2.26 2.04 
+
+degenerate_seq_1 10.15 27.60 6.14 37.27 3.50 1.98 0.01 0.10 
+
+degenerate_seq_2 × 11.36 19.32 × 12.59 9.03 1.38 0.38 
+
+LiDAR_Degenerate 11.5 × 6.09 6.03 0.02 2.07 0.01 0.64 
+
+Bright_Screen_Wall × × 0.02 × 0.03 0.69 2.01 1.26 
+
+CBD_Building_2 17.66 × 1.95 × 0.01 1.66 0.02 0.01 
+
+CBD_Building_3 32.49 × 11.86 × 0.01 0.01 0.83 0.01 
+
+HIT_Graffiti_Wall_1 × × 6.71 × 0.10 0.20 32.87 19.52 
+
+HIT_Graffiti_Wall_2 × × × × × 83.13 11.50 11.76 
+
+HIT_Graffiti_Wall_3 × × × × × × 17.84 17.08 
+
+HIT_Graffiti_Wall_4 × × 3.01 × 1.15 1.15 0.42 5.67 
+
+HKU_Cultural_Center_1 × × 0.09 × 0.02 0.02 0.03 0.03 
+
+HKU_Cultural_Center_2 15.68 × 5.50 × 0.03 0.03 0.90 0.88 Average – – – – – – 5.40 4.57 
+
+other vehicles acting as dynamic obstacles can introduce erro-neous constraints, leading to backward or forward drift in the estimated position. By preventing such incorrect updates, the incorporation of CO contributed to the observed performance improvement. Notably, the impact was most pronounced in 
+
+HK-CHTunnel , leading to a considerable performance gap of 52.74 m. However, in specific sequences, although streetlamps could serve as useful geometric features, CO neglects them, resulting in incorrect state updates and a noticeable perfor-mance decline of 3.4 m, as seen in Urban_Tunnel_3 . In some sequences, other methods showed better performance: GenZ-ICP and PV-LIO exhibited the best performance in 
+
+HK-Whaompoa and Urban_Tunnel_3 , respectively. In the former sequence, the degeneracy duration was short, and the presence of streetlamps provided constraints, resulting in GenZ-ICP achieving the best performance. In the latter sequence, the vehicle passed through the tunnel with minimal variation in velocity. This result was attributed to the accurate horizontal orientation estimates in this sequence, resulting in minimal accumulation of gravity-induced errors in the acceleration measurements. 
+
+2) Evaluation on Handheld Platforms: As listed in the lower part of Table II, during the handheld traversal of 
+
+ShieldTunnel_1-6 , all algorithms except FAST-LIO2 and D-LIO experienced divergence. In particular, the ICP methods were affected by the rounded tunnel geometry, resulting in continuous roll rotation. Although FAST-LIO2 and D-LIO did not diverge, they produced backward state estimates even during forward motion, leading to erro-neous odometry. By contrast, our approach substantially mit-igated the effects of degeneracy in these sequences. No-tably, ShieldTunnel_4 involved handheld shaking during traversal, and ShieldTunnel_5 included motions along the tunnel side wall, demonstrating that our method effectively alleviates degeneracy not only during forward motion but also under diverse motion conditions. Although our method mitigated some challenging scenarios, it still failed to prevent odometry divergence in some scenarios. In Urban_Tunnel_1 , the erroneous detection of degeneracy PV-LIO Ours R3LIVE/FAST-LIVO2 Neural Network Degenerate Region Trajectory  Velocity 0 10 
+
+−5
+
+0
+
+5
+
+10 -1.0 
+
+0.0 
+
+1.0 
+
+-1.0 
+
+0.0 
+
+1.0 
+
+0 50 100 -1.0 
+
+0.0 
+
+1.0  
+
+> (a) degenerate_seq_2
+
+−100 0 100 
+
+−150 
+
+−100 
+
+−50 
+
+0
+
+-1.0 
+
+0.0 
+
+1.0 
+
+-1.0 
+
+0.0 
+
+1.0 
+
+80 100 -1.0 
+
+0.0 
+
+1.0       
+
+> (b) HIT_Graffiti_Wall_1
+> Fig. 6. Handheld motion: Estimated trajectory and velocity visualization on degenerate cases. The left column shows the trajectory (X–Y plane in meters), and the right column presents the body-frame velocities (velocity in meters per second over time in seconds). The symbols △and ☆denote the start and end points, respectively, of each trajectory.
+
+prevented the triggering of ESKF correction, i.e., the system behaved identically to the baseline algorithm. Across all 
+
+FlatGround sequences, divergence was avoided, yet the estimated states showed non-negligible discrepancies from the GT. 
+
+3) Evaluation on Handheld and Drone Platforms Without Ground Truth: In this experiment, we employed datasets without GT, including our private datasets, and adopted the 11 
+
+end-to-end error as the evaluation metric. First, ICP-based methods rapidly diverged and failed to produce accurate odometry, even over relatively short degenerate durations, as shown in Table III. Additionally, D-LIO experienced degraded odometry accuracy in non-degenerate scenarios because of the narrow FOV of the Livox Avia sensor. By compar-ison, the results listed in Table III demonstrate that our system remained stable in all sequences. Remarkably, our method was able to mitigate degeneracy compared to the other approaches in degenerate_seq_0-2 . In particular, 
+
+degenerate_seq_2 involved lateral motion of the drone while facing a wall, as seen in Fig. 6(a), under which PV-LIO failed to estimate odometry accurately, leading to a substantial end-to-end error. By contrast, our method produced a trajec-tory closely matching that of R3LIVE, achieving performance comparable to systems that incorporate vision. As shown by the estimated velocities on the right of Fig. 6(a), our method aligned closely with R3LIVE, confirming that B vNN  
+
+> M
+
+is quite accurate, even in degenerate regions. However, B vNN  
+
+> M
+
+was not accurate along all axes. As observed from the arrows along the x-axis on the right side of Fig. 6(a), a slight gap exists because the degenerate direction in this sequence was primarily aligned with the y-axis. By updating solely along the degenerate direction, the limitations of the neural network can be alleviated. Some sequences reveal a limitation of the proposed method: The deep-learning-based velocity estimator fails to accu-rately predict velocities under complex motions, such as frequent rotations, which leads to degraded odometry ac-curacy. Bright_Screen_Wall includes in-place yaw ro-tations, which negatively impact velocity prediction. This effect is more pronounced in HIT_Graffiti_Wall_1-4 ,where frequent handheld rotations led to substantial performance degradation. Fig. 6(b) illustrates that in 
+
+HIT_Graffiti_Wall_1 , the velocities exhibited substan-tial fluctuations, which led to considerable degradation in estimation performance both within degenerate regions and across the entire sequence. Despite exhibiting the same limita-tion in the HIT_Graffiti_Wall_2-3 sequences, the pro-posed method prevented odometry estimation failure, whereas the baseline algorithms suffered from odometry divergence. Specifically, these sequences involved extended periods of facing a featureless wall, creating severe geometric degeneracy that caused other baselines to fail. In contrast, our method maintained a relatively stable velocity estimation, thereby preventing odometry divergence. Although our approach did not achieve the best performance across all evaluated datasets, two variants (w/ and w/o CO) showed the best results in 21 out of 27 sequences (excluding sequences where all algorithms diverged), effectively demon-strating their ability to mitigate degeneracy. Furthermore, our w/ CO variant achieved lower average ATE and end-to-end errors than its w/o CO counterpart, demonstrating the improved performance of the proposed method. 
+
+C. Performance Gain from ESKF-Based Integration 
+
+Experiments demonstrated that integrating deep-learning-based velocity into the ESKF enables consistent updates of all                                 
+
+> TABLE IV COMPARISON BETWEEN ODOMETRY UPDATES (ATE ↓[M])
+> Sequence Liao
+> et al. [14] ININ-LIO [15] Ours
+> ShieldTunnel_1 101.99 22.58 12.67
+> ShieldTunnel_2 162.67 105.94 21.60
+> ShieldTunnel_3 58.97 14.34 12.68
+> ShieldTunnel_4 79.98 27.76 21.84
+> ShieldTunnel_5 41.12 ×6.55
+> ShieldTunnel_6 74.93 10.86 6.40
+> Average 86.61 –13.55
+> Each best result is highlighted as first .
+
+state components, yielding enhanced performance compared to other methods for updating the state. Two additional ap-proaches were implemented for comparison, as introduced in Section I and illustrated in Fig. 1. Liao et al. [14] utilized the eigenvalues of degeneracy to compute a weighted mean between IMU motion prediction and LiDAR odometry. For comparison, we implemented this approach by updating the state based on the velocity, where all components of B vNN 
+
+> M
+
+along each axis were utilized. The formulation of this method is 
+
+v = 
+
+> W
+
+λmin  
+
+> W
+
+λmax 
+
+bv + (1 − 
+
+> W
+
+λmin  
+
+> W
+
+λmax 
+
+)( W bRB vNN  
+
+> M
+
+), (28) 
+
+Pvel = (  
+
+> W
+
+λmin  
+
+> W
+
+λmax 
+
+)2 bPvel + (1 − 
+
+> W
+
+λmin  
+
+> W
+
+λmax 
+
+)2(W bRΣ NN  
+
+> v,M W
+
+bR⊤),
+
+(29) where (·)vel refers to the velocity component of the state. The original method is not based on a filter-based LIO framework and does not update the state covariance; thus, we constructed (29) consistently with (28). Second, for ININ-LIO [15], the comparison was imple-mented such that degenerate directions were replaced by  
+
+> B
+
+vNN  
+
+> M
+
+, and non-degenerate directions by the LIO output:  
+
+> W
+
+VD = W bRB VD W bR⊤, W VO = ( I3 − W bRB VD W bR⊤),
+
+v = W VO bv + W VD (W bRB vNN  
+
+> M
+
+),
+
+Pvel = W VO bPvel W V⊤O + W VD (W bRΣ NN  
+
+> v,M W
+
+bR⊤)W V⊤D ,
+
+where W VO denotes the projection matrix onto the non-degenerate space in the world frame. As shown in Table IV, our ESKF-based strategy exhib-ited enhanced performance. Updating the velocity across all axes [14] led to a marked performance decrease. As previ-ously discussed in Section IV-B3, the neural velocity cannot be accurately predicted in all directions, which introduces errors. Because the LIO system updates the state from prior estimates, incorrect updates result in accumulated estimation errors, leading to degraded performance. In this sense, Fig. 7 illustrates that the velocity prediction performance gradually declined across all sequences. Compared with ININ-LIO [15], our approach could be said to offer three main advantages. First, our approach updates all variables of the state x simultaneously, thereby maintain-ing consistency among them. Fig. 7(a) illustrates that ININ-LIO experiences substantial velocity oscillations, resulting in 12 Liao et al. [14] ININ-LIO Ours Trajectory  Velocity  Acc.  Bia sTrajectory  Velocity  Acc.  Bia s0 200                                         
+
+> −100
+> 0
+> 100
+> 200
+> 0.0
+> 2.5
+> -1.0
+> 0.0
+> 1.0
+> 0500
+> -2.5
+> 0.0
+> 2.5
+> -0.5
+> 0.0
+> 0.0
+> 0.5
+> 0500
+> 0.0
+> 0.1
+> (a) ShieldTunnel_1 0500 1000
+> −500
+> −250
+> 0
+> 250 0.0
+> 2.5
+> -1.0
+> 0.0
+> 1.0
+> 0250
+> -2.5
+> 0.0
+> 2.5
+> 0.0
+> 1.0
+> -0.5
+> 0.0
+> 0.5
+> 0250
+> 0.0
+> 0.2 (b) ShieldTunnel_2 0100 200
+> −100
+> 0
+> 100 0.0
+> 2.5
+> -1.0
+> 0.0
+> 1.0
+> 0200
+> -2.5
+> 0.0
+> 2.5
+> -0.2
+> 0.0
+> 0.2
+> -0.2
+> 0.0
+> 0.2
+> 0200
+> 0.0
+> 0.2
+> (c) ShieldTunnel_3 −100 0100
+> −100
+> 0
+> 100
+> 200
+> 0.0
+> 2.5
+> -1.0
+> 0.0
+> 1.0
+> 0200
+> -2.5
+> 0.0
+> 2.5
+> -0.5
+> 0.0
+> 0.5
+> 0.0
+> 0.5
+> 0200
+> 0.0
+> 0.5 (d) ShieldTunnel_4 050 100
+> −50
+> 0
+> 50 0.0
+> 2.5
+> -1.0
+> 0.0
+> 1.0
+> 0200
+> -2.5
+> 0.0
+> 2.5
+> -0.5
+> 0.0
+> -0.5
+> 0.0
+> 0200
+> 0.0
+> 1.0
+> (e) ShieldTunnel_5 0100 200
+> −100
+> 0
+> 100 0.0
+> 2.5
+> -1.0
+> 0.0
+> 1.0
+> 0200
+> -2.5
+> 0.0
+> 2.5
+> -0.5
+> 0.0
+> -0.2
+> 0.0
+> 0.2
+> 0200
+> 0.0
+> 0.1 (f) ShieldTunnel_6
+> Fig. 7. Plots of the estimated trajectories, velocities, and acceleration biases for degenerate cases. The left column shows the trajectory (X–Y plane in meters), the center displays the body-frame velocities (velocity in meters per second over time in seconds), and the right column presents the estimated acceleration biases (m/s 2over time). The symbols △and ☆denote the start and end points, respectively, of each trajectory.
+
+degraded odometry estimation accuracy, with a difference of 9.91 m compared with our method, as noted in Table IV. Substantial oscillations in the estimated velocity were also observed in Figs. 7(b), (c), (d), and (f) compared to our method. This result can be attributed to the biases and gravity, which should be jointly updated by the system but are not; for this reason, using them as inputs to the neural network may lead to unstable inference. Second, ININ-LIO relies entirely on B vNN  
+
+> M
+
+in the degenerate directions, which may distort the trajectory, potentially intro-ducing discontinuities. In the trajectory of Fig. 7(c), ININ-LIO slightly deviated from our method, likely because of its full reliance on the neural network during the pronounced velocity changes near 180 s. As shown in the center of Fig. 7(c), although the difference between our estimated velocity and that of ININ-LIO is not pronounced, the subtle deviations suggest that fully trusting the neural velocity may be problem-atic. Moreover, while the oscillation issue discussed previously can be mitigated through the proposed Kalman gain-based weighting to suppress noise effects, the velocity-only update in ININ-LIO does not provide this benefit. Finally, our approach demonstrates stability even in rota-tional motions that the neural network fails to predict accu-rately. The Shield_Tunnel_4 sequence involved substan-tial rotational motion, where ININ-LIO exhibited substantial performance degradation, as depicted in the left and center of Fig. 7(d). As shown in Fig. 7(e), the estimated odometry diverged during a sudden rotation toward the wall at the start, which was not the case with our method. To summarize, as shown in Table IV, the proposed method achieved the highest performance across all sequences, demon-strating that consistently and continuously updating all com-ponents of the state through the ESKF provides increased robustness in degenerate scenarios. 
+
+D. Comparison with Vision-Integrated Methods Under Nor-mal and Visually Degenerate Conditions 
+
+We conducted further experiments to support our third claim that the proposed method can serve as an alternative under geometrically and photometrically sparse conditions. We con-ducted experiments on our platform in the same geometry but under different illumination conditions, using a handheld setup (see Supplementary Material C for detailed information on the sequences). The comparison was performed with the baseline PV-LIO [19] and the vision-integrated FAST-LIVO2 [7]. As shown in Table V, PV-LIO diverged on both se-quences, confirming that they were LiDAR-degenerate. For 
+
+handheld_light , both our method and FAST-LIVO2 suc-cessfully estimated the poses without divergence, as shown 13 PV-LIO Ours FAST-LIVO2 Trajectory  Velocity Image 0 100 200              
+
+> −100
+> 0
+> 100
+> -1.0
+> 0.0
+> 1.0
+> -1.0
+> 0.0
+> 1.0
+> 0200
+> -1.0
+> 0.0
+> 1.0
+> (a) handheld_light 0100 200
+> −100
+> 0
+> 100
+> -1.0
+> 0.0
+> 1.0
+> -1.0
+> 0.0
+> 1.0
+> 0250
+> -1.0
+> 0.0
+> 1.0
+> (b) handheld_dark
+> Fig. 8. Performance comparison under abundant and sparse visual features in geometrically featureless environments: Plots of estimated trajectory and velocity visualization on degenerate cases from the private dataset. The left column shows a single frame from the sequence, the middle column presents the estimated trajectory (X–Y plane in meters), and the right column displays the body-frame velocities (velocity in meters per second over time in seconds). TABLE V PERFORMANCE EVALUATION ON PRIVATE DATASETS (E ND -TO -E ND
+> ERROR ↓[M])
+
+Sequence PV-LIO [19] FAST-LIVO2 [7] Ours 
+
+handheld_light × 0.72 12.65 
+
+handheld_dark × 205.35 30.07 
+
+in Table V and Fig. 8(a). FAST-LIVO2 achieved an end-to-end error of approximately 0.72 m, whereas our method exhibited a larger error of 12.65 m, indicating comparatively lower performance. This result can be attributed to the fact that FAST-LIVO2 benefits from abundant visual features in the environment, allowing it to better perceive the surroundings. In contrast, the slightly incorrect velocity estimates produced by our system accumulated over time, leading to the observed discrepancy in end-to-end error. For handheld_dark , as shown in the right side of Fig. 8(b), FAST-LIVO2 failed to estimate the position near 200 s, i.e., at the return point. Despite the lack of visual features, FAST-LIVO2 estimated the position up to this point. This result can be explained by the images shown in the left panel of Fig. 8(b), where lighting served as a visual cue that facilitated traversal. However, the failure of FAST-LIVO2 at the return point can be attributed to its use of LiDAR rays to determine the 3D positions of visual patches. When the platform rotates to return, the LiDAR rays become approxi-mately parallel to the visual patches, leading to incorrect 3D position estimates and ultimately causing the observed failure. The issue arises in dark environments because few visual features are present. In contrast, our system was able to prevent divergence. Although the end-to-end error reached 30.07 m, the trajectory shown in the middle panel of Fig. 8(b) indicates that this error was caused mainly by accumulated rotational         
+
+> TABLE VI EFFECT OF INPUT REPRESENTATION CHOICES (AVE ↓[M/S], ATE ↓[M])
+
+Sequence 
+
+Not Compensated  
+
+> W
+
+g, ba, bw
+
+Compensated AVE ATE AVE ATE 
+
+Car 
+
+vehicle_campus_1 0.09 4.75 0.07 4.54 
+
+vehicle_multilayer_0 0.06 3.81 0.04 3.96 Average 0.07 4.28 0.06 4.25 Others 
+
+hku_campus_seq_3 0.15 3.55 0.14 2.52 
+
+hku_park_1 0.20 7.26 0.19 7.35 
+
+hkust_campus_3 0.23 60.57 0.20 45.54 
+
+hku2 0.26 6.20 0.21 5.95 
+
+HKU_Lecture_Center_2 0.24 3.58 0.26 3.15 
+
+HKU_Main_Building 0.46 6.20 0.43 4.33 
+
+SYSU_2 0.72 11.50 0.64 11.49 
+
+OffRoad_5 0.15 2.55 0.14 4.31 
+
+OffRoad_6 0.13 5.51 0.12 2.67 
+
+OffRoad_7 0.14 0.83 0.12 0.70 
+
+TunnelingTunnel_4 0.14 5.59 0.11 3.97 
+
+TunnelingTunnel_5 0.11 2.67 0.10 3.36 Average 0.24 9.67 0.22 7.94 
+
+drift in the odometry. Considering this result, the start and end points remained approximately close. Hence, our results imply that the proposed method can mitigate degeneracy even when LiDAR and camera measurements are sparse. 
+
+E. Impact of Utilizing LIO States on Network Generalization 
+
+Although the prior study [15] introduced the exclusion of LIO-estimated biases from learning (while treating gravity as a constant), it did not examine how removing both the estimated biases and gravity affects the generalization performance of deep-learning models. Thus, we analyzed the impact of utiliz-ing LIO-estimated values on the input processing of the neural network, thereby supporting our fourth and final key claim. As illustrated in Table VI, compensating for both biases and gravity consistently improves performance across most datasets. Although the performance difference in AVE appears to be as small as 0.01 m/s in most datasets, the odometry estimation errors became more substantial over time. This result highlights the importance of considering the average ATE, which shows a 1.73 m difference in the “Others” dataset. In addition, as seen in SYSU_2 , which involved rotational motion (see Fig. S1), the 0.08 m/s difference in AVE can be regarded as relatively substantial. In contrast, for mostly linear-motion scenarios or low-DoF car platforms, the performance remained approximately identical. Although compensating for gravity and biases has a rel-atively small impact in simple motions, leveraging LIO-estimated components in more complex motions enhances the system’s generalization capability, as discussed previously. V. C ONCLUDING REMARKS 
+
+In this paper, we present ALIVE-LIO, a degeneracy-aware LiDAR–inertial odometry framework that integrates learning-based velocity estimation into a classical ESKF. By addressing 14 
+
+degeneracy, ALIVE-LIO enables reliable state correction along degenerate directions while preserving the probabilistic consis-tency and interdependencies among all state components. Un-like existing heuristic approaches that loosely combine data-driven and model-based methods, ALIVE-LIO achieves tight integration by performing full-state updates within the ESKF, rather than correcting only the velocity. Additionally, IMU inputs, which are compensated using bias and gravity estimates from the LIO system, are employed to enhance the generaliza-tion performance of learning-based velocity estimation. Exten-sive experiments across multiple platforms, including ground vehicles, aerial drones, and handheld devices, demonstrated that ALIVE-LIO effectively mitigates LiDAR degeneracy in challenging real-world environments. Furthermore, results on private datasets suggest that the proposed method offers a viable and reliable alternative in scenarios where both geomet-ric and photometric features are insufficient, conditions under which conventional LVIO systems often struggle. Despite these promising results, some limitations remain. ALIVE-LIO exhibited reduced robustness under aggressive rotational motion and may fail to trigger corrective updates when degeneracy is not successfully detected. Additional prac-tical challenges observed in real-world deployments include slow recovery from degeneracy, sensitivity to sensor place-ment and operating conditions, and performance degradation under severe mechanical vibration. Future work will focus on improving the reliability of degeneracy detection, enhancing robustness under highly dynamic motions, and addressing the identified practical limitations to further extend the applicabil-ity of ALIVE-LIO in diverse and challenging environments. REFERENCES [1] C. Cadena, L. Carlone, H. Carrillo, Y. Latif, D. Scaramuzza, J. Neira, I. Reid, and J. J. Leonard, “Past, present, and future of simultaneous localization and mapping: Toward the robust-perception age,” IEEE Trans. Robot. , vol. 32, no. 6, pp. 1309–1332, 2016. [2] D. Lee, M. Jung, W. Yang, and A. Kim, “LiDAR odometry survey: recent advancements and remaining challenges,” Intell. Serv. Robot. ,vol. 17, no. 2, pp. 95–118, Mar. 2024. [3] D. Lee, H. Lim, and S. Han, “GenZ-ICP: Generalizable and degeneracy-robust LiDAR odometry using an adaptive weighting,” IEEE Robot. Autom. Lett. , vol. 10, no. 1, pp. 152–159, 2025. [4] P. Pfreundschuh, H. Oleynikova, C. Cadena, R. Siegwart, and O. Ander-sson, “COIN-LIO: Complementary intensity-augmented LiDAR inertial odometry,” in Proc. IEEE Int. Conf. Robot. Automat. , 2024, pp. 1730– 1737. [5] J. Lin and F. Zhang, “R3LIVE: A robust, real-time, RGB-colored, LiDAR-inertial-visual tightly-coupled state estimation and mapping package,” in Proc. IEEE Int. Conf. Robot. Automat. , 2022, pp. 10 672– 10 678. [6] C. Zheng, Q. Zhu, W. Xu, X. Liu, Q. Guo, and F. Zhang, “Fast-LIVO: Fast and tightly-coupled sparse-direct LiDAR-inertial-visual odometry,” in Proc. IEEE/RSJ Int. Conf. Intell. Robot. Syst. , 2022, pp. 4003–4009. [7] C. Zheng, W. Xu, Z. Zou, T. Hua, C. Yuan, D. He, B. Zhou, Z. Liu, J. Lin, F. Zhu, Y. Ren, R. Wang, F. Meng, and F. Zhang, “Fast-LIVO2: Fast, direct LiDAR–inertial–visual odometry,” IEEE Trans. Robot. , vol. 41, pp. 326–346, 2025. [8] J. Lee, R. Komatsu, M. Shinozaki, T. Kitajima, H. Asama, Q. An, and A. Yamashita, “Switch-SLAM: Switching-based LiDAR-inertial-visual SLAM for degenerate environments,” IEEE Robot. Autom. Lett. , vol. 9, no. 8, pp. 7270–7277, 2024. [9] H. Xiao, Z. Hu, C. Lv, J. Meng, J. Zhang, and J. You, “Progressive multi-modal semantic segmentation guided SLAM using tightly-coupled LiDAR-visual-inertial odometry,” IEEE Trans. Intell. Transp. Syst. ,vol. 26, no. 2, pp. 1645–1656, 2025. [10] T. Okawara, K. Koide, S. Oishi, M. Yokozuka, A. Banno, K. Uno, and K. Yoshida, “Tightly-coupled LiDAR-IMU-wheel odometry with an online neural kinematic model learning via factor graph optimization,” 
+
+Robot. Auton. Syst. , vol. 187, p. 104929, 2025. [11] T. Tuna, J. Nubert, Y. Nava, S. Khattak, and M. Hutter, “X-ICP: Localizability-aware LiDAR registration for robust localization in ex-treme environments,” IEEE Trans. Robot. , vol. 40, pp. 452–471, 2024. [12] T. Tuna, J. Nubert, P. Pfreundschuh, C. Cadena, S. Khattak, and M. Hut-ter, “Informed, constrained, aligned: A field analysis on degeneracy-aware point cloud registration in the wild,” IEEE Trans. Field Robot. ,vol. 2, pp. 485–515, 2025. [13] Z. Chen, H. Chen, Y. Qi, S. Zhong, D. Feng, J. Wu, W. Wen, and M. Liu, “RELEAD: Resilient localization with enhanced LiDAR odometry in adverse environments,” in Proc. IEEE Int. Conf. Robot. Automat. , 2024, pp. 3999–4005. [14] Z. Liao, X. Zhang, T. Zhang, Z. Li, Z. Zheng, Z. Wen, and Y. Li, “A real-time degeneracy sensing and compensation method for enhanced LiDAR SLAM,” IEEE Trans. Intell. Transp. Syst. , vol. 26, no. 3, pp. 4202–4213, 2025. [15] Y. Gao, L. Zhao, and B. Zhang, “ININ-LIO: Informer-based neural inertial network-aided LiDAR–inertial odometry,” IEEE Trans. Instrum. Meas. , vol. 74, pp. 1–10, 2025. [16] H. Yue, Q. Xu, F. Chen, J. Pan, and W. Chen, “LP-ICP: General localizability-aware point cloud registration for robust localization in extreme unstructured environments,” 2025, arXiv:2501.02580. [17] Y. Qiu, C. Xu, Y. Chen, S. Zhao, J. Geng, and S. Scherer, “AirIO: Learning inertial odometry with enhanced IMU feature observability,” 
+
+IEEE Robot. Autom. Lett. , vol. 10, no. 9, pp. 9368–9375, 2025. [18] S. Zhao, S. Zhou, R. Blanchard, Y. Qiu, W. Wang, and S. Scherer, “Tartan IMU: A light foundation model for inertial positioning in robotics,” in Proc. IEEE/CVF Conf. Comput. Vis. and Pattern Recognit. ,2025, pp. 22 520–22 529. [19] C. Yuan, W. Xu, X. Liu, X. Hong, and F. Zhang, “Efficient and prob-abilistic adaptive voxel mapping for accurate online LiDAR odometry,” 
+
+IEEE Robot. Autom. Lett. , vol. 7, no. 3, pp. 8518–8525, 2022. [20] O. R. developers, “ONNX runtime,” 2021, Accessed: Aug. 30, 2025. [Online]. Available: https://onnxruntime.ai/ [21] S. Rusinkiewicz and M. Levoy, “Efficient variants of the ICP algorithm,” in Proc. IEEE Int. Conf. 3D Digital Imaging and Modeling , 2001, pp. 145–152. [22] J. Zhang, M. Kaess, and S. Singh, “On degeneracy of optimization-based state estimation problems,” in Proc. IEEE Int. Conf. Robot. Automat. ,2016, pp. 809–816. [23] A. Tagliabue, J. Tordesillas, X. Cai, A. Santamaria-Navarro, J. P. How, L. Carlone, and A.-a. Agha-mohammadi, “LION: LiDAR-inertial observability-aware navigator for vision-denied environments,” in Proc. Int. Symp. Exp. Robot. , 2021, pp. 380–390. [24] Y. Ma, J. Xu, S. Yuan, T. Zhi, W. Yu, J. Zhou, and L. Xie, “MM-LINS: A multi-map LiDAR-inertial system for over-degenerate environments,” 
+
+IEEE Trans. Intell. Veh. , vol. 10, no. 1, pp. 472–482, 2025. [25] C. Chen and X. Pan, “Deep learning for inertial positioning: A survey,” 
+
+IEEE Trans. Intell. Transp. Syst. , vol. 25, no. 9, pp. 10 506–10 523, 2024. [26] M. A. Esfahani, H. Wang, K. Wu, and S. Yuan, “OriNet: Robust 3-D orientation estimation with a single particular IMU,” IEEE Robot. Autom. Lett. , vol. 5, no. 2, pp. 399–406, 2020. [27] Y. Qiu, C. Wang, C. Xu, Y. Chen, X. Zhou, Y. Xia, and S. Scherer, “AirIMU: Learning uncertainty propagation for inertial odometry,” 2024, arXiv:2310.04874. [28] W. Liu, D. Caruso, E. Ilg, J. Dong, A. I. Mourikis, K. Daniilidis, V. Kumar, and J. Engel, “TLIO: Tight learned inertial odometry,” IEEE Robot. Autom. Lett. , vol. 5, no. 4, pp. 5653–5660, 2020. [29] H. Yan, Q. Shan, and Y. Furukawa, “RIDI: Robust IMU double integra-tion,” in Proc. European Conf. Comput. Vis. , 2018, pp. 641–656. [30] A. Bajwa, C. C. Cossette, M. A. Shalaby, and J. R. Forbes, “DIVE: Deep inertial-only velocity aided estimation for quadrotors,” IEEE Robot. Autom. Lett. , vol. 9, no. 4, pp. 3728–3734, 2024. [31] Y. Jin, W.-A. Zhang, H. Sun, and L. Yu, “Learning-aided inertial odometry with nonlinear state estimator on manifold,” IEEE Trans. Intell. Transp. Syst. , vol. 24, no. 9, pp. 9792–9803, 2023. [32] W. Xu and F. Zhang, “Fast-LIO: A fast, robust LiDAR-inertial odometry package by tightly-coupled iterated Kalman filter,” IEEE Robot. Autom. Lett. , vol. 6, no. 2, pp. 3317–3324, 2021. [33] W. Xu, Y. Cai, D. He, J. Lin, and F. Zhang, “Fast-LIO2: Fast direct lidar-inertial odometry,” IEEE Trans. Robot. , vol. 38, no. 4, pp. 2053–2073, 2022. 15 
+
+[34] Z. Chen, Y. Qi, D. Feng, X. Zhuang, H. Chen, X. Hu, J. Wu, K. Peng, and P. Lu, “Heterogeneous LiDAR dataset for benchmarking robust localization in diverse degenerate scenarios,” The Int. J. Robot. Res. ,2025. [35] M. Panias, L. Caglio, S. Glavind, A. Sadeqi, M. Faber, H. Stang, and E. Katsanos, “Tuning of Kalman filter noise parameters for uncertainty quantification in input-state estimation of MDOF systems,” in Proc. EC-COMAS Thematic Conf. Uncertainty Quan. Comput. Sci. Eng. National Technical University of Athens, 2023. [36] C. Forster, L. Carlone, F. Dellaert, and D. Scaramuzza, “On-manifold preintegration for real-time visual–inertial odometry,” IEEE Trans. Robot. , vol. 33, no. 1, pp. 1–21, 2017. [37] G. Cioffi, L. Bauersfeld, E. Kaufmann, and D. Scaramuzza, “Learned inertial odometry for autonomous drone racing,” IEEE Robot. Autom. Lett. , vol. 8, no. 5, pp. 2684–2691, 2023. [38] L.-T. Hsu, F. Huang, H.-F. Ng, G. Zhang, Y. Zhong, X. Bai, and W. Wen, “Hong Kong UrbanNav: An open-source multisensory dataset for benchmarking urban navigation algorithms,” NAVIGATION: J. Inst. Navig. , vol. 70, no. 4, 2023. [39] L.-T. Hsu, N. Kubo, W. Wen, W. Chen, Z. Liu, T. Suzuki, and J. Meguro, “UrbanNav: An open-sourced multisensory dataset for benchmarking positioning algorithms designed for urban areas,” in Proc. Int. Tech. Meet. Satell. Division of the Inst. Navig. , St. Louis, Missouri, Sep. 2021, pp. 226–256. [40] K. Chen, R. Nemiroff, and B. T. Lopez, “Direct LiDAR-inertial odome-try: Lightweight LIO with continuous-time motion correction,” in Proc. IEEE Int. Conf. Robot. Automat. , 2023, pp. 3983–3989. [41] M. Grupp, “evo: Python package for the evaluation of odometry and SLAM.” Accessed: Oct. 12, 2025. [Online]. Available: https: //github.com/MichaelGrupp/evo [42] S. Park, “CoCEL handheld dataset,” https://github.com/ SanghyunPark01/CoCEL Handheld-Dataset, 2025. 1
+
+# ALIVE-LIO: Degeneracy-Aware Learning of Inertial Velocity via ESKF-based Integration for LiDAR-Inertial Odometry 
+
+# Supplementary Material Neural Network Ground Truth Trajectory  Velocity Trajectory  Velocity Trajectory  Velocity Trajectory  Velocity 0 20   
+
+> −20
+> −10
+> 00.0
+> 2.0
+> -1.0
+> 0.0
+> 1.0
+> 050
+> -1.0
+> 0.0
+
+(a) SYSU_2 0 50    
+
+> −20
+> 0
+> 20
+> -1.0
+> 0.0
+> 1.0
+> 0.0
+> 1.0
+> 0100 -1.0
+> 0.0
+
+(b) hku_campus_seq_3 0 100 
+
+0
+
+50 0.0 
+
+2.5 
+
+-1.0 
+
+0.0 
+
+0 500 
+
+0.0 
+
+0.5 (c) OffRoad_5 −250 0 250    
+
+> −500
+> −250
+> 00.0
+> 5.0
+> -0.5
+> 0.0
+> 0.5
+> 0250
+> 0.0
+> 0.5
+
+(d) vehicle_campus_1 0 5  
+
+> −2.5
+> 0.0
+> 2.5-1.0
+> 0.0
+> 1.0
+> -2.0
+> 0.0
+> 2.0
+> 050
+> 0.0
+> 2.0
+
+(e) HKU_Main_Building −250 0 250    
+
+> −400
+> −200
+> 00.0
+> 1.0
+> -1.0
+> 0.0
+> 1.0
+> 01000
+> -1.0
+> 0.0
+> 1.0
+
+(f) hkust_campus_3 −50 0    
+
+> −20
+> 00.0
+> 2.5
+> 0.0
+> 1.0
+> 0100 -0.5
+> 0.0
+> 0.5
+
+(g) OffRoad_7 0 50    
+
+> −25
+> 00.0
+> 2.5
+> 0.0
+> 1.0
+> 0500
+> 0.0
+> 0.2
+
+(h) vehicle_multilayer_0 
+
+Fig. S1: Evaluation of Deep Learning-based Inertial Odometry on Multiple Datasets. The left column shows the trajectory (X–Y plane in meters), while the right column presents the body-frame velocities along the x, y, and z axes (velocity in m/s over time in seconds). The symbols △ and ☆ denote the start and end points of each trajectory, respectively. TABLE S1: Quantitative Results of Neural Network (AVE ↓
+
+[m/s], ATE ↓ [m], RTE ↓ [m]) 
+
+Seq. AVE ATE RTE 
+
+Car 
+
+vehicle_campus_1 0.07 4.54 0.43 
+
+vehicle_multilayer_0 0.04 3.96 0.10 Avg. 0.06 4.25 0.26 
+
+Others 
+
+hku_campus_seq_3 0.14 2.52 0.35 
+
+hku_park_1 0.19 7.35 0.69 
+
+hkust_campus_3 0.20 45.54 0.52 
+
+hku2 0.21 5.95 0.53 
+
+HKU_Lecture_Center_2 0.26 3.15 0.73 
+
+HKU_Main_Building 0.43 4.33 1.20 
+
+SYSU_2 0.64 11.49 2.11 
+
+OffRoad_5 0.14 4.31 0.19 
+
+OffRoad_6 0.12 2.67 0.15 
+
+OffRoad_7 0.12 0.70 0.17 
+
+TunnelingTunnel_4 0.11 3.97 0.27 
+
+TunnelingTunnel_5 0.10 3.36 0.30 Avg. 0.22 7.94 0.60 
+
+Worst results are marked as worst and second worst . 
+
+A. Neural Network Evaluation 
+
+As shown in Table S1, the AVE for the car is below 0.1m/s for all cases, and the ATE remains within 5m. As shown in Fig. S1(d) and (h), since the car exhibits low DoF in its motion, predictions are primarily performed along the x-direction, resulting in higher prediction accuracy. For datasets using the built-in IMU of the Livox LiDAR, the ATE for hkust_campus_3 is relatively large at 45.54m. However, as shown in (f), considering the long trajectory and accumulated errors, this value can be regarded as within an acceptable range. In contrast, for HKU_Main_Building and 
+
+SYSU_2 , both the AVE and RTE are observed to be relatively high. As depicted in Table S1(a) and (b), the predicted trajectory deviates significantly from GT, and for SYSU_2 ,the velocity prediction performance is notably degraded. This can be attributed to the dataset containing insufficient data, as it includes rotations in place and backward movements. Furthermore, while velocities along the y and z axes for 
+
+HKU_Main_Building are accurately predicted, the x-axis prediction performance deteriorates, likely due to increased ve-locity variability induced by rotation. As observed, prediction performance deteriorates for motions involving insufficient data or abrupt rotations. However, for the remaining datasets, the network is able to accurately predict even on unseen data. 
+
+B. Real-time Performance 
+
+Experiments on open datasets were conducted on a desktop equipped with an Intel Core i9-13900KF CPU (24 cores, 32 threads, 5.8 GHz), an NVIDIA GeForce RTX 3090 Ti GPU, 64 GB RAM, and Ubuntu 20.04 LTS. Experiments on private datasets were conducted on an Intel NUC (Intel Core i7-1165G7 CPU, 4 cores, 8 threads, up to 4.7 GHz, 2
+
+TABLE S2: Dataset split for training, evaluation, and degeneracy sequences 
+
+Platform Dataset Sequence Train Evaluation Degeneracy 
+
+Car FusionPortableV2 [1] 
+
+vehicle_campus_0 vehicle_campus_1 vehicle_highway_0 vehicle_highway_1 vehicle_multilayer_0 vehicle_tunnel_0 vehicle_street_0 
+
+UrbanNav [2], [3] HK-TST HK-CHTunnel HK-Mongkok HK-Whaompoa 
+
+GEODE [4] 
+
+Urban_Tunnel_1-3 (partial) Urban_Tunnel_1-3 Bridge_1 Bridge_2-3 Bridge_2-3 (partial) Others R3LIVE [5] 
+
+hku_campus_seq_0-2 hku_campus_seq_3 degenerate_seq_0-2 hku_main_building hku_park_1 hku_park_0 hkust_campus_3 hkust_campus_0-2 
+
+FAST-LIVO [6] hku1 hku2 LiDAR_Degenerate Visual_Challenge 
+
+FAST-LIVO2 [7] 
+
+CBD_Building_1 HKU_Lecture_Center_2 CBD_Building_2-3 HKU_Centennial_Garden HKU_Main_Building HIT_Graffiti_Wall_1-4 HKU_Landmark SYSU_2 HKU_Cultural_Center_1-2 HKU_Lecture_Center_1 Bright_Screen_Wall Retail_Street HKUST_Red_Sculpture SYSU_1 
+
+GEODE [4] 
+
+OffRoad_1-4 OffRoad_5-7 ShieldTunnel_1-6 TunnelingTunnel_1-3 TunnelingTunnel_4-5 FlatGroundSmooth FlatGroundAggresive 
+
+Private handheld_train handheld_light handheld_dark 
+
+TABLE S3: The Inference Time (ms ↓)
+
+Processor N = 500 N = 1000 N = 2000 
+
+Desktop (CPU) 1.40 3.14 3.10 Desktop (GPU) 1.93 2.25 3.10 OnBoard (CPU) – 4.68 –
+
+16 GB RAM, x86 64 architecture, Ubuntu). We measured real-time performance by averaging the inference time of the deep learning model over 200s on each processor. As summarized in Table S3, the system exhibits low inference times on both desktop CPUs/GPUs and onboard low-performance CPUs, confirming its real-time capability. 
+
+C. Detail of Private Datasets 
+
+For the train dataset, handheld_train was collected using a Livox Mid-360, where the IMU was oriented in various directions such as sideways, backward, and with tilting motions. For degeneracy datasets, both handheld_light and 
+
+handheld_dark traversed the tunnel while facing the walls with Livox Avia. handheld_light traversed the tunnel in a bright environment with abundant visual features, whereas 
+
+handheld_dark was recorded in a darker setting by re-ducing the camera aperture. Additionally, handheld_light 
+
+retraced its path to return to the starting position, while TABLE S4: System Parameter Settings 
+
+Model Notation Value 
+
+Neural Network 
+
+λC 0.002 
+
+δcar 0.5 
+
+δLivox 0.05 Degeneracy 
+
+θw 45 ◦
+
+θs 80 ◦
+
+τw 180 
+
+τs 35 
+
+σv 0.01 
+
+handheld_dark crossed to the opposite side of the path and returned to the initial location. The reason for using the Livox Mid-360 for training and the Livox Avia in degenerate scenarios is that the Mid-360 provides a 360° LiDAR scan, allowing stable odometry estimation via LIO even in environments where the platform faces a wall, whereas the Avia, with its narrow FOV, was used because degeneracy occurs when facing a wall. Furthermore, experiments were not conducted in long tunnels where LiDAR degeneracy could occur for safety reasons. 3
+
+REFERENCES [1] H. Wei, J. Jiao, X. Hu, J. Yu, X. Xie, J. Wu, Y. Zhu, Y. Liu, L. Wang, and M. Liu, “FusionPortableV2: A unified multi-sensor dataset for generalized slam across diverse platforms and scalable environments,” The Int. J. Robot. Res. , vol. 44, no. 7, pp. 1093–1116, 2025. [2] L.-T. Hsu, F. Huang, H.-F. Ng, G. Zhang, Y. Zhong, X. Bai, and W. Wen, “Hong Kong UrbanNav: An open-source multisensory dataset for benchmarking urban navigation algorithms,” NAVIGATION: J. Inst. Navig. , vol. 70, no. 4, 2023. [3] L.-T. Hsu, N. Kubo, W. Wen, W. Chen, Z. Liu, T. Suzuki, and J. Meguro, “UrbanNav: An open-sourced multisensory dataset for benchmarking positioning algorithms designed for urban areas,” in Proc. Int. Tech. Meet. Satell. Division of the Inst. Navig. , St. Louis, Missouri, Sep. 2021, pp. 226–256. [4] Z. Chen, Y. Qi, D. Feng, X. Zhuang, H. Chen, X. Hu, J. Wu, K. Peng, and P. Lu, “Heterogeneous LiDAR dataset for benchmarking robust localization in diverse degenerate scenarios,” The Int. J. Robot. Res. , 2025. [5] J. Lin and F. Zhang, “R3LIVE: A robust, real-time, RGB-colored, LiDAR-inertial-visual tightly-coupled state estimation and mapping pack-age,” in Proc. IEEE Int. Conf. Robot. Automat. , 2022, pp. 10 672–10 678. [6] C. Zheng, Q. Zhu, W. Xu, X. Liu, Q. Guo, and F. Zhang, “Fast-LIVO: Fast and tightly-coupled sparse-direct LiDAR-inertial-visual odometry,” in Proc. IEEE/RSJ Int. Conf. Intell. Robot. Syst. , 2022, pp. 4003–4009. [7] C. Zheng, W. Xu, Z. Zou, T. Hua, C. Yuan, D. He, B. Zhou, Z. Liu, J. Lin, F. Zhu, Y. Ren, R. Wang, F. Meng, and F. Zhang, “Fast-LIVO2: Fast, direct LiDAR–inertial–visual odometry,” IEEE Trans. Robot. , vol. 41, pp. 326–346, 2025.

@@ -1,0 +1,2485 @@
+Title: Residual-Aware Distributionally Robust EKF: Absorbing Linearization Mismatch via Wasserstein Ambiguity
+
+URL Source: https://arxiv.org/pdf/2604.02749v1
+
+Published Time: Mon, 06 Apr 2026 00:27:53 GMT
+
+Number of Pages: 24
+
+Markdown Content:
+# Residual-Aware Distributionally Robust EKF: Absorbing Linearization Mismatch via Wasserstein Ambiguity ∗
+
+Minhyuk Jang †, Jungjin Lee †, Astghik Hakobyan, Naira Hovakimyan, and Insoon Yang †‡
+
+Abstract 
+
+The extended Kalman filter (EKF) is a cornerstone of nonlinear state estimation, yet its performance is fundamentally limited by noise-model mismatch and linearization errors. We develop a residual-aware distributionally robust EKF that addresses both challenges within a unified Wasserstein distributionally robust state estimation framework. The key idea is to treat linearization residuals as uncertainty and absorb them into an effective uncertainty model cap-tured by a stage-wise ambiguity set, enabling noise-model mismatch and approximation errors to be handled within a single formulation. This approach yields a computable effective radius along with deterministic upper bounds on the prior and posterior mean-squared errors of the true nonlinear estimation error. The resulting filter admits a tractable semidefinite program-ming reformulation while preserving the recursive structure of the classical EKF. Simulations on coordinated-turn target tracking and uncertainty-aware robot navigation demonstrate improved estimation accuracy and safety compared to standard EKF baselines under model mismatch and nonlinear effects. 
+
+# 1 Introduction 
+
+State estimation is a central problem in control, robotics, and signal processing, where the goal is to infer the hidden state of a dynamical system from noisy and partial measurements. The accuracy of these estimates directly determines the quality of downstream feedback control, motion planning, and safe navigation. For linear systems, the Kalman filter achieves this optimally in the minimum mean-squared error (MMSE) sense [1]. For nonlinear systems, exact Bayesian filtering is generally intractable, and one resorts to approximations such as the extended Kalman filter (EKF), unscented Kalman filter, and particle filters [2]. Among these, the EKF remains the method of choice due to its recursive structure and compu-tational efficiency. Its performance is, however, fundamentally limited by two compounding failure 
+
+> ∗
+
+This work was supported in part by the Information and Communications Technology Planning and Evaluation (IITP) grants funded by MSIT No. 2022-0-00124, No. 2022-0-00480 and No. RS-2021-II211343, Artificial Intelligence Graduate School Program (Seoul National University), the National Research Foundation of Korea (NRF) grant funded by MSIT No. RS-2026-25477173, the Air Force Office of Scientific Research Grant (AFOSR) Grant AF FA9550-25-1-0274, the National Aeronautics and Space Administration (NASA) under Grant 80NSSC22M0070, the National Science Foundation (NSF) under Grants CMMI 2135925, CPS 2311085 and IIS 2331878, and the Higher Education and Science Committee of the RA under Grant 24FP-C017. 
+
+> †
+
+The first two authors contributed equally. 
+
+> ‡
+
+M. Jang and N. Hovakimyan are with the Department of Mechanical Science and Engineering, Grainger College of Engineering, University of Illinois Urbana-Champaign, Urbana, IL, USA {jang64, nhovakim }@illinois.edu .J. Lee and I. Yang are with the Department of Electrical and Computer Engineering and Automation and Systems Research Institute, Seoul National University, Seoul, South Korea {jungbbal, insoonyang }@snu.ac.kr . A. Hakobyan is with the Center for Scientific Innovation and Education and the National Polytechnic University of Armenia, Yerevan, Armenia astghik.hakobyan@csie.am .
+
+1
+
+> arXiv:2604.02749v1 [eess.SY] 3 Apr 2026
+
+modes: noise-model mismatch , since true noise distributions are rarely known exactly and must be approximated from data or prior assumptions; and linearization error , since each predict–update cycle discards higher-order Taylor remainder terms that accumulate over time and can lead to filter divergence. These two failure modes have largely been studied in isolation. Robust filtering methods address noise-model and parameter uncertainty [2–6], while nonlinear filtering approaches handle Taylor remainders within EKF-type updates [7, 8]. Consequently, EKF-type estimators that jointly ad-dress both remain limited, particularly in output-feedback settings where estimation errors directly impact control and safety [9, 10]. Distributionally robust state estimation (DRSE) has emerged as a principled framework for handling noise-model uncertainty. In the linear setting, existing works rely on either divergence-based [11–13] or Wasserstein ambiguity set formulations [14–22], both yielding tractable solutions with statistically meaningful guarantees. For nonlinear systems, however, DRSE remains underde-veloped; distributionally robust particle filters [23] illustrate the potential, but their computational cost limits real-time applicability. Extending DRSE to nonlinear EKF-type estimators that jointly address noise-model uncertainty and linearization residuals thus remains an open challenge. To address this, we embed state-dependent linearization residuals directly into a Wasserstein ambiguity set, unifying robustness to noise-model mismatch and nonlinear approximation error within a single framework. This leads to a novel residual-aware distributionally robust EKF (DR-EKF) that preserves the recursive EKF while admitting a tractable semidefinite programming (SDP) reformulation and formal performance guarantees for the true nonlinear system. The main contributions of this paper are as follows: 
+
+• We reinterpret linearization residuals as uncertainty and absorb them into a Wasserstein ambi-guity set, thereby unifying robustness to noise-model mismatch and nonlinear approximation error. 
+
+• We construct a computable stage-wise ambiguity radius that guarantees feasibility of the true effective uncertainty law, and derive a deterministic recursive certificate for the prior and posterior mean-squared errors of the true nonlinear estimation error. 
+
+• We derive a tractable SDP reformulation of the DRSE problem and specialize it to the proposed ambiguity radius, yielding a DR-EKF algorithm that preserves the recursive EKF structure while accounting for residual-induced uncertainty. 
+
+• We demonstrate improved estimation accuracy and enhanced closed-loop safety, including substantial reductions in collision rates, under noise-model misspecification and nonlinear effects. The remainder of the paper is organized as follows: Section 2 presents the preliminaries, Sec-tion 3 develops the proposed DR-EKF, ambiguity set construction, and recursive MSE certificate, and Section 4 reports simulation results. 
+
+# 2 Preliminaries 
+
+2.1 Notation 
+
+For a random variable z, let L(z) and L(z | G ) denote its law and conditional law given a σ-algebra 
+
+G, respectively. P2(Rd) denotes the set of probability measures on Rd with finite second moments. Let Sn, Sn
+
+> +
+
+, Sn 
+
+> ++
+
+denote the sets of symmetric, positive semidefinite, and positive definite matrices in Rn×n. For A, B ∈ Sn, A ⪰ B means A − B ∈ Sn
+
+> +
+
+, and λmin (A) denotes the smallest eigenvalue of A. Finally, ∥ · ∥ denotes the Euclidean norm for vectors and the spectral norm for matrices. 
+
+2.2 Problem Setup 
+
+We consider the discrete-time nonlinear stochastic system 
+
+xt+1 = f (xt, u t) + wt, (1) 
+
+yt = h(xt) + vt, (2) where xt ∈ Rnx is the state, ut ∈ Rnu is a known input, and yt ∈ Rny is the measurement at time t.The maps f : Rnx × Rnu → Rnx and h : Rnx → Rny are assumed twice continuously differentiable. The initial state x0 ∈ Rnx , process noise wt ∈ Rnx , and measurement noise vt ∈ Rny are random vectors with unknown distributions Qx, 0, Qw,t ∈ P 2(Rnx ) and Qv,t ∈ P 2(Rny ), respectively. We assume throughout that x0, {wt}t≥0, and {vt}t≥0 are mutually independent, and that each of 
+
+{wt}t≥0 and {vt}t≥0 is temporally independent. At each time t ≥ 0, the estimator has access to the measurement history Yt := {y0, . . . , y t}
+
+with Yt := σ(Yt) denoting the associated information σ-algebra. For convenience, we define Y−1 := 
+
+{∅ , Ω}. The objective is to estimate the state xt based on the available information Yt. If the noise distributions were known exactly, a natural formulation would be the stage-wise conditional MMSE problem min 
+
+> ψt∈F t
+
+E∥xt − ψt(Yt)∥2 Yt−1
+
+ , (3) where Ft := ψt : ( Rny )t+1 → Rnx ψt is measurable is the set of admissible estimators. The optimal estimator ¯ xt = ψt(Yt) is then the conditional mean of the state. For nonlinear systems, the MMSE estimation problem (3) is generally intractable. In practice, it is approximated using recursive methods such as the EKF, which linearizes the nonlinear dy-namics and measurement models around the current estimate. However, this local approximation introduces additional errors due to higher-order Taylor remainder terms. 
+
+2.3 Distributionally Robust State Estimation 
+
+While EKF-type methods provide a tractable approximation to the MMSE estimator, their per-formance can degrade due to two fundamental sources of uncertainty: the true noise distributions 
+
+Qx, 0, Qw,t , and Qv,t are typically unknown and must be approximated from finite data or modeling assumptions, and the local linearizations of f and h introduce higher-order Taylor remainder terms acting as state-dependent perturbations. Existing Wasserstein DRSE formulations address the first source for linear systems [14,15,18], but do not account for linearization-induced uncertainty. These considerations motivate a distributionally robust formulation of (3) that addresses both. To describe these effects in a unified way, we introduce the stacked noise vector 
+
+ϵt := 
+
+(
+
+[x⊤ 
+
+> 0
+
+, v ⊤ 
+
+> 0
+
+]⊤, t = 0 ,
+
+[w⊤
+
+> t−1
+
+, v ⊤ 
+
+> t
+
+]⊤, t ≥ 1,
+
+which collects all exogenous uncertainty entering the system at stage t. Under local linearization, the Taylor remainder terms act as additional uncertainty. As we will show in the next section, these residuals can be absorbed into an effective stacked uncertainty ˜ ϵt = ϵt + ∆ t, where ∆ t captures the linearization residuals. We therefore consider the DR-MMSE estimation problem inf 
+
+> ψt∈F t
+
+sup 
+
+> Pϵ,t ∈Dϵ,t
+
+EPϵ,t 
+
+∥xt − ψt(Yt)∥2 Yt−1
+
+ , (4) where Pϵ,t is a candidate marginal distribution of ϵt and Dϵ,t ⊂ P 2(Rnx+ny ) is an ambiguity set encoding our uncertainty in the nominal stacked-noise law. Strictly speaking, for t ≥ 1 the law Pϵ,t alone does not determine the conditional law of xt; one must also specify the carried state law from stage t−1. In Section 3.2, we make this precise through a local stage-wise surrogate that models L(et−1, ϵ t | Y t−1) directly. With this understanding, (4) is the distributionally robust counterpart of (3). 
+
+2.4 Wasserstein Ambiguity Sets 
+
+In DRSE, the ambiguity set Dϵ,t is used to capture uncertainty in the noise model. We adopt Wasserstein ambiguity sets centered at a nominal noise distribution, which quantify uncertainty through the distance between probability measures. Specifically, the type-2 Wasserstein distance between two probability measures P, Q ∈ P 2(Rd) is defined as 
+
+W2(P, Q) := 
+
+
+
+inf 
+
+> π∈Π( P,Q)
+
+Z
+
+> Rd×Rd
+
+∥z − z′∥2 dπ (z, z ′)
+
+1/2
+
+,
+
+where Π( P, Q) denotes the set of all couplings with marginals P and Q. Intuitively, W2 measures the minimum transportation cost between probability distributions, making it a natural metric for quantifying deviations between the true and nominal noise laws [24]. In our setting, it is especially appealing because it is compatible with moment-based uncertainty and yields tractable DRO reformulations [25, 26]. Using this metric, we define the stage-wise ambiguity set for the stacked noise ϵt ∈ Rnx+ny as 
+
+Dϵ,t (θt) := 
+
+n
+
+P ∈ P 2(Rnx+ny ) W2(P, ˆQϵ,t ) ≤ θt
+
+o
+
+, (5) where ˆQϵ,t ∈ P 2(Rnx+ny ) is the prescribed nominal distribution of the stacked noise and θt ≥ 0 is the radius, which controls the trade-off between performance and robustness. We take the nominal distribution of ϵt to be Gaussian with independent blocks. In particular, for each t ≥ 0, let ˆQϵ,t = N (ˆ ϵt, ˆΣϵ,t ) with ˆΣϵ,t ∈ Snx+ny 
+
+> ++
+
+, where ˆQϵ, 0 = ˆQ− 
+
+> x, 0
+
+⊗ ˆQv, 0, ˆQϵ,t = ˆQw,t −1 ⊗ ˆQv,t , t ≥ 1,
+
+where ˆQ− 
+
+> x, 0
+
+= N (ˆ x− 
+
+> 0
+
+, ˆΣ−
+
+> x, 0
+
+), ˆQw,t −1 = N ( ˆ wt−1, ˆΣw,t −1), and ˆQv,t = N (ˆ vt, ˆΣv,t ) denote the nominal laws of the initial state, process noise, and measurement noise, respectively. 
+
+Remark 1. Although the nominal stacked covariance is taken block diagonal, the ambiguity set is defined over the joint stacked law. Consequently, the resulting optimization problem implicitly allows for full covariance structures, including the cross block Σwv,t −1. Thus, the least-favorable process–measurement correlations can emerge without requiring a correlated nominal model. 
+
+The ambiguity set (5) forms the basis for the tractable residual-aware DR-EKF developed in the next section. 3 Residual-Aware Approach for Distributionally Robust EKF 
+
+In this section, we develop a residual-aware DR-EKF that incorporates linearization residuals into a Wasserstein ambiguity set, unifying robustness to noise-model mismatch and linearization error within the recursive EKF structure. At a high level, we introduce the residual-as-uncertainty 
+
+principle, whereby nonlinear approximation error is treated as uncertainty and absorbed into a single ambiguity set. The construction proceeds in three steps: ( i) derive an effective uncertainty model that captures both stochastic noise and Taylor residuals, ( ii ) reformulate the DRSE problem as a tractable SDP with EKF structure, and ( iii ) construct a computable ambiguity radius with a recursive MSE certificate. 
+
+3.1 Exact Nonlinear Error Dynamics and Effective Uncertainty Model 
+
+We first derive the nonlinear error dynamics and show how linearization residuals can be captured in an effective uncertainty term. We adopt an EKF-style predict–update structure, linearizing f
+
+and h around the current estimate at each stage (e.g., [2, Chapter 13]). Given the posterior estimate ¯xt−1 at time t − 1, the filter forms the prior mean ¯x− 
+
+> t
+
+= f (¯ xt−1, u t−1) + ˆ wt−1, (6) and computes the Jacobians 
+
+At−1 := ∂f ∂x (¯ xt−1, u t−1), Ct := ∂h ∂x (¯ x− 
+
+> t
+
+).
+
+Then, the prior and posterior estimation errors are given by e− 
+
+> t
+
+:= xt − ¯x− 
+
+> t
+
+and et := xt − ¯xt. To isolate the effect of linearization, we introduce the exact Taylor remainder maps 
+
+rft−1(e) := f (¯ xt−1 + e, u t−1) − f (¯ xt−1, u t−1) − At−1e, rht (e) := h(¯ x− 
+
+> t
+
++ e) − h(¯ x− 
+
+> t
+
+) − Cte. 
+
+Substituting xt−1 = ¯ xt−1 + et−1 into (1) and subtracting the nominal prediction (6) produces the exact prior error dynamics 
+
+e− 
+
+> t
+
+= At−1et−1 + ( wt−1 − ˆwt−1) + rft−1(et−1). (7) Similarly, substituting xt = ¯ x− 
+
+> t
+
++ e− 
+
+> t
+
+into (2) and subtracting the nominal predicted measurement 
+
+h(¯ x− 
+
+> t
+
+) + ˆ vt gives the innovation 
+
+νt := yt − h(¯ x− 
+
+> t
+
+) − ˆvt = Cte− 
+
+> t
+
++ ( vt − ˆvt) + rht (e− 
+
+> t
+
+). (8) The exact nonlinear error dynamics, therefore, take the form of a locally linear model driven by effective uncertainty. Specifically, introducing ˜wt−1 := wt−1 + rft−1(et−1), ˜vt := vt + rht (e− 
+
+> t
+
+),
+
+the dynamics (7) and (8) can be written as 
+
+e− 
+
+> t
+
+= At−1et−1 +   ˜wt−1 − ˆwt−1
+
+, ν t = Cte− 
+
+> t
+
++  ˜vt − ˆvt
+
+.
+
+Introducing the effective stacked uncertainty variable, ˜ϵt := 
+
+(
+
+[x⊤ 
+
+> 0
+
+, ˜v⊤ 
+
+> 0
+
+]⊤, t = 0 ,
+
+[ ˜ w⊤
+
+> t−1
+
+, ˜v⊤ 
+
+> t
+
+]⊤, t ≥ 1, (9) the uncertainty in the local error equations is captured by the law L(˜ ϵt), which combines stochastic noise and Taylor residuals into a single uncertainty model. This representation forms the basis for treating linearization residuals as uncertainty. Moreover, ˜ ϵt differs from the nominal stacked noise 
+
+ϵt only through the residual term ∆ t := ˜ ϵt − ϵt. Thus, enlarging the Wasserstein ambiguity set by the magnitude of ∆ t suffices to contain the effective uncertainty law, as formalized in Section 3.4. 
+
+3.2 Stage-wise SDP Reformulation Under Local Linear-Gaussian Surrogate 
+
+Following standard EKF practice, we approximate the nonlinear filtering problem at each time stage t by a local linear-Gaussian surrogate. Under this surrogate, the DRSE problem reduces to a tractable stage-wise distributionally robust linear MMSE problem. This subsection develops the baseline DRSE formulation; linearization residuals will be incorporated in the next step by treating them as uncertainty. Conditioned on Yt−1, we approximate the nonlinear system by a local linear-Gaussian surrogate defined as follows: (i) The conditional law of the state is approximated as Gaussian, L(xt | Y t−1) ≈ N (¯ x− 
+
+> t
+
+, Σ−
+
+> x,t
+
+). (ii) The nonlinear innovation is approximated by the affine model νt ≈ Ct(xt − ¯x− 
+
+> t
+
+)+( vt −ˆvt) := ˆ νt.The exact conditional joint law factorizes as L(et−1, ϵ t | Y t−1) = L(et−1 | Y t−1)⊗L (ϵt), reflecting the independence of past estimation error and current noise. In the surrogate, we replace L(et−1 | Y t−1)by a Gaussian approximation and retain this product structure only at the surrogate level. Under this surrogate, the stage-wise surrogate of DR-MMSE problem (4) depends only on the first two moments of the stacked noise distribution and thus admits an exact finite-dimensional reformulation in terms of covariance matrices. 
+
+Proposition 1 (Stage-wise SDP reformulation) . Fix t ≥ 1, and let Σx,t −1 be the posterior co-variance carried from stage t − 1. Under the local linear-Gaussian approximation, the stage-wise surrogate of DR-MMSE estimation problem (4) is equivalent to the following finite-dimensional SDP: 
+
+max 
+
+> Σ−
+> x,t ,Σx,t ,Σw,t −1,
+> Σv,t ,Σwv,t −1,Z t
+
+Tr(Σ x,t )s.t. Σ− 
+
+> x,t
+
+= At−1Σx,t −1A⊤ 
+
+> t−1
+
++ Σ w,t −1,
+
+Σ− 
+
+> x,t
+
+− Σx,t Tt
+
+T ⊤ 
+
+> t
+
+St
+
+
+
+⪰ 0,
+
+ ˆΣϵ,t Zt
+
+Z⊤ 
+
+> t
+
+Σϵ,t 
+
+
+
+⪰ 0,
+
+Tr  Σϵ,t + ˆΣϵ,t − 2Zt
+
+ ≤ θ2 
+
+> t
+
+,
+
+Σϵ,t ⪰ λmin ( ˆΣϵ,t )Inx+ny ,
+
+Σϵ,t =
+
+ Σw,t −1 Σwv,t −1
+
+Σ⊤ 
+
+> wv,t −1
+
+Σv,t 
+
+
+
+∈ Snx+ny 
+
+> +
+
+,
+
+Σ−
+
+> x,t
+
+, Σx,t , Σw,t −1 ∈ Snx 
+
+> +
+
+, Σv,t ∈ Sny 
+
+> +
+
+, Σwv,t −1 ∈ Rnx×ny , Z t ∈ R(nx+ny )×(nx+ny ),
+
+(10) 
+
+where 
+
+Tt := Σ −
+
+> x,t
+
+C⊤ 
+
+> t
+
++ Σ wv,t −1,St := CtΣ−
+
+> x,t
+
+C⊤ 
+
+> t
+
++ Σ v,t + CtΣwv,t −1 + Σ ⊤
+
+> wv,t −1
+
+C⊤ 
+
+> t
+
+.Moreover, the SDP (10) attains its optimum. If Σ∗ 
+
+> x,t
+
+and Σ∗ 
+
+> ϵ,t
+
+are optimal for (10) , with associated blocks (T ∗ 
+
+> t
+
+, S ∗ 
+
+> t
+
+), then the least-favorable stacked noise law for the surrogate is N (ˆ ϵt, Σ∗
+
+> ϵ,t
+
+), and the corresponding minimax-optimal posterior estimate ¯xt = ψ∗ 
+
+> t
+
+(Yt) admits the innovation form 
+
+ψ∗ 
+
+> t
+
+(Yt) = ¯ x− 
+
+> t
+
++ K∗ 
+
+> t
+
+νt, (11) 
+
+where K∗ 
+
+> t
+
+= T ∗ 
+
+> t
+
+(S∗ 
+
+> t
+
+)−1 is the robust gain. 
+
+In words, the SDP (10) computes the least-favorable covariance matrices within the ambiguity set, producing a minimax-optimal Kalman-like update. While [27, Lemma 1] considers the un-correlated case, Proposition 1 extends this formulation to allow cross-covariance Σ wv,t −1, induced by the joint Wasserstein ambiguity set, thereby capturing noise coupling. 1 The proof adapts the primal–dual sandwich argument of [15]; see Appendix A. 
+
+Remark 2 (Initial stage t = 0) . At t = 0 , the stacked noise is ϵ0 = [ x⊤ 
+
+> 0
+
+, v ⊤ 
+
+> 0
+
+]⊤, and there is no preceding propagation step. Accordingly, the prior covariance Σ− 
+
+> x, 0
+
+is treated as a free decision variable rather than being specified by a propagation constraint. Under the local linear-Gaussian surrogate, the DR-MMSE estimation problem (4) at t = 0 is equivalent to the following finite-dimensional SDP: 
+
+max 
+
+> Σ−
+> x, 0,Σx, 0,
+> Σv, 0,Σxv, 0,Z 0
+
+Tr(Σ x, 0)s.t.
+
+Σ− 
+
+> x, 0
+
+− Σx, 0 T0
+
+T ⊤ 
+
+> 0
+
+S0
+
+
+
+⪰ 0,
+
+ ˆΣϵ, 0 Z0
+
+Z⊤ 
+
+> 0
+
+Σϵ, 0
+
+
+
+⪰ 0,
+
+Tr  Σϵ, 0 + ˆΣϵ, 0 − 2Z0
+
+ ≤ θ20,
+
+Σϵ, 0 ⪰ λmin ( ˆΣϵ, 0)Inx+ny ,
+
+Σϵ, 0 =
+
+ Σ− 
+
+> x, 0
+
+Σxv, 0
+
+Σ⊤ 
+
+> xv, 0
+
+Σv, 0
+
+
+
+∈ Snx+ny 
+
+> +
+
+,
+
+Σ−
+
+> x, 0
+
+, Σx, 0 ∈ Snx 
+
+> +
+
+, Σv, 0 ∈ Sny 
+
+> +
+
+, Σxv, 0 ∈ Rnx×ny , Z 0 ∈ R(nx+ny )×(nx+ny ),
+
+(12) 
+
+where 
+
+T0 := Σ −
+
+> x, 0
+
+C⊤ 
+
+> 0
+
++ Σ xv, 0,S0 := C0Σ−
+
+> x, 0
+
+C⊤ 
+
+> 0
+
++ Σ v, 0 + C0Σxv, 0 + Σ ⊤
+
+> xv, 0
+
+C⊤ 
+
+> 0
+
+.
+
+Moreover, the SDP (12) attains its optimum. If (Σ −,∗ 
+
+> x, 0
+
+, Σ∗
+
+> x, 0
+
+, Σ∗
+
+> v, 0
+
+, Σ∗
+
+> xv, 0
+
+, Z ∗ 
+
+> 0
+
+) is optimal for (12) , with associated blocks (T ∗ 
+
+> 0
+
+, S ∗ 
+
+> 0
+
+), then the least-favorable stacked noise law for the surrogate is N (ˆ ϵ0, Σ∗
+
+> ϵ, 0
+
+),and the corresponding minimax-optimal estimator ψ∗ 
+
+> 0
+
+(Y0) = ¯ x0 admits the innovation form 
+
+ψ∗ 
+
+> 0
+
+(Y0) = ¯ x− 
+
+> 0
+
++ K∗ 
+
+> 0
+
+ν0,
+
+where K∗ 
+
+> 0
+
+= T ∗ 
+
+> 0
+
+(S∗ 
+
+> 0
+
+)−1 is the robust gain. 
+
+Applying Proposition 1 recursively results in a DR-EKF under the local linear-Gaussian sur-rogate. Building on this foundation, we then incorporate linearization residuals by designing the ambiguity set to capture both the noise model mismatch and nonlinear effects. 
+
+> 1The least-favorable distribution shares the nominal mean ˆ ϵt, since the quadratic loss depends only on second-order moments and mean deviations are not adversarially beneficial.
+
+3.3 Bounding the Linearization Residuals 
+
+The gap between the effective stacked uncertainty ˜ ϵt and the nominal noise ϵt is precisely the linearization residual ∆ t = ˜ ϵt − ϵt. To quantify its effect on the ambiguity set, we first derive oracle 
+
+bounds on ∆ t. These bounds are not directly computable, but they make explicit how linearization error enters the ambiguity radius and set up the computable construction in Section 3.4. 
+
+Assumption 1 (Local curvature bounds) . There exist constants Lf , L h ≥ 0 such that, in a neigh-borhood of the filter trajectory, ∂f ∂x (·, u ) is Lipschitz in x with constant Lf , uniformly over admissible inputs u, and ∂h ∂x (·) is Lipschitz in x with constant Lh.
+
+Lemma 1 (Quadratic remainder bound) . Under Assumption 1, the Taylor remainder terms satisfy 
+
+∥rft−1(e)∥ ≤ Lf
+
+2 ∥e∥2, ∥rht (e)∥ ≤ Lh
+
+2 ∥e∥2,
+
+for all e in the neighborhood specified in Assumption 1. 
+
+The result follows from standard Taylor remainder bounds under Lipschitz Jacobians. See Appendix B for the proof. Lemma 1 provides pointwise quadratic bounds on the Taylor remainder terms. To convert these into bounds suitable for Wasserstein radius construction, we impose a local moment-regularity condition ensuring that the fourth moments are controlled by second moments. 
+
+Assumption 2 (Fourth-moment bound) . There exist constants αf , α h ≥ 0 such that, for all t ≥ 0,
+
+(E[∥e− 
+
+> t
+
+∥4]) 1/2 ≤ αhE[∥e− 
+
+> t
+
+∥2],
+
+and, for all t ≥ 1,
+
+(E[∥et−1∥4]) 1/2 ≤ αf E[∥et−1∥2].
+
+This assumption imposes a local uniform kurtosis bound along the filter trajectory. Combined with Lemma 1, it converts the quadratic remainder bounds into second-moment bounds compatible with the Wasserstein ambiguity set. 2
+
+Combining Lemma 1 with Assumption 2 gives the second-moment bounds on the residual magnitudes. 
+
+Lemma 2 (Oracle residual radii) . Under Assumptions 1 and 2, define 
+
+ηft−1 := Lf
+
+2 αf E[∥et−1∥2],
+
+for t ≥ 1 and 
+
+ηht := Lh
+
+2 αhE[∥e− 
+
+> t
+
+∥2],
+
+for t ≥ 0. Then  E[∥rft−1(et−1)∥2]1/2 ≤ ηft−1, t ≥ 1,
+
+ E[∥rht (e− 
+
+> t
+
+)∥2]1/2 ≤ ηht , t ≥ 0.
+
+(13) Proof of Lemma 2 is given in Appendix C. These bounds quantify how residuals enter the effective uncertainty through second moments. However, both ηft−1 and ηht depend on the unknown error moments and are therefore not directly computable, leading to a circular dependence.      
+
+> 2More generally, bounded kurtosis suffices. Under standard EKF stability conditions [28, Th. 3.1], such bounds hold locally with finite constants. In the experiments, we set αf=αh=√3.
+
+3.4 Computable Effective Radius and Recursive Distributionally Robust Cer-tificate 
+
+We construct a computable ambiguity radius that accounts for both nominal noise uncertainty and linearization effects, together with deterministic recursive bounds on the prior and posterior second moments of the true nonlinear estimation error. The key challenge is the circular dependence introduced above: the residual bounds depend on the estimation error, while the estimation error depends on the ambiguity radius. 
+
+To address this, we develop a recursive certificate construction based on deterministic error bounds. The approach proceeds in three steps: ( i) build a deterministic posterior MSE envelope for the linear-Gaussian surrogate, ( ii ) show that any deterministic posterior error bound induces a computable effective radius together with a prior MSE bound, and ( iii ) combine these with the mismatch recursion to certify the true posterior MSE. We begin by formalizing the uncertainty in the nominal noise model and introducing determin-istic bounds on the linearized dynamics and filter gains. 
+
+Assumption 3 (Nominal ambiguity radius) . For each t ≥ 0, the nominal radius θϵ,t ≥ 0 satisfies 
+
+L(ϵt) ∈ Dϵ,t (θϵ,t ).
+
+Assumption 4 (Deterministic envelopes) . There exist deterministic sequences {¯at, ¯mt, ¯kt}t≥0 such that, for every t ≥ 0, ∥At∥ ≤ ¯at, ∥I − K∗ 
+
+> t
+
+Ct∥ ≤ ¯mt, and ∥K∗ 
+
+> t
+
+∥ ≤ ¯kt almost surely. 3
+
+These assumptions ensure that the true noise law lies within the ambiguity set and that the filter dynamics are uniformly bounded, enabling recursive error propagation. 
+
+3.4.1 Oracle effective radius 
+
+For each t ≥ 0, we define the oracle effective radius as 
+
+ηϵ,t := 
+
+q
+
+(ηft−1)2 + ( ηht )2, θeff  
+
+> ϵ,t
+
+:= θϵ,t + ηϵ,t , (14) where ηft−1 and ηht are defined in (13), with ηf 
+
+> −1
+
+:= 0. This radius enlarges the nominal ambiguity set just enough to absorb linearization residuals, so that the effective noise ˜ ϵt lies in Dϵ,t (θeff  
+
+> ϵ,t
+
+). However, ηϵ,t depends on the unknown error moments and is therefore not directly computable. 
+
+3.4.2 Surrogate posterior MSE envelope 
+
+We first construct a deterministic posterior MSE envelope for the surrogate system, independent of the residual terms. To this end, we consider the linear-surrogate error dynamics: ˆe− 
+
+> t
+
+:= At−1 ˆet−1 + ( wt−1 − ˆwt−1), t ≥ 1 (15) ˆet := ( I − K∗ 
+
+> t
+
+Ct)ˆ e− 
+
+> t
+
+− K∗ 
+
+> t
+
+(vt − ˆvt), t ≥ 0, (16) with ˆ e− 
+
+> 0
+
+:= x0 − ˆx− 
+
+> 0
+
+. Because ˆ et evolves under the same gains as the true error but without nonlinear remainder terms, it serves as a tractable proxy for the true estimation error.                    
+
+> 3On a bounded operating region, Assumption 1 yields deterministic bounds on ∥At∥and ∥Ct∥.Moreover, the SDP constraints together with the spectral tube bounds [27, Proposition 1] imply upper and lower spectral bounds on Σ −
+> x,t and S∗
+> t, hence also a bound on ∥K∗
+> t∥=∥T∗
+> t(S∗
+> t)−1∥. One may then take ¯ mt:= 1 + ¯kt¯ctwhen ∥Ct∥ ≤ ¯ct.
+
+Lemma 3 (Surrogate posterior MSE envelope) . Suppose Assumptions 3 and 4 hold. Define ¯s0 := ¯m0
+
+q
+
+Tr( ˆΣ−
+
+> x, 0
+
+) + ¯k0
+
+q
+
+Tr( ˆΣv, 0) + ( ¯ m0 + ¯k0)θϵ, 0 and for t ≥ 1,
+
+¯st := ¯ mt
+
+
+
+¯at−1 ¯st−1 +
+
+q
+
+Tr( ˆΣw,t −1)
+
+
+
++ ¯kt
+
+q
+
+Tr( ˆΣv,t ) + ( ¯ mt + ¯kt)θϵ,t . (17) 
+
+Then E[∥ˆet∥2] ≤ ¯s2 
+
+> t
+
+for all t ≥ 0.
+
+Proof of Lemma 3 is given in Appendix D. The quantity ¯ st provides a deterministic posterior MSE envelope for the surrogate system and will serve as the basis for constructing a computable bound on the true estimation error. 
+
+3.4.3 Computable prior bound and effective radius 
+
+We now use the deterministic posterior bound to construct a computable effective ambiguity radius. The key observation is that the oracle residual bounds can be upper-bounded using a deterministic posterior error bound. 
+
+Lemma 4 (Computable one-step radius bound) . Fix t ≥ 0 and suppose Assumptions 1 to 4 hold. For t ≥ 1, let ¯Vt−1 ∈ R satisfy E[∥et−1∥2] ≤ ¯V 2
+
+> t−1
+
+. Define ¯ηft−1 := Lf 
+
+> 2
+
+αf ¯V 2 
+
+> t−1
+
+with ¯ηf 
+
+> −1
+
+:= 0 , and let 
+
+γt := ¯ at−1 ¯Vt−1 +
+
+q
+
+Tr( ˆΣw,t −1) + θϵ,t + ¯ ηft−1, t ≥ 1. (18) 
+
+with γ0 := 
+
+q
+
+Tr( ˆΣ−
+
+> x, 0
+
+) + θϵ, 0. Set ¯ηht := Lh 
+
+> 2
+
+αhγ2 
+
+> t
+
+. Then ηft−1 ≤ ¯ηft−1, E[∥e− 
+
+> t
+
+∥2] ≤ γ2 
+
+> t
+
+, ηht ≤ ¯ηht , and therefore 
+
+θeff  
+
+> ϵ,t
+
+≤ ¯θeff  
+
+> ϵ,t
+
+:= θϵ,t +
+
+q
+
+(¯ ηft−1)2 + (¯ ηht )2. (19) Proof of Lemma 4 is given in Appendix E. Lemma 4 shows that, given a deterministic posterior bound at stage t − 1, one can compute both a valid ambiguity radius ¯θeff  
+
+> ϵ,t
+
+and a bound on the prior error at stage t.
+
+3.4.4 Certificate recursion and main result 
+
+We now combine the two lemmas to obtain a recursive certificate. The true error decomposes as 
+
+et = ˆ et + δt, where δt := et − ˆet captures the mismatch due to Taylor residuals. Let δ− 
+
+> t
+
+:= e− 
+
+> t
+
+− ˆe−
+
+> t
+
+denote the corresponding prior mismatch. Initialize ρ− 
+
+> 0
+
+:= 0 and, for each t ≥ 0, set 
+
+ρt = ¯ mtρ− 
+
+> t
+
++ ¯kt ¯ηht , ρ− 
+
+> t+1
+
+= ¯ atρt + ¯ ηft , ¯Vt = ¯ st + ρt, (20) where ¯ ηft := Lf 
+
+> 2
+
+αf ¯V 2 
+
+> t
+
+. The next theorem establishes that ¯V 2 
+
+> t
+
+provides an upper bound on the true posterior MSE. 
+
+Theorem 1 (Distributionally robust true MSE certificate) . Suppose Assumptions 1 to 4 hold, and let {¯θeff  
+
+> ϵ,t
+
+, γ t, ¯st, ρ − 
+
+> t
+
+, ρ t, ¯Vt}t≥0 be constructed according to (17) –(20) . Then, for every t ≥ 0:(i) (Marginal feasibility) The true effective uncertainty law satisfies L(˜ ϵt) ∈ Dϵ,t (¯θeff  
+
+> ϵ,t
+
+).(ii) (Prior MSE) The true prior error satisfies E[∥e− 
+
+> t
+
+∥2] ≤ γ2 
+
+> t
+
+.(iii) (Posterior MSE) The true posterior error satisfies E[∥et∥2] ≤ ¯V 2 
+
+> t
+
+.Algorithm 1: Residual-aware DR-EKF 
+
+Input: ˆx− 
+
+> 0
+
+, ˆΣ−
+
+> x, 0
+
+, { ˆwt, ˆvt, ˆΣw,t , ˆΣv,t , θ ϵ,t }t≥0, {¯at, ¯mt, ¯kt}t≥0, Lf , Lh, αf , αh 
+
+> 1
+
+Initialize ¯ x− 
+
+> 0
+
+← ˆx− 
+
+> 0
+
+, ρ− 
+
+> 0
+
+← 0, and ¯ ηf 
+
+> −1
+
+← 0 
+
+> 2
+
+for t = 0 , 1, . . . do  
+
+> 3
+
+Observe yt and compute Ct ← ∂h ∂x (¯ x− 
+
+> t
+
+) 
+
+> 4
+
+Compute γt via (18) and set ¯ ηht ← Lh 
+
+> 2
+
+αhγ2 
+
+> t
+> 5
+
+Compute ¯θeff  
+
+> ϵ,t
+
+via (19)  
+
+> 6
+
+Solve (10) with ¯θeff  
+
+> ϵ,t
+
+(use (12) for t = 0) to obtain Σ ∗ 
+
+> x,t
+
+and K∗ 
+
+> t
+> 7
+
+Update the posterior mean and covariance: ¯ xt ← ¯x− 
+
+> t
+
++ K∗ 
+
+> t
+
+(yt − h(¯ x− 
+
+> t
+
+) − ˆvt), Σ x,t ← Σ∗ 
+
+> x,t
+> 8
+
+Update the mismatch bound: ρt ← ¯mtρ− 
+
+> t
+
++ ¯kt ¯ηht 
+
+> 9
+
+Compute ¯ st via (17) and set ¯Vt ← ¯st + ρt 
+
+> 10
+
+Compute At ← ∂f ∂x (¯ xt, u t) 
+
+> 11
+
+Set ¯ ηft ← Lf 
+
+> 2
+
+αf ¯V 2 
+
+> t
+> 12
+
+Predict the prior mean: ¯ x− 
+
+> t+1
+
+← f (¯ xt, u t) + ˆ wt 
+
+> 13
+
+Propagate the prior mismatch bound: ρ− 
+
+> t+1
+
+← ¯atρt + ¯ ηft 
+
+> 14
+
+end 
+
+Proof of Theorem 1 is given in Appendix F. 
+
+Remark 3. The bounds in Theorem 1 hold locally along the filter trajectory, i.e., as long as the trajectory remains within the neighborhood where Assumption 1 holds. 
+
+Together, Lemmas 3 and 4 provide the key ingredients: Lemma 3 establishes a deterministic posterior envelope, while Lemma 4 yields a computable ambiguity radius and prior bound. The-orem 1 combines these with the mismatch dynamics to obtain a fully recursive certificate for the true nonlinear estimation error. This leads to the practical residual-aware DR-EKF in Algorithm 1, summarized as a fully recursive and implementable filtering algorithm that preserves the structure of the classical EKF. 
+
+Remark 4. In practice, replacing the deterministic bounds with realized quantities such as ∥At∥,
+
+∥I −K∗ 
+
+> t
+
+Ct∥, ∥K∗ 
+
+> t
+
+∥, and 
+
+q
+
+Tr(Σ ∗
+
+> x,t
+
+) can yield a less conservative pathwise surrogate of the certificate. 
+
+# 4 Experiment Results 
+
+We evaluate the proposed residual-aware DR-EKF on three benchmarks, which are designed to evaluate both estimation accuracy and the practical impact of the proposed uncertainty represen-tation. 4 The first is coordinated-turn (CT) radar tracking, which tests estimation performance under covariance misspecification and increasing nonlinearity. The second is obstacle-avoiding nav-igation with an uncertainty-aware model predictive controller (MPC), which evaluates whether the posterior covariance improves downstream safety decisions in a static environment. The third is crowd-aware navigation on the ETH/UCY dataset with pedestrian trajectory prediction and uncertainty-aware MPC, which evaluates whether the proposed covariance representation improves 
+
+> 4Code and additional results are available at project codebase.
+
+Table 1: Summary of experimental parameters. 
+
+Param. CT Target Tracking Safe Navigation Crowd-Aware Navigation 
+
+μx, 0 [0 , 0, 2, 0, 0.3] ⊤ [0 , 0, 0] ⊤ [2 .5, 6.0, 0.0] ⊤
+
+Σ− 
+
+> x, 0
+
+diag(0 .04 I2, 0.25 I2, 0.0025) diag(0 .01 I2, 0.001) diag(0 .01 I2, 0.007615) Σw,t diag(0 .0001 I2, 0.0025 I2, 0.0004) diag(0 .008 I2, 0.002) diag(0 .01 I2, 0.007615) Σv,t diag(0 .0001 , 0.25) diag(0 .04 I3, 0.03) diag(0 .0144 I3, 0.001218) ˆx− 
+
+> 0
+
+μx, 0 [0 , 0, 0] ⊤ [2 .5, 6.0, 0.0] ⊤
+
+ˆΣ− 
+
+> x, 0
+
+0.1Σ − 
+
+> x, 0
+
+diag(0 .01 I2, 0.001) diag(0 .005 I2, 0.002285) ˆΣw,t 0.1Σ w,t diag(0 .002 I2, 0.0005) diag(0 .005 I2, 0.002285) ˆΣv,t 0.1Σ v,t diag(0 .005 I3, 0.0075) diag(0 .0072 I3, 0.000366) 
+
+θϵ,t 0.001 0.25 0.3(Lf , L h) (0 .3, 0.2) (0 .3, 0.5) (0 .5, 0.5) (αf , α h) (√3, √3) (√3, √3) (√3, √3) 
+
+safety in dynamic environments with moving pedestrians and static obstacles. For clarity, the key experimental parameters for all three benchmarks are summarized in Table 1. 5
+
+In all three scenarios, the DR-EKF uses the effective radius (19). The nominal radius θϵ,t 
+
+can be calibrated from data using standard DRO techniques, such as bootstrap confidence sets over the Wasserstein ball [26]. In the experiments, it was selected via a validation procedure minimizing time-averaged MSE across Monte Carlo runs. The curvature constants Lf and Lh
+
+satisfying Assumption 1 were derived analytically, using the fact that the state remains within a bounded operating region. 
+
+4.1 Coordinated-turn Target Tracking 
+
+We consider a standard CT target tracking model [29, 30] with sampling time ∆ t = 0 .2 s: 
+
+f (xt) = 
+
+
+
+px,t + sin( ωt∆t) 
+
+> ωt
+
+vx,t − 1−cos( ωt∆t) 
+
+> ωt
+
+vy,t 
+
+py,t + 1−cos( ωt∆t) 
+
+> ωt
+
+vx,t + sin( ωt∆t) 
+
+> ωt
+
+vy,t 
+
+cos( ωt∆t)vx,t − sin( ωt∆t)vy,t 
+
+sin( ωt∆t)vx,t + cos( ωt∆t)vy,t 
+
+ωt
+
+
+
+, (21) where xt = [ p⊤ 
+
+> t
+
+, v ⊤ 
+
+> t
+
+, ω t]⊤ comprises the planar position pt = [ px,t , p y,t ]⊤, planar velocity vt =[vx,t , v y,t ]⊤, and turn rate ωt. The target is observed via range and bearing: 
+
+h(xt) = ∥pt∥, atan2( py,t , p x,t )⊤ .
+
+We assume the true noise is zero-mean Gaussian, with nominal and true models differing only in their covariances (see Table 1). Performance is evaluated over 100 Monte Carlo runs with horizon 
+
+T = 50. Fig. 1 (a) and (b) show the EKF and DR-EKF state-estimate trajectories, respectively, for the same Monte Carlo run, selected as the one whose EKF MSE is the median among 100 runs. The results show that the EKF trajectory deviates more noticeably from the true trajectory, whereas the DR-EKF tracks it more closely and smoothly. 
+
+> 5
+
+The filter runs fully online, with each predict–update cycle completing within the discretization step ∆ t, and thus is real-time deployable. While our experiments use Python with MOSEK solver, the SDP (10) admits efficient first-order solutions (e.g., Frank–Wolfe [15, Algorithms 1 and 2]) for broader deployment. −10 −5 0 5               
+
+> x(m)
+> 0
+> 5
+> 10
+> y (m)
+> −10 −5 05
+> x(m)
+> 0
+> 5
+> 10
+> y (m)
+> 0.2 0.3 0.4 0.5 0.6 0.7 0.8
+> Initial Turn Rate ω0(rad/s)
+> 10 0
+> 10 1
+> 10 2
+> 10 3
+> Mean Square Error
+> True trajectory EKF DR-EKF
+
+Figure 1: Coordinated-turn experiment under nominal covariance misspecification. (a) EKF with nominal statistics and (b) DR-EKF trajectories for the Monte Carlo run whose EKF MSE is the median over 100 runs. (c) Average MSE versus the initial turn rate ω0, where increasing |ω0|
+
+corresponds to stronger nonlinearity; shaded regions denote 0 .1 times the standard deviation over 100 runs. To examine the effect of nonlinearity, we vary the initial turn rate ω0 while keeping all covariance matrices and the nominal model fixed. As |ω0| increases, the trigonometric couplings in (21) amplify linearization error. As shown in Fig. 1 (c), EKF performance degrades as nonlinearity increases, whereas the DR-EKF maintains substantially lower MSE even at large |ω0|. This indicates that the proposed DR-EKF is more robust to accumulated linearization error. 
+
+4.2 Safe Navigation with Uncertainty-Aware MPC 
+
+We evaluate whether the posterior uncertainty of the residual-aware DR-EKF improves closed-loop safety in a goal-reaching task with an obstacle. The controller uses the estimated state together with a covariance-derived adaptive safety margin, linking uncertainty to safety constraints. The system follows unicycle dynamics with sampling time ∆ t = 0 .2 s, while the measurement model consists of three ultra-wideband range measurements and a heading measurement. Specifi-cally, 
+
+f (xt, u t) = 
+
+
+
+px,t + st cos( ψt)∆ tpy,t + st sin( ψt)∆ tψt + ωt∆t
+
+ , h(xt) = 
+
+
+
+∥pt − b1∥2
+
+∥pt − b2∥2
+
+∥pt − b3∥2
+
+ψt
+
+ , (22) where xt = [ p⊤ 
+
+> t
+
+, ψ t]⊤ is the robot state, with pt = [ px,t , p y,t ]⊤ denoting the planar position and 
+
+ψt the heading angle. The control input is ut = [ st, ω t]⊤, comprising the commanded linear and angular velocities, and bi ∈ R2, i = 1 , 2, 3, are fixed beacon locations. We assume the true noise follows a zero-mean Gaussian distribution (see Table 1). Starting from an initial state x0, the robot must reach a predefined goal position pgoal . At each time step, we solve a receding-horizon MPC problem based on the current state estimate ¯ xt. Let Figure 2: Closed-loop navigation under uncertainty-aware MPC. (a) Representative trajectories for EKF with nominal statistics, EKF with true noise statistics, and the proposed DR-EKF; crosses indicate collisions, and five of the 100 Monte Carlo runs are shown for clarity. (b) Time evolution of the safety margin δt; shaded bands denote ±1 empirical standard deviation over 100 runs. ¯xt+k|t = [¯ p⊤
+
+> t+k|t
+
+, ¯ψt+k|t]⊤ denote the predicted state at stage t + k. The MPC problem is given by min    
+
+> {¯xt+k|t}Nk=0 ,{ut+k|t}N−1
+> k=0
+> N−1
+
+X
+
+> k=0
+
+
+
+q∥¯pt+k|t − pgoal ∥22 + rss2 
+
+> t+k|t
+
++ rωω2
+
+> t+k|t
+
+
+
++ qf ∥¯pt+N |t − pgoal ∥22 (23a) s.t. ¯xt|t = ¯ xt, (23b) ¯xt+k+1 |t = f (¯ xt+k|t, u t+k|t), k = 0 , . . . , N − 1, (23c) 0 ≤ st+k|t ≤ smax , |ωt+k|t| ≤ ωmax , k = 0 , . . . , N − 1, (23d) 
+
+∥¯pt+k|t − pobs ∥2 ≥ robs + δt, k = 1 , . . . , N, (23e) where q = 5, rs = 0 .5, rω = 0 .5, and qf = 20 are the cost weights, and the input constraints are 
+
+smax = 1 .5 m /s and ωmax = 2 .0 rad /s. At each time step, the MPC enforces the safety constraint (23e), where the safety margin is defined as 
+
+δt := κσ
+
+q
+
+Tr(Σ p,t ),
+
+with Σ p,t denoting the position block of Σ x,t and κσ = 1 .645. Thus, the obstacle is adaptively inflated according to the current state-estimation uncertainty. Unlike fixed heuristic margins, this construction directly leverages the posterior covariance from the residual-aware DR-EKF, enabling the safety margin to adjust online to both distributional mismatch and linearization residuals. We compare the EKF with nominal statistics, the EKF with true noise statistics, and the pro-posed DR-EKF. Over 100 Monte Carlo runs, the collision rates are 77%, 43%, and 1%, respectively. As shown in Fig. 2, the DR-EKF maintains greater obstacle clearance through a more adaptive safety margin, particularly near the obstacle, substantially reducing collisions and demonstrating the practical impact of the proposed uncertainty representation. 
+
+4.3 Safe Navigation in Crowd Scenes 
+
+We evaluate the DR-EKF in a crowd navigation setting where a mobile robot must reach a goal while avoiding pedestrians with uncertain predicted trajectories, in addition to static obstacles (e.g., walls, pillars). This setting provides a realistic and challenging testbed for uncertainty-aware navigation. 0 3 6 9 12 15       
+
+> x (m)
+> 2
+> 4
+> 6
+> 8
+> 10
+> 12
+> 14
+> y (m)
+> Pedestrians EKF (nominal) EKF (true) DR-EKF Collision
+> 4812
+> Time (s)
+> 0.0
+> 0.3
+> 0.6
+> 0.9
+> Safety margin   (m)
+
+Figure 3: Closed-loop navigation under uncertainty-aware MPC with pedestrian prediction on the ZARA02 scene from the ETH/UCY dataset. (a) Representative trajectories for EKF with nominal statistics, EKF with true noise statistics, and the proposed DR-EKF; crosses mark collisions. (b) Time evolution of the safety margin δt; shaded bands indicate ±1 empirical standard deviation across 50 runs. Experiments are conducted on the ZARA02 sequence from the ETH/UCY dataset [31, 32], which contains 1052 frames. The robot follows the same unicycle dynamics (22) with sampling time ∆ t = 0 .4 s, using the same range-heading observation model with beacons at b1 = [1 .0, 1.0] ⊤, b2 = [14 .0, 1.0] ⊤, and 
+
+b3 = [7 .5, 9.0] ⊤. Noise statistics are given in Table 1. The environment includes static obstacles with known center pobs ∈ R2 and radius robs . The robot, with body radius rrobot = 0 .4 m, starts from an initial state x0 and must reach a predefined goal position pgoal while interacting with pedestrians replayed from the dataset. Let At = {1, . . . , M t} denote the set of pedestrians observed at time t. For each j ∈ A t, let 
+
+p(j) 
+
+> t−H+1: t
+
+= ( p(j)
+
+> t−H+1
+
+, . . . , p (j) 
+
+> t
+
+), with p(j) 
+
+> τ
+
+∈ R2, denote the most recent H = 8 observed positions. A pedestrian prediction module Gpred , implemented by Trajectron++ [33], produces an N = 12 step forecast  ˜p(j)
+
+> t+k|t
+
+ j∈A t
+
+> k=1 ,...,N
+
+= Gpred 
+
+ p(j)
+
+> t−H+1: t
+
+
+
+> j∈A t
+
+
+
+(24) where ˜ p(j) 
+
+> t+k|t
+
+∈ R2 denotes the predicted mean position of pedestrian j at time t + k.The adaptive safety margin δt is defined in Section 4.2, with κσ = 1. The effective minimum clearance is then given by 
+
+deff min ,t = dbase min + δt, (25) where dbase min = rrobot +rped is the nominal physical clearance. Here, rped = 0 .1/√2 m is a conservative half-width approximation of a pedestrian. Thus, the safety margin adapts online to the state-estimation uncertainty while remaining grounded in physical geometry. The MPC controller follows the formulation in (23), with predicted pedestrian trajectories from (24) incorporated as time-varying constraints to ensure collision avoidance. The cost weights are q = 1, rs = 0 .002, rω = 0 .15, and qf = 10, and the input limits are smax = 0 .8 m /s and 
+
+ωmax = 0 .4 rad /s. The effective clearance deff min ,t from (25) is applied uniformly to both the static obstacles and predicted pedestrian positions. We compare three estimators in closed loop: EKF with nominal noise statistics, EKF with true noise statistics, and the proposed DR-EKF. Over 50 Monte Carlo runs, the collision rates are 100%, 100%, and 66%, respectively. As shown in Fig. 3, the DR-EKF maintains a larger and more responsive safety margin δt in the vicinity of pedestrians, resulting in a noticeable reduction in collision rate compared to the nominal EKF. In contrast, the nominal EKF underestimates uncertainty, leading to insufficient clearance and frequent collisions. Among the three estimators, DR-EKF achieves the lowest collision rate, indicating that explicitly accounting for linearization residuals can play a critical role in safe navigation in dynamic environments. 
+
+# 5 Conclusions 
+
+We introduced a residual-aware DR-EKF that unifies noise uncertainty and linearization error within a Wasserstein ambiguity framework while preserving the recursive EKF structure. By rein-terpreting linearization residuals as uncertainty, the method admits a tractable SDP formulation, a computable ambiguity radius, and a deterministic recursive certificate for the prior and poste-rior MSE of the true nonlinear system. The resulting estimator improves accuracy under model mismatch and nonlinear effects while enabling safer downstream decision-making. Future work includes deriving tighter bounds to reduce conservatism in the effective radius and validating the framework on hardware under realistic conditions. 
+
+# A Proof of Proposition 1 
+
+Proof. Condition on Yt−1. Since xt = ¯ x− 
+
+> t
+
++ e− 
+
+> t
+
+and ¯ x− 
+
+> t
+
+is Yt−1-measurable, every estimator ψt(Yt)can be written as 
+
+ψt(Yt) = ¯ x− 
+
+> t
+
++ ϕt(νt),
+
+for some measurable map ϕt, because Yt = ( Yt−1, y t) and νt = yt − h(¯ x− 
+
+> t
+
+) − ˆvt is a one-to-one Yt−1-measurable transform of yt. Under the stage-wise local linear-Gaussian surrogate, the innovation is approximated by ˆνt = Cte− 
+
+> t
+
++ ( vt − ˆvt),
+
+and the corresponding stage-wise minimax problem becomes 
+
+Jt := inf 
+
+> ϕt
+
+sup 
+
+> Pϵ,t ∈Dϵ,t (θt)
+
+EPϵ,t 
+
+∥e− 
+
+> t
+
+− ϕt(ˆ νt)∥2 Yt−1
+
+ . (26) The stage-wise surrogate dynamics are 
+
+e− 
+
+> t
+
+= At−1et−1 + ( wt−1 − ˆwt−1),
+
+ˆνt = Cte− 
+
+> t
+
++ ( vt − ˆvt). (27) We first restrict to Gaussian stacked-noise laws, 
+
+Pϵ,t = N (mϵ,t , Σϵ,t ),
+
+Σϵ,t =
+
+ Σw,t −1 Σwv,t −1
+
+Σ⊤ 
+
+> wv,t −1
+
+Σv,t 
+
+
+
+∈ Snx+ny 
+
+> +
+
+. (28) This restriction is introduced only to derive a lower bound. Under the surrogate, et−1 | Y t−1 ∼N (0 , Σx,t −1); hence, for every Gaussian choice of Pϵ,t , the pair ( et−1, ϵ t) is jointly Gaussian, and (e− 
+
+> t
+
+, ˆνt) is an affine image of ( et−1, ϵ t). Therefore, ( e− 
+
+> t
+
+, ˆνt) is jointly Gaussian, and the inner infimum in (26) is attained by the conditional mean E[e− 
+
+> t
+
+| ˆνt, Yt−1], which is affine in ˆ νt; see, e.g., [15, Propositions 3.1–3.2]. Consequently, after minimizing over the affine offset, the resulting MMSE depends only on the covariance of ( e− 
+
+> t
+
+, ˆνt). For Gaussian laws, 
+
+W 22
+
+
+
+N (mϵ,t , Σϵ,t ), N (ˆ ϵt, ˆΣϵ,t )
+
+
+
+= ∥mϵ,t − ˆϵt∥2 + B2
+
+Σϵ,t , ˆΣϵ,t 
+
+
+
+. (29) Hence, within the Gaussian subclass (28), replacing mϵ,t by ˆ ϵt leaves the minimized MMSE un-changed and can only decrease the Wasserstein distance. Thus, an optimizer of the Gaussian-restricted problem may be chosen with nominal mean: 
+
+Pϵ,t = N (ˆ ϵt, Σϵ,t ). (30) Let 
+
+λt := λmin ( ˆΣϵ,t ) > 0.
+
+Since ˆΣϵ,t ∈ Snx+ny 
+
+> ++
+
+, we may, without loss of optimality, restrict all subsequent covariance optimiza-tions to Σϵ,t ⪰ λtInx+ny ,
+
+because this redundant constraint does not change the optimal value; see [27, Appendix A] and [15]. Under (30), both e− 
+
+> t
+
+and ˆ νt are centered conditional on Yt−1. Their conditional covariances are therefore Σ− 
+
+> x,t
+
+= Cov( e− 
+
+> t
+
+| Y t−1) = At−1Σx,t −1A⊤ 
+
+> t−1
+
++ Σ w,t −1, (31) 
+
+Tt = Cov( e− 
+
+> t
+
+, ˆνt | Y t−1) = Σ −
+
+> x,t
+
+C⊤ 
+
+> t
+
++ Σ wv,t −1, (32) 
+
+St = Cov(ˆ νt | Y t−1) = CtΣ−
+
+> x,t
+
+C⊤ 
+
+> t
+
++ Σ v,t + CtΣwv,t −1 + Σ ⊤
+
+> wv,t −1
+
+C⊤ 
+
+> t
+
+. (33) Moreover, if we define Ωt := 
+
+ Σ− 
+
+> x,t
+
+Σwv,t −1
+
+Σ⊤ 
+
+> wv,t −1
+
+Σv,t 
+
+
+
+,
+
+then Ωt =
+
+At−1Σx,t −1A⊤ 
+
+> t−1
+
+00 0
+
+
+
++ Σ ϵ,t ⪰ Σϵ,t ⪰ λtI. 
+
+Therefore, 
+
+St = [ Ct Iny ] Ω t
+
+C⊤
+
+> t
+
+Iny
+
+
+
+⪰ λt
+
+ CtC⊤ 
+
+> t
+
++ Iny
+
+ ≻ 0,
+
+so St is invertible. For a linear estimator ϕt(ˆ νt) = Kt ˆνt, the conditional MSE is 
+
+Rt(Kt, Σϵ,t ) = E ∥e− 
+
+> t
+
+− Kt ˆνt∥2 Yt−1
+
+
+
+= Tr(Σ −
+
+> x,t
+
+) − 2 Tr( KtT ⊤ 
+
+> t
+
+) + Tr( KtStK⊤ 
+
+> t
+
+)= Tr 
+
+
+
+Σ− 
+
+> x,t
+
+− TtS−1 
+
+> t
+
+T ⊤
+
+> t
+
+
+
++ Tr 
+
+
+
+(Kt − TtS−1 
+
+> t
+
+)St(Kt − TtS−1 
+
+> t
+
+)⊤
+
+.
+
+Hence, the minimum over Kt is attained at 
+
+K∗ 
+
+> t
+
+= TtS−1 
+
+> t
+
+, (34) and the minimized value is inf 
+
+> Kt
+
+Rt(Kt, Σϵ,t ) = Tr 
+
+
+
+Σ− 
+
+> x,t
+
+− TtS−1 
+
+> t
+
+T ⊤
+
+> t
+
+
+
+. (35) For Gaussian laws of the form (30), feasibility in Dϵ,t (θt) is equivalent to 
+
+B
+
+
+
+Σϵ,t , ˆΣϵ,t 
+
+
+
+≤ θt, (36) which admits the semidefinite representation 
+
+ ˆΣϵ,t Zt
+
+Z⊤ 
+
+> t
+
+Σϵ,t 
+
+
+
+⪰ 0,
+
+Tr  Σϵ,t + ˆΣϵ,t − 2Zt
+
+ ≤ θ2 
+
+> t
+
+. (37) Therefore, restricting the supremum in (26) to Gaussian laws yields the lower bound 
+
+Jt ≥ max 
+
+> Σ−
+> x,t ,Σw,t −1,Σv,t ,
+> Σwv,t −1,Z t
+
+Tr 
+
+
+
+Σ− 
+
+> x,t
+
+− TtS−1 
+
+> t
+
+T ⊤
+
+> t
+
+
+
+(38) subject to (31), (37), and Σϵ,t =
+
+ Σw,t −1 Σwv,t −1
+
+Σ⊤ 
+
+> wv,t −1
+
+Σv,t 
+
+
+
+∈ Snx+ny 
+
+> +
+
+. (39) To upper-bound the full problem over all laws in Dϵ,t (θt), define 
+
+Mt(θt) := 
+
+n
+
+(m, Σ) : ∥m − ˆϵt∥2 + B2(Σ , ˆΣϵ,t ) ≤ θ2 
+
+> t
+
+, Σ ∈ Snx+ny
+
+> +
+
+o
+
+.
+
+By the Gelbrich inequality, every law in Dϵ,t (θt) induces a mean–covariance pair in Mt(θt). Thus, restricting the estimator to be affine gives the standard Gelbrich upper bound, whereas (38) provides the corresponding Gaussian lower bound. The same conditional restricted primal–dual sandwich argument as in [15, Theorem 4.1 and Corollary 4.1] therefore applies here: since ˆQϵ,t is Gaussian, the image of the Gaussian Wasserstein ball under the mean–covariance projection is exactly Mt(θt), and the risk of any affine estimator depends on the adversary only through these moments. Hence the lower bound (38) is tight, and Jt equals the maximum of Tr 
+
+
+
+Σ− 
+
+> x,t
+
+− TtS−1 
+
+> t
+
+T ⊤
+
+> t
+
+
+
+over the feasible covariance set. In particular, there exists a least-favorable stacked-noise law, and it may be chosen Gaussian with mean ˆ ϵt and covariance Σ ∗
+
+> ϵ,t
+
+.Finally, introduce Σ x,t and impose Σx,t ⪯ Σ− 
+
+> x,t
+
+− TtS−1 
+
+> t
+
+T ⊤ 
+
+> t
+
+. (40) Since St ≻ 0, the Schur complement gives Σx,t ⪯ Σ− 
+
+> x,t
+
+− TtS−1 
+
+> t
+
+T ⊤ 
+
+> t
+
+⇐⇒ 
+
+Σ− 
+
+> x,t
+
+− Σx,t Tt
+
+T ⊤ 
+
+> t
+
+St
+
+
+
+⪰ 0. (41) Because the objective maximizes Tr(Σ x,t ), the inequality (40) is tight at optimality. Collecting the propagation constraint, the Bures LMI, the PSD block structure of Σ ϵ,t , and the Schur complement condition (41) yields the SDP (10). Let Σ ∗ 
+
+> x,t
+
+and Σ ∗ 
+
+> ϵ,t
+
+be optimal for (10), with associated blocks ( T ∗ 
+
+> t
+
+, S ∗ 
+
+> t
+
+). Then the optimal value of the stage-wise local linear-Gaussian surrogate of (4) equals Tr(Σ ∗
+
+> x,t
+
+), the least-favorable stacked-noise law is N (ˆ ϵt, Σ∗
+
+> ϵ,t
+
+), and the minimax-optimal estimator is 
+
+ψ∗ 
+
+> t
+
+(Yt) = ¯ x− 
+
+> t
+
++ T ∗ 
+
+> t
+
+(S∗ 
+
+> t
+
+)−1 ˆνt, (42) which is exactly the innovation-form update (11). This proves the proposition. 
+
+# B Proof of Lemma 1 
+
+Proof. We prove the bound for rft−1(e); the proof for rht (e) is identical. Fix e such that the segment 
+
+{¯xt−1 + se : s ∈ [0 , 1] } lies in the neighborhood of Assumption 1. By the fundamental theorem of calculus, 
+
+rft−1(e) = f (¯ xt−1 + e, u t−1) − f (¯ xt−1, u t−1) − At−1e
+
+=
+
+Z 10
+
+ ∂f ∂x (¯ xt−1 + se, u t−1) − ∂f ∂x (¯ xt−1, u t−1)
+
+
+
+e ds. 
+
+Taking norms and using Assumption 1, we obtain 
+
+∥rft−1(e)∥ ≤ 
+
+Z 10
+
+∂f ∂x (¯ xt−1 + se, u t−1) − ∂f ∂x (¯ xt−1, u t−1) ∥e∥ ds 
+
+≤
+
+Z 10
+
+sL f ∥e∥2 ds = Lf
+
+2 ∥e∥2.
+
+The bound for rht (e) follows in the same way, with ¯ xt−1 and At−1 replaced by ¯ x− 
+
+> t
+
+and Ct, and Lf
+
+replaced by Lh.
+
+# C Proof of Lemma 2 
+
+Proof. For t ≥ 1, Lemma 1 gives 
+
+∥rft−1(et−1)∥2 ≤ L2
+
+> f
+
+4 ∥et−1∥4, ∥rht (e− 
+
+> t
+
+)∥2 ≤ L2
+
+> h
+
+4 ∥e− 
+
+> t
+
+∥4.
+
+Taking expectations and applying Assumption 2 gives 
+
+ E[∥rft−1(et−1)∥2]1/2 ≤ Lf
+
+2 αf E[∥et−1∥2] = ηft−1,
+
+and  E[∥rht (e− 
+
+> t
+
+)∥2]1/2 ≤ Lh
+
+2 αh E[∥e− 
+
+> t
+
+∥2] = ηht .
+
+At t = 0, there is no process-side residual term, so ηf 
+
+> −1
+
+= 0. D Proof of Lemma 3 
+
+Proof. We prove by induction that E[∥ˆet∥2] ≤ ¯s2 
+
+> t
+
+for all t ≥ 0. By the Wasserstein ambiguity assumption and 1-Lipschitzness of coordinate projections, all marginals of L(ϵt) inherit the same radius θϵ,t .
+
+Base case ( t = 0 ): Using the definition of ˆ e0, Minkowski’s inequality, and Assumption 4, 
+
+ E[∥ˆe0∥2]1/2 ≤ ¯m0
+
+ E[∥e− 
+
+> 0
+
+∥2]1/2 + ¯k0
+
+ E[∥v0 − ˆv0∥2]1/2.
+
+By the Gelbrich inequality and the trace-tube bound [27, Proposition 1],  E[∥e− 
+
+> 0
+
+∥2]1/2 ≤
+
+q
+
+Tr( ˆΣ−
+
+> x, 0
+
+)+ 
+
+θϵ, 0 and  E[∥v0 − ˆv0∥2]1/2 ≤
+
+q
+
+Tr( ˆΣv, 0) + θϵ, 0. Substituting yields  E[∥ˆe0∥2]1/2 ≤ ¯s0.
+
+Induction step: Fix t ≥ 1 and assume E[∥ˆet−1∥2] ≤ ¯s2
+
+> t−1
+
+. From (15), Minkowski’s inequality, and Assumption 4, 
+
+ E[∥ˆe− 
+
+> t
+
+∥2]1/2 ≤ ¯at−1 ¯st−1 +  E[∥wt−1 − ˆwt−1∥2]1/2.
+
+Applying the same Wasserstein bound to wt−1 gives  E[∥wt−1 − ˆwt−1∥2]1/2 ≤
+
+q
+
+Tr( ˆΣw,t −1) + θϵ,t .Hence  E[∥ˆe− 
+
+> t
+
+∥2]1/2 ≤ ¯at−1 ¯st−1 +
+
+q
+
+Tr( ˆΣw,t −1) + θϵ,t .
+
+From (16), Minkowski’s inequality, and Assumption 4, 
+
+ E[∥ˆet∥2]1/2≤ ¯mt
+
+ E[∥ˆe− 
+
+> t
+
+∥2]1/2 + ¯kt
+
+ E[∥vt − ˆvt∥2]1/2≤ ¯st,
+
+where we applied the same Wasserstein bound to vt, thus completing the induction. 
+
+# E Proof of Lemma 4 
+
+Proof. We treat the cases t = 0 and t ≥ 1 separately. We show ηft−1 ≤ ¯ηft−1 and ηht ≤ ¯ηht , which together imply the claimed bound on θeff  
+
+> ϵ,t
+
+.
+
+Case t = 0 . By Assumption 3, the x0-marginal satisfies 
+
+W2(L(x0), ˆQ−
+
+> x, 0
+
+) ≤ θϵ, 0.
+
+Applying the Wasserstein bound via the Gelbrich inequality and the trace-tube bound [27, Propo-sition 1] yields 
+
+E[∥e− 
+
+> 0
+
+∥2] ≤  q
+
+Tr( ˆΣ−
+
+> x, 0
+
+) + θϵ, 0
+
+2 =: γ20 .
+
+Therefore, 
+
+ηh 
+
+> 0
+
+≤ Lh
+
+2 αhγ20 = ¯ ηh 
+
+> 0
+
+.
+
+Case t ≥ 1. Since E[∥et−1∥2] ≤ ¯V 2
+
+> t−1
+
+, we have ηft−1 ≤ Lf 
+
+> 2
+
+αf ¯V 2 
+
+> t−1
+
+= ¯ ηft−1. Applying Minkowski’s inequality to the prior error dynamics (7) and using Assumption 4, we obtain 
+
+ E[∥e− 
+
+> t
+
+∥2]1/2 ≤ ¯at−1
+
+ E[∥et−1∥2]1/2 +  E[∥wt−1 − ˆwt−1∥2]1/2 +  E[∥rft−1(et−1)∥2]1/2.By Assumption 3, the wt−1-marginal satisfies W2(L(wt−1), ˆQw,t −1) ≤ θϵ,t . Applying again the Gelbrich inequality and the trace-tube bound gives  E[∥wt−1 − ˆwt−1∥2]1/2 ≤
+
+q
+
+Tr( ˆΣw,t −1) + θϵ,t .Combining this with E[∥et−1∥2] ≤ ¯V 2 
+
+> t−1
+
+and Lemma 2, we obtain 
+
+ E[∥e− 
+
+> t
+
+∥2]1/2 ≤ ¯at−1 ¯Vt−1 +
+
+q
+
+Tr( ˆΣw,t −1) + θϵ,t + ¯ ηft−1 = γt.
+
+Hence E[∥e− 
+
+> t
+
+∥2] ≤ γ2 
+
+> t
+
+, and therefore ηht ≤ Lh 
+
+> 2
+
+αhγ2 
+
+> t
+
+= ¯ ηht .Finally, substituting the bounds on ηft−1 and ηht into (14) gives θeff  
+
+> ϵ,t
+
+≤ ¯θeff  
+
+> ϵ,t
+
+, which proves the claim. 
+
+# F Proof of Theorem 1 
+
+Proof. We prove part (iii) together with the auxiliary bounds 
+
+ E[∥δ− 
+
+> t
+
+∥2]1/2 ≤ ρ− 
+
+> t
+
+,  E[∥δt∥2]1/2 ≤ ρt
+
+by induction on t, where δ− 
+
+> 0
+
+:= 0, δ0 := −K∗ 
+
+> 0
+
+rh 
+
+> 0
+
+(e− 
+
+> 0
+
+), and, for t ≥ 1, δ− 
+
+> t
+
+:= e− 
+
+> t
+
+− ˆe− 
+
+> t
+
+and δt := et − ˆet.Parts (i) and (ii) are obtained at each stage by applying Lemma 4. For each t ≥ 0, write ˜ ϵt = ϵt + ∆ t, where ∆ 0 =
+
+ 0
+
+rh 
+
+> 0
+
+(e− 
+
+> 0
+
+)
+
+
+
+and, for t ≥ 1, ∆ t =
+
+rft−1(et−1)
+
+rht (e− 
+
+> t
+
+)
+
+
+
+.Using the identity coupling, 
+
+W2(L(˜ ϵt), L(ϵt)) ≤  E[∥∆t∥2]1/2 ≤ ηϵ,t .
+
+Base case ( t = 0 ). By Lemma 4, 
+
+E[∥e− 
+
+> 0
+
+∥2] ≤ γ20 , ηh 
+
+> 0
+
+≤ ¯ηh 
+
+> 0
+
+, θeff  
+
+> ϵ, 0
+
+≤ ¯θeff 
+
+> ϵ, 0
+
+.
+
+Hence, using Assumption 3, 
+
+W2(L(˜ ϵ0), ˆQϵ, 0) ≤ W2(L(˜ ϵ0), L(ϵ0)) + W2(L(ϵ0), ˆQϵ, 0) ≤ θeff  
+
+> ϵ, 0
+
+≤ ¯θeff 
+
+> ϵ, 0
+
+.
+
+Therefore L(˜ ϵ0) ∈ Dϵ, 0(¯θeff 
+
+> ϵ, 0
+
+), proving (i), while E[∥e− 
+
+> 0
+
+∥2] ≤ γ20 proves (ii). Moreover,  E[∥δ0∥2]1/2 ≤ ¯k0
+
+ E[∥rh 
+
+> 0
+
+(e− 
+
+> 0
+
+)∥2]1/2 ≤ ¯k0 ¯ηh 
+
+> 0
+
+= ρ0
+
+and  E[∥δ− 
+
+> 0
+
+∥2]1/2 = 0 = ρ− 
+
+> 0
+
+. By Lemma 3, E[∥ˆe0∥2] ≤ ¯s20. Since e0 = ˆ e0 + δ0, Minkowski’s inequality gives  E[∥e0∥2]1/2 ≤ ¯s0 + ρ0 = ¯V0. Hence 
+
+E[∥e0∥2] ≤ ¯V 20 ,
+
+proving (iii). 
+
+Induction step. Fix t ≥ 1 and assume E[∥et−1∥2] ≤ ¯V 2 
+
+> t−1
+
+and  E[∥δt−1∥2]1/2 ≤ ρt−1. Applying Lemma 4 yields 
+
+ηft−1 ≤ ¯ηft−1, E[∥e− 
+
+> t
+
+∥2] ≤ γ2 
+
+> t
+
+, ηht ≤ ¯ηht ,
+
+as well as θeff  
+
+> ϵ,t
+
+≤ ¯θeff  
+
+> ϵ,t
+
+. The bound E[∥e− 
+
+> t
+
+∥2] ≤ γ2 
+
+> t
+
+proves (ii). Moreover, using Assumption 3 and the triangle inequality, W2(L(˜ ϵt), ˆQϵ,t ) ≤ ¯θeff  
+
+> ϵ,t
+
+. Thus L(˜ ϵt) ∈
+
+Dϵ,t (¯θeff  
+
+> ϵ,t
+
+), proving (i). From the error decompositions, δ− 
+
+> t
+
+= At−1δt−1 + rft−1(et−1) and δt = ( I − K∗ 
+
+> t
+
+Ct)δ− 
+
+> t
+
+− K∗ 
+
+> t
+
+rht (e− 
+
+> t
+
+). Applying Minkowski’s inequality, Assumption 4, the induction hypothesis, and the bounds above, we obtain  E[∥δ− 
+
+> t
+
+∥2]1/2 ≤ ¯at−1ρt−1 + ¯ ηft−1 = ρ−
+
+> t
+
+and  E[∥δt∥2]1/2 ≤ ¯mt ρ− 
+
+> t
+
++ ¯kt ¯ηht = ρt.
+
+Finally, Lemma 3 gives E[∥ˆet∥2] ≤ ¯s2 
+
+> t
+
+. Since et = ˆ et + δt, Minkowski’s inequality yields 
+
+ E[∥et∥2]1/2 ≤ ¯st + ρt = ¯Vt.
+
+Hence 
+
+E[∥et∥2] ≤ ¯V 2 
+
+> t
+
+,
+
+proving (iii). 
+
+# References 
+
+[1] R. E. Kalman, “A new approach to linear filtering and prediction problems,” J. Basic Eng. ,vol. 82, pp. 35–45, 1960. [2] D. Simon, Optimal State Estimation: Kalman, H∞, and Nonlinear Approaches . John Wiley & Sons, 2006. [3] U. Shaked, L. Xie, and Y. C. Soh, “New approaches to robust minimum variance filter design,” 
+
+IEEE Trans. Signal Process. , vol. 49, no. 11, pp. 2620–2629, 2001. [4] J. Speyer, J. Deyst, and D. Jacobson, “Optimization of stochastic linear systems with additive measurement and process noise using exponential performance criteria,” IEEE Trans. Autom. Control , vol. 19, no. 4, pp. 358–366, 1974. [5] P. Whittle, “Risk-sensitive linear/quadratic/Gaussian control,” Adv. Appl. Probab. , vol. 13, no. 4, pp. 764–777, 1981. [6] R. K. Boel, M. R. James, and I. R. Petersen, “Robustness and risk-sensitive filtering,” IEEE Trans. Autom. Control , vol. 47, no. 3, pp. 451–461, 2002. [7] B. Noack, V. Klumpp, N. Petkov, and U. D. Hanebeck, “Bounding linearization errors with sets of densities in approximate Kalman filtering,” in Proc. Int. Conf. Inf. Fusion , 2010, pp. 1–8. [8] L. Ding and C. Wen, “High-order extended Kalman filter for state estimation of nonlinear systems,” Symmetry , vol. 16, no. 5, p. 617, 2024. [9] J. Lorenzetti and M. Pavone, “A simple and efficient tube-based robust output feedback model predictive control scheme,” in Proc. IEEE Eur. Control Conf. , 2020, pp. 1775–1782. [10] M. K¨ ogel and R. Findeisen, “Robust output feedback MPC for uncertain linear systems with reduced conservatism,” IFAC-PapersOnLine , vol. 50, no. 1, pp. 10 685–10 690, 2017. [11] B. C. Levy and R. Nikoukhah, “Robust state space filtering under incremental model pertur-bations subject to a relative entropy tolerance,” IEEE Trans. Autom. Control , vol. 58, no. 3, pp. 682–695, 2012. [12] M. Zorzi, “Robust Kalman filtering under model perturbations,” IEEE Trans. Autom. Control ,vol. 62, no. 6, pp. 2902–2907, 2016. [13] ——, “On the robustness of the Bayes and Wiener estimators under model uncertainty,” 
+
+Automatica , vol. 83, pp. 133–140, 2017. [14] S. Shafieezadeh Abadeh, V. A. Nguyen, D. Kuhn, and P. M. Mohajerin Esfahani, “Wasserstein distributionally robust Kalman filtering,” Adv. Neural Inf. Process. Syst. , vol. 31, 2018. [15] V. A. Nguyen, S. Shafieezadeh-Abadeh, D. Kuhn, and P. Mohajerin Esfahani, “Bridging Bayesian and minimax mean square error estimation via Wasserstein distributionally robust optimization,” Math. Oper. Res. , vol. 48, no. 1, pp. 1–37, 2023. [16] B. Han, “Distributionally robust Kalman filtering with volatility uncertainty,” IEEE Trans. Autom. Control , vol. 70, no. 6, pp. 4000–4007, 2025. [17] T. Kargin, J. Hajar, V. Malik, and B. Hassibi, “Distributionally robust Kalman filtering over finite and infinite horizon,” arXiv preprint arXiv:2407.18837 , 2024. [18] M. Jang, A. Hakobyan, and I. Yang, “On the steady-state distributionally robust Kalman filter,” in Proc. IEEE Conf. Decis. Control , 2025, pp. 2385–2392. [19] X. Ding, E. Song, D. Niu, Z. Cao, and Q. Shi, “Exactly or approximately Wasserstein distribu-tionally robust estimation according to Wasserstein radii being small or large,” arXiv preprint arXiv:2510.01763 , 2025. [20] S. Wang and Z.-S. Ye, “Distributionally robust state estimation for linear systems subject to uncertainty and outlier,” IEEE Trans. Signal Process. , vol. 70, pp. 452–467, 2021. [21] K. Si, P. Li, Z.-P. Yuan, K. Qiao, B. Wang, and X. He, “Distributionally robust Kalman filtering for INS/GPS tightly coupled integration with model uncertainty and measurement outlier,” IEEE Trans. Instrum. Meas. , vol. 72, pp. 1–13, 2023. [22] Y. Feng, X. Li, S. X. Ding, H. Ye, and C. Shang, “Sinkhorn distributionally robust state estimation via system level synthesis,” arXiv preprint arXiv:2602.08018 , 2026. [23] S. Wang, “Distributionally robust state estimation for nonlinear systems,” IEEE Trans. Signal Process. , vol. 70, pp. 4408–4423, 2022. [24] C. Villani et al. , Optimal transport: old and new . Springer, 2009, vol. 338. [25] D. Kuhn, P. M. Esfahani, V. A. Nguyen, and S. Shafieezadeh-Abadeh, “Wasserstein distri-butionally robust optimization: Theory and applications in machine learning,” in Oper. Res. Manag. Sci. Age Analyt. INFORMS, 2019, pp. 130–166. [26] P. Mohajerin Esfahani and D. Kuhn, “Data-driven distributionally robust optimization using the Wasserstein metric: Performance guarantees and tractable reformulations,” Math. Pro-gram. , vol. 171, no. 1, pp. 115–166, 2018. [27] M. Jang, A. Hakobyan, and I. Yang, “Distributionally robust Kalman filter,” arXiv preprint arXiv:2512.06286 , 2025. [28] K. Reif, S. G¨ unther, E. Yaz, and R. Unbehauen, “Stochastic stability of the discrete-time extended Kalman filter,” IEEE Trans. Autom. Control , vol. 44, no. 4, pp. 714–728, 1999. [29] F. Gustafsson and A. J. Isaksson, “Best choice of coordinate system for tracking coordinated turns,” in Proc. IEEE Conf. Decis. Control , vol. 3, 1996, pp. 3145–3150. [30] M. Roth, G. Hendeby, and F. Gustafsson, “EKF/UKF maneuvering target tracking using coordinated turn models with polar/Cartesian velocity,” in Proc. Int. Conf. Inf. Fusion , 2014, pp. 1–8. [31] A. Lerner, Y. Chrysanthou, and D. Lischinski, “Crowds by example,” in Computer graphics forum , vol. 26, no. 3. Wiley Online Library, 2007, pp. 655–664. [32] S. Pellegrini, A. Ess, K. Schindler, and L. Van Gool, “You’ll never walk alone: Modeling social behavior for multi-target tracking,” in 2009 IEEE 12th international conference on computer vision . IEEE, 2009, pp. 261–268. [33] T. Salzmann, B. Ivanovic, P. Chakravarty, and M. Pavone, “Trajectron++: Dynamically-feasible trajectory forecasting with heterogeneous data,” in European conference on computer vision . Springer, 2020, pp. 683–700.
