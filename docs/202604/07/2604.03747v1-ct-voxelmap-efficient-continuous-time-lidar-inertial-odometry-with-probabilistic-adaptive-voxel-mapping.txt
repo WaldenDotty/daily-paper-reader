@@ -1,0 +1,1287 @@
+Title: CT-VoxelMap: Efficient Continuous-Time LiDAR-Inertial Odometry with Probabilistic Adaptive Voxel Mapping
+
+URL Source: https://arxiv.org/pdf/2604.03747v1
+
+Published Time: Tue, 07 Apr 2026 00:42:02 GMT
+
+Number of Pages: 16
+
+Markdown Content:
+> 1
+
+# CT-VoxelMap: Efficient Continuous-Time LiDAR-Inertial Odometry with Probabilistic Adaptive Voxel Mapping 
+
+Lei Zhao, Xingyi Li, Tianchen Deng, Chuan Cao, Han Zhang, Weidong Chen 
+
+Abstract —Maintaining stable and accurate localization during fast motion or on rough terrain remains highly challenging for mobile robots with onboard resources. Currently, multi-sensor fusion methods based on continuous-time representa-tion offer a potential and effective solution to this challenge. Among these, spline-based methods provide an efficient and intuitive approach for continuous-time representation. Previous continuous-time odometry works based on B-splines either treat control points as variables to be estimated or perform estimation in quaternion space, which introduces complexity in deriving analytical Jacobians and often overlooks the fitting error between the spline and the true trajectory over time. To address these issues, we first propose representing the increments of control points on matrix Lie groups as variables to be estimated. Leveraging the feature of the cumulative form of B-splines, we derive a more compact formulation that yields simpler analytical Jacobians without requiring additional boundary condition con-siderations. Second, we utilize forward propagation information from IMU measurements to estimate fitting errors online and further introduce a hybrid feature-based voxel map management strategy, enhancing system accuracy and robustness. Finally, we propose a re-estimation policy that significantly improves system computational efficiency and robustness. The proposed method is evaluated on multiple challenging public datasets, demonstrating superior performance on most sequences. Detailed ablation studies are conducted to analyze the impact of each module on the overall pose estimation system. 
+
+Index Terms —Continuous-time Odometry, Mapping, Sensor fusion. 
+
+I. I NTRODUCTION 
+
+Faced with the increasing application of various types of robots—such as mobile robots, humanoid robots, quadruped robots, wheel-legged robots, and unmanned aerial vehicles—in domains including autonomous driving, embodied intelligence, inspection, and search and rescue, enabling these robots to leverage their onboard resources to maintain stable and re-liable motion or pose estimation under conditions of jolts and rapid motion caused by complex terrain or their own complex locomotion patterns is a critical and highly chal-lenging task [1]–[5]. LiDAR sensors are widely adopted for pose estimation due to their advantages in measurement range, distance accuracy, and robustness under varying illumination conditions, making them well-suited for complex real-world environments. Furthermore, integrating complementary sensor modalities such as camera, IMU, and wheel odometer [6]– [10] can further enhance the accuracy and robustness of pose estimation systems. This multi-sensor fusion paradigm has gained significant traction in recent years and has substantially advanced the development of state estimation technologies. Current popular pose estimation techniques typically oper-ate in discrete time at fixed rates, as exemplified by systems 
+
+Fig. 1: Dataset platforms and mapping performance. Despite the varying motion patterns and sensor configurations across different dataset platforms, the proposed method achieves robust and accurate pose estimation in all cases. such as FAST-LIO [11], LeGO-LOAM [12], and FAST-LIVO2 [13]. These approaches generally require additional prepro-cessing steps, including sensor time synchronization and Li-DAR point cloud distortion (motion compensation), followed by pose estimation within filter or nonlinear optimization frameworks. For filter-based methods, the Iterated Extended Kalman Filter (IEKF) [9] and the Iterated Error-State Kalman Filter (IESKF) [11], [13] are commonly adopted. In such frameworks, the state is first predicted—either under constant velocity assumptions (for LiDAR-only setups) or using IMU measurements (for multi-sensor setups involving IMU)—while simultaneously performing motion compensation to correct LiDAR scan distortions. Maximum a posteriori (MAP) or maximum likelihood estimation (MLE) is then conducted based on the predicted state. For optimization-based frame-works, a sliding window strategy is typically employed, where measurements over a certain time span are used to construct residual terms, and nonlinear optimization is performed under MAP or MLE criteria [14], [15]. In general, optimization-based approaches tend to achieve higher accuracy, while filter-based methods offer greater computational efficiency. However, these discrete-time approaches face limitations when dealing with multi-sensor fusion scenarios, particularly those involving dense, asynchronous sensor measurements, high-fidelity processing requirements, and the need to accommodate varying sensor rates. As pose estimation technology advances, continuous-time trajectory representation-based methods have gradually gained attention as a means to further improve estimation accuracy, robustness, and multi-sensor fusion ef-ficiency. Continuous-time pose estimation has garnered increasing 
+
+> arXiv:2604.03747v1 [cs.RO] 4 Apr 2026 2
+
+attention in recent years. Unlike discrete-time approaches, continuous-time methods represent the state to be estimated using continuous functions. A key advantage lies in the ability to query states at arbitrary timestamps via interpolation, which facilitates lossless, dense, and asynchronous multi-sensor fu-sion. Current continuous-time methods can be broadly cat-egorized into three classes: piecewise linear trajectory-based methods, Gaussian process (GP)-based methods, and B-spline-based methods (particularly cubic B-splines). Piecewise linear methods typically adopt constant velocity assumptions and represent trajectories using connected linear segments [16], [17]. While convenient, their representational capacity for complex motions is limited. In contrast, GP-based and spline-based methods offer greater flexibility in modeling complex motion patterns [18]. GP-based approaches model continuous trajectories using Gaussian processes, enabling inference of pose means and covariances at arbitrary times-tamps. However, early GP methods required solving high-dimensional, dense inverse matrix for interpolation, incurring high computational costs unsuitable for real-time SLAM [19]. Subsequent work [20] introduced motion priors derived from linear time-varying stochastic differential equations, yielding exactly sparse inverse kernel matrix and improving query efficiency. This was later extended to matrix Lie groups [21]. Compared to GP representation, B-spline-based implemen-tations are more intuitive and flexible for pose estimation tasks. While B-splines can be recursively constructed via the De Boor-Cox formulation [22], [23], practical applications predominantly employ cumulative-form B-splines. [24] ana-lyzed time derivatives on Lie groups and proposed recursive formulations that improved Jacobian computation efficiency, significantly advancing the application of cubic B-splines in continuous-time pose estimation. Works such as [14], [25], [26] represent 6-DoF poses using cumulative cubic B-splines on matrix Lie groups within optimization frameworks. Dis-tinguishing features include loop closure integration in [25] for improved large-scale mapping consistency, camera mea-surements incorporation in [14] for enhanced accuracy, and analytic Jacobians in [26] replacing Ceres Solver for improved efficiency. Despite achieving satisfactory efficiency, these optimization-based frameworks directly treat control points as estimation variables, resulting in relatively complex Jacobian derivations and additional boundary condition considerations, leaving room for further efficiency improvement [27]. [27] extended continuous-time B-spline estimation to filter frameworks for enhanced efficiency, albeit using quaternion representations that complicate Jacobian derivation and lack intuitiveness. Furthermore, none of the aforementioned B-spline methods account for fitting errors between splines and true trajectories. In summary, while B-spline methods offer flexibility and in-tuitiveness, they lack uncertainty characterization and warrant further theoretical development. Motivation and Contribution: To further enhance the ef-ficiency and performance of B-spline-based continuous-time pose estimation, the main contributions of this paper are summarized as follows:  
+
+> •
+
+We propose an IEKF-based multi-sensor fusion odometry framework that integrates a more consistent spline repre-sentation with a hybrid-feature voxel map, achieving both high efficiency and robustness. The proposed method at-tains superior performance on multiple challenging public datasets while maintaining computational efficiency and system robustness.  
+
+> •
+
+Building upon [24], we derive a more compact cumulative-form cubic B-spline representation on Lie groups. By treating control point increments—rather than the control points themselves—as estimation variables, we obtain simplified analytic Jacobians that are unified in form and eliminate the need for explicit boundary condition handling.  
+
+> •
+
+To account for spline fitting errors, we leverage IMU measurements to estimate such errors online, thereby enhancing system robustness. Furthermore, we adopt a voxel map structure with hybrid features (plane features and voxel features) to improve estimation accuracy.  
+
+> •
+
+We introduce a re-estimation policy that decomposes an 
+
+m-dimensional problem into k subproblems of dimen-sion m/k , significantly improving both computational efficiency and system robustness.  
+
+> •
+
+Extensive experiments on public datasets, along with ablation studies, provide a comprehensive evaluation of the proposed algorithm. The complete code will be open-sourced to contribute to the community. The mapping performance on different public datasets and platforms is shown in Figure 1, where the images of the robot are respectively sourced from the data collection platforms corresponding to the public datasets [28]–[31]. II. RELATED WORK 
+
+This section briefly reviews prevalent LiDAR-based and LiDAR-inertial odometry frameworks, with a focus on the evo-lution from discrete-time to continuous-time pose estimation paradigms. 
+
+Discrete-time LiDAR-Based Odometry : early LiDAR-based pose estimation predominantly relied on 2D LiDAR sensors [32]. With the advent of 3D LiDAR technology, methods leveraging 3D measurements have gained increas-ing attention. LOAM [33] represents a seminal work in 3D LiDAR SLAM, which extracts geometric features from point clouds and employs nonlinear optimization to achieve favor-able accuracy and efficiency. Subsequent works such as [12] improved feature extraction by incorporating ground features and introducing loop closure, thereby mitigating z-axis drift and enhancing mapping consistency. [34] further extended the LOAM framework to multi-sensor configurations, improving robustness in degraded environments. Compared to filtering-based approaches, LOAM-style meth-ods exhibit relatively lower computational efficiency [8]. In contrast, [8], [9], building upon the MSCKF paradigm [35], [36], leverage state augmentation and QR decomposition-based state compression to achieve accuracy comparable to optimization-based methods while maintaining high efficiency. To exploit finer geometric details by utilizing raw point clouds directly [11], [37], the IESKF framework combined with 3
+
+point-to-plane ICP has demonstrated remarkable efficiency and accuracy. More recent advances [13], [38] adopt voxel-based representations and leverage plane features within local maps to further improve both precision and computational performance. However, with the rapid progress in autonomous driving and embodied intelligence, sensor suites have become increas-ingly diverse. The limitations of discrete-time pose estimation methods in accommodating asynchronous fusion of multiple homogeneous or heterogeneous sensors have become increas-ingly evident. Consequently, continuous-time pose estimation techniques have garnered growing research interest. 
+
+Continuous-time LiDAR-based odometry : compared to discrete-time methods that estimate poses only at discrete timestamps, continuous-time approaches treat the pose as lying on a continuous trajectory, with poses at specific moments obtained via sampling along this trajectory. Consequently, continuous-time SLAM can also be referred to as Simul-taneous Trajectory Estimation and Mapping (STEAM) [20]. When measurements acquired at different timestamps arrive, the corresponding states can be queried from the continuous trajectory to formulate residuals, eliminating the need for additional temporal synchronization or motion compensation [25]. Continuous-time trajectory representations can be broadly categorized into parametric methods (e.g., linear interpolation, splines) and non-parametric methods (e.g., one-dimensional Gaussian processes) [18]. Early parametric continuous-time approaches commonly employed linear interpolation or piece-wise continuous functions to represent trajectories. For in-stance, [17] utilized spherical linear interpolation for motion compensation during rapid motion, while [16] adopted piece-wise continuous linear functions to represent robot trajectories. Although these methods achieve satisfactory pose estimation performance under relatively fast motions, linear interpolation and piecewise linear functions have limited representational capacity for complex motion patterns and cannot guarantee velocity or acceleration continuity at junction points. Gaussian process-based and B-spline-based methods ad-dress these limitations. [19] implemented a Gaussian process-based SLAM approach, but querying poses between discrete timestamps required solving high-dimensional, dense matrix inverses, rendering it unsuitable for real-time applications. Subsequent work introduced motion priors derived from linear time-varying stochastic differential equations, yielding sparse inverse kernel matrix and enabling real-time deployment [20]. [39] further extended this framework to filter paradigms, achieving more efficient implementations. However, Gaussian process-based methods rely heavily on the form of motion priors. In contrast, B-spline-based methods offer greater intu-itiveness and convenience. [25] implemented continuous-time LiDAR-inertial odometry using cumulative-form B-splines de-rived from [24], albeit with relatively limited computational efficiency. [26] improved efficiency by introducing analytic Ja-cobians with respect to control points, replacing Ceres Solver’s automatic differentiation, while maintaining high pose estima-tion accuracy. Nevertheless, further improvements remain pos-sible. [27] subsequently extended continuous-time estimation to filter frameworks, employing quaternion representations for rotational trajectories and achieving efficient continuous-time estimation, albeit at the cost of increased complexity. Overall, continuous-time pose estimation methods based on B-splines still require further development. III. P RELIMINLARIES 
+
+This section presents the framework of the proposed ap-proach, including coordinate system definitions, sensor mea-surement models, and the cumulative-form continuous-time trajectory representation. 
+
+A. System Overview, Coordinate Frames and Mesurement Model 
+
+The framework of the proposed system is illustrated in Fig.2. The LiDAR coordinate frame is denoted as L(·), the IMU coordinate frame as I (·), and the global coordinate frame as G(·). The entire system incorporates two sensors: LiDAR, IMU. The corresponding measurement models are described as follows. 
+
+Fig. 2: Schematic diagram of system overview. 
+
+1) IMU measurement model : 
+
+> I
+
+ωm = I ω + bω + nw,I am = I a + ba + IGRGg + na.
+
+where ba denotes the accelerometer bias, bω denotes the gy-roscope bias, nw and na represent the additive white noise in angular velocity and acceleration measurements, respectively. 
+
+2) LiDAR measurement model : let {LPj , j = 1 , ..., m }
+
+denote the points in the current scan, which are sampled in the local LiDAR coordinate frame {L}. Due to LiDAR measurement noise, each measured point LPj is typically corrupted by noise Lnj , which consists of both ranging and beam-directing noise components [11]. 
+
+> L
+
+P gt j = LPj + Lnj
+
+B. B-spline Based Interpolation 
+
+In recent years, continuous-time odometry methods have achieved remarkable performance [17], [25], [26], [40]. Due to the relative simplicity of spline representations, we adopt the cumulative-form B-spline to represent continuous trajectories 4
+
+[18]. This representation is characterized by the following parameters: knot interval ∆t, spline order N (or degree 
+
+D ≜ N − 1), and a set of control points {Tm}, m = 0 , ..., M ,where Tm ∈ SE (3) . Each control point Tm is associated with a knot tm, satisfying tm = t0 + m∆t. We employ cubic splines ( N = 4 ) with a constant knot interval ∆t = τ .Unless otherwise specified, all subsequent references to spline trajectories refer to uniform cubic splines. The cumulative form of the cubic B-spline can be described as follows [24]: 
+
+R(t) = RiN −1Y
+
+> j=1
+
+Exp (˜λj (u)Log (R−1
+
+> i+j−1
+
+Ri+j )) ,p(t) = pi + 
+
+> N−1
+
+X
+
+> j=1
+
+˜λj (u)( pi+j − pi+j−1).
+
+(1) Where u = t−ti 
+
+> ∆t
+
+, t ∈ [ti, t i+1 ), t i ∈ { tm|m = 0 , ..., M }.The calculation of ˜λi and its first and second derivatives is as follows: 
+
+[˜λ0, ˜λ1, ..., ˜λN −1]T = ˜B(N )[1 , u, ..., u N −1]T ,
+
+[ ˙˜λ0, ˙˜λ1, ..., ˙˜λN −1]T = ˜B(N )[0 , 1, ..., ˙uN −2]T ,
+
+[¨˜λ0, ¨˜λ1, ..., ¨˜λN −1]T = ˜B(N )[0 , 0, ..., ¨uN −3]T .
+
+(2) Where ˙uj = j 
+
+> ∆t
+
+uj−1 and ¨uj = j(j−1) ∆t2 uj−2. Given N , a blending matrix B(N ) and its cumulative form ˜B(N ) can be found in [24], [26]. IV. S TATE ESTIMATION 
+
+In the state estimation task employing continuous-time trajectory representation, the state vector χ comprises the IMU accelerometer bias ba, gyroscope bias bw, gravity g, and the control point increments of the B-spline corresponding to the recent continuous trajectory segment. To facilitate estimation, we examine the rotational control points. From eq.(1) and eq.(2), it can be observed that ˜λ0(u) = 1 . Consequently, the continuous trajectory representation can be reformulated as: 
+
+R(t) = Ri−1 
+
+> N−1
+
+Y
+
+> j=0
+
+Exp (˜λj (u)dj ), d j = Log (R−1
+
+> i+j−1
+
+Ri+j ) (3) Similar to the approach in [27], we estimate dj rather than directly estimating GC RT . The key distinction lies in our estimation being performed on the matrix Lie group SO (3) ,which offers a more intuitive formulation. Based on the above representation, the corresponding recursive formulation for angular velocity can be derived as: 
+
+ω(j+1) = ATj ω(j) + ˙˜λj (u)dj , j = 0 , ..., N − 1.ω(t) = ω(N ), ω (0) = 0 ,Aj = Exp (˜λj (u)dj ), j = 0 , ..., N − 1.
+
+(4) The same idea is applied to the positional control points, yielding: 
+
+p(t) = pi−1 + 
+
+> N−1
+
+X
+
+> j=0
+
+˜λj (u)dj , d j = pi+j − pi+j−1. (5) The corresponding velocity and acceleration can be com-puted as follows: 
+
+v(t) =  
+
+> N−1
+
+X
+
+> j=0
+
+˙˜λj (u)dj , d j = pi+j − pi+j−1,a(t) =  
+
+> N−1
+
+X
+
+> j=0
+
+¨˜λj (u)dj , d j = pi+j − pi+j−1.
+
+(6) The advantages of this formulation are twofold. First, the state variables corresponding to the control points remain in Euclidean space, and the increments are small quantities, ensuring that the state variables stay within a relatively small range, which benefits state estimation. Second, based on the proposed continuous trajectory representation, the boundary conditions are consistent when deriving Jacobian matrices, eliminating the need to separately consider the cases j = 0 
+
+and j = N − 1, thus resulting in a more compact formulation. Consequently, the corresponding system can be expressed as: 
+
+χ .
+
+= χCr χCp χI
+
+T
+
+χCr = [ dTR,j ], χ Cp = [ dTp,j ], j = 0 , ..., N − 1,χI = [ bTw, b Ta , GgT ],u .
+
+= [ ωTm, a Tm]T , w .
+
+= [ nTbw , n Tba ]T .dTR,j , d Tp,j , j = 0 , ..., N − 1 denote the rotational and po-sitional control point increments corresponding to the newly added B-spline segment with their specific definitions given in eq.(3) and eq.(5), respectively. bw, ba, and Gg represent the gyroscope bias, accelerometer bias, and gravity vector, respectively. u denotes the IMU measurement input, and w
+
+represents the corresponding noise. 
+
+A. Kinematic Model 
+
+Based on the characteristics of uniform B-splines, the k-th spline segment represents the continuous trajectory over the interval [tk,s , t k,e ]. When a new LiDAR scan arrives, the maximum timestamp of its points is denoted as tLe . If 
+
+tLe ∈ [tk,s , t k,e ], the control points remain unchanged during the state prediction stage. However, when tLe > t k,e , new segments and corresponding control points need to be extended to represent the additional trajectory information. Resulting in a jump in the state χ, while bw, ba, and Gg remain unchanged. 
+
+hybrid system : Based on the above description, the state estimation task based on continuous-time representation can be modeled as a hybrid system, where the state undergoes jumps at discrete instants tk, k = 1, ..., n , while evolving continuously over the intervals ti ∈ [tk, t k+1 ) , k = 1 , ..., n .The system can then be expressed as: 
+
+ ˙χ(t) = 0 ⊞ w, t ∈ [tk, t k+1 ) , k = 1 , ..., n χt+ = Aχ t− , t = tk, k = 1 , ..., n. (7) Where w denotes the process noise, all modeled as Gaussian white noise. (The definitions of ⊟ and ⊞ follow those in [37]). A represents the state transition matrix, defined as 
+
+A = diag (Ar , A p, I 3, I 3, I 3). Here, Ar denotes the state transition matrix corresponding to the rotational control point 5
+
+increments, and Ap denotes the state transition matrix corre-sponding to the positional control point increments. When no new control points are added, both Ar and Ap are identity matrix. When new control points are added, the specific form needs to be discussed. For the prediction of control points, due to the local support property of B-splines, the control points corresponding to the newly extended k + 1 -th segment can be initialized from the control points of the k-th segment. The corresponding state can be initialized using the state at time t− 
+
+> k
+
+, yielding: 
+
+bt+ 
+
+> k
+> w
+
+= bt− 
+
+> k
+> w
+
+, b t+ 
+
+> k
+> a
+
+= bt− 
+
+> k
+> a
+
+, Ggt+ 
+
+> k
+
+= Ggt− 
+
+> k
+
+,dt+ 
+
+> k
+> R,j
+
+= dt−
+
+> k
+> R,j +1
+
+, d t+ 
+
+> k
+> p,j
+
+= dt−
+
+> k
+> p,j +1
+
+, j = 0 , ..., N − 2.
+
+For the initialization of dt+  
+
+> k
+> R,N −1
+
+and dt+ 
+
+> k
+> p,N −1
+
+, it is related to the initialization strategy. The initialization strategy adopted in this paper is the constant velocity initialization strategy, which maintains the linear velocity and angular velocity at times tk and tk+1 unchanged. For the rotational control points, according to eq.(4), we can obtain: 
+
+ω(tk) = ω(tk+1 )
+
+⇒ ATN −1 . . . A T 
+
+> 0
+
+ω(0) + · · · + ˙˜λN −1(0) dN −1
+
+= ATN −1 . . . A T 
+
+> 0
+
+ω(0) + · · · + ˙˜λN −1(1) dN −1
+
+⇒ ATN −1|u=0 dN −3 + dN −2 = ATN −1|u=1 dN −2 + dN −1
+
+⇒ dt+  
+
+> k
+> R,N −1
+
+≃ dt− 
+
+> k
+> R,N −2
+
+,
+
+when the control point frequency is sufficiently high, dj , j =0, ..., N − 1 are small quantities. For the positional control points, according to eq.(6), we can obtain: 
+
+v(tk+1 ) = v(tk) ⇒ dN −3 = dN −1 ⇒ dt+  
+
+> k
+> p,N −1
+
+= dt− 
+
+> k
+> p,N −2
+
+.
+
+Based on the discussion above, when new control points are added, the definitions of Ar and Ap are as follows: 
+
+Ar =
+
+
+
+0 I3 0 00 0 I3 00 0 0 I3
+
+0 0 I3 0
+
+ , A p =
+
+
+
+0 I3 0 00 0 I3 00 0 0 I3
+
+0 0 I3 0
+
+
+
+B. IMU Observation 
+
+Upon the arrival of the (k +1) -th LiDAR scan, based on the inter-scan LiDAR point cloud information over [ts,k +1 , t e,k +1 ]
+
+and the IMU measurements, maximum a posteriori (MAP) estimation of the state is performed within the iterated ex-tended Kalman filter (IEKF) framework. The corresponding observation equation is formulated as follows: 
+
+zk = h(f (χk; tk)) + vk.
+
+Where vk denotes the observation noise, h represents the corresponding observation equation, and f is a function of χ
+
+that yields the interpolated information obtained from control points at time tk ∈ [tk,s , t k,e ], such as Rtk , p tk , etc. 
+
+1) IMU observation with continuous-time trajectory :
+
+Based on the state information from the prediction stage, to achieve more accurate estimation of the control points, we utilize the IMU measurements, biases, and gravity information over the interval [ts,k +1 , t e,k +1 ]. Furthermore, due to the local support property of B-splines, the control points of the current trajectory segment also influence the representation of histor-ical trajectory segments. Specifically, the N control points of the current segment affect N spline trajectory segments, involving 2N − 1 control points in total. When formulating observations, both measurement and estimation information within the affected intervals are comprehensively considered, i.e., the IMU measurements and estimated biases and gravity information over [ts,k −N +2 , t e,k ]. Each interval has the same 
+
+∆t, and te,i = ts,i +1 , i = 0 , ..., n . A schematic illustration is provided in Fig. 3. 
+
+Fig. 3: The black line denotes a continuous trajectory, repre-sented by a 4th-order spline. The solid green circle denotes the IMU measurement, while the hollow green and red cir-cles represent the affected and unaffected historical estimated states, respectively. Based on the above description, the observation equation formulated from IMU poses and measurements over the inter-val [ts,k −N +2 , t e,k +1 ] is expressed as follows: 
+
+hB (χ, 0) = 
+
+ 
+
+> GIk
+
+R(tk)T (a(tk) + G ˆg) + ˆba − Itk am
+
+ω(tk) + ˆbω − Itk ωm
+
+ˆbω − bωtk
+
+ˆba − batk 
+
+> G
+
+ˆg ⊟ Ggtk
+
+
+
+,
+
+= hTa hTω hTI
+
+T .
+
+(8) Where R(t) and p(t) are computed from eq.(3) and eq.(5), respectively. ω(t) can be obtained from eq.(4), and a(t) can be obtained from eq.(6). Ggtk denotes the gravity estimate at time tk, bωtk and batk represent the angular velocity and acceleration biases at time tk, and Itk am and Itk ωm are the IMU measurements at time tk. G ˆg, ˆba, and ˆbω are the state variables at the current time. The term G ˆg ⊟ Ggtk can be computed on S2 and can be computed as follows: 
+
+s ⊟ d = BTd
+
+⌊d⌋ s
+
+|| ⌊ d⌋ s|| atan 2( || ⌊ d⌋ s|| , d T s), d ̸ = −s, s, d ∈ S2.
+
+Jacobian : linearizing the observation equation around 
+
+ˆχk+1 |k yields: 
+
+hB (χ, n ) = hB ( ˆ χ ⊞ δχ, n )
+
+≃ hB ( ˆ χ, 0) + HB δχ + n, n ∼ N (0 , P 
+
+> B
+
+)6
+
+Where P 
+
+> B
+
+is the covariance of the IMU observation noise. Based on the IMU measurement model, the noise in the observation equations ha and hw is approximated by the measurement noise. H is the Jacobian matrix obtained when linearizing hB (χ, 0) around ˆχk+1 |k:
+
+HB = lim 
+
+> δχ →0
+
+hB ( ˆ χ ⊞ δχ, 0) ⊟ hB ( ˆ χ, 0) 
+
+δχ 
+
+=
+
+h ∂h B   
+
+> ∂ˆdR,j
+> ∂h B
+> ∂ˆdp,j
+> ∂h B
+> ∂ˆχI
+
+i
+
+Based on the observation equation hB (χ, n ) (eq.(8)), the Ja-cobian matrix is computed using the chain rule. For notational convenience and without ambiguity, we omit the subscript k
+
+in the following derivations: 
+
+∂h a
+
+∂ ˆdR,j 
+
+= ∂h a
+
+∂R (t)
+
+∂R (t)
+
+∂ ˆdR,j 
+
+, j = 0 , ..., N − 1.
+
+Where ∂h a 
+
+> ∂R (t)
+
+can be computed as follows: 
+
+∂h a
+
+∂R (t) = GI R(t)T (a(t) + Gg)
+
+> ×
+
+According to eq.(3), ∂R (t) 
+
+> ∂ˆdR,j
+
+can be computed as follows: 
+
+∂R (t)
+
+∂ ˆdR,j 
+
+= ∂R (t)
+
+∂d j
+
+= ˜λj (u)Pj Jr (˜λj (u)dj ),Pj = Pj+1 ATj+1 , P N = I, A N = I, j = 0 , ...., N − 1.
+
+(9) Where Aj is defined as in eq.(4), and AN = I corresponds to the definition for j = N . It can be observed that, compared to the continuous trajectory representations in [24], [26], the proposed formulation yields a more concise form for Jacobian derivation, without requiring additional consideration of boundary conditions. ∂h ω 
+
+> ∂ˆdR,j
+
+can be computed as follows: 
+
+∂h ω
+
+∂ ˆdR,j 
+
+= ∂w (t)
+
+∂d j
+
+= ∂w (j+1) 
+
+∂d j
+
+, j = 0 , ..., N − 1. (10) According to eq.(4), ∂w (j+1)  
+
+> ∂d j
+
+can be computed as follows: 
+
+∂w (j+1) 
+
+∂d j
+
+= Pj (˜λj (u)ATj
+
+j
+
+w(j)k
+
+> ×
+
+Jr (−˜λj (u)dj ) + ˙˜λj (u)I)
+
+ba, bw, and g are independent of dR,j , thus their derivatives are all zero. For ∂h B 
+
+> ∂ˆdp,j
+
+, the corresponding Jacobian can be computed based on the observation equation hB (χ, n ) and eq.(6) as follows: 
+
+∂h a
+
+∂ ˆdp,j 
+
+= GI R(t)T ¨˜λj (u)I, ∂h w
+
+∂ ˆdp,j 
+
+= 0 , j = 0 , ..., N − 1. (11) 
+
+ba, bw, and g are independent of dp,j , thus their derivatives are all zero. Regarding ∂h B  
+
+> ∂ˆχI
+
+, it can be computed as follows: 
+
+∂h a
+
+∂ ˆχI
+
+= 0 I −GI R(t)T ⌊ˆg⌋× Bˆg
+
+ , ∂h w
+
+∂ ˆχI
+
+= I 0 0 .
+
+Among these, ∂h B ( ¯ χ, 0)  
+
+> ∂d R,j
+
+and ∂h B ( ¯ χ, 0)  
+
+> ∂d p,j
+
+are related to the seg-ment in which the historical state resides. The corresponding Jacobian only has non-zero values at the control points to be optimized, while the remaining control points in that segment are static and do not participate in the Jacobian computation. 
+
+hI is only related to the IMU state, therefore its Jacobian with respect to the state is: 
+
+∂h I
+
+∂ ˆχ =
+
+
+
+03×24 I3 03 03×2
+
+03×24 03 I3 03×2
+
+02×24 02×3 02×3 − BTgk ⌊gk ⌋×⌊gk ⌋×Bgk 
+
+> || gk|| 2
+
+
+
+Fitting error : In practical applications, to balance efficiency and representation accuracy, high-order splines are not em-ployed, and it cannot be guaranteed that the poses at all dis-crete time instants ti, i = 1 , ..., n lie exactly on the continuous trajectory. Consequently, representation errors are inevitably introduced, as illustrated in Fig.4, which subsequently affect the accuracy of pose estimation. Notably, this issue has not been addressed in existing continuous-time odometry works [17], [25]–[27]. 
+
+Fig. 4: Schematic diagram of representation error of continu-ous time spline curve. For the affected interval [tk−N +2 , t k+1 ], δT is estimated based on the differences between: (i) the optimally estimated poses over [tk−N +2 , t k] and the IMU forward-propagated poses over [tk, t k+1 ] [13], [37], and (ii) the poses obtained via continuous trajectory interpolation at the corresponding timestamps. The representation error is generally small, and we assume it follows the distribution δT ∼ N (0 , ΣT ). In practice, rotation and translation are interpolated separately, leading to the respective assumptions δR ∼ N (0 , ΣR) and 
+
+δp ∼ N (0 , Σp). The specific calculation method is as follows: 
+
+δθ i = GIi
+
+¯R ⊟ R(ti), t i ∈ [tk−N +2 , t k], i = 1 , ..., n. δθ j = GIj
+
+ˆR ⊟ R(tj ), t i ∈ [tk, t k+1 ], j = 1 , ..., s. 
+
+ΣR = 1
+
+N
+
+> N
+
+X
+
+> m=1
+
+δθ mδθ Tm, N = n + s. 
+
+(12) The above equation provides an estimate of the rotation representation error. For the translation representation error, a similar approach can be adopted. 
+
+δp i = G ¯pIi ⊟ p(ti), t i ∈ [tk−N +2 , t k], i = 1 , ..., n. δp j = G ˆpIj ⊟ p(tj ), t j ∈ [tk, t k+1 ], j = 1 , ..., s. 
+
+Σp = 1
+
+N
+
+> N
+
+X
+
+> m=1
+
+δp mδp Tm, N = n + s. 
+
+(13) 
+
+C. Lidar Observation With Uncertainty 1) Probalistic point to stable feature projection : Inspired by [38], we leverage point cloud uncertainty modeling [38], 7
+
+[40]–[42] to characterize feature uncertainty, further improving registration accuracy and efficiency. However, unlike [38] which focuses solely on planar features, we consider stable environmental structures more broadly. This is motivated by the fact that sensor placement or cluttered environments may not always provide sufficient and stable planar features, po-tentially degrading localization accuracy. 
+
+Point Uncertainty : The uncertainty of the points is quan-tified using the method described in [38], [43]. During pose estimation, points are projected into the global coordi-nate frame using the continuous-time representation: Gpi = 
+
+> GI
+
+R(t)( ILRLpi + I tL) + Gp(t), which introduces additional localization uncertainty [38]. The corresponding uncertainty of Gpi is given by: 
+
+PGpi = GI R(t)ILRPLpi (GI R(t)ILR)T + P
+
+> t
+
++ GI R(t)
+
+jILRLpi + I tL
+
+k
+
+> ×
+
+P
+
+> R
+
+jILRLpi + I tL
+
+kT 
+
+> ×
+> GI
+
+R(t)T (14) where P 
+
+> t
+
+corresponds to the uncertainty of Gp(t), and P
+
+> R
+
+corresponds to the uncertainty of GI R(t).
+
+Plane Uncertainty : For points Gpi, i = 1 , ..., N within a voxel, we can obtain: 
+
+q = 1
+
+N
+
+> N
+
+X
+
+> i=1
+> G
+
+pi, P 
+
+> V
+
+= 1
+
+N 
+
+> N−1
+
+X
+
+> i=1
+
+(Gpi − q)( Gpi − q)T .
+
+Let q denote the mean of the point cloud distribution within the voxel, and P 
+
+> V
+
+denote the corresponding covariance matrix. The eigendecomposition of this covariance matrix yields: U ΛU T = P 
+
+> V
+
+, where Λ = diag (λ1, λ 2, λ 3) and 
+
+U = [ u1, u 2, u 3] represent the eigenvalues and eigenvectors, respectively. Due to the consideration of both LiDAR point measurement uncertainty and pose uncertainty, these uncer-tainties propagate to the eigenvalues, eigenvectors, and mean [38], yielding: 
+
+[λgt , u gt , q gt ]T = f (Gp1 + δGp1 , ..., GpN + δGpN )
+
+≈ [¯λ, ¯u, q ]T +
+
+> N
+
+X
+
+> i=1
+
+∂f ∂Gpi
+
+δGpi .
+
+The corresponding covariance can be computed as P 
+
+> λ,u,q
+
+= PNi=1 
+
+> ∂f ∂Gpi
+
+PGpi ( ∂f ∂Gpi )T , where ∂f ∂Gpi =[ ∂λ k 
+
+> ∂Gpi
+
+, ∂u k 
+
+> ∂Gpi
+
+, ∂q ∂Gpi ]T . In this work, the uncertainty of the mean is not considered. 
+
+Point matching with feature uncertainty : During point cloud registration, relying on a single feature type may lead to performance degradation when the corresponding feature cannot be reliably detected [38]. Therefore, we employ mul-tiple feature types in this work. Considering the sparsity of LiDAR point clouds, we adopt both plane features and voxel features, denoted as fp and fv , respectively. Unlike previous works that primarily employ ICP-style approaches [37], [44], [45], our uncertainty modeling enables precise characterization of feature reliability, leading to more robust registration performance. The specific feature representations are illustrated in Fig. (5). The voxel construction follows a coarse-to-fine strategy similar to [38]. Specifically, when the point cloud is sparse, a coarse voxel representation is established. As the point cloud becomes denser, an adaptive refinement strategy is 
+
+Fig. 5: Voxel representation and decomposition diagram. employed to construct finer voxels. (Note: When a plane feature can be extracted from a voxel, further subdivision is not performed; otherwise, the voxel is subdivided until either stable features can be extracted or the maximum subdivision depth is reached.) Voxels that are leaf nodes and do not contain plane features are designated as voxel features. After con-structing the voxels, different types of observation equations are formulated based on the feature type. 
+
+Point-to-plane : The corresponding observation equation is formulated as follows: 
+
+hL(χ, n ) = uT 
+
+> 1
+
+(Gpi − q)= (ˆ u1 ⊞ δu1 )T [( ˆT (ti) ⊞ δT )I TL(Lpi + δLpi ) − q − δq ]
+
+≃ ˆuT 
+
+> 1
+
+( ˆT (ti)I TLL ˆpi − ˆq)
+
+| {z } 
+
+> hL,r ( ˆ χ, 0)
+
++HLδχ 
+
++ Ju1 δu1 + Jq δq + JR(ti)δθR(ti) + Jp(ti)δp(ti) + JLpi δLpi
+
+| {z }
+
+> nr
+
+(15) where hL,r ( ˆ χ, 0) denotes the residual, and nr represents the noise. ˆT (ti) ∈ SE (3) denotes the pose computed from the continuous trajectory at time L ˆpi, and δT represents the fittting error of the continuous trajectory. HL,i denotes the Jacobian matrix evaluated at ˆχ, which can be computed as follows: 
+
+HL,i = lim 
+
+> δχ →0
+
+hL,r ( ˆ χ ⊞ δχ, 0) ⊟ hL,r ( ˆ χ, 0) 
+
+δχ 
+
+=
+
+h ∂h L,r 
+
+> ∂d R,j
+> ∂h L,r
+> ∂d p,j
+> ∂h L,r
+> ∂χ I
+
+i
+
+, j = 0 , ..., N − 1.
+
+(16) where ∂h L,r  
+
+> ∂χ I
+
+= [0 1×8]. The Jacobian matrix with respect to the spline state variables can be derived using the chain rule as follows: 
+
+∂h L,r 
+
+∂d R,j 
+
+= ∂h L,r 
+
+∂R (ti)
+
+∂R (ti)
+
+∂d R,j 
+
+, ∂h L,r 
+
+∂d p,j 
+
+= ∂h L,r 
+
+∂p (ti)
+
+∂p (ti)
+
+∂d p,j 
+
+(17) Based on the observation equation, we can obtain: 
+
+∂h L,r 
+
+∂R (ti) = −ˆuT 
+
+> 1
+
+ˆR(ti) I TLLpi
+
+ 
+
+> ×
+
+, ∂h L,r 
+
+∂p (ti) = ˆ uT 
+
+> 1
+
+. 
+
+> ∂R (ti)
+> ∂d R,j
+
+can be computed via eq.(9), and ∂p (ti) 
+
+> ∂d p,j
+
+can be computed as follows: 
+
+∂p (ti)
+
+∂d p,j 
+
+= ˜λj (u)I, j = 0 , ..., N − 1; (18) 8
+
+Based on the formulation of the observation equation, which implies that each dimension of hL(χ, n ) follows an approximately zero-mean Gaussian distribution: 
+
+hL,i (χ, n ) ∼ N (hL,i ( ˆ χ, 0) , P 
+
+> ni
+
+), P 
+
+> ni
+
+= Jni
+
+P JTni
+
+P = diag (P 
+
+> u1
+
+, P 
+
+> q
+
+, PLpi , P
+
+> R(ti)
+
+, P
+
+> p(ti)
+
+)
+
+where Jn1 is computed as follows: 
+
+Jni = [ Ju1 , J q , J Lpi , J R(ti), J p(ti)]
+
+Ju1 = ( ˆT (ti)I TLL ˆpi − q)T , J q = −ˆuT 
+
+> 1
+
+, J Lpi = ˆ uT 
+
+> 1
+
+ˆR(ti)ILR, JR(ti) = −ˆuT 
+
+> 1
+
+ˆR(ti) I TLL ˆpi
+
+ 
+
+> ×
+
+, J p(ti) = ˆ uT 
+
+> 1
+
+.
+
+Point-to-voxel : When points do not lie within planar regions, voxel features are further utilized for registration. The local structure within a voxel is characterized by the three eigen-values and eigenvectors of the spatial point cloud distribution, and the observation equation is formulated by projecting points onto this distribution. Different from [46]–[48], by modeling both LiDAR point uncertainty and pose uncertainty, the three eigenvectors and eigenvalues are treated as random variables. 
+
+hL(χ, n ) = ¯Λ− 12 
+
+> i
+
+U Ti (Gpi − q) = 
+
+
+
+¯λ− 12 
+
+> 1
+
+uT 
+
+> 1
+
+(Gpi − q)¯λ− 12 
+
+> 2
+
+uT 
+
+> 2
+
+(Gpi − q)¯λ− 12 
+
+> 3
+
+uT 
+
+> 3
+
+(Gpi − q)
+
+ =
+
+
+
+k1(ˆ u1 ⊞ δu1 )T [( ˆT (ti) ⊞ δTi )I TL(L ˆpi + δLpi ) − ˆq − δq ]
+
+k2(ˆ u1 ⊞ δu2 )T [( ˆT (ti) ⊞ δTi )I TL(L ˆpi + δLpi ) − ˆq − δq ]
+
+k3(ˆ u3 ⊞ δu3 )T [( ˆT (ti) ⊞ δTi )I TL(L ˆpi + δLpi ) − ˆq − δq ]
+
+
+
+(19) where P 
+
+> V
+
+= U ΛU T = U Λ 12 Λ 12 U T = ( U Λ− 12 Λ− 12 U T )−1,
+
+ki = ¯λ− 12 
+
+> i
+
+, i = 1 , 2, 3. The computation of the Jacobian matrix and covariance for voxel features is similar to that of planar features. The main difference lies in that voxel features require three separate computations, each additionally weighted by the corresponding eigenvalue as coefficients. We omit further detailed derivation here for brevity. 
+
+Feature filtering : Considering the sparsity of LiDAR scans, accurately characterizing the local structure of a voxel typi-cally requires observations accumulated over multiple scans. Therefore, when projecting points based on feature types, a filtering mechanism based on the 3σ principle is applied. Tak-ing point-to-plane matching as an example, with the filtering mechanism incorporated, this can be expressed as: 
+
+hL(χk, n ) = su T 
+
+> 1
+
+(Gpi − q),s =
+
+(
+
+1 if d i ∈ U (q, 3
+
+qP 
+
+> nj
+
+),
+
+0 otherwise 
+
+(20) where U (q, 3
+
+qP 
+
+> nj
+
+) denotes the 3σ neighborhood of q, and 
+
+di is the distance to the corresponding plane. For voxel features, the judgment is performed on all three planes. A match is considered valid only when the 3σ principle is satisfied for all three planes simultaneously. 
+
+2) re-estimated policy : In this work, state prediction is performed under a constant velocity assumption. When the prediction interval δt is short, multiple predictions occur within the time interval [tls , t le ] of a single LiDAR scan, causing the uncertainty of control points to accumulate rapidly. Consequently, the subsequent posterior estimation, relying on 
+
+Fig. 6: The schematic diagram illustrates three prediction and estimation strategies, with the rightmost strategy being the prediction and re-estimation strategy used in this paper. only a few iterations, may not yield satisfactory results. Con-versely, when the prediction interval is long, the simple motion assumption fails to accurately characterize the motion within the interval, leading to poor initial guesses and subsequently degraded estimation performance. To address this issue, inspired by [49], we propose a re-estimation policy. Specifically, a relatively short prediction interval is adopted, and a maximum number of re-estimations (also the maximum sampling times) is set. Once the num-ber of points in the current interval exceeds a predefined threshold, fixed-number sampling is initiated, and the above process is repeated until either the maximum number of re-estimations is reached or all points in the current interval have been processed. This strategy significantly reduces the number of observations involved in computing the Kalman gain per estimation, thereby improving computational effi-ciency. Moreover, multiple iterative estimations are performed within a short interval (using the previous estimate as prior), enabling the estimated state to better align with the actual robot motion. This approach achieves remarkable performance and robustness, as illustrated in Fig.(6). Taking the prediction interval δt as an example, upon the arrival of a new LiDAR scan, the state is propagated once. Let the start and end times of this propagation be denoted as tps 
+
+and tpe , respectively. When the number of points within the corresponding interval [tps , t pe ] exceeds the threshold Nthre ,a sample-estimate-resample process is initiated. Assuming the final number of sampling iterations is k, i.e., the point cloud is divided into k segments, the efficiency improvement can be analyzed in terms of computational complexity. Since residual and Jacobian computations scale linearly with the number of points, the computational efficiency in this part remains largely unaffected. The primary difference lies in the Kalman gain computation and covariance matrix update. Based on the Kalman gain K ∈ Rm×n in eq.(22), the covariance 
+
+P ∈ Rn×n, and the computational complexity analysis in [50], we obtain: 
+
+SK = 6 n2m + 2 nm 2 + n2 − 4mn + O(m3) + O(n3)
+
+SP = 2 n3 + 2 n2m − n2 (21) where SP denotes the time complexity of the covariance update, and SK denotes the time complexity of computing the Kalman gain (a conservative estimate; in practice, since R9   
+
+> (a) M2UD [29] (b) MARS-LVIG [28] (c) Diter++ [31] (d) MCD [30]
+
+Fig. 7: The experiments are conducted on four public datasets with diverse platforms and environmental conditions. M2UD is collected using an all-terrain vehicle operating in staircases, forests, and playgrounds, featuring rugged terrain and low-speed motion. MARS-LVIG is captured by a quadrotor UAV flying in a downward-facing view at high speed. Diter++ is collected using a quadruped robot navigating complex terrain with significant vibrations and irregularities. MCD is acquired from a ground mobile robot operating in campus environments, characterized by relatively high-speed motion and a LiDAR sensor with a limited field of view. is a diagonal matrix, its inversion can be simplified to O(m)). 
+
+n represents the state dimension, and m represents the ob-servation dimension. Thus, the re-estimation policy effectively decomposes an m-dimensional problem into k subproblems of dimension m/k , thereby improving computational efficiency. 
+
+D. State Update 
+
+Based on the iterated extended Kalman filter (IEKF) frame-work, maximum a posteriori (MAP) estimation is performed iteratively according to the observation equation and kinematic equation: 
+
+δχ k,i +1 =
+
+Ki(zk − h( ˆ χk|k,i , 0)) − (I − KiHi)( ˆ χk|k,i − ˆχk|k−1). (22) where Ki = ( HTi R−1 
+
+> k
+
+Hi + P −1 
+
+> k|k
+
+)−1HTi R−1 
+
+> k
+
+is the Kalman gain, zk is the ideal observation set to 0, and ˆχk|k,i denotes the state estimate at the i-th iteration. Hi = [HTB , H TL ]T ,
+
+Rk = diag (P 
+
+> B
+
+, P
+
+> L
+
+). The iteration terminates when ei-ther the maximum number of iterations N is reached or 
+
+|| δχ k,i +1 || ≤ ϵ, where ϵ is a sufficiently small positive threshold. Upon termination, the covariance is updated as 
+
+Pk|k = ( I − KiHi)Pk|k−1. Based on the above discussion, the algorithmic framework is summarized in Algorithm 1. V. E XPERIMENTS 
+
+The performance of the proposed algorithm is comprehen-sively evaluated through extensive experiments and detailed ablation studies on public datasets, supplemented by further real-robot validation on a wheel-legged robot. 
+
+A. Experiment setup 
+
+The datasets used in this work include M2UD [29], MARS-LVIG [28], Diter++ [31] and MCD [30]. These datasets encompass diverse indoor and outdoor scenarios and feature various robotic platforms, such as all-terrain vehicles,, un-manned aerial vehicles, quadruped and ground mobile robots. Detailed information is provided in Table.I and Figure.7. TABLE I: Dataset for real-world    
+
+> Dataset Scenarios Sensors(Adopted)
+> M2UD [29] urban, palza, parking, campus, ground robot, uneven-terrain L(Velodyne VLP-16), I(Xsens MTi 300) MARS LVIG [28] airport, island, and valley, large-scale, fast, drone L(AVIA), I(built-in) Diter++ [31] quadruped, forest, and park, large-scale, rough-terrain L(Ouster OS1 64/128), I(built-in) MCD [30] large-scale urban, fast, ground vehicle L(Livox Mid 70), I(VN100)
+
+For method comparison, the following algorithms are se-lected as baselines: FAST-LIO2 (F-LIO2) [37], FAST-LIVO2 (F-LIVO2) [13], CLIC [14], and RESPLE (R-LIO) [27]. F-LIO2 is a widely adopted LiDAR-inertial odometry frame-work. F-LIVO2, an improved version of VoxelMap, achieves state-of-the-art performance and has garnered significant atten-tion as a multi-sensor fusion odometry method; its LIO compo-nent is employed in the comparative experiments. Both CLIC and RESPLE are recent continuous-time odometry methods, with CLIC adopting an optimization-based framework and RE-SPLE utilizing an IEKF-based framework, both demonstrating competitive performance. To quantify accuracy, trajectory estimates are interpolated at the end timestamps of LiDAR frames. The root mean square error (RMSE) and maximum value (MAX) of the absolute position error (APE) are then computed using the evo tool [51]. To mitigate the influence of random errors, each sequence in every dataset is run three times, and the resulting RMSE and MAX metrics are averaged to obtain the final values. Due to variations in platforms and LiDAR sensor types across different datasets, experimental parameters are adjusted accordingly. In the MCD dataset, the knot frequency is set to 80 Hz. For the M2UD and MARS-LVIG datasets, a knot frequency of 50 Hz achieves optimal accuracy and robustness. For the Diter++ dataset , the knot frequncy is set to 35 HZ. All algorithms are evaluated on the same hardware platform with the following specifications: CPU: i5-12400F, RAM: 16GB. 10 
+
+Algorithm 1 CTVoxelMap: Continuous-time state estimation with adaptive voxel map 
+
+Input: ∆t: the knot’s interval time of cubic B-spline; 
+
+> L
+
+pti, i = 1 , ..., n : the k-th frame measurements of lidar; 
+
+{vt, ω t}: the measurements of imu, t ∈ [tk−j , t k], j =1, ... ; ˆχk: the state to be estimated; 
+
+Output: ¯χk : the state estimated.  
+
+> 1:
+
+repeat  
+
+> 2:
+
+Propagate the state once.  
+
+> 3:
+
+Let Nl denote the set of LiDAR points acquired within the propagation interval.  
+
+> 4:
+
+repeat  
+
+> 5:
+
+if Nl > N thre then  
+
+> 6:
+
+Devide Nl into two parts, Nl1 and Nl2, let 
+
+Nl = Nl1. 
+
+> 7:
+
+end if  
+
+> 8:
+
+calculate the pose in {G} of lidar points in Nl. 
+
+> 9:
+
+If the voxel map is not initialized, construct the adaptive voxel map(Fig.(5)).  
+
+> 10:
+
+Based on the χk and imu measurements, calculate the cubic Bspline fitting error.  
+
+> 11:
+
+i = 0 , χk,i = ˆ χk. 
+
+> 12:
+
+for || χk,i +1 ⊟ χk,i || > ϵ or i < N do  
+
+> 13:
+
+Based on measurements and eq.(8), calculate the residual and jacobian with respect to χk,i . 
+
+> 14:
+
+Based on voxel map, the fitting error and the observation formulation of features, calculate the residual and jacobian with respect to χk,i . 
+
+> 15:
+
+Calculate the δχ k,i according to eq.(22).  
+
+> 16:
+
+χk,i +1 = χk,i ⊞ δχ k,i  
+
+> 17:
+
+Recompute the pose of lidar points in {G}
+
+according to χk,i +1 and update voxel map.  
+
+> 18:
+
+Update the cubic Bspline fitting error.  
+
+> 19:
+
+i = i + 1 . 
+
+> 20:
+
+end for  
+
+> 21:
+
+Get the estimated state ¯χk. 
+
+> 22:
+
+Nl = Nl2, ˆχk = ¯ χk. 
+
+> 23:
+
+until all points in this frame is processed or the max re-estimation times is reached.  
+
+> 24:
+
+until all points is processed.  
+
+> 25:
+
+return ¯χk.
+
+B. Performance comparison on real-world datasets 
+
+The statistical results on public datasets are summarized in Table.II. CT-VLO (ours) denotes the LiDAR-only mode of the proposed algorithm, while CT-VLIO (ours) represents the IMU-LiDAR fusion mode. For the LO mode, the covariance of the continuous trajectory fitting error is set using fixed hyperparameters. For the LIO mode, the covariance of the continuous trajectory fitting error is computed using eq.(12). According to the results presented in the table, the proposed method achieves the best performance in terms of APE met-rics across multiple sequences from different public datasets. Among the compared methods in the MCD dataset, the MAX metric is not reported, as their results are sourced from [26], [27], which do not include the MAX metric. Therefore, to ensure a fair comparison, only the RMSE metric IS compared here, while the MAX metric of the proposed method are listed solely for illustration. 
+
+1) MCD dataset : Among these, the MCD dataset com-prises campus scenes, and the proposed method attains the best performance on most sequences within this dataset. For the ‘ntu-night13‘ sequence, due to the time delay between the IMU and LiDAR measurements, the continuous-time-based method, which is sensitive to the timestamps of measurements, experiences a degradation in system estimation performance after incorporating IMU measurements. 
+
+2) M2UD dataset : For the M2UD dataset, several chal-lenging sequences were selected. Among them, the ‘aggres-sive04‘ sequence was collected using an all-terrain vehicle traversing rough terrain, including scenarios such as going up and down stairs and undergoing large-scale pitch motion. In this sequence, only R-LIO and the proposed algorithm were able to complete the entire sequence, with the proposed algorithm achieving better performance. Notably, CT-VLO outperformed CT-VLIO in this sequence, primarily because the IMU measurements exhibited significant abrupt changes during rough terrain traversal, and since no specific processing was applied to handle such IMU data, the fusion of IMU measurements actually degraded the overall performance. The ‘plaza03‘ sequence involves multiple floors within a shopping mall. Since all methods failed after entering the elevator at 1350 seconds, the time range for this sequence was fixed to 
+
+[0 , 1350] . Among the methods, F-LIO, while not achieving the best performance, demonstrated relatively stable results. However, CLIC and F-LIVO2 were unable to complete this sequence, and R-LIO exhibited instability, failing repeatedly. The reported results for R-LIO in this sequence are the best obtained from a limited number of successful runs. 
+
+3) MARS-LVIG dataset : For the MARS-LVIG dataset, three sequences involving medium-speed ( 8 m/s) to high-speed (12 m/s) motion (including GNSS information) were selected. In the ‘HKairport02‘ sequence, during takeoff or landing, LiDAR measurements are severely degraded, and all methods exhibit certain drift. After incorporating IMU measurements, smaller drift can be achieved, improving the robustness of the system. In the ‘AMtown03‘ sequence, which includes flat-area takeoff and landing as well as rapid large-scale turns, LiDAR degeneration occurs. In such scenarios, the CLIC method exhibits significant drift and fails to complete the sequence. 
+
+4) Diter++ dataset : For the Diter++ dataset, a total of two sequences are used. The ‘Forest-new‘ sequence involves short-distance operation within a forest area with relatively complex terrain, and all selected methods achieved good performance. The ‘Park-in-day-cam-free‘ sequence involves navigation through a combination of forest areas, buildings, and long corridors, with large-scale and long-duration opera-tion (2160 seconds). Among the methods, CLIC could only maintain operation for a limited period and failed to complete the sequence. In contrast, CT-VLO successfully completed the entire sequence, achieving the best APE metric. The complete operation results for the sequence are presented in the supplementary video material. To provide a more intuitive illustration of algorithm per-formance, the challenging sequence ‘aggresive04‘ and ‘AM-11 
+
+TABLE II: APE (MAX/ RMSE, meters) of methods on public dataset                                                                                                                 
+
+> Dataset Sequence CLIC F-LIO2 R-LIO F-LIVO2 CT-VLO (ours) CT-VLIO (ours)
+> MCD ntu-day-01 25.194 0.901 0.549 3.681 / 1.276 2.639 / 1.100 2.904 / 1.444 ntu-day-02 0.503 0.185 0.188 0.439 / 0.148 0.421 / 0.167 0.355 / 0.144
+> ntu-day-10 22.775 1.975 1.493 2.127 / 0.826 1.549 / 0.646 2.295 / 0.955 ntu-night-04 4.154 0.902 0.416 1.028 / 0.455 1.063 / 0.385 0.901 / 0.310
+> ntu-night-08 22.275 1.002 0.940 2.133 / 0.868 1.983 / 0.789 2.242 / 1.132 ntu-night-13 21.299 1.288 0.560 2.587 / 1.112 0.855 / 0.381 2.452 / 1.229 M2UD plaza03 ×0.831 / 0.436 1.733 / 0.308 ∗×2.419 / 0.644 1.435 / 0.619 aggressive04 ××2.507 / 0.882 ×2.107 /0.690 2.118 / 0.715 aggressive05 ×7.298 / 3.567 7.465 / 3.228 ×7.521 / 3.179 7.548 / 3.243 campus06 ×6.601 / 2.524 3.642 / 1.422 2.392 / 1.256 2.292 /1.123 3.011 / 1.461 MARS-LVIG HKisland02 3.475 / 1.973 3.851 / 2.241 4.503 / 2.177 3.948 / 2.028 4.562 / 2.065 4.232 / 1.909
+> HKairport02 15.635 / 3.122 8.987 / 2.931 10.797 / 3.557 8.390 / 3.284 15.294 / 3.220 4.509 /2.702
+> AMtown03 ×6.191 / 3.216 20.640 / 12.630 5.490 / 2.685 3.971 / 2.299 3.183 /2.033
+> Diter++ Park-in-day-cam-free ×0.939 / 0.348 0.825 / 0.416 3.194 / 1.011 0.581 / 0.214 0.573 / 0.252 Forest-new 2.704 / 1.372 0.438 / 0.103 0.371 / 0.127 0.505 / 0.147 0.479 / 0.108 0.466 / 0.103
+
+town03‘ are selected for further analysis. The mapping results on these sequences are presented in Figure. 8. On the ‘aggres-sive04‘ sequence, the CLIC method begins to exhibit pose estimation oscillations after traversing the first staircase and eventually fails completely. Both F-LIO2 and F-LIVO2 strug-gle to maintain consistent pose estimation when encountering severe pitch variations, resulting in abrupt attitude jumps. In contrast, RESPLE, CT-VLO (ours), and CT-VLIO (ours) all sustain stable pose estimation throughout the sequence. On the ‘AMtown03‘ sequence, CLIC loses track during the first rapid large-angle turn. The remaining methods successfully complete the entire sequence. However, since none of these approaches incorporate loop closure techniques, all exhibit accumulated pose estimation errors. Comparatively, CT-VLO and CT-VLIO maintain relatively smaller cumulative errors, yielding clearer mapping results. 
+
+C. Ablation study 
+
+Based on the APE metrics, the results on public datasets demonstrate the performance of CT-VLO and CT-VLIO. To gain deeper and more direct insights into the impact of each proposed module, ablation studies are conducted on three sequences with different LiDAR sensors: MCD: ntu-day01 (Mid-70); M2UD: aggressive04 (Velodyne-16); and MARS-LVIG: AMtown03 (Avia). The CT-VLO method (LiDAR-only mode) is employed in these ablation experiments to eliminate the influence of IMU measurements. The effects of fitting error modeling, voxel features, and the re-estimation policy are investigated. When the re-estimation policy is enabled, the maximum number of re-estimations is set to 5 for all cases. Ten independent runs are performed on each sequence, with results summarized in Table.III. The reported APE-related metrics include maximum deviation, mean, and RMSE, all in meters (m). Average processing time per frame is reported in milliseconds (ms). Success rate (S-rate) is computed as 
+
+SC/T C , where SC denotes success count and T C denotes total count. Ablation configurations are denoted as follows: wo f it − err (without cubic spline fitting error consideration); wo re (without re-estimation policy); wo voxel (without voxel features); wo re &voxel (without both re-estimation policy and voxel features); and w all (full CT-VLO method). The APE metrics reported correspond to the best results among the ten runs. TABLE III: Ablation Experiments of CT-VLO on datasets                                                       
+
+> MCD Max/Mean/RMSE Ave-time S-rate
+> wo fit-err --0/10 wo re 2.278/1.072/1.168 27.5316 6/10 wo voxel 1.779/0.826/0.906 27.2216 10/10 wo re&voxel 2.504/0.885/1.009 27.4204 4/10 w all 2.635/0.878/0.994 27.3120 9/10
+> M2UD Max/Mean/RMSE Ave-time S-rate
+> wo fit-err --0/10 wo re 2.046/0.601/0.691 33.796 8/10 wo voxel 2.081/0.593/0.686 33.497 10/10 wo re&voxel 2.097/0.598/0.688 33.931 10/10 w all 2.072/0.586/0.677 33.565 10/10
+> MARS-LVIG Max/Mean/RMSE Ave-time S-rate
+> wo fit-err --0/10 wo re --0/10 wo voxel 18.959/2.704/2.939 62.2079 10/10 wo re&voxel --0/10 w all 3.972/2.204/2.299 62.498 10/10
+
+1) Fitting Error : In the algorithm design, the error intro-duced by cubic B-spline trajectory fitting is explicitly con-sidered. According to eq.(15), this error propagates into the observation noise, thereby increasing the uncertainty of the observations. The results in Table.III indicate that under the current framework, the system fails to operate properly when the continuous trajectory fitting error is not accounted for. 
+
+2) Voxel Feature : As shown in Table.III, the incorporation of voxel features increases the information available to the system. However, the results in MCD indicate that on this dataset, voxel features lead to a slight decrease in both system stability and performance. From the results in M2UD, it can 12 
+
+(a) CLIC (b) F-LIO2 (c) F-LIVO2 
+
+(d) RESPLE (e) CT-VLO (f) CT-VLIO 
+
+(g) CLIC (h) F-LIO2 (i) F-LIVO2 
+
+(j) RESPLE (k) CT-VLO (l) CT-VLIO 
+
+Fig. 8: Performing results comparison of different methods on the ‘aggressive04‘ and ‘AMtown03‘ sequence. 13 
+
+Fig. 9: Statistical results of total and voxel residual numbers. be observed that when the re-estimation policy is not applied, using only voxel features marginally reduces system stability; however, when both the re-estimation policy and voxel fea-tures are employed together, system performance improves. According to the results in MARS-LVIG, the introduction of voxel features further enhances estimation performance. Figure.9 illustrates the relationship between the total number of residuals and the number of residuals corresponding to voxel features during runtime. Combining the results from Table.III, it can be concluded that when the proportion of voxel features is high, system stability and performance tend to degrade. Conversely, when the proportion of voxel features is relatively low, they contribute positively to improving esti-mation performance. 
+
+3) Re-estimation Policy : As shown in MCD, the re-estimation policy improves the system success rate regardless of whether voxel features are utilized. According to the results in M2UD, when combined with voxel features, the re-estimation policy further enhances system robustness. The re-sults in MARS-LVIG indicates that the system fails to operate properly without the re-estimation policy. Therefore, it can be concluded that the re-estimation policy significantly improves system robustness. Additionally, the tabulated results show that average per-frame processing time increases when the policy is not applied, further demonstrating its effectiveness in improving computational efficiency. To further investigate the impact of the re-estimation policy, a detailed analysis of the maximum number of re-estimations is provided in the discussion section. 
+
+D. Discussion 
+
+Through ablation studies, it is evident that the re-estimation policy significantly impacts system robustness. This section 
+
+Fig. 10: Performing results comparison of CT-VLO with different re-estimate times on ‘AMtown03‘ sequence TABLE IV: Re-estimate policy of CT-VLO on MARS-LVIG dataset                                        
+
+> AMtown03 re-estimate times Max/Mean/RMSE Ave-time
+> CT-VLO 1--CT-VLO 2--CT-VLO 3--CT-VLO 4--CT-VLO 53.971/2.204/2.299 62.4751 CT-VLO 610.611/2.265/2.481 63.6368 CT-VLO 729.316/3.186/3.989 66.2219 CT-VLO 841.146/2.814/3.485 69.2019 CT-VLO 97.416/3.459/3.721 71.3103 CT-VLO 10 3.829 /2.149 /2.253 74.809 CT-VLO 11 7.219/3.665/3.986 75.4734 CT-VLO 12 7.219/3.665/3.986 75.0008
+
+further discusses the effect of the maximum number of re-estimations within the re-estimation policy. The discussion is conducted on the ‘AMtown03‘ sequence, with results pre-sented in Table.IV. According to the results in Table.IV, when the maximum number of re-estimations is set too low, the majority of points in a scan are discarded, leading to system failure. As the maximum number of re-estimations gradually increases, both the number of utilized points per scan and the processing time increase accordingly. After reaching 10 re-estimations, the per-frame processing time stabilizes, with the best performance achieved at 10 re-estimations. When the maximum is set to 11 or 12, no significant change in processing time is observed, indicating that all points in the scan are being utilized. Figure.IV shows the actual number of re-estimations during sequence execution, where the horizontal axis represents the 14   
+
+> (a) Trajectory (b) Plot trajectories in the x, y, and z directions (c) Speed curve
+
+Fig. 11: Performing results comparison of CT-VLO with different re-estimation times on ‘AMtown03‘ sequence. 
+
+Fig. 12: Description of the Experimental Wheel-Legged Robot Platform and Hardware. estimation index and the vertical axis represents the actual number of re-estimations. Under the current parameter set-tings, the actual maximum number of re-estimations is 10. The trajectory results are presented in Figure.11, indicating that the impact of the re-estimation policy is amplified under LiDAR-degraded conditions, where a lower number of re-estimations contributes to system stability. Based on these findings, to balance performance and efficiency in practical applications, the maximum number of re-estimations is set to 5. 
+
+E. wheel-legged experiments 
+
+To further demonstrate the algorithm’s adaptability to dif-ferent robot platforms (motion modes) and different LiDAR sensors, real-robot validation was conducted on campus using a wheel-legged robot. The robot platform is shown in Figure 12. Real-world experiments were carried out on campus in challenging and bumpy terrain areas, including the botanical garden, riverside, and garden. Screenshots of the experimental environments and the experimental results are shown in Table V and Figure 13, respectively. Based on the real-robot experiments, better performance is still attainable on the wheel-legged robot with the Livox-Mid 360. TABLE V: APE Metric (RMSE, mster) on Our Self-Collected Botanical Dataset.             
+
+> Dataset F-LIO2 CT-VLO CT-VLIO
+> botanical01 1.853 1.723 1.711
+> botanical02 1.249 0.877 0.821
+> botanical03 2.093 2.008 2.025
+
+F. conclusion 
+
+Through an in-depth analysis of the spline representation, this work improves upon the widely adopted cumulative-form B-spline on Lie groups, eliminating the need for addi-tional boundary condition considerations (i.e., cases j = 0 
+
+or j = N − 1) when deriving Jacobians with respect to state variables. By estimating control point increments rather than directly estimating the control points themselves, the Jacobian computation is significantly simplified. Furthermore, by accounting for continuous trajectory fitting errors—either through online IMU-based estimation or predefined hyper-parameters—the proposed system achieves stable operation. The introduction of voxel features within the voxel map enables the system to exploit additional information, thereby enhancing estimation performance. Finally, the proposed re-estimation policy, which involves multiple sample-estimate cycles within the prediction interval, substantially improves system robustness while reducing per-frame processing time and enhancing computational efficiency. There are still some limitations. First, the paper discusses performance in scenarios involving bumps or rapid motion, and further extension to highly dynamic and occluded envi-ronments is needed to achieve a more versatile and robust pose estimation system. Second, although the re-estimation policy 15 
+
+(a) Botanical01 env (b) Botanical02 env (c) Botanical03 env 
+
+(d) Botanical01 Trajectory (e) Botanical02 Trajectory (f) Botanical03 Trajectory 
+
+Fig. 13: Comparison of Trajectories Across Different Scenes in the Dataset. significantly enhances system robustness, its effectiveness may be compromised in severely sensor-degraded environments. Addressing these limitations constitutes a direction for future work. REFERENCES [1] C. Xia, Y. Shen, Y. Yang, X. Deng, S. Chen, J. Xin, and N. Zheng, “Onboard sensors-based self-localization for autonomous vehicle with hierarchical map,” IEEE Transactions on Cybernetics , vol. 53, no. 7, pp. 4218–4231, 2023. [2] W. Liu, Y. Ren, R. Guo, V. W. Kong, A. S. Hung, F. Zhu, Y. Cai, H. Wu, Y. Zou, and F. Zhang, “Slope inspection under dense vegetation using lidar-based quadrotors,” Nature Communications , vol. 16, no. 1, p. 7411, 2025. [3] N. Chen, F. Kong, W. Xu, Y. Cai, H. Li, D. He, Y. Qin, and F. Zhang, “A self-rotating, single-actuated uav with extended sensor field of view for autonomous navigation,” Science Robotics , vol. 8, no. 76, p. eade4538, 2023. [4] Y. Wang, B. Ren, X. Zhang, P. Wang, C. Wang, R. Song, Y. Li, and M. Q.-H. Meng, “Rolo-slam: rotation-optimized lidar-only slam in uneven terrain with ground vehicle,” Journal of Field Robotics , vol. 42, no. 3, pp. 880–902, 2025. [5] T. Deng, G. Shen, C. Xun, S. Yuan, T. Jin, H. Shen, Y. Wang, J. Wang, H. Wang, D. Wang, et al. , “Mne-slam: Multi-agent neural slam for mobile robots,” in Proceedings of the Computer Vision and Pattern Recognition Conference , pp. 1485–1494, 2025. [6] J. Lv, J. Xu, K. Hu, Y. Liu, and X. Zuo, “Targetless calibration of lidar-imu system based on continuous-time batch estimation,” in 2020 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , pp. 9968–9975, 2020. [7] Z. Yuan, F. Lang, T. Xu, and X. Yang, “Liwo: Lidar-inertial-wheel odometry,” in 2023 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , pp. 1481–1488, 2023. [8] X. Zuo, P. Geneva, W. Lee, Y. Liu, and G. Huang, “Lic-fusion: Lidar-inertial-camera odometry,” in 2019 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , pp. 5848–5854, 2019. [9] X. Zuo, Y. Yang, P. Geneva, J. Lv, Y. Liu, G. Huang, and M. Pollefeys, “Lic-fusion 2.0: Lidar-inertial-camera odometry with sliding-window plane-feature tracking,” in 2020 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , pp. 5112–5119, 2020. [10] C. Zheng, Q. Zhu, W. Xu, X. Liu, Q. Guo, and F. Zhang, “Fast-livo: Fast and tightly-coupled sparse-direct lidar-inertial-visual odometry,” in 2022 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , pp. 4003–4009, 2022. [11] W. Xu and F. Zhang, “Fast-lio: A fast, robust lidar-inertial odometry package by tightly-coupled iterated kalman filter,” IEEE Robotics and Automation Letters , vol. 6, no. 2, pp. 3317–3324, 2021. [12] T. Shan and B. Englot, “Lego-loam: Lightweight and ground-optimized lidar odometry and mapping on variable terrain,” in 2018 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) ,pp. 4758–4765, 2018. [13] C. Zheng, W. Xu, Z. Zou, T. Hua, C. Yuan, D. He, B. Zhou, Z. Liu, J. Lin, F. Zhu, Y. Ren, R. Wang, F. Meng, and F. Zhang, “Fast-livo2: Fast, direct lidar–inertial–visual odometry,” IEEE Transactions on Robotics ,vol. 41, pp. 326–346, 2025. [14] J. Lv, X. Lang, J. Xu, M. Wang, Y. Liu, and X. Zuo, “Continuous-time fixed-lag smoothing for lidar-inertial-camera slam,” IEEE/ASME Transactions on Mechatronics , vol. 28, no. 4, pp. 2259–2270, 2023. [15] T. Shan, B. Englot, D. Meyers, W. Wang, C. Ratti, and D. Rus, “Lio-sam: Tightly-coupled lidar inertial odometry via smoothing and mapping,” in 2020 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , pp. 5135–5142, 2020. [16] X. Zheng and J. Zhu, “Traj-lo: In defense of lidar-only odometry using an effective continuous-time trajectory,” IEEE Robotics and Automation Letters , vol. 9, no. 2, pp. 1961–1968, 2024. [17] P. Dellenbach, J.-E. Deschaud, B. Jacquet, and F. Goulette, “Ct-icp: Real-time elastic lidar odometry with loop closure,” in 2022 Interna-tional Conference on Robotics and Automation (ICRA) , pp. 5580–5586, 2022. [18] W. Talbot, J. Nubert, T. Tuna, C. Cadena, F. D¨ umbgen, J. Tordesillas, T. D. Barfoot, and M. Hutter, “Continuous-time state estimation methods in robotics: A survey,” IEEE Transactions on Robotics , pp. 1–20, 2025. [19] C. H. Tong, P. Furgale, and T. D. Barfoot, “Gaussian process gauss– newton for non-parametric simultaneous localization and mapping,” The 16 
+
+International Journal of Robotics Research , vol. 32, no. 5, pp. 507–525, 2013. [20] T. D. Barfoot, C. H. Tong, and S. S¨ arkk¨ a, “Batch continuous-time trajectory estimation as exactly sparse gaussian process regression.,” in 
+
+Robotics: Science and Systems , vol. 10, pp. 1–10, Citeseer, 2014. [21] J. Dong, B. Boots, and F. Dellaert, “Sparse gaussian processes for continuous-time trajectory estimation on matrix lie groups,” arXiv preprint arXiv:1705.06020 , 2017. [22] M. G. Cox, “The numerical evaluation of b-splines,” IMA Journal of Applied mathematics , vol. 10, no. 2, pp. 134–149, 1972. [23] C. De Boor, “On calculating with b-splines,” Journal of Approximation theory , vol. 6, no. 1, pp. 50–62, 1972. [24] C. Sommer, V. Usenko, D. Schubert, N. Demmel, and D. Cremers, “Efficient derivative computation for cumulative b-splines on lie groups,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , June 2020. [25] J. Lv, K. Hu, J. Xu, Y. Liu, X. Ma, and X. Zuo, “Clins: Continuous-time trajectory estimation for lidar-inertial system,” in 2021 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) ,pp. 6657–6663, 2021. [26] T.-M. Nguyen, X. Xu, T. Jin, Y. Yang, J. Li, S. Yuan, and L. Xie, “Eigen is all you need: Efficient lidar-inertial continuous-time odometry with internal association,” IEEE Robotics and Automation Letters , 2024. [27] Z. Cao, W. Talbot, and K. Li, “Resple: Recursive spline estimation for lidar-based odometry,” IEEE Robotics and Automation Letters , vol. 10, no. 10, pp. 10666–10673, 2025. [28] H. Li, Y. Zou, N. Chen, J. Lin, X. Liu, W. Xu, C. Zheng, R. Li, D. He, F. Kong, et al. , “Mars-lvig dataset: A multi-sensor aerial robots slam dataset for lidar-visual-inertial-gnss fusion,” The International Journal of Robotics Research , vol. 43, no. 8, pp. 1114–1127, 2024. [29] Y. Jia, S. Wang, S. Shao, Y. Wang, F. Zhang, and T. Wang, “M2ud: A multi-model, multi-scenario, uneven-terrain dataset for ground robot with localization and mapping evaluation,” The International Journal of Robotics Research , p. 02783649251401224, 2025. [30] T.-M. Nguyen, S. Yuan, T. H. Nguyen, P. Yin, H. Cao, L. Xie, M. Wozniak, P. Jensfelt, M. Thiel, J. Ziegenbein, et al. , “Mcd: Diverse large-scale multi-campus dataset for robot perception,” in Proceedings of the IEEE/CVF conference on computer vision and pattern recognition ,pp. 22304–22313, 2024. [31] J. Kim, H. Kim, S. Jeong, Y. Shin, and Y. Cho, “Diter++: Diverse terrain and multi-modal dataset for multi-robot slam in multi-session environments,” in 2025 IEEE International Conference on Robotics and Automation (ICRA) , pp. 12187–12193, 2025. [32] S. Kohlbrecher, O. Von Stryk, J. Meyer, and U. Klingauf, “A flexible and scalable slam system with full 3d motion estimation,” in 2011 IEEE international symposium on safety, security, and rescue robotics ,pp. 155–160, IEEE, 2011. [33] J. Zhang, S. Singh, et al. , “Loam: Lidar odometry and mapping in real-time,” in Robotics: Science and systems , vol. 2, pp. 1–9, Berkeley, CA, 2014. [34] G. P. C. J´ unior, A. M. C. Rezende, V. R. F. Miranda, R. Fernandes, H. Azp´ urua, A. A. Neto, G. Pessin, and G. M. Freitas, “Ekf-loam: An adaptive fusion of lidar slam with wheel odometry and inertial data for confined spaces with few geometric features,” IEEE Transactions on Automation Science and Engineering , vol. 19, no. 3, pp. 1458–1471, 2022. [35] A. I. Mourikis and S. I. Roumeliotis, “A multi-state constraint kalman filter for vision-aided inertial navigation,” in Proceedings 2007 IEEE International Conference on Robotics and Automation , pp. 3565–3572, 2007. [36] M. Li and A. I. Mourikis, “High-precision, consistent ekf-based visual-inertial odometry,” The International Journal of Robotics Research ,vol. 32, no. 6, pp. 690–711, 2013. [37] W. Xu, Y. Cai, D. He, J. Lin, and F. Zhang, “Fast-lio2: Fast direct lidar-inertial odometry,” IEEE Transactions on Robotics , vol. 38, no. 4, pp. 2053–2073, 2022. [38] C. Yuan, W. Xu, X. Liu, X. Hong, and F. Zhang, “Efficient and probabilistic adaptive voxel mapping for accurate online lidar odometry,” 
+
+IEEE Robotics and Automation Letters , vol. 7, no. 3, pp. 8518–8525, 2022. [39] H. Shen, Z. Wu, Y. Hui, W. Wang, Q. Lyu, T. Deng, Y. Zhu, B. Tian, and D. Wang, “Cte-mlo: Continuous-time and efficient multi-lidar odometry with localizability-aware point cloud sampling,” IEEE Transactions on Field Robotics , 2025. [40] Y. Lv, Y. Zhang, X. Zhao, W. Li, J. Ning, and Y. Jin, “Cta-lo: Accurate and robust lidar odometry using continuous-time adaptive estimation,” in 2024 IEEE International Conference on Robotics and Automation (ICRA) , pp. 12034–12040, 2024. [41] B. Jiang and S. Shen, “A lidar-inertial odometry with principled un-certainty modeling,” in 2022 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , pp. 13292–13299, 2022. [42] K. Huang, J. Zhao, J. Lin, Z. Zhu, S. Song, C. Ye, and T. Feng, “Log-lio2: A lidar-inertial odometry with efficient uncertainty analysis,” IEEE Robotics and Automation Letters , vol. 9, no. 10, pp. 8226–8233, 2024. [43] C. Yuan, X. Liu, X. Hong, and F. Zhang, “Pixel-level extrinsic self cal-ibration of high resolution lidar and camera in targetless environments,” 
+
+IEEE Robotics and Automation Letters , vol. 6, no. 4, pp. 7517–7524, 2021. [44] T. Tuna, J. Nubert, Y. Nava, S. Khattak, and M. Hutter, “X-icp: Localizability-aware lidar registration for robust localization in extreme environments,” IEEE Transactions on Robotics , vol. 40, pp. 452–471, 2024. [45] Z. Liu and F. Zhang, “Balm: Bundle adjustment for lidar mapping,” 
+
+IEEE Robotics and Automation Letters , vol. 6, no. 2, pp. 3184–3191, 2021. [46] C. Wang, Z. Cao, J. Li, J. Yu, and S. Wang, “Hierarchical distribution-based tightly-coupled lidar inertial odometry,” IEEE Transactions on Intelligent Vehicles , vol. 9, no. 1, pp. 1423–1435, 2024. [47] J. Zhu, J. Mu, C.-B. Yan, D. Wang, and Z. Li, “3dmndt: 3d multi-view registration method based on the normal distributions transform,” IEEE Transactions on Automation Science and Engineering , vol. 21, no. 1, pp. 488–501, 2024. [48] P. Biber and W. Strasser, “The normal distributions transform: a new approach to laser scan matching,” in Proceedings 2003 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS 2003) (Cat. No.03CH37453) , vol. 3, pp. 2743–2748 vol.3, 2003. [49] D. He, W. Xu, N. Chen, F. Kong, C. Yuan, and F. Zhang, “Point-lio: robust high-bandwidth light detection and ranging inertial odometry,” 
+
+Advanced Intelligent Systems , vol. 5, no. 7, p. 2200459, 2023. [50] B. Chen, X. Liu, H. Zhao, and J. C. Principe, “Maximum correntropy kalman filter,” Automatica , vol. 76, pp. 70–77, 2017. [51] M. Grupp, “evo: Python package for the evaluation of odometry and slam..” https://github.com/MichaelGrupp/evo, 2017.
