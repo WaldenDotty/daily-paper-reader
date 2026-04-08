@@ -1,0 +1,1033 @@
+Title: Learning Kalman Policy for Singular Unknown Covariances via Riemannian Regularization
+
+URL Source: https://arxiv.org/pdf/2604.05071v1
+
+Published Time: Wed, 08 Apr 2026 00:04:55 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# Learning Kalman Policy for Singular Unknown Covariances via Riemannian Regularization 
+
+Larsen Bier, Student Member, IEEE and Shahriar Talebi, Member, IEEE 
+
+Abstract —Kalman filtering is a cornerstone of estimation theory, yet learning the optimal filter under unknown and potentially singular noise covariances remains a fundamental challenge. In this paper, we revisit this problem through the lens of control–estimation duality and data-driven policy opti-mization, formulating the learning of the steady-state Kalman gain as a stochastic policy optimization problem directly from measurement data. Our key contribution is a Riemannian reg-ularization that reshapes the optimization landscape, restoring structural properties such as coercivity and gradient dominance. This geometric perspective enables the effective use of first-order methods under significantly relaxed conditions, including unknown and rank-deficient noise covariances. Building on this framework, we develop a computationally efficient algorithm with a data-driven gradient oracle, enabling scalable stochastic im-plementations. We further establish non-asymptotic convergence and error guarantees enabled by the Riemannian regularization, quantifying the impact of bias and variance in gradient estimates and demonstrating favorable scaling with problem dimension. Numerical results corroborate the effectiveness of the proposed approach and robustness to the choice of stepsize in challenging singular estimation regimes. 
+
+I. I NTRODUCTION 
+
+Kalman filtering—recognized as the minimum mean squared error estimator for linear Gaussian systems—has a long-standing role in estimation theory since its introduction in [1]. Its extensions have been extensively studied, particularly within the framework of adaptive Kalman filtering [2], [3], [4], [5], [6], [7]. More recently, [8] categorizes existing methods into four principal approaches: Bayesian inference [9], [10], [11], maximum likelihood estimation [12], [13], covariance matching [6], and innovation correlation techniques [2], [4]. Among these, Bayesian and maximum likelihood approaches are often associated with significant computational overhead, while covariance matching methods can suffer from practi-cal bias issues. Consequently, innovation correlation–based methods have gained greater prominence and have been the focus of more recent developments [14], [15], [16]. Despite their popularity, these methods rely heavily on underlying statistical assumptions and, importantly, lack non-asymptotic performance guarantees. The duality between control and estimation establishes a fundamental connection between two core synthesis problems in systems theory [1], [17], [18]. This relationship has long enabled the transfer of both theoretical insights and compu-tational methodologies across these domains. On the optimal control side, recent years have witnessed significant progress in data-driven synthesis techniques. In particular, first-order  
+
+> The authors are with the University of California, Los Angeles, CA, USA. Emails:
+
+larsenbier@g.ucla.edu and s.talebi@ucla.edu .
+
+optimization methods have been successfully applied to state-feedback Linear Quadratic Regulator (LQR) problems [19], [20]. This policy optimization viewpoint has proven especially powerful, as the LQR objective is known to satisfy a gradient dominance property [21]. As a result, despite the inherent non-convexity of the problem when parameterized directly by the control policy, first-order methods can be employed with guarantees of global convergence. Building on this founda-tion, first-order Policy Optimization (PO) methods have been extended to a range of LQR-type settings, including output-feedback LQR (Output-feedback Linear Quadratic Regula-tors (OLQR)) [22], [23], model-free formulations [24], risk-constrained variants [25], [26], and Linear Quadratic Gaussian (LQG) problems [27]. More recently, geometric approaches based on Riemannian optimization have been developed, in-cluding optimization on submanifolds and extensions with ergodic-risk constraints [28], [26]; see [29] for a comprehen-sive overview. The extension of policy optimization (PO) methodologies to the estimation domain was initiated in [30], [31], where the optimal Kalman gain is learned in the presence of un-known noise covariances . In this line of work, the problem is formulated as a stochastic policy optimization task min-imizing output prediction error, linking data-driven optimal control with its dual, optimal filtering. Convergence guarantees are established for stochastic gradient methods under biased gradients and stability constraints, with bias–variance bounds scaling logarithmically in system dimension and trajectory length affecting only the bias. Following this direction, [32] considers an slightly different MSE cost based on the steady-state innovation (prediction error), yielding a gradient that admits an interpretable decomposition as the product of an observability Gramian and a term capturing violation of the orthogonality principle. In a related but distinct direc-tion grounded in invariant ellipsoid theory, [33] develops an optimization-based filtering framework for systems subject to bounded disturbances, employing a Euclidean ℓ2-regularized gradient method. Despite these advances, there remains a notable gap in learning ill-conditioned estimation problems, particularly through non-Euclidean regularization in settings involving singular noise covariance structures. In this paper, we study the estimation problem for linear systems with known dynamics and observation models, but with unknown and singular process and measurement noise covariances. The objective is to learn the optimal steady-state Kalman gain from training data comprising independent realizations of the observation process. Building on recent de-velopments in Riemannian policy [34], [28] optimization data-
+
+> arXiv:2604.05071v1 [eess.SY] 6 Apr 2026
+
+driven estimation [30], [31], we develop a first-order optimiza-tion method tailored to ill-conditioned estimation settings. Our approach revisits classical estimation through the perspective of geometric regularization and control–estimation duality. In particular, we introduce a Riemannian regularization inspired by the Riemannian metric introduced in [28] that restores key structural properties such as coercivity and gradient dominance of the cost over sublevel sets in the case of singular matrix parameters. This enables the effective application of first-order policy iteration methods under significantly relaxed assumptions, notably allowing for unknown and rank-deficient noise covariances. Our contributions are fourfold. First, we formulate the estimation task as a policy optimization problem (§II), and introduce a Riemannian regularization that improves the condi-tioning and geometric structure of the problem (§III). Second, we develop a direct policy optimization framework for learning the optimal Kalman gain in the presence of unknown and singular noise covariances (§III-A). Third, we construct a data-driven gradient oracle from measurement sequences, which enables a stochastic implementation of the proposed method (§IV). Fourth, we establish non-asymptotic error guarantees while preserving computational efficiency (§V). Finally, we present numerical examples in §VI and conclude the paper in §VII. II. B ACKGROUND AND PROBLEM FORMULATION 
+
+Consider the stochastic difference equation, 
+
+x(t + 1) = Ax (t) + ξ(t), (1a) 
+
+y(t) = Hx (t) + ω(t), (1b) where x(t) ∈ Rn is the state of the system, y(t) ∈ Rm
+
+is the observation, and {ξ(t)}t∈Z and {ω(t)}t∈Z are the un-correlated zero-mean process and measurement noise vectors, respectively, with the following covariances, 
+
+E [ξ(t)ξ⊺(t)] = Q ∈ Rn×n, E [ω(t)ω⊺(t)] = R ∈ Rm×m,
+
+for some positive semi-definite matrices Q, R ≽ 0. Let m0
+
+and P0 ≽ 0 denote the mean and covariance of the initial condition x0. Also, let us fix a time horizon T > 0 and define an estimation policy, denoted by L, as a map that takes a history of the observation signal YT = {y(0) , y (1) , . . . , y (T −
+
+1) } as an input and outputs an estimate of the state x(T ),denoted by ˆxL(T ).We make the following assumptions in our problem setup: 1) The system parameters A and H are known. 2) The process and the measurement noise covariance matrices, Q and R,are not available and may be singular . 3) We have access to a training data-set that consists of independent realizations of the observation signal {y(t)}Tt=0 . However, ground-truth measurements of x(T ) is not available. This setting arises in applications such as active aero-elastic control of aircraft, where systems are well understood and admit approximate or reduced-order models, yet in deployment are subject to unmodeled dynamics, disturbances, and other uncertainties captured through process and measurement noise. Allowing the covariances Q and R to be rank-deficient enables modeling more structured disturbances, but also leads to an ill-posed estimation problem that complicates learning. Ideally, one would seek an estimation policy L that minimizes the mean-squared state estimation error 
+
+E ∥x(T ) − ˆxL(T )∥2 , but this objective is infeasible since the true state x(T ) is not observable. As an alternative, we consider a surrogate objective that minimizes the mean-squared error in predicting the observation y(T ) via 
+
+ˆyL(T ) = H ˆxL(T ). This constitutes a prediction problem, as 
+
+ˆxL(T ) depends only on observations up to time T − 1. The resulting optimization problem is to find L minimizing the mean-squared prediction error, 
+
+min  
+
+> ˆyL(T)∈σ{y(t)}Tt=0
+
+Jest  
+
+> T
+
+(L) := E ∥y(T ) − ˆyL(T )∥2 , (2) where σ{y(t)}Tt=0 denotes the σ-algebra generated by past measurements up to current time T .
+
+A. Kalman Policy Parameterization 
+
+Indeed, when Q and R are known, the solution is given by the celebrated Kalman filter algorithm [1], [35, Theorem 6.42]. For the case with R ≻ 0 or HQH ⊺ ≻ 0 (or both), the unique optimal filtering policy iteratively updates the estimate 
+
+ˆx(t) according to [36] 
+
+ˆx(t + 1) = Aˆx(t) + L(t)( y(t) − H ˆx(t)) , ˆx(0) = m0, (3) where L(t) := AX (t)H⊺(HX (t)H⊺ + R)−1 is the Kalman gain, and X(t) := E[( x(t) − ˆx(t))( x(t) − ˆx(t)) ⊺] is the error covariance matrix that satisfies the Ricatti equation,          
+
+> X(t+ 1) = ( A−L(t)H)X(t)( A−L(t)H)⊺+Q+L(t)RL (t)⊺
+
+with X(t0) = X0. It is known that X(t) converges to a steady-state value X∗ when the pair (A, H ) is observable and the pair 
+
+(A, Q 12 ) is controllable [35], [37]. In such a case, the gain converges to L∗ := AX ∗H⊺(HX ∗H⊺ + R)−1, the so-called steady-state Kalman gain. For relatively large horizons T , it is a common practice to evaluate the steady-state Kalman gain 
+
+L∗ offline and use it, instead of L(t), to update the estimate in real-time. We consider restriction of the estimation policies L to the Kalman filter realized with a constant gain L. In particular, we define the estimate ˆxL(T ) at time T through (3) with a the constant gain L replacing L(t).
+
+ˆxL(T ) = ATL m0 + PT −1 
+
+> t=0
+
+AT −t−1 
+
+> L
+
+Ly (t), (4) where AL := A−LH . Note that this estimate does not require knowledge of the matrices Q or R. By considering ˆyL(T ) := 
+
+H ˆxL(T ), the problem is now finding the optimal gain L that minimizes the mean-squared prediction error 
+
+Jest  
+
+> T
+
+(L) := E ∥y(T ) − ˆyL(T )∥2 . (5) For the case of positive definite noise covariances Q and 
+
+R, this problem has been recently studied in [30], [31] and Stochastic Gradient Descent (SGD)-type algorithm is proposed for guaranteed learning of the globally optimal Kalman gain. However, there is no guarantee these algorithms work for the ill-posed problems with rank deficient or singular noise covariances, simply because the pillar conditions of coercivity and gradient dominance fail to hold. 
+
+Notation. By M := {A ∈ Rn×n | ρ(A) < 1}, we denote the set of (Schur) stable matrices, and define the Lyapunov map L : M × Rn×n 7 → Rn×n, that sends the pair (A, Q ) to the unique solution X of 
+
+X = AXA ⊺ + Q, (6) which has the representation X = P∞ 
+
+> i=0
+
+AiQ(A⊺)i; in this case, if Q ⪰ 0 ( ≻ 0) , then X ⪰ 0 ( ≻ 0) . Furthermore, when 
+
+Q ⪰ 0, then X ≻ 0 if and only if (A, Q 1/2) is controllable (see [38] and references therein). The following is a frequently used technical lemma. 
+
+Lemma 1 (Lemma 3.1 in [28]) The subset M is an open sub-manifold of Rn×n, the Lyapunov map L : M × Rn×n →
+
+Rn×n is smooth, and its differential acts as 
+
+d L(A,Q )[E, F ] = L A, E L(A, Q )A⊺ + A L(A, Q )E⊺ + F 
+
+on any (E, F ) ∈ T(A,Q )(M × Rn×n) ∼= Rn×n ⊕ Rn×n.Furthermore, for any A ∈ M and Q, Σ ∈ Rn×n we have, the so-called Lyapunov-trace property, 
+
+tr [ L(A⊺, Q )Σ] = tr [ L(A, Σ) Q] .
+
+III. G EOMETRIC REGULARIZATION AND THE ALGORITHM 
+
+By the estimation-control duality established in [30, Propo-sition 1], the mean-squared prediction error in (5) takes the following form 
+
+Jest  
+
+> T
+
+(L) = tr [ XT (L)H⊺H] + tr [ R] .
+
+In order to streamline the analysis, we consider the steady state regime and thus define the set of Schur stabilizing gains 
+
+S := {L ∈ Rn×m : ρ(A − LH ) < 1}.
+
+Now, for any L ∈ S in the steady-state limit as T →∞: XT (L) → X∞(L) := P∞ 
+
+> t=0
+
+(AL)t (Q + LRL ⊺) ( A⊺
+
+> L
+
+)t .
+
+Because ρ(AL) < 1, the limit coincides with the unique solution XL = L(AL, Q + LRL ⊺). Therefore, the steady-state limit of the mean-squared prediction error JMSE (L) := lim T →∞ Jest  
+
+> T
+
+(L) is well-defined and in fact the convergence is exponentially fast in T . Thus, we formally analyze the following constrained optimization problem: 
+
+min  
+
+> L∈S
+
+← JMSE (L) = tr [ L(AL, Q + LRL ⊺)H⊺H] + tr [ R] ,
+
+(7) The pair (A, H ) is observable, so is (AL, H ) for any 
+
+L ∈ S (as any unobservable mode of (AL, H ) is indeed an unobservable mode of (A, H )). Equivalently, (A⊺, H ⊺)
+
+is controllable and thus L(A⊺
+
+> L
+
+, H ⊺H) ≻ 0 for all L ∈ S .Therefore, following [28, Proposition 3.3], we equip S with a Riemannian metric. 
+
+⟨V, W ⟩YL := tr[ V W ⊺YL]
+
+where YL = L(A⊺
+
+> L
+
+, H ⊺H). Here, we embed S into Rn×(n+m)
+
+by sending L 7 → I L and equip this with the sub-Riemannian metric induced by the same YL. With abuse of notation, we use the same symbols (S, ⟨· , ·⟩ YL ) to denote this embedded manifold and its induced sub-Riemannian metric whenever convenient. Next, by the Lyap-trace property, we can show that 
+
+JMSE (L) − tr [ R] = tr [( Q + LRL ⊺)YL] = tr 
+
+I L Q 00 R
+
+ I L⊺ YL
+
+
+
+= I L Q 12 00 R 12
+
+ 2
+
+> YL
+
+(8) In particular with respect to our sub-Riemannian metric, we showed that the MSE cost can be viewed as a simple 2-norm of the filtering policy, rescaled with noise covariances. Inspired by this intuition, we use the same sub-Riemannian metric to introduce the Riemannian-Regularized MSE cost, denoted by JR, as 
+
+JR(L, γ ) := JMSE (L) + γ I L 2
+
+> YL
+
+, (9) with γ > 0 being a regularization factor. We will show how this Riemannian regularization recovers vital properties required for learning a policy, thus resulting in a well-conditioned learning problem. These properties will be jus-tified lated in Proposition 2. 
+
+Lemma 2 The regularized cost JR and its gradient takes the following explicit forms, 
+
+JR(L, γ ) = tr [( Qγ + LR γ L⊺)YL] + tr [ R] (10) 
+
+∇LJR(L, γ ) = 2 YL
+
+ −LR γ + ALX(L,γ )H⊺ , (11) where YL = L(A⊺
+
+> L
+
+, H ⊺H) and X(L,γ ) = L(AL, Q γ +
+
+L⊺Rγ L), with Qγ = Q + γI and Rγ = R + γI .
+
+Proof. By the definition of ⟨· , ·⟩ YL ,
+
+γ I L 2
+
+> YL
+
+= tr [ γ(I + LL ⊺)YL] .
+
+Combining like terms with the first equality of (8) recovers (10). The gradient follows from the formula in [30] by substituting Qγ and Rγ in for Q and R respectively. □
+
+A. The learning algorithm 
+
+For each fixed γ > 0, we also characterize the global minimizer L∗ = arg min L∈S JR(L, γ ). The domain S is non-empty whenever (A, H ) is observable. Thus, by continuity of L → JR(L, γ ), there exists some finite α, γ > 0 such that the regularized sublevel set S(α,γ ) is non-empty and compact (see Proposition 2). Therefore, the minimizer is an interior point and thus must satisfy the first-order optimality condition ∇JR(L∗ 
+
+> γ
+
+, γ ) = 0 . Moreover, by coercivity of the regularized cost, the minimizer is stabilizing and unique, and satisfies L∗ 
+
+> γ
+
+= AX ∗ 
+
+> γ
+
+H⊺  Rγ + HX ∗ 
+
+> γ
+
+H⊺−1 , with X∗ 
+
+> γ
+
+=
+
+L(AL∗ 
+
+> γ
+
+, Q γ + L∗ 
+
+> γ
+
+Rγ (L∗ 
+
+> γ
+
+)⊺). As expected, the regularized global minimizer L∗ 
+
+> γ
+
+is explicitly dependent on the noise covariances Q and R, and the regularizer γ. Based on this intuition, we provide the following algorithm as an extension Algorithm 1: Riemannian-Regularized Kalman Policy Optimization  
+
+> 1:
+
+Get a tolerance ϵ > 0, failure probability δ, γmin > 0,and initialize regularization factor γ0 ≫ γmin  
+
+> 2:
+
+Get a policy L0 ∈ S with α ≥ JR(L0, γ 0) 
+
+> 3:
+
+Set measurement length T ≥ O  ln( ϵ−1) and batch-size M ≥ O  ϵ−1 ln(ln( ϵ−1)) ln( δ−1) 
+
+> 4:
+
+Set L ← L0 and choose a stepsize η ≤ 29ℓ(α,γ min ) 
+
+> 5:
+
+for k = 0 , 1, · · · , K ≥ O (ln( ϵ−1)) do  
+
+> 6:
+
+γ ← γk 
+
+> 7:
+
+while ∥∇ LJR(L, γ k)∥2 ≥ (1 −β)αγ k 
+
+> c(α,γ min )
+
+do  
+
+> 8:
+
+Get M independent measurements of length T :
+
+Yi  
+
+> [0: T]
+
+= {yt}T 
+
+> 0
+
+, i = 1 , · · · , M  
+
+> 9:
+
+From the gradient oracle, inquire: 
+
+∇LJR(L, γ ) ← Oracle (L, {Y {0: T }}Mi=1 ) 
+
+> 10:
+
+Update the policy: 
+
+L ← L − η∇LJR(L, γ ) 
+
+> 11:
+
+end while  
+
+> 12:
+
+Set the converged policy Lk+1 ← L 
+
+> 13:
+
+Geometric schedule: 
+
+update γk+1 ← max [ γmin , βγ k] where β ∈ (0 , 1)  
+
+> 14:
+
+end for  
+
+> 15:
+
+return LK
+
+of ideas in [30], [31] via continuation for the regularized learning problem (7) via (9): The rationale behind the algorithm is that combining linear convergence within each continuation step with the geometric decay of γ will result in a procedure that converges linearly to the unregularized solution L∗. The constants ℓ(α, γ ) and 
+
+c(α, γ ) correspond to the locally Lipschitz and PL properties of the regularized cost, respectively, as defined explicitly later in Proposition 2. The regularization idea in the context of estimation prob-lems has been explored recently [33], however, using a Eu-clidean ℓ2-regularization of the filtering gain and through a different approach using invariant ellipsoid . Nonethe-less, we compare our algorithm against such Euclidean ℓ2-regularization of the filtering policy in §VI. IV. D ATA -DRIVEN GRADIENT ORACLE 
+
+When noise covariance matrices Q and R are unknown, it is not possible to directly compute the gradient of the MSE cost from Lemma 2. Therefore, we construct a stochastic gradient oracle that estimates the gradient from the data at hand. For that, consider a length T − t0 sequence of measurements 
+
+Y{t0:T } := {y(t0), y (t0 + 1) , . . . , y (T − 1) } starting at some initial time t0. Given any filtering gain L ∈ S , using (4) we obtain an estimate ˆyL(T ) as 
+
+ˆyL(T ) = H ˆxL(T ) = HA T −t0 
+
+> L
+
+m0 + PT −1 
+
+> t=t0
+
+HA T −t−1 
+
+> L
+
+Ly (t).
+
+This results in an estimation error eT (L) := y(T ) − ˆyL(T )
+
+with its squared-norm denoted by 
+
+ε(L, Y{t0:T }) := ∥eT (L)∥2
+
+Let us now consider the regularized mean squared-norm of the error over all possible random measurement sequences: 
+
+J{t0:T }(L, γ ) := E ε(L, Y{t0:T }) + γ I L 2
+
+> YL
+
+.
+
+Then it is then straightforward to show that 
+
+lim   
+
+> (T−t0)→∞
+
+J{t0:T }(L) = JR(L),
+
+with an exponentially fast rate. Next, assuming access to independent collection of the measurement sequence, the gradient of the regularized MSE cost can be approximated as follows: 
+
+Proposition 1 (Gradient Oracle) Given L ∈ S and M inde-pendently collected measurements {Y i 
+
+> [t0,T ]
+
+}Mi=1 , define 
+
+[∇JR(L, γ ) = 1
+
+> M
+
+PMi=1 ∇Lε(L, Yi 
+
+> {t0:T}
+
+)+ 2 γY L (−L + ALZLH⊺) ,
+
+where ZL = L(AL, I ) and 
+
+∇Lε(L, Y) = −2 
+
+> T−t0−1
+
+X
+
+> t=0
+
+(A⊺
+
+> L
+
+)tH⊺eT (L)y⊺(T − t − 1) +2  
+
+> T−t0−1
+
+X
+
+> t=1
+> t
+
+X
+
+> k=1
+
+(A⊺
+
+> L
+
+)t−kH⊺eT (L)y⊺(T −t−1) L⊺(A⊺
+
+> L
+
+)k−1H⊺.
+
+Then, [∇JR(L, γ ) is an unbiased estimate of the gradient 
+
+∇JR(L, γ ); i.e., as T − t0 → ∞ ,
+
+E
+
+h[∇JR(L, γ )
+
+i
+
+→ ∇ JR(L, γ ).
+
+Proof. Computing the regularizing norm in (9) does not require knowledge of Q or R. Thus, we focus on estimating 
+
+JMSE . Denote the approximated MSE cost value by 
+
+[JMSE (L) := 1
+
+M
+
+> M
+
+X
+
+> i=1
+
+ε(L, Yi 
+
+> {t0:T}
+
+).
+
+For small enough ∆ ∈ Rn×m,
+
+ε(L + ∆ , Y) − ε(L, Y) = ∥eT (L + ∆) ∥2 − ∥ eT (L)∥2 =2tr [( eT (L + ∆) − eT (L)) e⊺ 
+
+> T
+
+(L)] + o(∥∆∥)) .
+
+The difference 
+
+eT (L + ∆) − eT (L) = E1(∆) + E2(∆) + o(∥∆∥),
+
+contains the following terms that are linear in ∆:
+
+E1(∆) := − T −t0−1P
+
+> t=0
+
+H(AL)t∆y(T − t − 1) ,E2(∆) := T −t0−1P
+
+> t=1
+> t
+
+P
+
+> k=1
+
+H(AL)t−k∆H(AL)k−1Ly (T − t − 1) .
+
+Therefore, combining the two identities, the definition of gradient under the inner product ⟨A, B ⟩ := tr [ AB ⊺], and ignoring the higher order terms in ∆ yields, 
+
+⟨∇ Lε(L, y ), ∆⟩ = 2tr [( E1(∆) + E2(∆)) e⊺ 
+
+> T
+
+(L)] ,which by linearity and cyclic permutation property of trace reduces to: 
+
+⟨∇ Lε(L, y ), ∆⟩ = −2tr 
+
+"
+
+∆ 
+
+> T−t0−1
+
+X
+
+> t=0
+
+y(T − t − 1) e⊺ 
+
+> T
+
+(L)H(AL)t
+
+!# 
+
++2tr 
+
+"
+
+∆ 
+
+> T−t0−1
+
+X
+
+> t=1
+> t
+
+X
+
+> k=1
+
+H(AL)k−1Ly (T − t − 1) e⊺ 
+
+> T
+
+(L)H(AL)t−k
+
+!# 
+
+.
+
+This holds for all admissible ∆, concluding the formula for the gradient. □
+
+Note that the variance of this estimate also converges to zero at a rate of O( 1 
+
+> M
+
+) as the number of sample measurements M
+
+increases. The number M is referred to as the batch-size. Noting that this gradient estimate [∇JR(L, γ ) only depends on the available information, we utilize this gradient approxi-mation as the gradient oracle in Algorithm 1. The convergence under this stochastic oracle can be obtained using the gradient dominance condition and locally Lipschitz property, but the analysis becomes more complicated than the deterministic oracle due to the possibility of the iterated gain Lk leaving the sub-level sets due to stochastic errors in the gradient. V. C ONVERGENCE ANALYSIS 
+
+First, we establish how this geometric regularization enables us to recover the essential properties required for the learning the optimal Kalman gain through a direct policy optimization. 
+
+Proposition 2 Suppose (A, H ) is observable, and consider the Riemannian regularized MSE cost JR : S × R≥0 → R. Then, the following holds true for each fixed γ ≥ 0:1) The Riemannian regularized cost JR(L, γ ) is coercive in 
+
+L if γ > 0; i.e., for any sequence {Lk} ∈ S ,if Lk → ∂S or ∥Lk∥ → ∞ then JR(Lk, γ ) → ∞ .
+
+2) For any α > 0, the sublevel set S(α,γ ) := {L ∈ Rn×m :
+
+JR(L, γ ) ≤ α} is compact if γ > 0, is contained in S,and S(α,γ 1) ⊂ S (α,γ 2) whenever 0 ≤ γ2 ≤ γ1.3) There exists a unique global minimizer of JR(·, γ ) de-noted by 
+
+L∗ 
+
+> γ
+
+= AX ∗ 
+
+> γ
+
+H⊺  Rγ + HX ∗ 
+
+> γ
+
+H⊺−1 ,
+
+with X∗ 
+
+> γ
+
+= L(AL∗ 
+
+> γ
+
+, Q γ + L∗ 
+
+> γ
+
+Rγ (L∗ 
+
+> γ
+
+)⊺).4) The Riemannian regularized cost JR(·, γ ) has the PL-property: ∀L ∈ S (α,γ )
+
+JR(L, γ ) − JR(L∗ 
+
+> γ
+
+, γ ) ≤ c(α, γ )∥∇ LJR(L, γ )∥2
+
+where 
+
+c(α, γ ) := λ(Y ∗ 
+
+> L
+
+)2γκ 2(α,γ )
+
+and κ(α,γ ) := inf L∈S (α,γ ) λ(YL) > 0. Also, c(α, γ ) is decreasing in γ for any fixed α.5) The Riemannian regularized cost JR has Lipschitz gra-dient on sublevel sets: ∀L, L ′ ∈ S (α,γ )
+
+∥∇ LJR(L, γ ) − ∇ LJR(L′, γ )∥ ≤ ℓ(α, γ )∥L − L′∥,
+
+where 
+
+ℓ(α, γ ) := 2αγ (λ(R) + γ + α) + 4√2αγ ∥H∥2ξ(α,γ ),
+
+is decreasing in γ for any fixed α, and ξ(α,γ ) is a non-increasing function of γ defined in the proof. 
+
+Proof. Lemmas 1 and 2 of [31] establish coercivity and gradient dominance respectively for the case of Q, R ≻ 0.Following the same argument using the form of the regularized cost from (10) in Lemma 2 and noting that Qγ , R γ ≻ 0 shows parts 1 through 4. For part 5, like in the proof of the dual LQR problem’s gradient dominance [19, Proposition 3.10], we can show that the Hessian of JR is characterized by 
+
+d2 JR(L, γ )[ E, E ] =2tr (Rγ E⊺ + HX (L,γ )H⊺E⊺YL)E
+
+− 4tr H d X(L,γ )[E]A⊺
+
+> L
+
+YLE
+
+=:2tr a(L,γ )
+
+ − 4tr b(L,γ )
+
+ .
+
+We want to bound the magnitude of the Hessian, so consider 
+
+max 
+
+> L∈S (α,γ )
+
+sup  
+
+> ∥E∥F=1
+
+| d2 JR(L)[ E, E ]|≤ max 
+
+> L∈S (α,γ )
+
+sup  
+
+> ∥E∥F=1
+
+(2 |tr a(L,γ )
+
+ |) + sup  
+
+> ∥E∥F=1
+
+(4 |tr b(L,γ )
+
+ |).
+
+Let E by any unit norm tangent vector. Because tr [ YL] ≤ α/γ 
+
+and tr X(L,γ )H⊺H = JR(L, γ ) ≤ α,
+
+|tr a(L,γ )
+
+ | ≤ α(λ(R) + γ + α)/γ. (12) Clearly, a(α,γ ) is decreasing in γ. We now consider the second term. From [19, Proposition 7.7], 
+
+tr 
+
+h
+
+Y 1/2
+
+> L
+
+i
+
+≤ p(2 α/γ ), and ∥ALY 1/2 
+
+> L
+
+∥2 ≤ pα/γ. (13) To deal with the d X(L,γ )[E] term, we define the following terms that are non-increasing in γ:
+
+X(α,γ ) := max 
+
+> L∈S (α,γ )
+
+tr [ XL] , and Z(α,γ ) := max 
+
+> L∈S (α,γ )
+
+tr [ L(AL, I )] .
+
+Recall that d X(L,γ )[E] = L(AL, V ) for a matrix V depend-ing on the problem parameters. To bound V , consider that 
+
+d X(L,γ )[E] − AL d X(L,γ )[E]A⊺
+
+> L
+
+= −EHX (L,γ )A⊺ 
+
+> L
+
+− ALX(L,γ )(EH )⊺ + ER γ L⊺ + LR γ E⊺
+
+⪯ ALX(L,γ )A⊺ 
+
+> L
+
++ ( EH )X(L,γ )(EH )⊺ + ER γ E⊺ + LR γ L⊺
+
+= X(L,γ ) − Qγ + ( EH )X(L,γ )(EH )⊺ + ER γ E⊺
+
+⪯ (tr X(L,γ )
+
+ + α + λ(R) + γ)Qγ /γ, (14) where in the first inequality we used part (b.1) of [19, Proposition 2.1]. By part (c) of the same proposition, this implies that d X(L,γ )[E] is less than or equal to the following in Loewner ordering: 
+
+1
+
+γ (tr X(L,γ )
+
+ + α + λ(R) + γ)( XL + γZ(α,γ )I). (15) Using (b.2) of [19, Proposition 2.1] in the first inequality of (14) instead of (b.1) and combining the result with (15) shows that 
+
+∥ d X(L,γ )[E]∥2 (16) 
+
+≤ 1
+
+γ [tr X(L,γ )
+
+ + α + λ(R) + γ]( X(α,γ ) + γZ(α,γ )).
+
+To address the tr X(L,γ )
+
+ term, it will be helpful to observe that ∥L∥2 
+
+> F
+
+≤ α/ (γκ (α,γ )), which follows from the fact that L ∈ S(α,γ ). Thus tr [ L(AL, LL ⊺)] ≤
+
+tr [ L(AL, tr [ LL ⊺] I)] ≤ [α/ (γκ (α,γ ))] Z(α,γ ). From this in-equality and the linearity of L in its second argument, 
+
+tr X(L,γ )
+
+ = tr [ XL] + γtr [ L(AL, I + LL ⊺)] 
+
+≤ X (α,γ ) + ( γ + α/κ (α,γ ))Z(α,γ ). (17) Substituting (17) into (14), we can see that ∥ d X(L,γ )[E]∥2
+
+is upper bounded by a function that is decreasing in γ. Let 
+
+ξ(α,γ ) denote this function. Then by (13), (16), and (17), 
+
+|tr b(L,γ )
+
+ | ≤ ∥ H∥2∥ d X(L,γ )[E]∥2∥ALY 1/2 
+
+> L
+
+∥2tr 
+
+h
+
+Y 1/2
+
+> L
+
+i
+
+≤ √2∥H∥2αξ (α,γ )/γ, (18) which is a decreasing function of γ. Combining (12) and (18) justifies the claimed Lipschitz constant. □
+
+Finally, these results are sufficient to provide recursive feasibility and convergence guarantees for Algorithm 1 which recovers the globally optimal filtering policy from measure-ment data despite the lack of fully excited noise. To simplify our probabilistic analysis, we consider almost surely bounded measurement and process noise with zero mean; the exten-sion to sub-Gaussian noise follows by a standard argument involving Bernstein’s concentration inequalities. 
+
+Theorem 1 Suppose (A, H ) is observable. Assume that ∥x0∥,
+
+∥ξ(t)∥ ≤ κξ , and ∥ω(t)∥ ≤ κω for all t (almost surely), and the initial state has zero mean, i.e., m0 = 0 . Consider 
+
+L0 ∈ S , fix γ0 ≥ γmin > 0 and α ≥ JR(L0, γ 0), and set stepsize η = 29ℓ(α,γ min ) . Then, for any γ ≥ γmin and ϵ, δ > 0,with probability at least 1 − δ the internal loop terminates in 
+
+O(ln(1 /ϵ )) iterations if 
+
+T ≥ O 
+
+
+
+ln( 1
+
+ϵ )
+
+
+
+and M ≥ O 
+
+
+
+ln( 1
+
+δ ) 1
+
+ϵ ln(ln( 1
+
+ϵ )) 
+
+
+
+.
+
+Furthermore, the optimality gap decays linearly as 
+
+JR(Lk, γ k) − JMSE (L∗) ≤ α(2 − β) max {γ0βk, γ min }.
+
+Proof. Under the hypothesis and the choice of stepsize, we can show that that Assumption 2, 3 and 4 in [31] are all satisfied if γ ≥ γmin > 0. Therefore, if the trajectory length 
+
+T and batch-size M is large enough (in particular satisfying the rates stated above), by [31, Theorem 3] the inner-loop converges in a linear rate. We compute this rate explicitly and then show that the outer-loop also has a linear convergence rate—due to geometric scheduling of the regularizer. Set fk(L) = JR(L, γ k), and denote by L⋆k its minimizer. Let Lk,m be the policy obtained by Algorithm 1 after m inner iteration and k outer iterations, and let Lk be the output of the k-th inner loop. Recall the PL constant c(α, γ ) defined in Proposition 2 and note that c(α, ·) is a decreasing function. Therefore, by [31, Theorem 1], we have 
+
+fk(Lk,m ) − fk(L∗
+
+> k
+
+) ≤ qm (fk(Lk, 0) − fk(L∗
+
+> k
+
+)) 
+
+and terminated by 
+
+∥∇ fk(Lk)∥2 
+
+> F
+
+≤ εk
+
+c(α, γ min ) , εk := C γ k
+
+for some constant C > 0 independent of k, with 
+
+q := 1 − η
+
+4c(α, γ min ) ∈ (0 , 1) .
+
+Define the gap Ek := fk(Lk) − fk(L∗
+
+> k
+
+). At the outer stage 
+
+k + 1 , the inner loop is run for m gradient steps such that 
+
+Ek+1 ≤ qm  fk+1 (Lk) − fk+1 (L∗
+
+> k+1
+
+) (19) because Lk+1 ,0 = Lk. By Lemma 2 and the definition of 
+
+L∗ 
+
+> k+1
+
+we have that fk+1 (L∗
+
+> k+1
+
+) ≤ fk+1 (L0) ≤ f0(L0) ≤ α
+
+whenever γ0 ≥ γk ≥ γk+1 ≥ γmin , because JR(L0, γ ) ≤
+
+f0(L0) ≤ α for all γ ≤ γ0; and thus, 
+
+fk(L∗
+
+> k+1
+
+) − fk+1 (L∗
+
+> k+1
+
+)= ( γk − γk+1 )tr 
+
+h
+
+[I + ( L∗
+
+> k+1
+
+)⊺L∗
+
+> k+1
+
+]Y(L∗
+
+> k+1 )
+
+i
+
+≤ (1 − β)γkfk+1 (L∗
+
+> k+1
+
+) ≤ (1 − β)γkα (20) Also, by definitions of fk, Lk, L∗
+
+> k
+
+, and L∗ 
+
+> k+1
+
+we have 
+
+fk+1 (Lk) − fk(Lk) ≤ 0 and fk(L∗
+
+> k
+
+) − fk(L∗
+
+> k+1
+
+) ≤ 0.
+
+Therefore, by aggregating the last three upperbounds we obtain 
+
+fk+1 (Lk) − fk+1 (L∗
+
+> k+1
+
+) ≤ fk(Lk) − fk(L∗
+
+> k
+
+) + (1 − β)αγ k.
+
+(21) By combining eqs. (19) and (21) we obtain that 
+
+Ek+1 ≤ qm(Ek + (1 − β)αγ k).
+
+Now, if Ek ≤ C0γk for some constant C0 satisfying 
+
+C0 ≥ (1 − β)α
+
+and qm ≤ β/ 2 then 
+
+Ek+1 ≤ β
+
+2 (C0 + (1 − β)α)γk ≤ C0γk+1 ,
+
+as γk+1 = βγ k. Note that by PL property and the termination condition of the inner loop 
+
+Ek ≤ c(α, γ min )∥∇ fk(Lk)∥2 
+
+> F
+
+≤ C0γk,
+
+and thus, by induction, we obtain the convergence rate 
+
+Ek ≤ C0γk, ∀k = 1 , 2, · · · .
+
+Finally, 
+
+JR(Lk, γ k)−JMSE (L∗)= Ek + fk(L∗
+
+> k
+
+) − fk(L∗) + fk(L∗) − JMSE (L∗)
+
+≤ Ek + γkα ≤ (C0 + α)γkbecause fk(L∗
+
+> k
+
+) − fk(L∗) ≤ 0 and fk(L∗) − JMSE (L∗) ≤
+
+γkα by a similar argument as in (20). Because γk =max {γ0βk, γ min } the final claim follows, and for small enough γmin > 0 the condition fk(Lk) − f0(L∗) ≤ ϵ is guaranteed once 
+
+K ≥ log( ϵ/ (( C0 + α)γ0)) log β = O(ln( 1
+
+ϵ )) . □
+
+VI. S IMULATIONS 
+
+Here, we demonstrate the effectiveness of the proposed framework in improving estimation policies for a linear time-invariant (LTI) system. Specifically, we consider a system with known dynamics (A, H ), where n = 4 and m = 3 .Additional details on the generation of these system matrices are provided in the accompanying GitHub repository [39]. To deliberately construct an ill-conditioned estimation problem, the noise covariance matrices Q and R, as well as the matrix 
+
+H⊺H, are chosen to be singular. Fixing the trajectory length T = 50 , we run Algorithm 1 using the stochastic gradient oracle in Proposition 1, with data from (1), and evaluate performance across varying batch sizes 
+
+M . Then, fixing M = 20 , we also vary T and run Algorithm 1. As the choice of the trajectory length T and the batch size 
+
+M affects the convergence behavior of Algorithm 1, we report the progress of the normalized MSE cost in Figure 1, where each figure shows statistics over 50 rounds of simulation. Each round of simulation contains 20 continuation steps of 2 thousand iterations each, where γ is scaled geometrically by a factor of β = 0 .5 each step. Furthermore, the normalized MSE cost is calculated as the performance of the current gain LK
+
+on the unregularized objective JMSE relative to the optimal solution L∗ to JMSE .The results exhibit an initial phase of linear convergence, consistent with the theoretical guarantees established for the regularized objective under sufficiently accurate gradient esti-mates. As the iterates approach a neighborhood of the optimal solution, the convergence rate transitions to sublinear behavior. This degradation is expected, as the updates rely on stochastic approximations of the gradient, and the effect of estimation noise becomes dominant near optimality—contrasting with the linear convergence observed for Gradient Descent (GD) under an exact gradient oracle. Proposition 2 illustrates convergence of the learned Kalman gain toward the optimal solution, in agreement with the structural properties of the objective function analyzed in §V, particularly the gradient dominance condition established in Proposition 2. Finally, Figure 2 compares the performance of a conven-tional Euclidean ℓ2-regularization with the proposed Rieman-nian regularization on a structured problem which highlights the latter’s robustness, especially when as ∥L∗∥F becomes larger:                         
+
+> A=
+> 
+> z1000.51000.5
+> , H =
+> 100010
+> 
+> , Q =
+> 
+> 100010000
+> , R =
+> 1000
+> 
+> ,
+
+where Q, R , and H⊺H are singular, γ = 0 .1, β = 0 .25 , and 
+
+z is a hyperparameter controlling (proportionally) ∥L∗∥F . For each trial, we initialize a stabilizing gain L0 with z − 0.5 in the upper-left entry and zeros elsewhere, then run Algorithm 1 with the deterministic gradient oracle—to isolate the effect of regularization—for 20 steps with 1000 inner iterations. For each z, the stepsize η is the largest power of 10 that results in convergence for both regularization types. The results demonstrate that for problems where the optimal gain is far from the origin, the Euclidean regularization fails to quickly converge to the optimal solution, as the indiscriminate penalty on ∥L∥F drives the regularized solution away from L∗ and towards 0. In contrast, Riemannian regularization converges more directly towards the optimal gain, even for large values of 
+
+z which result in an L∗ far from the origin, which aligns with the linear convergence of Algorithm 1 shown in Theorem 1. This highlights the benefit of the proposed Riemannian regu-larization and how compatible it is with the inherent geometry of the problem. VII. C ONCLUSIONS 
+
+We studied the problem of learning the optimal steady-state Kalman gain in settings where the process and measurement noise covariances are both unknown and potentially singular, leading to an ill-conditioned problem. Leveraging the intrinsic geometry of the policy space, we introduced a Riemannian regularization that restores key structural properties of the objective, and developed a direct policy optimization algorithm based on a continuation scheme. Our theoretical analysis estab-lishes convergence guarantees for the proposed method, while empirical results demonstrate improved stability and perfor-mance compared to conventional Euclidean ℓ2-regularization. These findings highlight the effectiveness of incorporating geometric structure into data-driven estimation. Future work will focus on extending this framework to account for model uncertainty, time-varying dynamics, and more general stochas-tic settings. REFERENCES [1] R. E. Kalman, “A new approach to linear filtering and prediction problems,” ASME. Journal of Basic Engineering , vol. 82, pp. 35–45, 03 1960. [2] R. Mehra, “On the identification of variances and adaptive Kalman filtering,” IEEE Transactions on Automatic Control , vol. 15, no. 2, pp. 175–184, 1970. [3] R. Mehra, “Approaches to adaptive filtering,” IEEE Transactions on Automatic Control , vol. 17, no. 5, pp. 693–698, 1972. [4] B. Carew and P. Belanger, “Identification of optimum filter steady-state gain for systems with unknown noise covariances,” IEEE Transactions on Automatic Control , vol. 18, no. 6, pp. 582–587, 1973. [5] P. R. Belanger, “Estimation of noise covariance matrices for a linear time-varying stochastic process,” Automatica , vol. 10, no. 3, pp. 267– 275, 1974. [6] K. Myers and B. Tapley, “Adaptive sequential estimation with unknown noise statistics,” IEEE Transactions on Automatic Control , vol. 21, no. 4, pp. 520–523, 1976. [7] K. Tajima, “Estimation of steady-state Kalman filter gain,” IEEE Trans-actions on Automatic Control , vol. 23, no. 5, pp. 944–945, 1978. [8] L. Zhang, D. Sidoti, A. Bienkowski, K. R. Pattipati, Y. Bar-Shalom, and D. L. Kleinman, “On the identification of noise covariances and adaptive Kalman filtering: A new look at a 50 year-old problem,” IEEE Access ,vol. 8, pp. 59362–59388, 2020. [9] D. Magill, “Optimal adaptive estimation of sampled stochastic pro-cesses,” IEEE Transactions on Automatic Control , vol. 10, no. 4, pp. 434–439, 1965. (a) (b) (c) 
+
+Fig. 1: Performance of our Riemanian-Regularized Kalman Policy Optimization (Algorithm 1) with the data-driven oracle and without knowledge of the singular covariances. Vertical lines represent a new continuation step. Plots are of the mean progress over 50 trials with random initializations of (a) the estimation error for different batch sizes M , (b) the estimation error for different trajectory length T , and (c) the mean Frobenius norm distance between the Lk and the optimal, un-regularized gain L∗ for various batch sizes. Shaded regions show 99%-cover of the realizations per iteration step. 
+
+Fig. 2: The benefit of the Riemannian regularization over the Euclidean one. Comparison of the convergence of the normalized, unregularized cost for various values of z using the deterministic gradient oracle. Dashed lines illustrate the Euclidean ℓ2-regularization vs solid lines representing the Riemannian regularization. 
+
+[10] C. G. Hilborn and D. G. Lainiotis, “Optimal estimation in the presence of unknown parameters,” IEEE Transactions on Systems Science and Cybernetics , vol. 5, no. 1, pp. 38–43, 1969. [11] P. Matisko and V. Havlena, “Noise covariances estimation for Kalman filter tuning,” IFAC Proceedings Volumes , vol. 43, no. 10, pp. 31–36, 2010. [12] R. Kashyap, “Maximum likelihood identification of stochastic linear systems,” IEEE Transactions on Automatic Control , vol. 15, no. 1, pp. 25–34, 1970. [13] R. H. Shumway and D. S. Stoffer, “An approach to time series smoothing and forecasting using the EM algorithm,” Journal of Time Series Analysis , vol. 3, no. 4, pp. 253–264, 1982. [14] B. J. Odelson, M. R. Rajamani, and J. B. Rawlings, “A new autocovari-ance least-squares method for estimating noise covariances,” Automatica ,vol. 42, no. 2, pp. 303–308, 2006. [15] B. M. ˚Akesson, J. B. Jørgensen, N. K. Poulsen, and S. B. Jørgensen, “A generalized autocovariance least-squares method for Kalman filter tuning,” Journal of Process Control , vol. 18, no. 7-8, pp. 769–779, 2008. [16] J. Dun´ ık, M. ˆ Simandl, and O. Straka, “Methods for estimating state and measurement noise covariance matrices: Aspects and comparison,” IFAC Proceedings Volumes , vol. 42, no. 10, pp. 372–377, 2009. [17] R. E. Kalman, “On the general theory of control systems,” in Pro-ceedings First International Conference on Automatic Control, Moscow, USSR , pp. 481–492, 1960. [18] J. Pearson, “On the duality between estimation and control,” SIAM Journal on Control , vol. 4, no. 4, pp. 594–600, 1966. [19] J. Bu, A. Mesbahi, M. Fazel, and M. Mesbahi, “LQR through the lens of first order methods: Discrete-time case,” arXiv preprint arXiv:1907.08921 , 2019. [20] J. Bu, A. Mesbahi, and M. Mesbahi, “Policy gradient-based algo-rithms for continuous-time linear quadratic control,” arXiv preprint arXiv:2006.09178 , 2020. [21] M. Fazel, R. Ge, S. Kakade, and M. Mesbahi, “Global convergence of policy gradient methods for the linear quadratic regulator,” in Proceed-ings of the 35th International Conference on Machine Learning , vol. 80, pp. 1467–1476, PMLR, 2018. [22] I. Fatkhullin and B. Polyak, “Optimizing static linear feedback: Gradient method,” SIAM Journal on Control and Optimization , vol. 59, no. 5, pp. 3887–3911, 2021. [23] S. Kraisler and M. Mesbahi, “Output-feedback synthesis orbit geometry: Quotient manifolds and lqg direct policy optimization,” IEEE Control Systems Letters , vol. 8, pp. 1577–1582, 2024. [24] H. Mohammadi, M. Soltanolkotabi, and M. R. Jovanovic, “On the linear convergence of random search for discrete-time LQR,” IEEE Control Systems Letters , vol. 5, no. 3, pp. 989–994, 2021. [25] F. Zhao, K. You, and T. Bas ¸ar, “Global convergence of policy gra-dient primal-dual methods for risk-constrained LQRs,” arXiv preprint arXiv:2104.04901 , 2021. [26] S. Talebi and N. Li, “Ergodic-risk criterion for stochastically stabilizing policy optimization,” arXiv preprint arXiv:2409.10767 , 2024. [27] Y. Tang, Y. Zheng, and N. Li, “Analysis of the optimization landscape of linear quadratic gaussian (LQG) control,” in Proceedings of the 3rd Conference on Learning for Dynamics and Control , vol. 144, pp. 599– 610, PMLR, June 2021. [28] S. Talebi and M. Mesbahi, “Policy optimization over submanifolds for constrained feedback synthesis,” IEEE Transactions on Automatic Control (to appear), arXiv preprint arXiv:2201.11157 , 2022. [29] S. Talebi, Y. Zheng, S. Kraisler, N. Li, and M. Mesbahi, “Policy optimization in control: Geometry and algorithmic implications,” arXiv preprint arXiv:2406.04243 , 2024. [30] S. Talebi, A. Taghvaei, and M. Mesbahi, “Duality-based stochastic policy optimization for estimation with unknown noise covariances,” arXiv preprint arXiv:2210.14878 , 2022. [31] S. Talebi, A. Taghvaei, and M. Mesbahi, “Data-driven optimal filtering for linear systems with unknown noise covariances,” in Advances in Neural Information Processing Systems (NeurIPS) , vol. 36, pp. 69546– 69585, Curran Associates, Inc., 2023. [32] M. A. Belabbas and A. Olshevsky, “Interpretable gradient descent for kalman gain,” arXiv preprint arXiv:2507.14354 , 2025. [33] M. V. Khlebnikov, “A comparison of guaranteeing and kalman filters,” 
+
+Automation and Remote Control , vol. 84, pp. 389–411, 2023. [34] S. Talebi and M. Mesbahi, “Riemannian Constrained Policy Optimiza-tion via Geometric Stability Certificates,” in 2022 IEEE 61st Conference on Decision and Control (CDC) , pp. 1472–1478, 2022. [35] H. Kwakernaak and R. Sivan, Linear Optimal Control Systems ,vol. 1072. Wiley-interscience, 1969. [36] E. Tse and M. Athans, “Optimal minimal-order observer-estimators for discrete linear time-varying systems,” IEEE Transactions on Automatic Control , vol. 15, no. 4, pp. 416–426, 1970. [37] F. Lewis, Optimal Estimation with an Introduction to Stochastic Control Theory . New York, Wiley-Interscience, 1986. [38] Z. Gajic and M. T. J. Qureshi, Lyapunov Matrix Equation in System Stability and Control . Courier Corporation, 2008. [39] S. Talebi and L. Bier, “Riemannian-regularized-policy-optimization,” Mar. 2026. Available on GitHub at https://github.com/shahriarta/ Riemannian-regularized-policy-optimization.

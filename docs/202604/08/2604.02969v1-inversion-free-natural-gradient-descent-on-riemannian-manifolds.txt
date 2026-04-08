@@ -1,0 +1,4493 @@
+Title: Inversion-Free Natural Gradient Descent on Riemannian Manifolds
+
+URL Source: https://arxiv.org/pdf/2604.02969v1
+
+Published Time: Mon, 06 Apr 2026 00:43:15 GMT
+
+Number of Pages: 73
+
+Markdown Content:
+# Inversion-Free Natural Gradient Descent on Riemannian Manifolds 
+
+## Dario Draca 1, Takuo Matsubara 2 and Minh-Ngoc Tran 3
+
+1School of Mathematics and Statistics, University of Sydney, Australia 
+
+2School of Mathematics, University of Edinburgh, UK 
+
+3University of Sydney Business School, Australia 
+
+Abstract 
+
+The natural gradient method is widely used in statistical optimization, but its standard for-mulation assumes a Euclidean parameter space. This paper proposes an inversion-free stochas-tic natural gradient method for probability distributions whose parameters lie on a Riemannian manifold. The manifold setting offers several advantages: one can implicitly enforce parameter constraints such as positive definiteness and orthogonality, ensure parameters are identifiable, or guarantee regularity properties of the objective like geodesic convexity. Building on an intrinsic formulation of the Fisher information matrix (FIM) on a manifold, our method main-tains an online approximation of the inverse FIM, which is efficiently updated at quadratic cost using score vectors sampled at successive iterates. In the Riemannian setting, these score vec-tors belong to different tangent spaces and must be combined using transport operations. We prove almost-sure convergence rates of O(log s/s α) for the squared distance to the minimizer when the step size exponent α > 2/3. We also establish almost-sure rates for the approxi-mate FIM, which now accumulates transport-based errors. A limited-memory variant of the algorithm with sub-quadratic storage complexity is proposed. Finally, we demonstrate the effectiveness of our method relative to its Euclidean counterparts on variational Bayes with Gaussian approximations and normalizing flows. 
+
+Keywords: Variational Bayes; Fisher information matrix; Stochastic optimization; Rie-mannian optimization; Bures-Wasserstein manifold 1
+
+> arXiv:2604.02969v1 [stat.ML] 3 Apr 2026
+
+# 1 Introduction 
+
+This paper studies the optimization of an objective function L(θ) ≡ L (qθ) defined over a family of parametric distributions Q = {qθ : θ ∈ M} . Problems of this form are central to statistics and machine learning. For instance, maximum likelihood estimation minimizes the negative log-likelihood over Q, while variational Bayes approximates an intractable posterior distribution by minimizing the negative evidence lower bound (Hoffman et al. 2013). Two broad approaches exist for this class of problems. The first identifies Q with its parameter space M, reducing the optimization to a standard problem in M, but discarding the geometric structure of Q. This paper adopts the second approach, which views Q as a statistical manifold in the sense of information geometry (Amari 2016), and leverages tools from differential geometry to facilitate optimization. When Q is equipped with the Fisher-Rao metric, the Riemannian gradient of the objective is known as the natural gradient (Amari 1998). The natural gradient defines a parameterization-invariant steepest descent direction on Q, and has been shown to yield significant improvements on a broad range of optimization tasks (Hoffman et al. 2013, Tran et al. 2017, Lin et al. 2019, Martens 2020). However, most existing work is limited to problems where M is a Euclidean space. There are several reasons to consider parameter spaces with a manifold structure. First, numerous applications involve constrained domains; for example, consider the space of sym-metric and positive definite (SPD) matrices Sd
+
+> ++
+
+. There are various metrics for which Sd
+
+> ++
+
+becomes a complete Riemannian manifold (Pennec et al. 2006, Arsigny et al. 2006), so that geodesic paths are guaranteed to remain in Sd
+
+> ++
+
+. Then, positivity can be enforced by perform-ing natural gradient updates along geodesics (Tran et al. 2021, Lin et al. 2020). The Stiefel manifold St( p, n ) for p ≤ n encodes matrices in Rn×p with orthonormal columns (Edelman et al. 1998). Further examples include the probability simplex, fixed rank matrices (Absil & Malick 2012), correlation matrices (David & Gu 2019), and more. The second motivation is the elimination of non-identifiable parameter directions; hence, ensuring invertibility of the Fisher information matrix (FIM). In certain dimension reduction 2methods, one optimizes a likelihood L(S) where S ∈ St( p, n ) represents a linear subspace, so that L(S) = L(SO ) for any O ∈ St( p, p ). The natural setting for optimizing over linear subspaces is the Grassmann manifold (Edelman et al. 1998); examples of likelihood-based optimization on this space include sufficient dimension reduction (Cook & Forzani 2009, Nghiem et al. 2024) and envelope methods (Cook & Zhang 2015). This identifiability problem also occurs in models which incorporate low-rank matrices in the factored form α⊤β where 
+
+α, β ∈ Rp×n for p < n ; e.g. reduced-rank vector GLMs (Yee & Hastie 2003), and models for co-integrated time series (Koop et al. 2009). The non-identifiability can be circumvented by working on the manifold of fixed rank matrices (Meyer et al. 2011, Mishra et al. 2014). The third reason concerns the regularity of the objective function. Some objective func-tions, which appear non-convex in a Euclidean setting, exhibit convexity along the geodesics of a suitably chosen manifold. The Bures-Wasserstein space (Bures 1969, Malagò et al. 2018), denoted BW( Rd), corresponds to the set of d-dimensional Gaussian distributions endowed with the 2-Wasserstein metric. The KL divergence on BW( Rd) is known to be geodesically convex when the target distribution is log-concave (Lambert et al. 2022). However, convexity does not hold under the standard Euclidean parameterization of the covariance or precision matrices (Challis & Barber 2013). Such regularity properties are useful for constructing natural gradient algorithms with strong theoretical guarantees (Kumar et al. 2025). The formulation of the Fisher information on a smooth manifold is well-established in the statistical literature, where it is viewed as a bilinear form in each tangent space of M;see e.g. Smith (2005), Xavier & Barroso (2005). Despite the growing interest in Riemannian optimization, comparatively little has been done on extending the natural gradient method to general manifolds. Prominent work includes Hu et al. (2024), whose approach applies to embedded submanifolds and quotient manifolds (Absil et al. 2009) of Rm×n, where tangent spaces can be identified with subspaces of an ambient vector space. They represent the intrinsic FIM as an r × r matrix (r = mn ) in the ambient space, and employ Kronecker-factor approximations (Martens & Grosse 2015) to reduce computational requirements for 3models with a compatible gradient structure. They establish almost-sure consistency for the iterates, and also fast local convergence rates in the deterministic setting. The main contribution of this paper is a stochastic natural gradient method for optimiza-tion over Riemannian parameter spaces. In contrast to Hu et al. (2024) 
+
+• Our approach is purely intrinsic, does not require an embedding space, and only makes standard regularity assumptions on the manifold and objective function. 
+
+• We explicitly treat the FIM as a stochastic object, and employ an online estimate which is asymptotically consistent under mild regularity conditions. The fundamental idea is to maintain a moving approximation of the inverse FIM, which is updated with a small number of new score vectors at each iterate. By exploiting the outer product structure of the FIM, this low-rank update can be performed in quadratic time (Amari et al. 2000, Park et al. 2000, Godichon-Baggioni et al. 2024). In the Riemannian setting, the approximate FIM is localized to the tangent space of the current iterate, and must be updated using vector transport operations (Absil et al. 2009). 
+
+• We prove almost-sure convergence rates of O(log s/s α) for the squared distance to a local minimizer, and also provide almost-sure rates for the approximate FIM. 
+
+• We propose a limited-memory variant of the algorithm which employs a low-rank esti-mate of the FIM, yielding sub-quadratic storage complexity. The above are inspired by Godichon-Baggioni et al. (2024), who applied this idea to variational Bayes in the Euclidean setting. The major new technical difficulty concerns the convergence analysis of the approximate FIM, which now accumulates curvature-based distortions, and also errors due to the approximation of the parallel transport operation. 
+
+• We demonstrate the efficacy of our method on variational Bayes using Gaussian dis-tributions on BW( Rd), and normalizing flows (Berg et al. 2018) on St( p, n ).4The paper is organized as follows. Section 2 introduces the necessary preliminaries and background. In Section 3, we review the intrinsic formulation of the Fisher information on a smooth manifold, and the corresponding representation of the natural gradient. Section 4 presents our inversion-free natural gradient method, followed by a rigorous convergence anal-ysis in Section 5. We demonstrate the application of our method to the Bures-Wasserstein and Stiefel manifolds in Section 6 and Section 7, respectively. Finally, Section 8 concludes the paper. Proofs and technical details are provided in the Supplementary Material. 
+
+# 2 Background 
+
+In this section we recall, informally, some elementary notions from Riemannian geometry, describe the statistical optimization problems of interest, and review the natural gradient method. For details on Riemannian optimization see Absil et al. (2009), Boumal (2023). 
+
+## 2.1 Geometric preliminaries 
+
+Let M denote a smooth d-dimensional manifold; this is a topological space which locally resembles Rd, and is regular enough to support a rigorous notion of smoothness and differen-tiability for curves and functions. At each point x ∈ M , the velocities ˙γ(0) of smooth curves 
+
+γ : [0 , 1] → M with γ(0) = x form a vector space, the tangent space TxM. The tangent bun-dle collects all tangent spaces T M = {(x, v ) : x ∈ M , v ∈ TxM} . If Φ : M → N is a smooth map between manifolds, then at each x ∈ M it induces a linear map DΦ( x) : TxM → TΦ( x)N
+
+referred to as its differential ; this is analogous to the (Euclidean) Jacobian viewed as a linear map. A Riemannian metric on M assigns a smoothly varying inner product to each tangent space, denoted ⟨· , ·⟩ x : TxM × TxM → R. The pair (M, ⟨· , ·⟩ x) is referred to as a Riemannian manifold . The induced norm is ∥v∥x =
+
+> √
+
+⟨v, v ⟩x. The Riemannian length of a curve γ : [0 , 1] → M is obtained by integrating the magnitude of the velocity: 
+
+len( γ) = ∫ 10 ∥ ˙γ(t)∥γ(t)dt . The Riemannian distance d(x, y ) is defined as the infimum of len( γ)
+
+5over all smooth curves connecting x, y ∈ M . A smooth curve γ : [0 , 1] → M is a geodesic 
+
+if it experiences zero acceleration on the manifold; this is the analogue of a straight line in Euclidean space. For each v ∈ TxM, there exists a unique geodesic γx,v (t) with γx,v (0) = x
+
+and ˙γx,v (0) = v. The exponential map at x is exp x(v) := γx,v (1) , generalizing the Euclidean operation x → x + v. In practice, the exponential map must often be replaced by a retrac-tion ; a smooth map R : T M → M such that Rx(0) = x and DRx(0) = Id x for all x ∈ M .A retraction is second order if d(Rx(v), exp x(v)) = O(∥v∥3
+
+> x
+
+) for (x, v ) ∈ T M.
+
+## 2.2 Statistical optimization 
+
+In this paper we are interested in optimization over a parametric family of probability dis-tributions; this problem is central to statistics. Let Q = {qθ : θ ∈ M} denote such a family, and consider a dataset {yi}ni=1 . Maximum likelihood estimation (Fisher 1922) minimizes 
+
+L(θ) := EY ∼˜p
+
+> [
+
+− log qθ(Y )]
+
+, ˜p(y) = 1
+
+n
+
+> n∑
+> i=1
+
+δyi (y). (2.1) In variational Bayes (Wainwright & Jordan 2008), one seeks to approximate a target density 
+
+π(y) = ¯ π(y)/C , where ¯π can be evaluated pointwise but the normalizing constant C may be unknown. This is done by minimizing the negative evidence lower bound 
+
+L(θ) := EY ∼qθ
+
+> [
+
+log qθ(Y ) − log ¯ π(Y )]
+
+. (2.2) For both objectives, the gradient can be formulated as an expectation ∇L (θ) = EY ∼p[g(Y ; θ)] ,where p and g are suitably chosen; see Section 4.3. When M = Rd, the standard approach to optimizing (2.2) is stochastic gradient descent (Hoffman et al. 2013) 
+
+θ(k+1) = θ(k) − τk̂ ∇L (θ(k)), (2.3) where ̂ ∇L is a stochastic estimate of the gradient, and τk > 0 is a step size. 6This procedure often converges slowly in practice, and one must employ additional strate-gies like momentum (Polyak 1964, Nesterov 2013). Popular alternatives include adaptive gradient methods (Duchi et al. 2011, Kingma & Ba 2014), and stochastic (quasi)-Newton methods (Byrd et al. 2016); see also Bottou et al. (2018) for a comprehensive survey. The natural gradient method (Amari 1998) is also notable, and we discuss it shortly. The generalization of Euclidean stochastic optimization methods to the Riemannian set-ting has been the subject of considerable attention. Bonnabel (2013) studied the convergence of Riemannian stochastic gradient descent, which generalizes the iteration (2.3) to manifolds: 
+
+θ(k+1) = Rθ(k) (−τk̂ ∇L (θ(k))) . (2.4) Here, ̂ ∇L (θk) is a stochastic estimate of the Riemannian gradient, and R is a retraction. Various extensions including adaptive Riemannian gradient methods (Bécigneul & Ganea 2018, Kasai et al. 2019), and variance reduced methods (Zhang et al. 2016, Sato et al. 2019) have been proposed. There are also Riemannian generalizations of stochastic (quasi)-Newton methods (Kasai et al. 2018). For a somewhat recent overview, see Hosseini & Sra (2020). These methods exploit the geometry of the parameter space M, and in the case of second-order methods the curvature of the objective. However, they do not directly account for how parameter perturbations affect the shape of the distribution, which is of primary concern in (2.1) and (2.2). If there is a mismatch between parameter scales and their influence on qθ,this can degrade optimization. The natural gradient method addresses this directly. 
+
+## 2.3 Natural gradient descent 
+
+In natural gradient descent (Amari 1998) on Rd, one preconditions the Euclidean gradient with the inverse Fisher information IF (θ) := EY ∼qθ [∇ℓY (θ)∇ℓY (θ)⊤] where ℓy(θ) := log qθ(y)
+
+∇nat L(θ) = I−1 
+
+> F
+
+(θ)∇L (θ). (2.5) 7It is well-known that the Fisher information locally characterizes the KL divergence. For a small perturbation δθ , we have the following second-order expansion; see e.g. (Amari 2016) 
+
+KL( qθ∥qθ+δθ ) = 12(δθ )⊺IF (θ)( δθ ) + o(∥δθ ∥2). (2.6) The Fisher information thus weights directions according to their effect on the distribu-tion, as measured by the KL divergence. Consequently, preconditioning by I−1 
+
+> F
+
+(θ) shrinks steps in directions where small parameter changes induce large changes in the distribution, and enlarge them in directions where the distribution is less sensitive. Formally, the natural gradient corresponds to the Riemannian gradient of L with respect to the Fisher-Rao metric on Q. This geometric structure is intrinsic to the statistical model, so the natural gradient points in the same direction in distribution space regardless of the parametrization. This invariance, together with the above rescaling behavior, often leads to more effective optimization (Ollivier et al. 2017). For a review of natural gradient methods in modern machine learning, we refer to Martens (2020). In addition to Hu et al. (2024), several authors have investigated the natural gradi-ent method in the manifold setting. Closely related is Tran et al. (2021), who develop a general-purpose natural gradient algorithm which is applicable to embedded submanifolds and quotient manifolds, where M ⊂ Rd and dim M ≤ d. They approximate natural gradient directions in the ambient space, and then project the result onto the tangent space of M. A notable limitation is that the Fisher information can be singular in the ambient space. The remaining works are more specialized, and mostly apply to SPD manifolds. For example, Lin et al. (2020) formulate a retraction-based natural gradient update for SPD matrices which enforces positive-definiteness. Lin et al. (2023) propose a momentum-based approach on certain SPD (sub)manifolds which employs special local coordinate systems to simplify updates. Magris et al. (2024) develop a natural gradient algorithm for Gaussian VB, which performs retraction-based updates with respect to the precision matrix. 83 Riemannian Natural Gradient Descent 
+
+In this section we define the Fisher information for a family of distributions whose parameters live on a Riemannian manifold, and formulate the natural gradient update. 
+
+## 3.1 Fisher information on a Manifold 
+
+The intrinsic formulation of the Fisher information on a Riemannian manifold is well estab-lished; see, for example, Smith (2005), Xavier & Barroso (2005). Let Q := {qθ : θ ∈ M} be a family of densities on Rd, where M is a smooth manifold. Define 
+
+ℓy(θ) := log qθ(y), y ∈ Rd. (3.1) The Fisher information at θ is a bilinear form (equivalently, a (0 , 2) -tensor) on TθM
+
+Fθ[u, v ] := EY ∼qθ
+
+> [
+
+Dℓ Y (θ)[ u] Dℓ Y (θ)[ v]]
+
+, u, v ∈ TθM, (3.2) where Dℓ Y (θ) : TθM → R is the differential with respect to θ ∈ M . Provided the expecta-tion exists, Fθ is clearly symmetric and non-negative definite. Suppose in addition that M possesses a “baseline” Riemannian metric ⟨· , ·⟩ θ. Let Gθ
+
+denote its matrix representation in local coordinates, so ⟨u, v ⟩θ = u⊤Gθv for all u, v ∈ TθM.We use ∇ℓy(θ) to denote the Riemannian gradient of ℓy(·) with respect to this baseline metric; i.e. Dℓ y(θ)[ u] = ⟨u, ∇ℓy(θ)⟩θ for all u ∈ TθM. We refer to ∇ℓy(θ) as the score vector throughout the paper. Then, substituting into (3.2) yields 
+
+Fθ[u, v ] = Eqθ
+
+> [
+
+⟨u, ∇ℓY (θ)⟩θ · ⟨ v, ∇ℓY (θ)⟩θ
+
+> ]
+
+= u⊤GθEqθ
+
+> [
+
+∇ℓY (θ) ∇ℓY (θ)⊤]
+
+Gθv. (3.3) Thus, in local coordinates the bilinear map Fθ is represented by the matrix 
+
+ˆFθ := GθEqθ
+
+> [
+
+∇ℓY (θ) ∇ℓY (θ)⊤]
+
+Gθ. (3.4) 9When this expression is positive definite and varies smoothly in θ, the Fisher information form defines a Riemannian metric on M (equivalently, Q) in its own right. To streamline ter-minology, we will refer to (3.2) and its coordinate representations as the Fisher information metric regardless of whether it satisfies these additional conditions. The Fisher information metric can also be described by a self-adjoint linear map IF (θ)
+
+Fθ[u, v ] = ⟨u, I F (θ)v⟩θ, ∀u, v ∈ TθM. (3.5) In coordinates this operator has matrix representation ̂
+
+IF (θ) = Eqθ
+
+> [
+
+∇ℓY (θ)∇ℓY (θ)⊤]
+
+Gθ. (3.6) Formally, IF (θ) can be viewed as a (1 , 1) -tensor (or a linear map) obtained by raising one of the indices of Fθ with respect to the baseline metric. To disambiguate between Fθ and 
+
+IF (θ), we refer to the latter as the Fisher information operator when necessary. The Fisher metric retains many of its familiar properties from the Euclidean setting. For example, one has the equivalence between the outer product and Hessian representations (Smith 2005, Theorem 1). Note, here the second-order version of the Fisher information is defined using the Riemannian Hessian (Absil et al. 2009) interpreted as a bilinear form. Following Smith (2005), this expression is independent of the choice of affine connection. 
+
+Fθ = −Eqθ [∇2ℓY (θ)] . (3.7) Similar to (2.6), the Fisher information can also be shown to locally characterize the KL divergence on a Riemannian manifold. Let R denote a second-order retraction; in Appendix F we show the following local expansion under standard regularity conditions 
+
+KL( qθ∥qRθ (v)) = 12 Fθ[v, v ] + o(∥v∥2
+
+> θ
+
+), ∀(θ, v ) ∈ T M. (3.8) 10 3.2 Natural gradient on a Riemannian manifold 
+
+To formulate the natural gradient descent step, let f : M → R denote a smooth function. The Riemannian gradient ∇f (θ) ∈ TθM with respect to the baseline metric is defined by: 
+
+Df (θ)[ v] = ⟨v, ∇f (θ)⟩θ, ∀v ∈ TθM. (3.9) On Rd with the Euclidean metric, this reduces to the usual gradient. Provided that Fθ is positive, this differential can also be characterized by the Fisher metric 
+
+Df (θ)[ v] = Fθ(v, ∇nat f (θ)) , ∀v ∈ TθM, (3.10) Then ∇nat f (θ) ∈ TθM is the natural gradient . From (3.5) we have the representation 
+
+∇nat f (θ) = I−1 
+
+> F
+
+(θ)∇f (θ) = [
+
+Eqθ [∇ℓY (θ) ∇ℓY (θ)⊤]Gθ
+
+> ]−1
+
+∇f (θ). (3.11) Given a retraction R, step size sequence τs > 0, starting point θ(0) , a natural gradient descent iteration on M takes the form 
+
+θ(s+1) = Rθ(s)
+
+> (
+
+− τs I−1 
+
+> F
+
+(θ(s)) ∇f (θ(s))
+
+> )
+
+. (3.12) This update generalizes the standard Euclidean scheme, where M is a vector space and the retraction is implicitly specified by the parametrization. 
+
+# 4 Inversion-free Riemannian Natural Gradient 
+
+In this section we present an approximate natural gradient descent method for arbitrary Riemannian manifolds. In many practical applications, the Fisher operator does not possess a convenient analytic expression, and must be repeatedly estimated and inverted. The proposed approach works by sampling a single (or small) number of score vectors at each 11 iteration, and using a well-known matrix inversion identity (Sherman & Morrison 1950) to update a running approximation of the inverse Fisher operator. For a d-dimensional manifold, this operation has quadratic complexity, while inversion is typically cubic. 
+
+Lemma 4.1. Let A ∈ GL( n, R) and u, v ∈ Rn where 1 + v⊺A−1u̸ = 0 , then 
+
+(A + uv ⊺)−1 = A−1 − (1 + v⊺A−1u)−1 · A−1uv ⊺A−1. (4.1) This idea of approximating the natural gradient without matrix inversion was, to our knowledge, first mentioned in the Euclidean setting by Amari et al. (2000). More recently, its application to variational Bayes has been explored, still on Rd by Godichon-Baggioni et al. (2024); we now briefly review their method and adopt their notation. For each s = 1 , 2 . . . , let θ(s) ∈ Rd denote the s-th algorithm iterate, then define 
+
+Hs+1 := H0 +
+
+> s∑
+> k=0
+
+∇ℓ¯yk+1 (θ(k))∇ℓ¯yk+1 (θ(k))⊤, ¯yk+1 ∼ qθ(k) ; Hs+1 := 1
+
+s + 1 Hs+1 . (4.2) where H0 is some positive definite matrix such as H0 = ϵI with ϵ > 0 and I the identity. The matrix H−1 
+
+> s+1
+
+is used as a substitute for I−1 
+
+> F
+
+(θ(s)) in a natural gradient descent update 
+
+θ(s+1) := θ(s) − τs+1 H−1 
+
+> s+1 ̂
+
+∇L (θ(s)), (4.3) where τs+1 is a step-size sequence, and L the (negative) evidence lower bound (ELBO). Godichon-Baggioni et al. (2024) show that θ(s) converges to a stationary point θ∗ of L, and that H−1 
+
+> s
+
+→ I−1 
+
+> F
+
+(θ∗). The updated inverse H−1 
+
+> s+1
+
+can be computed from H−1 
+
+> s
+
+using (4.1) as 
+
+H−1 
+
+> s+1
+
+= H−1 
+
+> s
+
+− (
+
+1 + ϕ⊤
+
+> s+1
+
+H−1 
+
+> s
+
+ϕs+1 
+
+> )−1
+
+H−1 
+
+> s
+
+ϕs+1 ϕ⊤
+
+> s+1
+
+H−1 
+
+> s
+
+, ϕs+1 := ∇ℓ¯ys+1 (θ(s)). (4.4) We now generalize this procedure to a Riemannian manifold M; let L : M → R denote our objective function, Q := {qθ : θ ∈ M} our family of densities, and θ(s) ∈ M the s-th 12 algorithm iterate. The algorithm consists of three repeated steps: transport the approxima-tion to the inverse Fisher from Tθ(s−1) M to Tθ(s) M, update it using score vector(s) from qθ(s) ,and then update the manifold iterate θ(s) → θ(s+1) . We consider each step in more detail. 
+
+## 4.1 Transporting Inverse Fisher Approximation 
+
+The main challenge in the Riemannian setting is that we cannot directly combine vectors from different tangent spaces; hence, we need a mechanism to move H−1 
+
+> s
+
+from Tθ(s−1) M to 
+
+Tθ(s) M. This is typically achieved using a vector transport operation, which generalizes the notion of parallel transport along geodesics; see e.g. Absil et al. (2009, Section 8.1). Informally, a vector transport T associated with a retraction R is a smooth map which, given (x, u ) ∈ T M, defines a linear map Tux : TxM → TRx(u)M where T0x := Id x.To aid clarity, for x, y ∈ M where R−1 
+
+> x
+
+(y) is well defined, we denote 
+
+Tx,y := TR−1  
+
+> x(y)
+
+: TxM → TyM, Ts,s ±1 := Tθ(s),θ (s±1) . (4.5) Then, to move H−1 
+
+> s
+
+, we compose it with two transports 
+
+H−1 
+
+> s+1 /2
+
+:= T ∗ 
+
+> s,s −1
+
+◦ H−1 
+
+> s
+
+◦ T s,s −1 : Tθ(s) M → Tθ(s) M, (4.6) where T ∗ 
+
+> s,s −1
+
+is the adjoint of Ts,s −1 with respect to the baseline metric. It ensures that H−1
+
+> s
+
+remains self-adjoint, which simplifies our analysis. In practice, one can replace the (adjoint) transport with any suitable linear map between the corresponding tangent spaces. 
+
+Remark 4.2 . The implementation of (4.6) involves matrix multiplication; if the transport operators are dense matrices, then our per-iteration cost becomes O(dκ) where 2 < κ ≤ 3.For standard matrix manifolds, T can often be chosen to have some low dimensional structure (e.g. Kronecker product). This results in a lower computation complexity, and can be further accelerated via parallel computing. We explore this in more detail in the experiments. 13 4.2 Updating Inverse Fisher Approximation 
+
+Following the transportation, our next task is to update H−1 
+
+> s+12
+
+using score vectors from qθ(s)
+
+Hs+1 = Hs+ 12
+
++ ϕs+1 ϕ⊤
+
+> s+1
+
+Gθ(s) , ϕs+1 = ∇θ log qθ(s) (¯ ys+1 ), ¯ys+1 ∼ qθ(s) . (4.7) Recall from the expression for IF (θ) in (3.5), the additional Gθ(s) term corresponds to the matrix representation of the baseline metric at θ(s). To compute H−1
+
+> s+1
+
+, we apply (4.1) 
+
+H−1 
+
+> s+1
+
+= H−1 
+
+> s+1 /2
+
+− (1 + ⟨ϕs+1 , H −1
+
+> s+1 /2
+
+ϕs+1 ⟩θ(s) )−1 · H−1
+
+> s+1 /2
+
+ϕs+1 (Gθ(s) ϕs+1 )⊤H−1
+
+> s+1 /2
+
+. (4.8) Then H−1 
+
+> s+1
+
+:= ( 1 
+
+> s+1
+
+Hs+1 )−1 is our updated approximation to I−1 
+
+> F
+
+(θ(s)). One can, of course, incorporate multiple score vectors per iteration via repeated applications of this operation. 
+
+## 4.3 Natural Gradient Step 
+
+For the natural gradient step, let ∇L denote the Riemannian gradient of the objective L
+
+and ̂ ∇L its stochastic estimate. In our analysis, we assume these take the following form 
+
+∇L (θ(s)) = EY ∼p[g(Y ; θ(s))] ,̂ ∇L (θ(s)) = 1
+
+B
+
+> B
+
+∑
+
+> i=1
+
+g(ys+1 ,i ; θ(s)), (4.9) where ys+1 ,i ∼ p, and p is some distribution which can possibly depend on θ(s). This frame-work covers several important problems including the MLE problem in (2.1) where p is the empirical distribution and g(y; θ) = −∇ θ log qθ(y). In the VB problem (2.2), p = qθ(s) and 
+
+g(y; θ) = log qθ(y)¯π(y) × ∇ θ log qθ(y). (4.10) The gradient ∇L (θ(s)) = EY ∼p[g(Y ; θ(s))] with g(y; θ) in (4.10) is a Riemannian gener-alization of the so-called (Euclidean) score-function gradient in the VB literature; see the derivation in Appendix G. This appendix also presents a generalization of the reparameterization-
+
+14 trick gradient (Kingma & Welling 2013). For a step size sequence τs, the approximate natural gradient update is then 
+
+θ(s+1) := Rθ(s) (vs+1 ) , vs+1 := −τs+1 H−1 
+
+> s+1 ̂
+
+∇L (θ(s)). (4.11) 
+
+Algorithm 1 Riemannian Inverse Free Natural Gradient Descent 
+
+Require: Initial parameter θ(0) = θ(−1) ; ϵ > 0; step sizes τs; transport T ; retraction R.
+
+H0 = ϵI ∈ Tθ(0) M
+
+for s = 0 , 1, ... do 
+
+Transport H−1 
+
+> s
+
+from Tθ(s−1) M to Tθ(s) M using (4.6), yielding H−1
+
+> s+1 /2
+
+.Sample ¯ys+1 ∼ qθ(s) and let ϕs+1 = ∇θ log qθ(s) (¯ ys+1 ) ∈ Tθ(s) M.Update H−1 
+
+> s+1 /2
+
+using ϕs+1 via (4.8), yielding H−1
+
+> s+1
+
+; let H−1 
+
+> s+1
+
+= ( s + 1) H−1
+
+> s+1
+
+.Compute stochastic gradient ̂ ∇L (θ(s)) using ys+1 ,i ∼ p and (4.9). Compute update direction vs+1 = −τs+1 H−1 
+
+> s+1 ̂
+
+∇L (θ(s)).Update manifold iterate θ(s+1) = Rθ(s) (vs+1 ).
+
+end for return θ(s)
+
+Remark 4.3 (Limited memory approximation) . For high dimensional problems, it can be infeasible to store H−1 
+
+> s
+
+as a dense d × d matrix. One alternative is to maintain a “sliding window” approximation, which only incorporates the K ≪ d most recent score vectors. Let θ ∈ M , and ϕ1, ..., ϕ K ∈ TθM denote these vectors after re-ordering the indices from newest to oldest. Then, by repeated application of the Sherman-Morrison formula to HK := 
+
+H0 + ∑Ks=1 ϕsϕ⊤ 
+
+> s
+
+Gθ, we have the following vectorized representation of the inverse 
+
+H−1 
+
+> K
+
+= 1
+
+ϵ I −
+
+> K−1∑
+> s=0
+
+csψsψ⊤ 
+
+> s
+
+Gθ, (4.12) where ψs := H−1 
+
+> s
+
+ϕs+1 and cs := (1 + ⟨ϕs+1 , ψ s⟩θ)−1. This representation requires storing K
+
+vectors and scalars rather than a full matrix. In Appendix H, we show that transporting H−1
+
+> K
+
+reduces to transporting each ψs. Furthermore, the oldest score vector can be removed, and a new one incorporated via a recursive procedure with O(dK ) complexity. This approach 15 resembles that of Godichon-Baggioni et al. (2024, Remark 4.2), but tracks the exact inverse of the moving average rather than an approximation. 
+
+# 5 Convergence Analysis 
+
+In this section we analyze the convergence of the Riemannian inversion-free natural gradient descent method described in the previous section (Algorithm 1). The results and their proofs are inspired by Godichon-Baggioni et al. (2024). We begin by presenting our assumptions. 
+
+Assumption 5.1. The Riemannian (stochastic) gradient of the objective takes the form 
+
+∇L (θ(s)) = EY ∼p[g(Y ; θ(s))] ∈ Tθ(s) M,̂ ∇L (θ(s)) = 1
+
+> BB∑
+> i=1
+
+g(ys+1 ,i ; θ(s)), (5.1) 
+
+where ys+1 ,i ∼ p and p is some distribution which may optionally depend on θ.
+
+As mentioned earlier, this framework covers several important problems; for example, maximum likelihood estimation and variational Bayes. 
+
+Assumption 5.2. The algorithm iterates are restricted to a compact set X ⊂ M which is to-tally retractive w.r.t. the second-order retraction R. The transport is Tx,y := DRx(R−1 
+
+> x
+
+(y)) .
+
+The assumptions involving X are common in stochastic Riemannian optimization meth-ods involving retractions (Bonnabel 2013, Zhang & Sra 2016, Sato et al. 2019). The assump-tion of compactness is only used to ensure certain regularity properties of T (Theorem 8.4, Appendix A), which are necessary for the proof of Theorem 5.5, and can sometimes be omitted when R = exp (Theorem 8.5, Appendix A). The notion of a totally retractive neighborhood is described in Huang et al. (2015), and ensures that T and R−1 are well-defined wherever they appear. Second-order retractions are commonly available for many matrix manifolds (Absil & Malick 2012). To streamline our presentation, we assume that 
+
+T = DR, which has been used in e.g. the literature on the Riemannian BFGS algorithm 16 (Ring & Wirth 2012, Huang et al. 2015). However, this is not strictly necessary, but provides a neat sufficient condition for the more technical conclusions of Lemmas 8.3 - 8.7 (Appendix A). 
+
+Assumption 5.3. The step size sequence is τk = cα 
+
+> (c′
+> α+k)α
+
+where cα, c ′ 
+
+> α
+
+> 0 and α ∈ (12 , 1) .
+
+Assumption 5.4. The eigenvalues of H−1 
+
+> s
+
+are bounded above by O(sβ ) a.s., β ∈ [0 , α − 12 ).
+
+The above assumption is required to ensure that the iterates of the algorithm do not diverge. Such explicit eigenvalue bounds are common in the analysis of adaptive stochas-tic optimization methods (Godichon-Baggioni & Tarrago 2023, Boyer & Godichon-Baggioni 2023, Godichon-Baggioni & Werge 2025). In Godichon-Baggioni et al. (2024), the authors circumvent this assumption by incorporating a tapered noise sequence into the construction of Hs, which prevents its eigenvalues from decreasing faster than O(s−β ). The strategy ap-pears viable in the Riemannian setting, albeit with restrictions on T , as repeated application of non-isometric vector transport can distort the decay rate of the noise sequence. The following theorem concerns the global behavior of the iterates of the algorithm. 
+
+Theorem 5.5. Given assumptions 5.1-5.4, and the following conditions on X :1. The objective L is differentiable and L0-smooth 1 with respect to R.2. There exists a stationary point θ∗ such that ∇L (θ∗) = 0 .3. There exist constants C0, C 1 ≥ 0 such that for all θ visited by the algorithm: 
+
+EY ∼p
+
+> [
+
+∥g(Y ; θ)∥2
+
+> θ
+> ]
+
+≤ C0 + C1(L(θ) − L (θ∗)) . (5.2) 
+
+4. There exist constants C′
+
+> 0
+
+, C ′ 
+
+> 1
+
+> 0 such that for all θ visited by the algorithm: 
+
+EY ∼qθ
+
+> [
+
+∥∇ θ log qθ(Y )∥4
+
+> θ
+> ]
+
+≤ C′ 
+
+> 0
+
++ C′
+
+> 1
+
+(L(θ) − L (θ∗)) 2. (5.3)                    
+
+> 1For all x∈ X and v∈TxM,t→ L ◦ R x(tv )is L0-smooth for t∈Rsuch that R(tv )∈ X . The notions of ordinary/strict/strong convexity with respect to Rare defined similarly.
+
+17 Then the iterates θ(s) generated by the algorithm satisfy: 
+
+• L(θ(s)) − L (θ∗) converges almost surely to a finite random variable. 
+
+• min sk=0 ∥∇L (θ(k))∥2 
+
+> θ(k)
+
+= o(s−(1 −α)) almost surely. 
+
+Note, if e.g. L is strictly convex with respect to R and has bounded level sets, then θ(s)
+
+converges a.s. to a unique minimizer. See Appendix C for a proof of Theorem 5.5. The following theorem shows that our method attains the usual rate of convergence for stochastic gradient algorithms with polynomial step size when α > 23 . The proof strategy resembles the approach in Godichon-Baggioni et al. (2024), albeit involving the linearized iterates R−1 
+
+> θ∗
+
+(θ(s)) ∈ Tθ∗ M in the tangent space of the limit point. This linearization process introduces an additional error term in our analysis, which becomes dominant when α ≤ 23 ,leading to a sub-optimal convergence rate in this regime. 
+
+Theorem 5.6. Given assumptions 5.1-5.4, conditions (3) and (4) from Theorem 5.5, and: 1. The sequence of iterates θ(s) converges to θ∗ almost surely. 2. The objective L is twice-differentiable in a neighborhood of θ∗ with ∇L (θ∗) = 0 .3. The Riemannian Hessian 2 ∇2L(θ∗) and IF (θ∗) are positive-definite. 4. There exists a constant η > 1 
+
+> α
+
+− 1 and Cη, 0, C η, 1 > 0 such that for all θ ∈ X :
+
+EY ∼p[∥g(Y ; θ)∥2+2 ηθ ] ≤ Cη, 0 + Cη, 1(L(θ) − L (θ∗)) 1+ η. (5.4) 
+
+Let d(·, ·) denote the Riemannian distance with respect to the baseline metric, then for δ > 0
+
+d(θ(s), θ ∗)2 = O
+
+> (
+
+max  
+
+> (
+
+log ssα , log s4+ δ
+
+s4α−2
+
+> ))
+
+, a.s. (5.5) 
+
+In particular, we have d(θ(s), θ ∗)2 = O(log ssα ) when α > 23 .
+
+> 2With respect to the Levi-Civita connection of the base metric.
+
+18 See Appendix D for a proof of Theorem 5.6. Finally, we can prove that our approximation to the Fisher operator is asymptotically exact. In Godichon-Baggioni et al. (2024) this follows from consistency θ(s) → θ∗. Here, our strategy involves formulating a recursive expression for Hs localized in Tθ∗ M, which requires transportation along geodesic triangles 
+
+θ∗ → θ(n) → θ(n+1) → θ∗. This produces errors due to holonomy; loosely, the failure of parallel transport around a loop to return a vector to its original state. The errors are proportional to the “area” of these triangles, and controlling them requires that α > 23 and the utilization of the preceding theorem. It is intriguing to consider whether a non-localized analysis is possible, and whether this can yield convergence rates in the α ≤ 23 regime. 
+
+Theorem 5.7. Assuming conditions of Theorem 5.6, and IF (θ) is locally Lipschitz 3 at θ∗
+
+∥Γθ(s),θ ∗ ◦ Hs+1 ◦ Γθ∗,θ (s) − IF (θ∗)∥op = O 
+
+> (
+
+log s1+ δ
+
+s3α/ 2−1
+
+> )
+
+, a.s. (5.6) 
+
+For α ∈ (23 , 1) , where δ > 0 and Γx,y denotes geodesic parallel transport from x → y.
+
+See Appendix E for a proof of Theorem 5.7. 
+
+Remark 5.8 . In Godichon-Baggioni et al. (2024), they incorporate a Polyak-Ruppert aver-aging step, and demonstrate that the averaged iterate ¯θ(s) converges to θ∗ in the squared Euclidean distance as O(log s/s ) almost surely, and that √s(¯θ(s) − θ∗) satisfies a central limit theorem. Polyak-Ruppert averaging has been studied in the manifold setting; see e.g. Tripuraneni et al. (2018). However, we leave this direction to future work. 
+
+# 6 Example: Gaussian Variational Inference 
+
+In this section we study Gaussian variational inference for a Bayesian logistic regression model. The natural gradient has a simple closed expression for Gaussian distributions, so we can assess the quality of the inverse-free updates relative to their ground truth, and gauge the                       
+
+> 3We take this to mean that there exists an open neighborhood U⊆ M around θ∗and a constant K > 0
+> s.t. ∀θ∈Uwe have ∥Γθ,θ ∗◦IF(θ)◦Γθ∗,θ −IF(θ∗)∥op ≤Kd (θ, θ ∗). See e.g. Section 10.4 in Boumal (2023)
+
+19 effect of the geometry. Specifically, we compare exact Fisher-preconditioned natural gradient methods against their approximate (i.e., inverse-free) counterparts in both a Euclidean and a Riemannian baseline geometry. Full details for this section are provided in Appendix I. 
+
+Model & Objective: Let D = {xi, y i}ni=1 denote a classification dataset with features 
+
+xi ∈ Rd and binary responses yi ∈ { 0, 1}. Let σ2 > 0 be the prior variance; we consider 
+
+yi | xi, β ∼ Bernoulli (
+
+(1 + exp( −β⊤xi)) −1)
+
+, β ∼ N (0 , σ 2Id). (6.1) We approximate the posterior π(β | D ) with a Gaussian variational density qμ, Σ by minimiz-ing the KL divergence (via the negative ELBO); see (2.2). 
+
+Baseline Manifold: For the Riemannian inverse-free algorithm, we employ the Bures-Wasserstein manifold BW( Rd) as the baseline Riemannian structure. This corresponds to the 2-Wasserstein space on Rd restricted to Gaussian distributions (Takatsu 2011). Lambert et al. (2022) and Diao et al. (2023) studied variational inference on BW( Rd) via Riemannian (proximal) gradient descent methods. The KL divergence is geodesically convex on BW( Rd)
+
+when the π is log-concave 4. However, this is not guaranteed for the Fisher geometry (Carrillo et al. 2024) or the Euclidean covariance parameterization (Challis & Barber 2013). 
+
+Algorithms: The comparison follows a 2×3 factorial design based on the following update rule, with step size τs, and ̂ ∇L a stochastic gradient associated with the baseline geometry 
+
+θs+1 = Rθs
+
+> (
+
+−τs · Ps[̂ ∇L (θs)] )
+
+, where θs := ( μs, Σs). (6.2) The first choice concerns the baseline geometry and retraction R; here we have: 
+
+• Euclidean (“Euc”) : additive updates in (μ, Σ) using full covariance parametrization. 
+
+• Bures-Wasserstein (“BW”) : updates to (μ, Σ) use the BW( Rd) exponential map.            
+
+> 4That is, π∝exp( −V)where V:Rd→Ris convex. This is true for the model in (6.1)
+
+20 The second choice is the linear operator Ps (preconditioner): 
+
+• Identity (“GD”) : Ps = Id, Riemannian gradient in baseline geometry. 
+
+• Exact (“NGD”) : Ps = I−1
+
+F (θ(s)), natural gradient direction with exact Fisher. 
+
+• Inverse-Free (“NGD Approx.”) : Ps = H−1
+
+s+1 , Algorithm 1 in baseline geometry. The methods are indexed as (Geometry)-(Preconditioner). 
+
+Implementation: For each method, the update direction is based on a stochastic estimate of the score function gradient (4.10) with a Monte-Carlo sample of 100 . The step size takes the form τs = c0/(100 + s)α, where c0, α are selected via grid search for each method and dataset. Following covariance updates, we clip eigenvalues to [10 −8, ∞). For the inverse-free method on BW( Rd) we employ the differentiated exponential map as the transport. 0 2500 5000 7500 10000 
+
+Iteration        
+
+> 10 3
+> 10 2
+> 10 1
+> 10 0
+> 10 1
+> 10 2
+> 10 3
+> 10 4
+> NELBO
+> Ionosphere
+> Euc-GD
+> Euc-NGD (Approx)
+> Euc-NGD 02500 5000 7500 10000
+
+Iteration        
+
+> 10 3
+> 10 2
+> 10 1
+> 10 0
+> 10 1
+> 10 2
+> 10 3
+> 10 4
+> NELBO
+> Breast Cancer
+> Euc-GD
+> Euc-NGD (Approx)
+> Euc-NGD 02500 5000 7500 10000
+
+Iteration       
+
+> 10 2
+> 10 1
+> 10 0
+> 10 1
+> 10 2
+> 10 3
+> 10 4
+> NELBO
+> Sonar
+> Euc-GD
+> Euc-NGD (Approx)
+> Euc-NGD 02500 5000 7500 10000
+
+Iteration        
+
+> 10 3
+> 10 2
+> 10 1
+> 10 0
+> 10 1
+> 10 2
+> 10 3
+> 10 4
+> NELBO
+> Ionosphere
+> BW-GD
+> BW-NGD (Approx)
+> BW-NGD 02500 5000 7500 10000
+
+Iteration        
+
+> 10 3
+> 10 2
+> 10 1
+> 10 0
+> 10 1
+> 10 2
+> 10 3
+> 10 4
+> NELBO
+> Breast Cancer
+> BW-GD
+> BW-NGD (Approx)
+> BW-NGD 02500 5000 7500 10000
+
+Iteration   
+
+> 10 2
+> 10 1
+> 10 0
+> 10 1
+> 10 2
+> 10 3
+> 10 4
+> NELBO
+> Sonar
+> BW-GD
+> BW-NGD (Approx)
+> BW-NGD
+
+Figure 1: NELBO versus iteration for the Bayesian logistic regression model. Top row: Euclidean covariance parameterization. Bottom row: Bures-Wasserstein manifold. Datasets from left to right: Ionosphere, Breast Cancer, Sonar. 
+
+Smaller Datasets: In Figure 1, we consider three standard datasets from the UCI reposi-tory 5: Ionosphere (n = 351 , p = 34) , Breast Cancer Wisconsin Diagnostic (n = 569 , p = 30) ,and Sonar, Mines vs. Rocks (n = 208 , p = 60) . The first row depicts the Euclidean methods, 
+
+> 5
+
+https://archive.ics.uci.edu/ml/index.php 
+
+21 while the second row employs BW( Rd) as the baseline Riemannian structure. Each figure reports the mean NELBO and standard error across ten runs initialized at (μ, Σ) = (0 , I ).The values are relative to a long run of exact natural gradient descent. We draw several conclusions. First, regardless of the baseline metric, incorporating the Fisher information improves training efficiency. This is evidenced by the superior performance of Euc-NGD relative to Euc-GD and of BW-NGD relative to BW-GD. Second, the approximate natural gradient performs comparably to its exact counterpart, albeit with a slightly longer initial stabilization phase. Third, BW-NGD (Approx.) converges faster than Euc-NGD (Approx.) and attains a better final ELBO, supporting the effectiveness of the BW baseline metric. 0 2000 4000 6000 8000 10000            
+
+> Iteration
+> 10 3
+> 10 2
+> 10 1
+> 10 0
+> 10 1
+> 10 2
+> 10 3
+> 10 4
+> NELBO
+> Adults
+> BW-NGD (Approx)
+> Euc-NGD (Approx)
+> BW-NGD
+> BW-GD
+> Euc-NGD 02000 4000 6000 8000 10000
+> Iteration
+> 10 3
+> 10 2
+> 10 1
+> 10 0
+> 10 1
+> 10 2
+> 10 3
+> 10 4
+> NELBO
+> Mushrooms
+
+Figure 2: Comparison of approximate/exact natural gradient algorithms on larger datasets. 
+
+Larger Datasets: The discrepancy between the Riemannian and Euclidean inverse-free approaches becomes even more apparent in higher dimensions. In Figure 2, we apply these methods on two LIBSVM datasets: Mushrooms (n = 8124 , p = 112) , and the training subset of Adult “a1a” (n = 1605 , p = 123) . Here Euc-NGD (Approx.) was considerably more unstable, and would diverge unless the initial step size was set to a small value ( τ0 <
+
+10 −4). Conversely, BW-NGD (Approx.) remained stable at larger step sizes ( τ0 ≈ 10 −2), and yielded a final ELBO value comparable to the exact methods. This again demonstrates the effectiveness of the BW baseline metric compared to the Euclidean metric. 22 7 Example: Stiefel Manifold Natural Gradient 
+
+In this section we consider variational Bayes inference with a normalizing flow as the vari-ational family (Rezende & Mohamed 2015). Normalizing flows are highly flexible, making them well-suited for approximating complex posterior distributions. We employ the Sylvester flow variant proposed by Berg et al. (2018), which employs weight matrices constrained to have orthonormal columns. This yields a variational family with no closed-form Fisher in-formation, and parameters which lie on the Stiefel manifold. Details are in Appendix J. 
+
+Model & Objective: We consider a Bayesian neural network for binary classification, 
+
+yi | w, x i ∼ Bernoulli( πw(xi)) , w ∼ N (0 , cI ).
+
+where πw(xi) ∈ [0 , 1] is the output of a single-hidden-layer network with 10 hidden units, input xi, weights w, and with a ridge-type regularization prior on w. The task is to approx-imate the posterior distribution of w using variational Bayes. The variational distribution qθ is based on a two-layer neural network, 
+
+ϵ ∼ N d(0 , I ), Z = σ(W1ϵ + b1), Y = W2Z + b2, (7.1) where W1, W 2 ∈ Rd×d, b1, b 2 ∈ Rd, σ(·) is the sigmoid activation, and we impose the orthog-onality constraints W ⊤ 
+
+> 1
+
+W1 = W ⊤ 
+
+> 2
+
+W2 = Id. Following Berg et al. (2018), this simplifies the Jacobian determinants in the density of qθ, enabling efficient computation of the ELBO gra-dient. The variational parameter θ = ( W1, W 2, b 1, b 2) thus belongs to the product manifold 
+
+M = St( d, d ) × St( d, d ) × Rd × Rd, where St( d, d ) is the Stiefel manifold. 
+
+Stiefel Manifold: The Stiefel manifold St( p, n ) = {W ∈ Rn×p : W ⊤W = Ip} is embedded in Rn×p; therefore, tangent spaces can be identified with linear subspaces in the ambient space. For a differentiable function F : Rn×p → R, the Riemannian gradient can be obtained 23 Figure 3: Negative lower bound plots of the three VB methods by projecting the Euclidean gradient ∇E 
+
+> W
+
+F onto the tangent space (Absil et al. 2009) 
+
+∇W F (W ) = ∇E 
+
+> W
+
+F (W ) − W sym( W ⊤∇E 
+
+> W
+
+F (W )) ∈ TW St( p, n ). (7.2) The Riemannian score function and ELBO gradient can thus be obtained from their Eu-clidean counterparts via (7.2); closed-form expressions for the latter are available in Godichon-Baggioni et al. (2024). For the retraction, we use the Cayley retraction of Zhu (2017), together with its associated isometric vector transport (see their Lemma 3). 
+
+Algorithms: We compare three methods. Riemannian stochastic gradient descent (RSGD) computes the Riemannian gradient of the ELBO via (7.2) and updates the Stiefel compo-nents using the Cayley retraction. The Riemannian natural gradient (Riemannian NGD) method is Algorithm 1, where the inverse Fisher approximation is based on a sliding window of K = 500 score vectors; see Remark 4.3. The sliding window update procedure is de-scribed in Appendix H. The extrinsic natural gradient method (extrinsic IFVB) applies the inversion-free approximation of Godichon-Baggioni et al. (2024) in the ambient Euclidean space. To enforce the orthogonality constraint, the resulting update direction is projected onto the tangent space, and the manifold parameters are updated using the retraction. Fur-ther details are in Appendix J. 24 Results: We use several datasets from the UCI Machine Learning Repository: the German Credit, Woman Labor Force, and Census datasets. Figure 3 plots the ELBO over the course of training for each method. The Riemannian natural gradient method attains the lowest negative lower bound across all datasets. 
+
+# 8 Conclusion 
+
+This paper developed a stochastic natural gradient method for optimization over probability distributions whose parameters lie on a Riemannian manifold. This formulation accommo-dates several constrained parameter spaces which commonly arise in statistics, including SPD matrices, the Stiefel manifold, and the Grassmann manifold. We proposed a Rieman-nian extension of an inversion-free approximate natural gradient method (Amari et al. 2000, Godichon-Baggioni et al. 2024), which streamlines the adaptive estimation of the inverse Fisher information matrix. We also proposed a limited-memory variant which reduces stor-age complexity from quadratic to sub-quadratic in the manifold dimension. In contrast to previous work (Tran et al. 2021, Hu et al. 2024), our approach is purely intrinsic, and yields almost-sure convergence rates in the stochastic setting for both the parameter iterates and approximate Fisher information. Finally, we presented two extended examples which demon-strated the efficacy of this geometric approach relative to its Euclidean counterparts. An interesting continuation of our research concerns its application beyond finite-dimensional models. In particular, the Wasserstein space of probability measures possesses a formal Rie-mannian structure (Villani et al. 2008), which provides notions of gradient, geodesics, and parallel transport. This suggests a possible route toward adapting our methodology to the non-parametric setting. Applications could involve particle-based algorithms like SVGD (Liu & Wang 2016), which approximate the gradient flow of the KL divergence in the Wasserstein space (Liu 2017). 25 Competing interests 
+
+The authors report there are no competing interests to declare. 
+
+# Acknowledgments 
+
+The first author was funded by an Australian Research Training Program scholarship, and a Data61 top-up scholarship. The first author also thanks their co-supervisor Associate Professor John Ormerod for helpful feedback on an earlier draft of this work. 
+
+# References 
+
+Absil, P.-A., Mahony, R. & Sepulchre, R. (2009), Optimization algorithms on matrix mani-folds, in ‘Optimization Algorithms on Matrix Manifolds’, Princeton University Press. Absil, P.-A. & Malick, J. (2012), ‘Projection-like retractions on matrix manifolds’, SIAM Journal on Optimization 22 (1), 135–158. Akyol, M. & Şahin, B. (2019), ‘Conformal semi-invariant Riemannian maps to Kähler man-ifolds’, Revista de la Union Matematica Argentina 60 (2). Amari, S.-I. (1998), ‘Natural gradient works efficiently in learning’, Neural computation 
+
+10 (2), 251–276. Amari, S.-i. (2016), Information geometry and its applications , Vol. 194, Springer. Amari, S.-i., Park, H. & Fukumizu, K. (2000), ‘Adaptive method of realizing natural gradient learning for multilayer perceptrons’, Neural computation 12 (6), 1399–1409. Arsigny, V., Fillard, P., Pennec, X. & Ayache, N. (2006), ‘Log-euclidean metrics for fast and simple calculus on diffusion tensors’, Magnetic Resonance in Medicine: An Official Journal of the International Society for Magnetic Resonance in Medicine 56 (2), 411–421. 26 Bécigneul, G. & Ganea, O.-E. (2018), ‘Riemannian adaptive optimization methods’, arXiv preprint arXiv:1810.00760 .Berg, R. v. d., Hasenclever, L., Tomczak, J. M. & Welling, M. (2018), ‘Sylvester normalizing flows for variational inference’, arXiv preprint arXiv:1803.05649 .Bhatia, R. (2009), Positive definite matrices , Princeton university press. Bhatia, R., Jain, T. & Lim, Y. (2019), ‘On the Bures–Wasserstein distance between positive definite matrices’, Expositiones Mathematicae 37 (2), 165–191. 
+
+URL: https://www.sciencedirect.com/science/article/pii/S0723086918300021 
+
+Bonnabel, S. (2013), ‘Stochastic gradient descent on Riemannian manifolds’, IEEE Trans-actions on Automatic Control 58 (9), 2217–2229. Bottou, L., Curtis, F. E. & Nocedal, J. (2018), ‘Optimization methods for large-scale machine learning’, SIAM review 60 (2), 223–311. Boumal, N. (2023), An introduction to optimization on smooth manifolds , Cambridge Uni-versity Press. Boyer, C. & Godichon-Baggioni, A. (2023), ‘On the asymptotic rate of convergence of stochastic Newton algorithms and their weighted averaged versions’, Computational Op-timization and Applications 84 (3), 921–972. Bures, D. (1969), ‘An extension of Kakutani’s theorem on infinite product measures to the tensor product of semifinite w*-algebras’, Transactions of the American Mathematical Society 135 , 199–212. Byrd, R. H., Hansen, S. L., Nocedal, J. & Singer, Y. (2016), ‘A stochastic quasi-Newton method for large-scale optimization’, SIAM Journal on Optimization 26 (2), 1008–1031. Carrillo, J. A., Chen, Y., Huang, D. Z., Huang, J. & Wei, D. (2024), ‘Fisher-Rao gradient flow: geodesic convexity and functional inequalities’, arXiv preprint arXiv:2407.15693 .27 Cénac, P., Godichon-Baggioni, A. & Portier, B. (2020), ‘An efficient averaged stochastic Gauss-Newton algorithm for estimating parameters of non linear regressions models’, arXiv preprint arXiv:2006.12920 .Challis, E. & Barber, D. (2013), ‘Gaussian Kullback-Leibler approximate inference’, The Journal of Machine Learning Research 14 (1), 2239–2286. Cook, R. D. & Forzani, L. (2009), ‘Likelihood-based sufficient dimension reduction’, Journal of the American Statistical Association 104 (485), 197–208. Cook, R. D. & Zhang, X. (2015), ‘Simultaneous envelopes for multivariate linear regression’, 
+
+Technometrics 57 (1), 11–25. Criscitiello, C. & Boumal, N. (2023), ‘An accelerated first-order method for non-convex optimization on manifolds’, Foundations of Computational Mathematics 23 (4), 1433–1509. David, P. & Gu, W. (2019), ‘A Riemannian structure for correlation matrices’, Operators and Matrices 13 (3), 607–627. Diao, M. Z., Balasubramanian, K., Chewi, S. & Salim, A. (2023), Forward-backward Gaus-sian variational inference via JKO in the Bures-Wasserstein space, in ‘International Con-ference on Machine Learning’, PMLR, pp. 7960–7991. Do Carmo, M. P. & Flaherty Francis, J. (1992), Riemannian geometry , Vol. 393, Springer. Duchi, J., Hazan, E. & Singer, Y. (2011), ‘Adaptive subgradient methods for online learning and stochastic optimization.’, Journal of machine learning research 12 (7). Duflo, M. (2013), Random iterative models , Vol. 34, Springer Science & Business Media. Edelman, A., Arias, T. A. & Smith, S. T. (1998), ‘The geometry of algorithms with orthog-onality constraints’, SIAM journal on Matrix Analysis and Applications 20 (2), 303–353. 28 Fisher, R. A. (1922), ‘On the mathematical foundations of theoretical statistics’, Philo-sophical transactions of the Royal Society of London. Series A, containing papers of a mathematical or physical character 222 (594-604), 309–368. Godichon-Baggioni, A., Nguyen, D. & Tran, M.-N. (2024), ‘Natural gradient variational Bayes without Fisher matrix analytic calculation and its inversion’, Journal of the Amer-ican Statistical Association pp. 1–12. Godichon-Baggioni, A. & Tarrago, P. (2023), ‘Non asymptotic analysis of adaptive stochastic gradient algorithms and applications’, arXiv preprint arXiv:2303.01370 .Godichon-Baggioni, A. & Werge, N. (2025), ‘On adaptive stochastic optimization for stream-ing data: A Newton’s method with O(dN) operations’, Journal of Machine Learning Re-search 26 (59), 1–49. Han, A., Mishra, B., Jawanpuria, P. & Gao, J. (2023), Riemannian accelerated gradient methods via extrapolation, in ‘International Conference on Artificial Intelligence and Statistics’, PMLR, pp. 1554–1585. Hoffman, M. D., Blei, D. M., Wang, C. & Paisley, J. (2013), ‘Stochastic variational inference’, 
+
+the Journal of machine Learning research 14 (1), 1303–1347. Hosseini, R. & Sra, S. (2020), ‘Recent advances in stochastic Riemannian optimization’, 
+
+Handbook of Variational Methods for Nonlinear Geometric Data pp. 527–554. Hu, J., Ao, R., So, A. M.-C., Yang, M. & Wen, Z. (2024), ‘Riemannian natural gradient methods’, SIAM Journal on Scientific Computing 46 (1), A204–A231. Huang, W. (2013), ‘Optimization algorithms on Riemannian manifolds with applications’, 
+
+PhD Thesis .Huang, W., Gallivan, K. A. & Absil, P.-A. (2015), ‘A Broyden class of quasi-Newton methods for Riemannian optimization’, SIAM Journal on Optimization 25 (3), 1660–1685. 29 Karcher, H. (1977), ‘Riemannian center of mass and mollifier smoothing’, Communications on pure and applied mathematics 30 (5), 509–541. Kasai, H., Jawanpuria, P. & Mishra, B. (2019), Riemannian adaptive stochastic gradient algorithms on matrix manifolds, in ‘International conference on machine learning’, PMLR, pp. 3262–3271. Kasai, H., Sato, H. & Mishra, B. (2018), Riemannian stochastic quasi-Newton algorithm with variance reduction and its convergence analysis, in ‘International Conference on Artificial Intelligence and Statistics’, PMLR, pp. 269–278. Kingma, D. P. & Ba, J. (2014), ‘Adam: A method for stochastic optimization’, arXiv preprint arXiv:1412.6980 .Kingma, D. P. & Welling, M. (2013), ‘Auto-encoding variational Bayes’, arXiv preprint arXiv:1312.6114 .Koop, G., León-González, R. & Strachan, R. W. (2009), ‘Efficient posterior simulation for cointegrated models with priors on the cointegration space’, Econometric Reviews 
+
+29 (2), 224–242. Kumar, N., Möllenhoff, T., Khan, M. E. & Lucchi, A. (2025), ‘Optimization guarantees for square-root natural-gradient variational inference’, arXiv preprint arXiv:2507.07853 .Lambert, M., Chewi, S., Bach, F., Bonnabel, S. & Rigollet, P. (2022), ‘Variational infer-ence via Wasserstein gradient flows’, Advances in Neural Information Processing Systems 
+
+35 , 14434–14447. Lin, W., Duruisseaux, V., Leok, M., Nielsen, F., Khan, M. E. & Schmidt, M. (2023), Simplify-ing momentum-based positive-definite submanifold optimization with applications to deep learning, in ‘International Conference on Machine Learning’, PMLR, pp. 21026–21050. 30 Lin, W., Khan, M. E. & Schmidt, M. (2019), Fast and simple natural-gradient varia-tional inference with mixture of exponential-family approximations, in K. Chaudhuri & R. Salakhutdinov, eds, ‘Proceedings of the 36th International Conference on Machine Learning’, Vol. 97 of Proceedings of Machine Learning Research , PMLR, pp. 3992–4002. Lin, W., Schmidt, M. & Khan, M. E. (2020), Handling the positive-definite constraint in the Bayesian learning rule, in ‘International conference on machine learning’, PMLR, pp. 6116–6126. Liu, J. & Yuan, Y. (2022), On almost sure convergence rates of stochastic gradient methods, 
+
+in ‘Conference on Learning Theory’, PMLR, pp. 2963–2983. Liu, Q. (2017), ‘Stein variational gradient descent as gradient flow’, Advances in neural information processing systems 30 .Liu, Q. & Wang, D. (2016), ‘Stein variational gradient descent: A general purpose Bayesian inference algorithm’, Advances in neural information processing systems 29 .Magnus, J. R. & Neudecker, H. (2019), Matrix differential calculus with applications in statistics and econometrics , John Wiley & Sons. Magris, M., Shabani, M. & Iosifidis, A. (2024), ‘Manifold Gaussian variational Bayes on the precision matrix’, Neural Computation 36 (9), 1744–1798. Malagò, L., Montrucchio, L. & Pistone, G. (2018), ‘Wasserstein riemannian geometry of gaussian densities’, Information Geometry 1(2), 137–179. Martens, J. (2020), ‘New insights and perspectives on the natural gradient method’, Journal of Machine Learning Research 21 (146), 1–76. Martens, J. & Grosse, R. (2015), Optimizing neural networks with Kronecker-factored ap-proximate curvature, in ‘International conference on machine learning’, PMLR, pp. 2408– 2417. 31 Meyer, G., Bonnabel, S. & Sepulchre, R. (2011), Linear regression under fixed-rank con-straints: a Riemannian approach, in ‘28th International Conference on Machine Learning’. Mishra, B., Meyer, G., Bonnabel, S. & Sepulchre, R. (2014), ‘Fixed-rank matrix factoriza-tions and Riemannian low-rank optimization’, Computational Statistics 29 (3), 591–621. Nesterov, Y. (2013), ‘Gradient methods for minimizing composite functions’, Mathematical programming 140 (1), 125–161. Nghiem, L. H., Hui, F. K., Muller, S. & Welsh, A. H. (2024), ‘Likelihood-based surrogate dimension reduction’, Statistics and Computing 34 (1), 51. Ollivier, Y., Arnold, L., Auger, A. & Hansen, N. (2017), ‘Information-geometric optimization algorithms: A unifying picture via invariance principles’, Journal of Machine Learning Research 18 (18), 1–65. Park, H., Amari, S.-I. & Fukumizu, K. (2000), ‘Adaptive natural gradient learning algorithms for various stochastic models’, Neural Networks 13 (7), 755–764. Pennec, X., Fillard, P. & Ayache, N. (2006), ‘A Riemannian framework for tensor computing’, 
+
+International Journal of computer vision 66 (1), 41–66. Polyak, B. T. (1964), ‘Some methods of speeding up the convergence of iteration methods’, 
+
+Ussr computational mathematics and mathematical physics 4(5), 1–17. Ranganath, R., Gerrish, S. & Blei, D. (2014), Black box variational inference, in ‘Artificial intelligence and statistics’, PMLR, pp. 814–822. Rezende, D. J., Mohamed, S. & Wierstra, D. (2014), Stochastic backpropagation and ap-proximate inference in deep generative models, in ‘International conference on machine learning’, PMLR, pp. 1278–1286. Rezende, D. & Mohamed, S. (2015), Variational inference with normalizing flows, in ‘Inter-national conference on machine learning’, PMLR, pp. 1530–1538. 32 Ring, W. & Wirth, B. (2012), ‘Optimization methods on Riemannian manifolds and their application to shape space’, SIAM Journal on Optimization 22 (2), 596–627. Sato, H., Kasai, H. & Mishra, B. (2019), ‘Riemannian stochastic variance reduced gra-dient algorithm with retraction and vector transport’, SIAM Journal on Optimization 
+
+29 (2), 1444–1472. Sherman, J. & Morrison, W. J. (1950), ‘Adjustment of an inverse matrix corresponding to a change in one element of a given matrix’, The Annals of Mathematical Statistics 
+
+21 (1), 124–127. Skovgaard, L. T. (1984), ‘A Riemannian geometry of the multivariate normal model’, Scan-dinavian journal of statistics pp. 211–223. Smith, S. T. (2005), ‘Covariance, subspace, and intrinsic Crame/spl acute/r-Rao bounds’, 
+
+IEEE Transactions on Signal Processing 53 (5), 1610–1630. Takatsu, A. (2011), ‘Wasserstein geometry of Gaussian measures’. Tran, M.-N., Nguyen, D. H. & Nguyen, D. (2021), ‘Variational bayes on manifolds’, Statistics and Computing 31 (6), 71. Tran, M.-N., Nott, D. J. & Kohn, R. (2017), ‘Variational Bayes with intractable likelihood’, 
+
+Journal of Computational and Graphical Statistics 26 (4), 873–882. Tripuraneni, N., Flammarion, N., Bach, F. & Jordan, M. I. (2018), Averaging stochastic gradient descent on Riemannian manifolds, in ‘Conference On Learning Theory’, PMLR, pp. 650–687. Villani, C. et al. (2008), Optimal transport: old and new , Vol. 338, Springer. Wainwright, M. J. & Jordan, M. I. (2008), ‘Graphical models, exponential families, and variational inference’, Foundations and Trends ® in Machine Learning 1(1-2), 1–305. 33 Xavier, J. & Barroso, V. (2005), Intrinsic variance lower bound (IVLB): an extension of the Cramér-Rao bound to Riemannian manifolds, in ‘Proceedings.(ICASSP’05). IEEE International Conference on Acoustics, Speech, and Signal Processing, 2005.’, Vol. 5, IEEE, pp. v–1033. Yee, T. W. & Hastie, T. J. (2003), ‘Reduced-rank vector generalized linear models’, Statistical modelling 3(1), 15–41. Zhang, H., J Reddi, S. & Sra, S. (2016), ‘Riemannian SVRG: Fast stochastic optimization on Riemannian manifolds’, Advances in Neural Information Processing Systems 29 .Zhang, H. & Sra, S. (2016), First-order methods for geodesically convex optimization, in 
+
+‘Conference on learning theory’, PMLR, pp. 1617–1638. Zhu, X. (2017), ‘A Riemannian conjugate gradient method for optimization on the Stiefel manifold’, Computational optimization and Applications 67 , 73–110. 34 Supplementary Material 
+
+This supplementary material contains proofs for all theoretical results, complementary knowl-edge omitted from the main text, and further experimental details. Section A presents in-termediate lemmas that facilitate the subsequent proofs. Section B proves limiting bounds for the spectrum of the approximate Fisher information matrix used in the main proofs. Sections C to E provide the proofs of the theoretical results presented in the main text. Sections F to H contains complementary material referred to in the main text. Sections I and J offer an in-depth description of our experimental setup. 
+
+## A Helpful Results 
+
+The Robbins-Siegmund theorem is a basic tool for working with stochastic sequences, and will be used repeatedly in our proofs. Here, it is lightly paraphrased from Duflo (2013). 
+
+Theorem 8.1 (Robbins-Siegmund Theorem) . Suppose that (Vn), (βn), (χn), and (ηn) are four non-negative sequences adapted to the filtration F = ( Fn) and that: 
+
+E[Vn+1 |F n] ≤ Vn(1 + βn) + χn − ηn. (8.1) 
+
+Then, on {∑ βn < ∞ and ∑ χn < ∞} , almost surely (Vn) converges to a finite random vari-able V∞ and the series ∑ ηn converges. 
+
+Throughout the following lemmas, we will assume that M is a Riemannian manifold, and 
+
+R is a second-order retraction on M. For (x, v ) ∈ T M we let Tvx [w] := DRx(v)[ w] denote the transport corresponding to the differentiated retraction. To simplify our presentation, we will assume that Rx and R−1 
+
+> x
+
+are well-defined 6 wherever they appear. 
+
+Lemma 8.2. For any x ∈ M there exist c1, c 2, δ > 0 such that ∀v ∈ TxM with ∥v∥x < δ c1∥v∥x ≤ d(x, Rx(v)) ≤ c2∥v∥x. (8.2)   
+
+> 6This is guaranteed within a small neighborhood of xusing similar reasoning as for the exponential map.
+
+35 Proof. See e.g., Proposition 7.1.3 in Absil et al. (2009), or Lemma 3.3.3 in Huang (2013). The following result is paraphrased from Lemma 6 in Tripuraneni et al. (2018). Here, the big-O notation bounds the norm of a hidden linear operator. 
+
+Lemma 8.3. Let ΓR 
+
+> vx
+
+denote parallel transport along γ(t) = Rx(tv ) for t ∈ [0 , 1] , then 
+
+Gx(v) := [Γ R 
+
+> vx
+
+]−1 ◦ T vx = Id x + 12Kx[v, v, ·] + O(∥v∥3
+
+> x
+
+), (8.3) 
+
+where Kx[v, v, ·] := d2 
+
+> dt 2
+
+Gx(tv )|t=0 is a trilinear map TxM × TxM × TxM → TxM.
+
+The following related lemma bounds the operator norms of T and its inverse. 
+
+Lemma 8.4. If X ⊆ M is compact then ∃δ, c > 0 such that ∀(x, v ) ∈ T X with ∥v∥x < δ 
+
+(1 − c∥v∥2
+
+> x
+
+)∥w∥x ≤ ∥T vx [w]∥Rx(v) ≤ (1 + c∥v∥2
+
+> x
+
+)∥w∥x, ∀w ∈ TxM. (8.4) 
+
+Proof. Let Gx(v) be defined as in Theorem 8.3. Because R is a second-order retraction, the first derivative of Gx evaluated at v = 0 vanishes 7. We have the truncated Taylor expansion: 
+
+Gx(v) = Id x + 12D2Gx(t∗v)[ v, v, ·], t∗ ∈ [0 , 1] . (8.5) Hence 
+
+∥T vx [w] − ΓR 
+
+> vx
+
+[w]∥Rx(v) = ∥Gx(v)[ w] − w∥x ≤ ∥ D2Gx(t∗v)∥op ∥v∥2
+
+> x
+
+∥w∥x. (8.6) By the smoothness of ΓR and R, let c < ∞ denote the supremum of ∥D2Gx(u)∥op over the compact set {(x, u ) ∈ T X | ∥ u∥x ≤ δ}. Since ΓR is isometric, we can evaluate the norm as 
+
+∥T vx [w]∥Rx(v) = ∥Gx(v)[ w]∥x = ∥(Gx(v)[ w] − w) + w∥x. (8.7) The result follows via the ordinary and reversed triangle inequalities. 
+
+> 7This is explained in more detail in the proof of Lemma 6 in Tripuraneni et al. (2018).
+
+36 Remark 8.5 . If M has bounded sectional curvature, non-zero injectivity radius, and R = exp ,Theorem 8.4 holds on M without compactness (Criscitiello & Boumal 2023, Proposition A.3). The next lemma shows that T agrees with the differentiated exponential map up to second-order terms. The assumption that X ⊆ M is a normal neighborhood 8 of x ∈ X 
+
+ensures that there is a unique minimizing geodesic from x to each y ∈ X .
+
+Lemma 8.6. Let X ⊆ M be a compact normal neighborhood of x ∈ M , then 
+
+T −1 
+
+> x,y
+
+◦ D exp x(exp −1 
+
+> x
+
+(y)) = Id x + O(d(x, y )2), ∀y ∈ X . (8.8) 
+
+Proof. The proof relies on the notion of a second covariant derivative of a smooth function 
+
+F : M → Rd; see e.g. Absil et al. (2009, Section 5.6). For vector fields X, Y on M:
+
+(∇DF )[ X, Y ] := X(DF [Y ]) − DF [∇X Y ]. (8.9) Here ∇X Y is the Levi-Civita covariant derivative on M, and X(DF [Y ]) means apply X to the components of the Rd-valued function DF [Y ]. Let v = exp −1 
+
+> x
+
+(y) and define: 
+
+G(v) := D(R−1 
+
+> x
+
+◦ exp x)( v) = DR−1 
+
+> x
+
+(exp x(v)) ◦ D exp x(v) (8.10) 
+
+= [ DRx(R−1 
+
+> x
+
+◦ exp x(v))] −1 ◦ D exp x(v) = T −1 
+
+> x,y
+
+◦ D exp x(exp −1 
+
+> x
+
+(y)) . (8.11) Clearly G(0) = Id. Next, we show DG (0) = 0 . The main result then follows by a Taylor series argument. Differentiating G along v, we have: 
+
+ddt G(tv )[ w]|t=0 = ( ∇DR−1 
+
+> x
+
+)[ v, D exp x(0)[ w]] + DR−1 
+
+> x
+
+(x)[ ∇v(D exp x[w])] (8.12) 
+
+= ( ∇DR−1 
+
+> x
+
+)[ v, w ] + ∇v(D exp x[w]) . (8.13) 
+
+> 8This terminology is standard in Riemannian geometry; see e.g. Do Carmo & Flaherty Francis (1992).
+
+37 Here ∇v(D exp x[w]) is the ordinary covariant derivative of y → D exp x(exp −1 
+
+> x
+
+(y))[ w] viewed as a vector field. Consider w = DR−1 
+
+> x
+
+(Rx(tv ))[ DRx(tv )[ w]] ; differentiating both sides of this equation at t = 0 yields that 
+
+0 = ( ∇DR−1 
+
+> x
+
+)[ v, D Rx(0)[ w]] + DR−1 
+
+> x
+
+(x)[ ∇v(DRx[w])] (8.14) 
+
+= ( ∇DR−1 
+
+> x
+
+)[ v, w ] + ∇v(DRx[w]) . (8.15) Combining these equations, it suffices to show that ∇v(DRx[w]) = ∇v(D exp x[w]) = 0 for 
+
+w, v ∈ TxM. Evidently, (v, w ) → ∇ v(DRx[w]) is bilinear, and furthermore, we have 
+
+D2
+
+dt 2 Rx(tv )|t=0 := ∇v(DRx[v]) = 0 . (8.16) This “zero acceleration” condition is often taken as the defining property of a second order retraction (Absil et al. 2009). The symmetry of (v, w ) → ∇ v(DRx[w]) can be verified e.g. using local coordinates, but the derivation is tedious. A concise explanation is possible 9, but requires some more sophisticated geometric machinery. Provided (v, w ) → ∇ v(DRx[w]) is a symmetric bilinear form, then by (8.16) and polarization it vanishes everywhere. The same argument applies to the exponential map, yielding DG (0) = 0 . The Taylor expansion is thus 
+
+G(v) = Id x + O(∥v∥2
+
+> x
+
+), where ∥v∥x = ∥ exp −1 
+
+> x
+
+(y)∥x = d(x, y ), which concludes the proof. An immediate consequence of the previous lemma is that T agrees with parallel transport up to second order terms. In the following lemmas, we define Tx,y [w] := DRx(R−1 
+
+> x
+
+(y))[ w],and let Γx,y denote the parallel transport along the geodesic connecting x, y ∈ M .
+
+Lemma 8.7. Let X ⊆ M be a compact normal neighborhood of x ∈ M , then 
+
+T −1 
+
+> x,y
+
+◦ Γx,y = Id x + O(d(x, y )2), ∀y ∈ X . (8.17)        
+
+> 9For example, we can relate the map (v, w )→ ∇ v(DRx[w]) to the second fundamental form of Rx, which generalizes (8.9) to smooth maps between Riemannian manifolds; see e.g. the preliminary material in Akyol & Şahin (2019). The symmetry of this map follows from the symmetry of the second fundamental form.
+
+38 Proof. We have 
+
+T −1 
+
+> x,y
+
+◦ Γx,y = T −1 
+
+> x,y
+
+◦ D exp x(exp −1 
+
+> x
+
+(y))   
+
+> ︸︷︷ ︸
+> =( a)
+
+◦ [D exp x(exp −1 
+
+> x
+
+(y))] −1 ◦ Γx,y   
+
+> ︸︷︷ ︸
+> =( b)
+
+. (8.18) From Theorem 8.6 (a) = Id x + O(d(x, y )2), and by Theorem 8.3 the same is true for (b).The following result has been used in various works; here it is paraphrased from Han et al. (2023, Lemma 2). The idea is attributed to Karcher (1977). 
+
+Lemma 8.8. Let X ⊆ M be a compact set where each pair x, y ∈ X is connected by a unique geodesic. There exists a curvature and diameter-dependent constant C > 0 such that 
+
+∥Γy,z Γx,y u − Γx,z u∥z ≤ Cd (x, y )d(y, z )∥u∥x, ∀x, y, z ∈ X , ∀u ∈ TxM. (8.19) The following will be crucial for proving the consistency of our Fisher approximation. 
+
+Corollary 8.9. For each x ∈ M there exists some neighborhood X ⊆ M such that 
+
+Γz,x ◦ T −1 
+
+> z,y
+
+◦ Γx,y = Id x + O(d(x, y )d(y, z ) + d(y, z )2), ∀y, z ∈ X . (8.20) 
+
+Proof. We can take X to be a compact totally normal 10 neighborhood of x ∈ M , which ensures the assumptions of Theorem 8.8. From Theorem 8.7 we have Γz,x ◦ T −1 
+
+> z,y
+
+◦ Γx,y =Γz,x ◦ Γy,z ◦ Γx,y + O(d(y, z )2). Then from Theorem 8.8, we have Γz,x ◦ Γy,z ◦ Γx,y = Id x +
+
+O(d(x, y )d(y, z )) . Combining these yields the result.     
+
+> 10 Loosely, Xis a normal neighborhood for each point in X. Such a set is guaranteed to exist around any point; see e.g. section 3 in Do Carmo & Flaherty Francis (1992).
+
+39 B Eigenvalue Bounds of Fisher Approximation 
+
+In the following lemma, the upper bound can be shown using weaker assumptions; see the proof of Theorem 5.5. It is included here for completeness. 
+
+Lemma 8.10. Suppose that the conditions of Theorem 5.5 hold, the iterates generated by Algorithm 1 converge θ(k) → θ∗ almost-surely, and that IF (θ) is continuous in a neighborhood of θ∗ with λmin (IF (θ∗)) > 0. It follows that: 
+
+0 < lim inf s→∞ λmin (Hs), lim sup 
+
+> s→∞
+
+λmax (Hs) < ∞, a.s. (8.21) 
+
+Proof. Define the composite transport T[k,s ] : Tθ(k) M → Tθ(s) M such that for k < s 
+
+T[k,s ] := Ts−1,s ◦ ... ◦ T k,k +1 , T[s,k ] = Tk+1 ,k ◦ ... ◦ T s,s −1, (8.22) and T[s,s ] = Id θ(s) . Then, we use the following notation for the transported score vectors 
+
+ϕk,s = T −1[s,k ][∇θ log qθ(k) (¯ yk+1 )] , ˜ϕk,s = Gθ(s) ϕk,s , (8.23) where Gθ(s) is the matrix representation of the baseline metric at θ(s). Consequently, 
+
+Hs+1 = 1
+
+s + 1 T −1[s, 0] H0T −∗  
+
+> [s, 0]
+
++ 1
+
+s + 1 
+
+> s
+
+∑
+
+> k=0
+
+ϕk,s ˜ϕ⊺
+
+> k,s
+
+. (8.24) Denote Φk,s := T −1[s,k ] ◦ IF (θ(k)) ◦ T −∗ 
+
+> [s,k ]
+
+, then writing Hs+1 = Rs+1 + Ms+1 where 
+
+Rs+1 = 1
+
+s + 1 
+
+> s
+
+∑
+
+> k=0
+
+Φk,s , Ms+1 = 1
+
+s + 1 
+
+{
+
+T −1[s, 0] H0T −∗  
+
+> [s, 0]
+
++
+
+> s
+
+∑
+
+> k=0
+
+[
+
+ϕk,s ˜ϕ⊺ 
+
+> k,s
+
+− Φk,s 
+
+]︸ ︷︷ ︸
+
+> :=Θ k,s
+
+}
+
+. (8.25) 40 B.1 Claim: ∑ ∥vs+1 ∥2 
+
+> θ(s)
+
+is finite almost surely. 
+
+Define the filtration Fs = σ(yk,i , ¯yk′ : k ≤ s, k ′ ≤ s + 1 , i ≤ B). Taking vs+1 as in (4.11), 
+
+E[∥vs+1 ∥2 
+
+> θ(s)
+
+|F s] ≤ τ 2
+
+> s+1
+
+∥H−1
+
+> s+1
+
+∥2 
+
+> op
+
+× E[∥̂∇L (θ(s))∥2 
+
+> θ(s)
+
+|F s] (8.26) 
+
+≤ τ 2
+
+> s+1
+
+∥H−1
+
+> s+1
+
+∥2 
+
+> op
+
+× E[∥g(Y, θ (s))∥2 
+
+> θ(s)
+
+|F s], (8.27) where the second line follows by convexity. Let δ = 2 α−2β −1 > 0. Then, using Theorem 5.4 and condition (3) from Theorem 5.5, we have 
+
+E[∥vs+1 ∥2 
+
+> θ(s)
+
+|F s] ≤ O(s−(1+ δ)) × [C0 + C1 (L(θ(s)) − L (θ∗)) 
+
+︸ ︷︷ ︸
+
+> := Ws
+
+] (8.28) 
+
+= ∥vs∥2 
+
+> θ(s−1)
+
++ O(s−(1+ δ)) − ∥ vs∥2 
+
+> θ(s−1)
+
+. (8.29) Since θ(s) → θ∗ we have Ws → 0, and the claim follows by the Robbins-Siegmund theorem. 
+
+B.2 Claim: ∥Ms∥2 
+
+> θ(s−1)
+
+→ 0 almost surely. 
+
+For linear maps A, B : TθM → TθM, let ⟨A, B ⟩θ be the Hilbert-Schmidt inner product. Let 
+
+˜Fs = σ(yk,i , ¯yk′ : k ≤ s, k ′ ≤ s, i ≤ B). (8.30) Note that ˜Fk slightly differs from Fk by excluding s′ = k + 1 . Consider the recursion: 
+
+Ms+1 = ss + 1 T −1 
+
+> s,s −1
+
+◦ Ms ◦ T −∗  
+
+> s,s −1
+
++ 1
+
+s + 1 Θs,s . (8.31) From the definition of Θs,s , we have E[Θ s,s | ˜Fs] = E[ϕs,s ˜ϕ⊺ 
+
+> s,s
+
+− IF (θ(s))| ˜Fs] = 0 . Hence 
+
+E[∥Ms+1 ∥2 
+
+> θ(s)
+
+| ˜Fs] = s2
+
+(s + 1) 2 ∥T −1 
+
+> s,s −1
+
+◦ Ms ◦ T −∗ 
+
+> s,s −1
+
+∥2 
+
+> θ(s)
+
++ 1(s + 1) 2 E[∥Θs,s ∥2 
+
+> θ(s)
+
+| ˜Fs]. (8.32) 41 For the last term, by convexity and Jensen’s inequality 
+
+E[∥Θs,s ∥2 
+
+> θ(s)
+
+| ˜Fs] ≤ 2E[∥ϕs,s ˜ϕs,s ∥2 
+
+> θ(s)
+
+| ˜Fs] + 2 ∥IF (θ(s))∥2 
+
+> θ(s)
+
+≤ 4E[∥ϕs,s ˜ϕs,s ∥2 
+
+> θ(s)
+
+| ˜Fs]. (8.33) Finally, since ϕs,s ˜ϕ⊺ 
+
+> s,s
+
+is self-adjoint, and applying condition (4) in Theorem 5.5 
+
+4E[∥ϕs,s ˜ϕs,s ∥2 
+
+> θ(s)
+
+| ˜Fs] = 4 E[∥ϕs,s ˜ϕs,s ∥2
+
+> op
+
+| ˜Fs] = 4 E[∥ϕs,s ∥4 
+
+> θ(s)
+
+| ˜Fs] ≤ 4( C′ 
+
+> 0
+
++ C′
+
+> 1
+
+W 2 
+
+> s
+
+). (8.34) For the first term in (8.31), using standard properties of the HS norm, one can show that 
+
+∥T −1 
+
+> s,s −1
+
+◦ Ms ◦ T −∗ 
+
+> s,s −1
+
+∥θ(s) ≤ ∥T −1
+
+> s,s −1
+
+∥2
+
+> op
+
+∥Ms∥θ(s−1) . (8.35) Since the iterates are eventually in a compact neighborhood of θ∗, from Theorem 8.4 we have 
+
+∥T −1
+
+> s,s −1
+
+∥op = 1 + O(∥vs∥2 
+
+> θ(s−1)
+
+) almost-surely. Hence, 
+
+E[∥Ms+1 ∥2 
+
+> θ(s)
+
+| ˜Fs] ≤ s2
+
+(s + 1) 2 · (
+
+1 + O(∥vs∥2 
+
+> θ(s−1)
+
+))
+
+· ∥ Ms∥2 
+
+> θ(s−1)
+
++ 4( C′ 
+
+> 0
+
++ C′
+
+> 1
+
+W 2 
+
+> s
+
+)(s + 1) 2 . (8.36) To show that ∥Ms+1 ∥2 
+
+> θ(s)
+
+→ 0 almost surely, we start by defining 
+
+Vs+1 = s + 1 log ( s + 1) 1+ δ ∥Ms+1 ∥2 
+
+> θ(s)
+
+, δ > 0. (8.37) Then, combining the above with (8.36), we have 
+
+E[Vs+1 | ˜Fs] ≤
+
+( s log s1+ δ
+
+(s + 1) log ( s + 1) 1+ δ
+
+)︸ ︷︷ ︸
+
+> ≤1
+
+[
+
+(1 + O(∥vs∥2 
+
+> θ(s−1)
+
+)) Vs + 4( C′ 
+
+> 0
+
++ C′
+
+> 1
+
+W 2 
+
+> s
+
+)
+
+s log s1+ δ
+
+]
+
+. (8.38) By the Robbins-Siegmund theorem, Vs = O(1) and thus ∥Ms∥2 
+
+> θ(s−1)
+
+= O (
+
+log s1+ δ/s )
+
+a.s. 42 B.3 Claim: composite transport behaves like an isometry for large k, s .
+
+Let ΓR 
+
+> s,s −1
+
+denote parallel transport along γ(t) = Rθ(s) (tR−1 
+
+> θ(s)
+
+(θ(s−1) )) from t = 0 to 1. Write 
+
+T −1[s,k ] = Γ R,−1
+
+> s,s −1
+
+(Γ R
+
+> s,s −1
+
+T −1
+
+> s,s −1
+
+) ◦ ... ◦ ΓR,−1
+
+> k+1 ,k
+
+(Γ R
+
+> k+1 ,k
+
+T −1
+
+> k+1 ,k
+
+). (8.39) From Theorem 8.4, there exist c, N > 0 a.s. so that for s > k > N and ∀w ∈ Tθ(k) M:
+
+> s−1
+
+∏
+
+> j=k
+
+(1 − c∥vj+1 ∥2 
+
+> θ(j)
+
+)∥
+
+︸ ︷︷ ︸ 
+
+> := V−
+> k,s −1
+
+w∥θ(k) ≤ ∥T −1[s,k ][w]∥θ(s) ≤
+
+> s−1
+
+∏
+
+> j=k
+
+(1 + c∥vj+1 ∥2 
+
+> θ(j)
+
+)
+
+︸ ︷︷ ︸ 
+
+> := V+
+> k,s −1
+
+∥w∥θ(k) . (8.40) To control V − 
+
+> k,s −1
+
+and V +
+
+> k,s −1
+
+, we note that, for a sequence ak̸ = −1,
+
+> ∞
+
+∑
+
+> k=0
+
+|ak| < ∞ =⇒
+
+> k
+
+∏
+
+> j=0
+
+(1 + aj ) → 
+
+> k→∞
+
+a̸ = 0 . (8.41) Consequently, 
+
+lim s→∞ V − 
+
+> k,s
+
+= V − 
+
+> k, ∞
+
+∈ R, lim s→∞ V + 
+
+> k,s
+
+= V + 
+
+> k, ∞
+
+∈ R, a.s. , (8.42) where V −
+
+> k, ∞
+
+, V + 
+
+> k, ∞
+
+→ 1 as k → ∞ . Therefore, for all w ∈ Tθ∗ M
+
+lim  
+
+> k→∞
+
+sup 
+
+> s≥k
+
+∥T −1[s,k ] ◦ Γ∗,k [w]∥θ(s) = lim  
+
+> k→∞
+
+inf  
+
+> s≥k
+
+∥T −1[s,k ] ◦ Γ∗,k [w]∥θ(s) = ∥w∥θ∗ . (8.43) Clearly, a similar result holds for T −∗  
+
+> [s,k ]
+
+since it has the same singular values as T −1[s,k ].
+
+B.4 Eigenvalue bounds for Rs.
+
+Define 
+
+˜Rs+1 = Γ s, ∗ ◦ Rs+1 ◦ Γ∗,s = 1
+
+s + 1 
+
+> s
+
+∑
+
+> k=0
+
+Γs, ∗ ◦ T −1[s,k ] ◦ IF (θ(k)) ◦ T −∗  
+
+> [s,k ]
+
+◦ Γ∗,s . (8.44) 43 For any w ∈ Tθ∗ M, we have: 
+
+⟨w, ˜Rs+1 w⟩θ∗ = 1
+
+s + 1 
+
+> s
+
+∑
+
+> k=0
+
+⟨T −∗ 
+
+> [s,k ]
+
+Γ∗,s w, I F (θ(k))T −∗ 
+
+> [s,k ]
+
+Γ∗,s w⟩θ(k) . (8.45) Since IF (θ(k)) → IF (θ∗) where λmin (IF (θ∗)) := λmin > 0, for large s, k we have 
+
+⟨T −∗ 
+
+> [s,k ]
+
+Γ∗,s w, I F (θ(k))T −∗ 
+
+> [s,k ]
+
+Γ∗,s w⟩θ(k) ≥ λmin ∥T −∗ 
+
+> [s,k ]
+
+Γ∗,s w∥2 
+
+> θ(k)
+
+> 12λmin ∥w∥2 
+
+> θ∗
+
+, a.s. (8.46) Hence, the eigenvalues of Hs are bounded below a.s. The upper bound follows similarly. 44 C Proof of Theorem 5.5 
+
+The proof is similar to Theorem 5.1 in Godichon-Baggioni et al. (2024). However, demon-strating that λmax (Hs+1 ) is bounded above almost surely is more involved. 
+
+Proof of Theorem 5.5. By the L0-smoothness of L with respect to the retraction 
+
+L(θ(s+1) ) ≤ L (θ(s)) + ⟨∇L (θ(s)), R−1 
+
+> θ(s)
+
+(θ(s+1) )⟩θ(s) + L0
+
+2 ∥R −1 
+
+> θ(s)
+
+(θ(s+1) )∥2 
+
+> θ(s)
+
+. (8.47) From (4.11) we have R−1 
+
+> θ(s)
+
+(θ(s+1) ) = −τs+1 H−1
+
+> s+1 1
+> B
+
+∑Bi=1 g(ys+1 ,i , θ (s)). Substituting 
+
+L(θ(s+1) ) ≤ L (θ(s)) − τs+1 
+
+B
+
+> B
+
+∑
+
+> i=1
+
+⟨∇L (θ(s)), H−1
+
+> s+1
+
+g(ys+1 ,i , θ (s))⟩θ(s)
+
++ L0
+
+2
+
+∥∥∥∥∥
+
+τs+1 
+
+B
+
+> B
+
+∑
+
+> i=1
+
+H−1
+
+> s+1
+
+g(ys+1 ,i , θ (s))
+
+∥∥∥∥∥
+
+> 2
+> θ(s)
+
+(8.48) 
+
+≤ L (θ(s)) − τs+1 
+
+B
+
+> B
+
+∑
+
+> i=1
+
+⟨∇L (θ(s)), H−1
+
+> s+1
+
+g(ys+1 ,i , θ (s))⟩θ(s)
+
++ L0τ 2
+
+> s+1
+
+2B ∥H−1
+
+> s+1
+
+∥2
+
+> op
+> B
+
+∑
+
+> i=1
+
+∥g(ys+1 ,i , θ (s))∥2 
+
+> θ(s)
+
+. (8.49) Let Ws = L(θ(s)) − L (θ∗), and define Fs as in Section B.1 of Theorem 8.10. We have 
+
+E[Ws+1 |F s] ≤ Ws − τs+1 
+
+B
+
+> B
+
+∑
+
+> i=1
+
+⟨∇L (θ(s)), H−1
+
+> s+1
+
+∇L (θ(s))⟩θ(s)
+
++ L0τ 2
+
+> s+1
+
+2B ∥H−1
+
+> s+1
+
+∥2
+
+> op
+> B
+
+∑
+
+> i=1
+
+E[∥g(ys+1 ,i , θ (s))∥2 
+
+> θ(s)
+
+|F s]. (8.50) In the first line, we used EY ∼pθ [g(Y, θ )] = ∇L (θ). From condition (3) in the theorem, 
+
+E[Ws+1 |F s] ≤ Ws − τs+1 ⟨∇L (θ(s)), H−1
+
+> s+1
+
+∇L (θ(s))⟩θ(s)
+
++ L0τ 2
+
+> s+1
+
+2 ∥H−1
+
+> s+1
+
+∥2
+
+> op
+
+(C0 + C1Ws). (8.51) 45 Taking H−1 
+
+> s+1
+
+outside of the inner product and rearranging terms gives 
+
+E[Ws+1 |F s] ≤ (1 + 12C1L0τ 2
+
+> s+1
+
+∥H−1
+
+> s+1
+
+∥2
+
+> op
+
+)Ws − τs+1 λmin (H−1
+
+> s+1
+
+)∥∇L (θ(s))∥2
+
+> θ(s)
+
++ 12C0L0τ 2
+
+> s+1
+
+∥H−1
+
+> s+1
+
+∥2
+
+> op
+
+. (8.52) Since H−1 
+
+> s+1
+
+is self-adjoint ∥H−1 
+
+> s
+
+∥op = λmax (H−1 
+
+> s
+
+) = O(sβ ) a.s., where the last equality is by Theorem 5.4. Then, since τs ∝ (c′ 
+
+> α
+
++ s)−α where β < α − 1/2, we have 2α − 2β > 1 and 
+
+∑
+
+> s
+
+τ 2
+
+> s+1
+
+∥H−1
+
+> s+1
+
+∥2 
+
+> op
+
+= O( ∑ 
+
+> s
+
+s2β−2α)
+
+< +∞, a.s. (8.53) By the Robbins-Siegmund theorem Ws converges a.s. to a finite RV W∞. Hence, we have the first part of Theorem 5.5. For the second assertion, from the Robbins-Siegmund theorem 
+
+∑
+
+> s
+
+τs+1 λmin (H−1
+
+> s+1
+
+)∥∇L (θ(s))∥2 
+
+> θ(s)
+
+< ∞, a.s. (8.54) Thus, if we can show λmax (Hs+1 ) is bounded above a.s., then ∑ 
+
+> s
+
+τs+1 ∥∇L (θ(s))∥2 
+
+> θ(s)
+
+< ∞,which implies that min sk=0 ∥∇L (θ(k))∥2 
+
+> θ(k)
+
+= o(s−(1 −α)); see Lemma 2 in Liu & Yuan (2022). 
+
+C.1 Claim: λmax (Hk+1 ) is bounded above almost surely. 
+
+We re-use reasoning from Sections B.1 to B.3. For these claims it suffices to assume the conditions 11 of Theorem 5.5, and the previous result on the convergence of Ws.Recall Hs+1 = Rs+1 + Ms+1 , where ∥Ms+1 ∥θ(s) → 0 a.s., and 
+
+Rs+1 = 1
+
+s + 1 
+
+> s
+
+∑
+
+> k=0
+
+Φk,s , Φk,s = T −1[s,k ] ◦ IF (θ(k)) ◦ T −∗ 
+
+> [s,k ]
+
+. (8.55) 
+
+> 11
+
+In particular, Theorem 5.5 assumes that the iterates are restricted to a compact domain explicitly, so the applications of Theorem 8.4 remain valid. This is the only reason for assuming compactness. 
+
+46 Using standard properties of the HS norm, and Theorem 8.4 
+
+∥Φk,s ∥2 
+
+> θ(s)
+
+≤ ∥T −1[s,k ]∥4
+
+> op
+
+∥IF (θ(k))∥2 
+
+> θ(k)
+
+≤
+
+> s−1
+
+∏
+
+> j=k
+
+(1 + O(∥vj+1 ∥2 
+
+> θ(j)
+
+)) × ∥ IF (θ(k))∥2 
+
+> θ(k)
+
+. (8.56) From Jensen’s inequality and condition (4) in the theorem 
+
+∥IF (θ(s))∥2 
+
+> θ(s)
+
+≤ E[∥∇ log qθ(s) (¯ ys+1 )∥4 
+
+> θ(s)
+
+| ˜Fs] ≤ C′ 
+
+> 0
+
++ C′
+
+> 1
+
+W 2 
+
+> s
+
+. (8.57) The summability of the ∥vs+1 ∥2 
+
+> θ(s)
+
+implies that the product term is almost surely bounded above by a finite random variable. Since this holds for every term comprising the summation in Rs+1 , we conclude that ∥Rs+1 ∥2 
+
+> θ(s)
+
+is also bounded above almost surely. Thus 
+
+lim sup 
+
+> s→∞
+
+∥Hs+1 ∥2 
+
+> θ(s)
+
+< ∞, a.s. (8.58) The same holds for λmax (Hs+1 ) since the HS norm upper-bounds the operator norm. 
+
+C.2 Remark: convergence to the set of minimizers. 
+
+Suppose that L is geodesically 12 convex, then we have 
+
+Ws = L(θ(s)) − L (θ∗) ≤ −⟨∇L (θ(s)), exp −1 
+
+> θ(s)
+
+(θ∗)⟩θ(s) ≤ ∥∇L (θ(s))∥θ(s) d(θ(s), θ ∗). (8.59) Provided L has bounded level sets, then the first conclusion of the theorem implies that 
+
+d(θ(s), θ ∗) is uniformly bounded almost surely. Consequently (8.54) implies that 
+
+∑
+
+> s
+
+τsW 2 
+
+> s
+
+≤ ∑
+
+> s
+
+τs∥∇L (θ(s))∥2d(θ(s), θ ∗)2 < ∞. (8.60) Since Ws converges a.s. to a finite RV and ∑ 
+
+> s
+
+τs = ∞, Ws → 0. Therefore, θ(s) converges a.s. to the set of minimizers. If L is strictly convex along geodesics, the minimizer is unique. 
+
+> 12
+
+The argument can be reproduced with minor changes if L is retraction-convex w.r.t. some retraction. 
+
+47 D Proof of Theorem 5.6 
+
+The proof is similar to Theorem 5.2 in Godichon-Baggioni et al. (2024). The key idea is to frame our analysis in the tangent space of the limit point Tθ∗ M, and work with 
+
+∆k := R−1 
+
+> θ∗
+
+(θ(k)) ∈ Tθ∗ M. (8.61) The new challenges include managing the error in H−1 
+
+> s+1
+
+arising from vector transportation, and not assuming that H−1 
+
+> s+1
+
+converges to IF (θ∗), since we require Theorem 5.6 to prove this. 
+
+D.1 Defining the recursion for ∆k+1 
+
+Define the function 
+
+Fθ = R−1 
+
+> θ∗
+
+◦ R θ : TθM → Tθ∗ M, Fk := Fθ(k) . (8.62) The linearized iterates can be expressed as 
+
+∆k+1 = R−1 
+
+> θ∗
+
+(θ(k+1) ) = R−1 
+
+> θ∗
+
+◦ R θ(k) (vk+1 ) = Fk(vk+1 ). (8.63) From Lemma 4 in Tripuraneni et al. (2018), we can expand Fk via a Taylor expansion 
+
+Fk(vk+1 ) = Fk(0) + DF k(0)[ vk+1 ] + D2Fk(t∗vk+1 )[ vk+1 , v k+1 ], t∗ ∈ [0 , 1] . (8.64) We further have Fk(0) = ∆ k, and it can be shown that 
+
+DF k(0) = [ DRθ∗ (R−1 
+
+> θ∗
+
+(θ(k)))] −1 = T −1 
+
+> θ∗,θ (k)
+
+:= T −1 
+
+> ∗,k
+
+. (8.65) For the Hessian term, since R is smooth and (θk, v k+1 ) → (θ∗, 0θ∗ ) almost surely 
+
+∥D2Fk(t∗vk+1 )[ vk+1 , v k+1 ]∥θ∗ = O(∥vk+1 ∥2 
+
+> θ(k)
+
+), a.s. (8.66) 48 Therefore, we have the following recursive expression 
+
+∆k+1 = ∆ k + T −1 
+
+> ∗,k
+
+[vk+1 ] + O(∥vk+1 ∥2 
+
+> θ(k)
+
+). (8.67) Consider an expanded version of this recursion, where Γx,y denotes geodesic PT, 
+
+∆k+1 = ∆ k − τk+1 T −1
+
+> ∗,k
+
+[
+
+H−1
+
+> k+1
+
+̂ ∇L (θ(k))]
+
++ O(∥vk+1 ∥2 
+
+> θ(k)
+
+) (8.68) 
+
+= ∆ k − τk+1 T −1 
+
+> ∗,k
+
+Γ∗,k ◦ Γ−1
+
+> ∗,k
+
+H−1
+
+> k+1
+
+Γ∗,k 
+
+︸ ︷︷ ︸
+
+> := ˜ H−1
+> k+1
+
+◦ Γ−1
+
+> ∗,k
+
+̂ ∇L (θ(k))
+
+︸ ︷︷ ︸
+
+> :=ˆ gk
+
++O(∥vk+1 ∥2 
+
+> θ(k)
+
+). (8.69) From Theorem 8.7 we have T −1 
+
+> ∗,k
+
+Γ∗,k = Id θ∗ + O(∥∆k∥2 
+
+> θ∗
+
+) almost surely, hence 
+
+∆k+1 = ∆ k − τk+1 ˜H−1 
+
+> k+1
+
+ˆgk + O(∥vk+1 ∥2 
+
+> θ(k)
+
++ ∥∆k∥2 
+
+> θ∗
+
+∥vk+1 ∥θ(k) )
+
+︸ ︷︷ ︸
+
+> := ζk+1
+
+. (8.70) Some further manipulations yield 
+
+∆k+1 = ∆ k − τk+1 ˜H−1 
+
+> k+1
+
+◦ Γ−1
+
+> ∗,k
+
+∇L (θ(k))
+
+︸ ︷︷ ︸
+
+> := gk
+
++τk+1 ˜H−1 
+
+> k+1
+
+(gk − ˆgk)
+
+︸ ︷︷ ︸
+
+> := ξk+1
+
++ζk+1 (8.71) 
+
+= ( Id − τk+1 ˜H−1
+
+> k+1
+
+∇2L(θ∗)) 
+
+︸ ︷︷ ︸
+
+> := Jk+1
+
+∆k − τk+1 ˜H−1 
+
+> k+1
+
+(gk − ∇ 2L(θ∗)∆ k)
+
+︸ ︷︷ ︸
+
+> := δk
+
++ τk+1 ˜H−1
+
+> k+1
+
+ξk+1 + ζk+1 . (8.72) To summarize, we have shown that 
+
+∆k+1 = Jk+1 ∆k − τk+1 ˜H−1
+
+> k+1
+
+δk + τk+1 ˜H−1
+
+> k+1
+
+ξk+1 + ζk+1 , (8.73) where 
+
+gk = Γ −1
+
+> ∗,k
+
+∇L (θ(k)), ˆgk = Γ −1
+
+> ∗,k
+
+̂ ∇L (θ(k)), ˜H−1 
+
+> k+1
+
+= Γ −1
+
+> ∗,k
+
+H−1
+
+> k+1
+
+Γ∗,k , (8.74) 
+
+ξk+1 = gk − ˆgk, δk = gk − ∇ 2L(θ∗)∆ k, Jk+1 = ( Id − τk+1 ˜H−1
+
+> k+1
+
+∇2L(θ∗)) , (8.75) 49 ζk+1 = O(∥vk+1 ∥2 
+
+> θ(k)
+
++ ∥∆k∥2 
+
+> θ∗
+
+∥vk+1 ∥θ(k) ). (8.76) Expanding (8.73) recursively yields 
+
+∆s+1 = βs+1 ,0∆0
+
+︸ ︷︷ ︸ 
+
+> := M1
+> s+1
+
++
+
+> s
+
+∑
+
+> k=0
+
+βs+1 ,k +1 τk+1 ˜H−1
+
+> k+1
+
+ξk+1 
+
+︸ ︷︷ ︸ 
+
+> := M2
+> s+1
+
++
+
+> s
+
+∑
+
+> k=0
+
+βs+1 ,k +1 
+
+(
+
+τk+1 ˜H−1
+
+> k+1
+
+δk + O(∥vk+1 ∥2 
+
+> θ(k)
+
++ ∥∆k∥2 
+
+> θ∗
+
+∥vk+1 ∥θ(k) ))︸ ︷︷ ︸ 
+
+> := M3
+> s+1
+
+, (8.77) where βs,k := ∏si=k+1 Ji and βs,s := Id. 
+
+D.2 Behavior of ∥Jk+1 ∥op 
+
+The operators ˜H−1 
+
+> k+1
+
+and ∇2L(θ∗) are self-adjoint, therefore 
+
+J∗
+
+> k+1
+
+Jk+1 = Id − τk+1 ˜H−1
+
+> k+1
+
+∇2L(θ∗) − τk+1 ∇2L(θ∗) ˜ H−1
+
+> k+1
+
++ τ 2
+
+> k+1
+
+∇2L(θ∗) ˜ H−2
+
+> k+1
+
+∇2L(θ∗). (8.78) By assumption λ(∇2L(θ∗)) ∈ (λmin , λ max ) where λmin > 0. From Theorem 8.10 we can also assume λ(H−1
+
+> k+1
+
+) ∈ (λmin , λ max ) almost surely for all k sufficiently large. Consequently 
+
+∥Jk+1 ∥2 
+
+> op
+
+= λmax (J∗
+
+> k+1
+
+Jk+1 ) ≤ 1 − 2λ2min τk+1 + τ 2
+
+> k+1
+
+λmax , a.s. (8.79) Therefore, ∃c, K > 0 such that ∥Jk+1 ∥op ≤ 1 − cτ k+1 for all k ≥ K almost surely. 
+
+D.3 Convergence rate of M 1 
+
+> s
+
+:
+
+For c, K as above, we have 
+
+∥M 1 
+
+> s
+
+∥θ∗ ≤
+
+∥∥∥
+
+> K−1
+
+∏
+
+> k=1
+
+Jk∆0
+
+∥∥∥θ∗ ×
+
+> s
+
+∏
+
+> k=K
+
+(1 − cτ k+1 ), a.s. (8.80) 50 The first term is bounded almost surely. For the second term: 
+
+> s
+
+∏
+
+> k=K
+
+(1 − cτ k+1 ) = O(
+
+exp [
+
+− c
+
+> s
+
+∑
+
+> k=K
+
+τk+1 
+
+]) 
+
+= O(exp[ −cs 1−α]) . (8.81) Therefore ∥M 1 
+
+> s
+
+∥θ∗ = O(exp[ −cs 1−α]) almost surely. 
+
+D.4 Convergence rate of M 2 
+
+> s
+
+:
+
+Define c, K as before, and split M 2 
+
+> s
+
+into two components 
+
+M 2 
+
+> s+1
+
+=
+
+> K−1
+
+∑
+
+> k=0
+
+βs+1 ,k +1 τk+1 ˜H−1
+
+> k+1
+
+ξk+1 +
+
+> s−1
+
+∑
+
+> k=K
+
+βs+1 ,k +1 τk+1 ˜H−1
+
+> k+1
+
+ξk+1 . (8.82) Let the first term be M 2as+1 and second M 2bs+1 . Using similar reasoning as for ∥M 1
+
+> s+1
+
+∥θ∗ ,
+
+∥M 2as+1 ∥θ∗ ≤
+
+> s
+
+∏
+
+> k=K
+
+∥Jk∥op × ∥ M 2
+
+> K−1
+
+∥θ∗
+
+︸ ︷︷ ︸
+
+> =O(1)
+
+= O(exp[ −cs 1−α]) , a.s. (8.83) For M 2bs+1 , we would like to employ Theorem 6.1 in Cénac et al. (2020), to conclude 
+
+∥M 2bs ∥θ∗ = O(
+
+√
+
+log s/s α), a.s. (8.84) However, our βn,k take a different form to theirs; they define these as 
+
+βn,k =
+
+> n
+
+∏
+
+> j=k+1
+
+(Id − τj+1 Γ) , βn,n = Id . (8.85) where Γ is a positive, bounded, self-adjoint linear operator. Then for sufficiently large k
+
+∥Id − τk+1 Γ∥op ≤ (1 − τk+1 λmin (Γ)) . (8.86) We remark that the proof of Theorem 6.1 in Cénac et al. (2020) uses the structure of βn,k 
+
+only through the bound ∥βn,k ∥op ≤ ∏nj=k+1 (1 − λmin τj+1 ). From Section D.2, we can see 51 that the same bound is guaranteed for ∥βn,k ∥op here almost surely for all k sufficiently large. Consequently, the proof carries over without substantive changes, and we can conclude (8.84). 
+
+D.5 Convergence rate of M 3 
+
+> s
+
+:
+
+For sufficiently large s, we have 
+
+E[∥M 3
+
+> s+1
+
+∥θ∗ |F s] ≤ (1 − cτ s+1 )∥M 3 
+
+> s
+
+∥θ∗ (8.87) 
+
++ O(τs+1 ∥δs∥θ∗ + ∥vs+1 ∥2 
+
+> θ(s)
+
++ ∥∆s∥2 
+
+> θ∗
+
+∥vs+1 ∥θ(s) ). (8.88) By Holder’s inequality, then using condition (3) in Theorem 5.5 and Theorem 8.10 
+
+E[∥vs+1 ∥θ(s) |F s] ≤ E[∥vs+1 ∥2 
+
+> θ(s)
+
+|F s]1/2 = O(τs+1 (C0 + C1Ws)1/2). (8.89) Therefore, since ∥∆s∥θ∗ = o(1) and τ 2 
+
+> s
+
+∝ (c′ 
+
+> α
+
++ s)−2α, we have 
+
+E[∥M 3
+
+> s+1
+
+∥θ∗ |F s] ≤ (1 − cτ s+1 )∥M 3 
+
+> s
+
+∥θ∗ + O(s−2α) + τs+1 O(∥δs∥θ∗ + ∥∆s∥2 
+
+> θ∗
+
+). (8.90) Provided that ∥δs∥θ∗ = O(∥∆s∥2 
+
+> θ∗
+
+), then the big-O term equals 
+
+O(∥δs∥θ∗ + ∥∆s∥2 
+
+> θ∗
+
+) = O( log ssα + ∥M 3 
+
+> s
+
+∥2
+
+> θ∗
+
+)
+
+. (8.91) Since ∥∆s∥θ∗ , ∥M is∥θ∗ → 0 a.s. for i = 1 , 2, we must also have ∥M 3 
+
+> s
+
+∥θ∗ → 0. Hence 
+
+E[∥M 3
+
+> s+1
+
+∥θ∗ | F s] ≤ (1 − (c − O(∥M 3 
+
+> s
+
+∥θ∗ )) τs+1 )∥M 3 
+
+> s
+
+∥θ∗ + O
+
+( log ss2α
+
+)
+
+. (8.92) Therefore, eventually we have for some ˜c > 0
+
+E[∥M 3
+
+> s+1
+
+∥θ∗ |F s] ≤ (1 − ˜cs −α)∥M 3 
+
+> s
+
+∥θ∗ + O
+
+( log ss2α
+
+)
+
+. (8.93) 52 Taking Vs+1 = ∥M 3
+
+> s+1
+
+∥θ∗ (s + 1) 2α−1/ log ( s + 1) 2+ δ, it follows that 
+
+E[Vs+1 | F s] ≤
+
+(
+
+1 − ˜csα
+
+) ( 
+
+1 + 1
+
+s
+
+)2α−1
+
+Vs + O
+
+( 1
+
+s log s1+ δ
+
+)
+
+. (8.94) One can show e.g. via a Taylor series that the coefficient of Vs is ≤ 1 eventually, hence 
+
+∥M 3
+
+> s+1
+
+∥θ∗ = O
+
+( log s2+ δ
+
+s2α−1
+
+)
+
+, a.s. (8.95) 
+
+D.6 Claim: ∥δs∥θ∗ = O(∥∆s∥2 
+
+> θ∗
+
+)
+
+Expanding the definition of δs
+
+δs = Γ −1 
+
+> ∗,s
+
+∇L (θ(s)) − ∇ 2L(θ∗) exp −1 
+
+> θ∗
+
+(θ(s))
+
+︸ ︷︷ ︸
+
+> =( a)
+
++ ∇2L(θ∗)[exp −1 
+
+> θ∗
+
+(θ(s)) − ∆s]
+
+︸ ︷︷ ︸
+
+> =( b)
+
+. (8.96) For (a), we can use a manifold version of Taylor’s theorem to conclude this is O(∥∆s∥2 
+
+> θ∗
+
+);see e.g. Lemma 7.4.7 in Absil et al. (2009). For (b), by a Taylor expansion we have 
+
+fx(v) := exp −1 
+
+> x
+
+◦ R x(v) = v + O(∥v∥2
+
+> x
+
+). (8.97) Letting x = θ∗, v = ∆ s = R−1 
+
+> θ∗
+
+(θ(s)), it follows that 
+
+fx(v) − v = exp −1 
+
+> θ∗
+
+(θ(s)) − ∆s = O(∥∆s∥2 
+
+> θ∗
+
+). (8.98) Therefore, we have ∥δs∥θ∗ = O(∥∆s∥2 
+
+> θ∗
+
+), which concludes the proof of the theorem. 53 E Proof of Theorem 5.7 
+
+Proof. Recall we denote geodesic parallel transport from θ(s) → θ∗ by Γs, ∗ := Γ θ(s),θ ∗ . From the proof of Theorem 8.10, we had that, for all δ > 0, the following holds a.s.: 
+
+Γs, ∗ ◦ Hs+1 ◦ Γ∗,s = 1
+
+s + 1 
+
+> s
+
+∑
+
+> k=0
+
+Γs, ∗ ◦ Φk,s ◦ Γ∗,s + O
+
+√
+
+log s1+ δ
+
+s
+
+ , (8.99) where Φk,s = T −1[s,k ] ◦ IF (θ(k)) ◦ T −∗ 
+
+> [s,k ]
+
+. We can express each summand as 
+
+Γs, ∗ ◦ Φk,s ◦ Γ∗,s = (
+
+Γs, ∗T −1[s,k ]Γ∗,k 
+
+)
+
+◦ (
+
+Γk, ∗IF (θ(k))Γ ∗,k 
+
+)
+
+◦ (
+
+Γk, ∗T −∗ 
+
+> [s,k ]
+
+Γ∗,s 
+
+)
+
+. (8.100) From the local Lipschitz continuity of IF at θ∗ and Theorem 5.6, we have 
+
+∥Γs, ∗IF (θ(s))Γ ∗,s − IF (θ∗)∥op = O
+
+√
+
+log ssα
+
+ . (8.101) The goal now is to prove the following convergence rate; the theorem follows by expanding the summation in (8.99) and examining the convergence rates of the individual error terms. 
+
+sup 
+
+> s≥k
+
+∥Γs, ∗T −1[s,k ]Γ∗,k − Id θ∗ ∥op = O
+
+( log k1+ δ
+
+k3α/ 2−1
+
+)
+
+, δ > 0. (8.102) Expanding the composite transport operation 
+
+Γs, ∗T −1[s,k ]Γ∗,k = (Γ s, ∗T −1
+
+> s,s −1
+
+Γ∗,s −1) ◦ ... ◦ (Γ k+1 ,∗T −1
+
+> k+1 ,k
+
+Γ∗,k ). (8.103) We bound the distance to Id θ∗ for individual terms using Theorem 8.9 
+
+Γs+1 ,∗T −1
+
+> s+1 ,s
+
+Γ∗,s = Id ∗ + O(d(θ(s), θ (s+1) )d(θ(s), θ ∗) + d(θ(s), θ (s+1) )2). (8.104) 54 Recall from Section B.1 in the proof of Theorem 8.10 that 
+
+E[∥vs+1 ∥2 
+
+> θ(s)
+
+|F s] ≤ τ 2
+
+> s+1
+
+∥H−1
+
+> s+1
+
+∥2
+
+> op
+
+(C0 + C1Ws) := (1 + s)−2α ˜Ws. (8.105) From Theorem 8.10 and the proof of Theorem 5.5, ˜Ws is bounded almost surely. Write 
+
+Vs+1 = (s + 1) 2α−1
+
+log ( s + 1) 1+ δ ∥vs+1 ∥2 
+
+> θ(s)
+
+, δ > 0. (8.106) Combining this with the previous inequality yields that 
+
+E[Vs+1 |F s] ≤ Vs − Vs + ˜Ws
+
+(s + 1) log ( s + 1) 1+ δ . (8.107) The final term has a finite sum a.s., therefore by the Robbins-Siegmund theorem, 
+
+> ∞
+
+∑
+
+> s=2
+
+Vs =
+
+> ∞
+
+∑
+
+> s=2
+
+s2α−1
+
+log s1+ δ ∥vs∥2 
+
+> θ(s−1)
+
+< ∞, a.s. (8.108) Let cs := sγ /(log s)1+ δ for some δ > 0 and γ < 2α − 1; by Cauchy-Schwarz 
+
+> ∞
+
+∑
+
+> s=k
+
+d(θ(s), θ (s+1) )d(θ(s), θ ∗) ≤
+
+( ∞∑
+
+> s=k
+
+csd(θ(s), θ (s+1) )2
+
+)1/2 ( ∞∑
+
+> s=k
+
+c−1 
+
+> s
+
+d(θ(s), θ ∗)2
+
+)1/2
+
+. (8.109) From Theorem 8.2 we have d(θ(s), θ (s+1) ) = O(∥vs+1 ∥θ(s) ), and hence almost surely 
+
+> ∞
+
+∑
+
+> s=k
+
+csd(θ(s), θ (s+1) )2 ≤ 1
+
+k2α−1−γ
+
+> ∞
+
+∑
+
+> s=k
+
+s2α−1
+
+log s1+ δ d(θ(s), θ (s+1) )2 = O(k−(2 α−1−γ)). (8.110) For the other term, if γ > 1 − α (note, 1 − α < 2α − 1 ⇐⇒ α > 2/3), by a standard result 
+
+> ∞
+
+∑
+
+> s=k
+
+c−1 
+
+> s
+
+d(θ(s), θ ∗)2 = O
+
+( ∞∑
+
+> s=k
+
+log s2+ δ
+
+sα+γ
+
+)
+
+= O
+
+( log k2+ δ
+
+kα+γ−1
+
+)
+
+, a.s. (8.111) 55 Consequently, since ∑∞ 
+
+> s=k
+
+d(θ(s), θ (s+1) )2 has a comparatively negligible rate: 
+
+> ∞
+
+∑
+
+> s=k
+
+[d(θ(s), θ (s+1) )d(θ(s), θ ∗) + d(θ(s), θ (s+1) )2]
+
+︸ ︷︷ ︸
+
+> := as
+
+= O
+
+√
+
+log k2+ δ
+
+kα+γ−1 ×
+
+√
+
+1
+
+k2α−1−γ
+
+ (8.112) 
+
+= O
+
+( log k1+ δ/ 2
+
+k3α/ 2−1
+
+)
+
+. (8.113) The tail product of (1 + as) converges to 1 at the same rate; since ex − 1 = O(x) for small x,
+
+> ∞
+
+∏
+
+> s=k
+
+(1 + as) − 1 = exp 
+
+( ∞∑
+
+> s=k
+
+log (1 + as)
+
+)
+
+− 1 ≤ exp 
+
+( ∞∑
+
+> s=k
+
+as
+
+)
+
+− 1 = O
+
+( ∞∑
+
+> s=k
+
+as
+
+)
+
+. (8.114) For a sequence of linear operators An and sub-multiplicative norm ∥ · ∥ , by induction 
+
+∥∥∥∥∥
+
+> n
+
+∏
+
+> i=m
+
+(Id + Ai) − Id 
+
+∥∥∥∥∥ ≤
+
+> n
+
+∏
+
+> i=m
+
+(1 + ∥Ai∥) − 1. (8.115) Therefore, from (8.103), we have for all k ≤ s
+
+∥Γs, ∗T −1[s,k ]Γ∗,k − Id θ∗ ∥op ≤
+
+> s−1
+
+∏
+
+> n=k
+
+(1 + ∥Γn+1 ,∗T −1
+
+> n+1 ,n
+
+Γ∗,n − Id ∥op 
+
+︸ ︷︷ ︸
+
+> := Bn
+
+) − 1. (8.116) From Theorem 8.9 we have Bn = O(an). Therefore, for any δ > 0:
+
+sup 
+
+> s≥k
+
+∥Γs, ∗T −1[s,k ]Γ∗,k − Id θ∗ ∥op ≤
+
+> ∞
+
+∏
+
+> s=k
+
+(1 + Bs) − 1 = O
+
+( log k1+ δ
+
+k3α/ 2−1
+
+)
+
+, (8.117) which concludes the proof. 56 F KL and Fisher Information on a Manifold 
+
+Let qθ(y) be a density on Rd parametrized by θ ∈ M , where M is a Riemannian manifold. 
+
+Fθ[u, v ] = EY ∼qθ
+
+> [
+
+⟨∇ log qθ(Y ), u ⟩θ · ⟨∇ log qθ(Y ), v ⟩θ
+
+> ]
+
+, u, v ∈ TθM.
+
+The local expansion of the KL in terms of Fθ on M can be expressed as follows. 
+
+Lemma 8.11. Let R be a second-order retraction. Under standard regularity conditions, KL (
+
+qθ | qRθ (v)
+
+> )
+
+= 12Fθ[v, v ] + o(∥v∥2
+
+> θ
+
+), (θ, v ) ∈ T M.
+
+Proof. Since R is a second-order retraction, we have the following Taylor expansion 13 
+
+log qRθ (v)(y) = log qθ(y) + ⟨∇ log qθ(y), v ⟩θ + 12
+
+> 〈
+
+Hess(log qθ(y))[ v], v 〉 
+
+> θ
+
++ o(∥v∥2
+
+> θ
+
+),
+
+in terms of the Riemannian Hessian at θ. Re-arranging and taking expectations 
+
+EY ∼qθ
+
+> [
+
+log qRθ (v)(Y )
+
+qθ(Y )
+
+> ]
+
+= EY ∼qθ [⟨∇ log qθ(Y ), v ⟩θ]+ 12 EY ∼qθ
+
+> [〈
+
+Hess(log qθ(Y ))[ v], v 〉
+
+> θ
+> ]
+
++o(∥v∥2
+
+> θ
+
+).
+
+The score term vanishes, provided we can interchange differentiation and integration. For the Hessian term, from Theorem 1 in Smith (2005) we have 
+
+EY ∼qθ
+
+> [〈
+
+Hess(log qθ(Y ))[ v], v 〉
+
+> θ
+> ]
+
+= −Fθ[v, v ]. (8.118) Thus 
+
+KL( qθ | qRθ (v)) = −EY ∼qθ
+
+> [
+
+log qRθ (v)(Y )
+
+qθ(Y )
+
+> ]
+
+= 12Fθ[v, v ] + o(∥v∥2
+
+> θ
+
+). (8.119) 
+
+> 13 See e.g. Proposition 5.44 in Boumal (2023).
+
+57 G ELBO Score-function and Reparameterization Gradients 
+
+Consider again a family of densities qθ(y) on Rd parameterized by θ ∈ M , where M is a Riemannian manifold. Recall, the evidence lower bound (ELBO) is given by LB (θ) = EY ∼qθ
+
+> [
+
+log ¯π(Y )
+
+qθ(Y )
+
+> ]
+
+= EY ∼qθ [hθ(Y )] , hθ(y) = log ¯π(y)
+
+qθ(y) (8.120) where π(y) ∝ ¯π(y) denote a target density. Depending on the approximating family, ∇θLB( θ) can often be expressed in several forms; we review the score function and reparameterization gradients here for completeness. 
+
+Lemma 8.12. The score-function gradient of LB( θ) can be expressed as 
+
+∇θLB( θ) = EY ∼qθ [∇θ log qθ(Y ) × hθ(Y )] (8.121) 
+
+Proof. Let v ∈ TθM and c : [0 , 1] → M be a smooth curve with c(0) = θ, c ′(0) = v.
+
+DLB( θ)[ v] =  
+
+> ∫
+
+∂∂t qc(t)(y)
+
+> ∣∣∣∣t=0
+
+· hθ(y)dy +
+
+> ∫
+
+qθ(y) · ∂∂t hc(t)(y)
+
+> ∣∣∣∣t=0
+
+dy (8.122) The second integrand evaluates to −⟨∇ θqθ(y), v ⟩θ, hence this term is zero. Thus 
+
+DLB( θ)[ v] = 
+
+> ∫
+
+⟨∇ θqθ(y), v ⟩θ · hθ(y)dy = ⟨EY ∼qθ [∇θ log qθ(y)hθ(Y )]   
+
+> ︸︷︷ ︸
+> := ∇LB( θ)
+
+, v ⟩θ (8.123) The Monte-Carlo estimator of the score function gradient can exhibit considerable vari-ance. Techniques such as control variates are often required to obtain a useful update di-rection (Ranganath et al. 2014). A popular alternative is to employ the reparameterization trick (Kingma & Welling 2013), which often results in a more stable Monte-Carlo estimator. 
+
+Lemma 8.13. Let ζ : M × Rm → Rd such that Y = ζ(θ, ϵ ) ∼ qθ(·), where ϵ ∼ p(·) is some 
+
+58 distribution independent of θ. The gradient of the lower bound can be expressed as 
+
+∇θLB( θ) = Ep(ϵ)
+
+> {
+
+Dζ ϵ(θ)∗[∇yhθ(ζϵ(θ))] }
+
+, (8.124) 
+
+where Dζ ϵ(θ)∗ : Rd → TθM denotes the adjoint of the differential w.r.t θ for ϵ fixed. Proof. Let c(t) be as in Theorem 8.12, then applying the chain rule 
+
+DLB( θ)[ v] = ∂∂t Ep(ϵ){hc(t)[ζ(c(t), ϵ )] }∣∣∣t=0 (8.125) 
+
+= Ep(ϵ) 
+
+> {
+
+∂∂t hc(t)[ζ(θ, ϵ )] ∣∣∣t=0 + ∂∂t hθ[ζ(c(t), ϵ )] ∣∣∣t=0 
+
+> }
+
+(8.126) Defining y∗(ϵ) = ζ(θ, ϵ ) to disambiguate the gradient operator, the first term equals 
+
+∂∂t hc(t)[ζ(θ, ϵ )] ∣∣∣t=0 = ⟨∇ θhθ[y∗(ϵ)] , v ⟩θ = −⟨∇ θ log qθ(y∗(ϵ)) , v ⟩θ (8.127) Taking the expectation of the above in p(ϵ) yields zero. For the second term, we have 
+
+∂∂t hθ[ζ(c(t), ϵ )]  
+
+> ∣∣∣t=0
+
+= ⟨∇ yhθ[ζ(θ, ϵ )] , Dζ ϵ(θ)[ v]⟩ = ⟨Dζ ϵ(θ)∗[∇yhθ[ζ(θ, ϵ )]] , v ⟩θ (8.128) Taking expectations again with respect to p(ϵ) yields the result. 59 H Low-dimensional Representation of H−1
+
+> s
+
+The purpose of this section is to describe how one can store, update, and transport a vec-torized “sliding window” version of H−1 
+
+> s
+
+, comprised of the most recent K score vectors. Let M be a Riemannian manifold, and θ ∈ M , us, v s ∈ TθM for 0 ≤ s ≤ K. Define 
+
+Hs := ϵI ︸︷︷︸ 
+
+> := H0
+
++
+
+> s∑
+> k=1
+
+ukv⊤ 
+
+> k
+
+Gθ, 1 ≤ s ≤ K. (8.129) We consider a slightly more general setting than described in Remark 4.3. Rather than defining Hs via a summation of terms ϕkϕ⊤ 
+
+> k
+
+Gθ, we have used ukv⊤ 
+
+> k
+
+Gθ. The purpose of this change is to accommodate the use of general (i.e, non-isometric) transports in Section H.3. 
+
+H.1 Vectorized Representation of H−1
+
+> s
+
+Following the inversion formula (4.1), for 0 ≤ s ≤ K − 1 we have 
+
+H−1 
+
+> s+1
+
+= H−1 
+
+> s
+
+− (1 + v⊤
+
+> s+1
+
+GθH−1 
+
+> s
+
+us+1 )−1H−1 
+
+> s
+
+us+1 v⊤
+
+> s+1
+
+GθH−1 
+
+> s
+
+(8.130) 
+
+= H−1 
+
+> s
+
+− (1 + ⟨vs+1 , H −1 
+
+> s
+
+us+1 ⟩θ)−1(H−1 
+
+> s
+
+us+1 )( H−∗  
+
+> s
+
+vs+1 )⊤Gθ. (8.131) For 0 ≤ s ≤ K − 1 define 
+
+μs := H−1 
+
+> s
+
+us+1 , νs := H−∗  
+
+> s
+
+vs+1 , cs := (1 + ⟨vs+1 , μ s⟩θ)−1. (8.132) Expanding the previous recursion, we therefore have 
+
+H−1 
+
+> s+1
+
+:= 1 
+
+> ϵ
+
+I −
+
+> s∑
+> k=0
+
+ckμkν⊤ 
+
+> k
+
+Gθ, 0 ≤ s ≤ K − 1. (8.133) For the adjoint of Hs, we just swap the roles of μ and ν.60 H−∗  
+
+> s+1
+
+= ( Hs + us+1 v⊤
+
+> s+1
+
+Gθ)−∗ = ( H∗ 
+
+> s
+
++ vs+1 u⊤
+
+> s+1
+
+Gθ)−1 (8.134) 
+
+= H−∗  
+
+> s
+
+− (1 + ⟨vs+1 , H −1 
+
+> s
+
+us+1 ⟩θ)−1(H−∗  
+
+> s
+
+vs+1 )( H−1 
+
+> s
+
+us+1 )⊤Gθ (8.135) 
+
+= H−∗  
+
+> s
+
+− csνsμ⊤ 
+
+> s
+
+Gθ = 1 
+
+> ϵ
+
+I −
+
+> s
+
+∑
+
+> k=0
+
+ckνkμ⊤ 
+
+> k
+
+Gθ. (8.136) 
+
+H.2 Updating Vectorized Representation of H−1
+
+> K
+
+In the following, we index score vectors from newest to oldest, as this simplifies the presen-tation. We want an efficient mechanism to compute (H0
+
+> K−1
+
+)−1 from H−1 
+
+> K
+
+, where 
+
+H0 
+
+> K−1
+
+:= H0 + u0v⊤ 
+
+> 0
+
+Gθ + u1v⊤ 
+
+> 1
+
+Gθ + · · · uK−1v⊤
+
+> K−1
+
+Gθ. (8.137) That is, we want to drop the oldest vectors uK , vK and incorporate the new vectors u0,
+
+v0. To drop the oldest vectors, one simply removes the last term in the summation (8.133). Incorporating the new term is slightly trickier, as we need to add it at the head of this summation, which then requires updating the subsequent ck, μ k, ν k. Define 
+
+H0 
+
+> −1
+
+:= ϵI, H0 
+
+> s
+
+:= Hs + u0v⊤ 
+
+> 0
+
+Gθ for 0 ≤ s ≤ K − 1. (8.138) We wish to find the ˜cs, ˜μs, and ˜νs defining (H0
+
+> K−1
+
+)−1 as in (8.133) 
+
+(H0
+
+> K−1
+
+)−1 = 1 
+
+> ϵ
+
+I − ˜c−1 ˜μ−1 ˜ν⊤−1Gθ −
+
+> K−2
+
+∑
+
+> s=0
+
+˜cs ˜μs ˜ν⊤ 
+
+> s
+
+Gθ. (8.139) That is, where for −1 ≤ s ≤ K − 2 we have 
+
+˜μs = ( H0 
+
+> s
+
+)−1us+1 , ˜νs = ( H0 
+
+> s
+
+)−∗ vs+1 , ˜cs = (1 + ⟨vs+1 , ˜μs⟩θ)−1. (8.140) 61 To that end, let z0 := u0/ϵ and z∗ 
+
+> 0
+
+:= v0/ϵ , and for 1 ≤ s ≤ K − 1 define 
+
+zs := H−1 
+
+> s
+
+u0 = ( H−1 
+
+> s−1
+
+− cs−1μs−1ν⊤
+
+> s−1
+
+Gθ)u0 = zs−1 − cs−1μs−1⟨νs−1, u 0⟩θ (8.141) 
+
+z∗ 
+
+> s
+
+:= H−∗  
+
+> s
+
+v0 = ( H−∗  
+
+> s−1
+
+− cs−1νs−1μ⊤
+
+> s−1
+
+Gθ)v0 = z∗ 
+
+> s−1
+
+− cs−1νs−1⟨μs−1, v 0⟩θ. (8.142) Then, for the ˜μs with 0 ≤ s ≤ K − 2 do 
+
+˜μs = ( H0 
+
+> s
+
+)−1us+1 = ( Hs + u0v⊤ 
+
+> 0
+
+Gθ)−1us+1 (8.143) 
+
+= H−1 
+
+> s
+
+us+1 − (1 + ⟨v0, H −1 
+
+> s
+
+u0⟩θ)−1H−1 
+
+> s
+
+u0v⊤ 
+
+> 0
+
+GθH−1 
+
+> s
+
+us+1 (8.144) 
+
+= μs − (1 + ⟨v0, z s⟩θ)−1⟨v0, μ s⟩θ · zs. (8.145) By similar reasoning, for the ˜νs we have 
+
+˜νs = ( H0 
+
+> s
+
+)−∗ vs+1 = νs − (1 + ⟨u0, z ∗ 
+
+> s
+
+⟩θ)−1⟨u0, ν s⟩θ · z∗ 
+
+> s
+
+. (8.146) Note that ⟨u0, z ∗ 
+
+> s
+
+⟩θ = ⟨v0, z s⟩θ. Finally, to obtain the ˜cs for 0 ≤ s ≤ K − 2˜c−1 
+
+> s
+
+− 1 = ⟨vs+1 , ˜μs⟩θ = v⊤
+
+> s+1
+
+Gθ(H0 
+
+> s
+
+)−1us+1 (8.147) 
+
+= v⊤
+
+> s+1
+
+GθH−1 
+
+> s
+
+us+1 − (1 + ⟨v0, H −1 
+
+> s
+
+u0⟩θ)−1v⊤
+
+> s+1
+
+GθH−1 
+
+> s
+
+u0v⊤ 
+
+> 0
+
+GθH−1 
+
+> s
+
+us+1 (8.148) 
+
+= c−1 
+
+> s
+
+− 1 − (1 + ⟨v0, z s⟩θ)−1⟨u0, ν s⟩θ · ⟨ v0, μ s⟩θ. (8.149) The full procedure for recomputing ˜ck, ˜μk, ˜νk thus requires O(K) evaluations of the metric. 
+
+H.3 Transportation of H−1
+
+> s
+
+Let ˜θ ∈ M , and T : TθM → T˜θM an invertible linear map. We want to transport H−1 
+
+> s
+
+from 
+
+TθM to T˜θM. For 0 ≤ s ≤ K − 1 define 
+
+˜Hs+1 := T ◦ Hs+1 ◦ T −1 = ˜Hs + ( T us+1 )( T −∗ vs+1 )⊤G˜θ. (8.150) 62 The transported inverse is then 
+
+˜H−1 
+
+> s+1
+
+= ˜H−1 
+
+> s
+
+− (1 + ⟨T −∗ vs+1 , ˜H−1 
+
+> s
+
+(T us+1 )⟩˜θ)−1( ˜H−1 
+
+> s
+
+T us+1 )( ˜H−∗  
+
+> s
+
+T −∗ vs+1 )⊤G˜θ. (8.151) Note that 
+
+⟨T −∗ vs+1 , ˜H−1 
+
+> s
+
+(T us+1 )⟩˜θ = ⟨vs+1 , H −1 
+
+> s
+
+us+1 ⟩θ = ⟨vs+1 , μ s⟩θ. (8.152) Furthermore 
+
+˜H−1 
+
+> s
+
+T us+1 = T (H−1 
+
+> s
+
+us+1 ) = T μs, (8.153) 
+
+˜H−∗  
+
+> s
+
+T −∗ vs+1 = T −∗ (H−∗  
+
+> s
+
+vs+1 ) = T −∗ νs. (8.154) Thus 
+
+˜H−1 
+
+> s+1
+
+= ˜H−1 
+
+> s
+
+− cs(T μs)( T −∗ νs)⊤G˜θ. (8.155) Hence (cs, T μs, T −∗ νs) maintains the structure in (8.133) relative to (cs, μ s, ν s). Note that if T is isometric then T −∗ = T . Hence, provided that u = v for every outer product term, then we only need to transport and update one set of vectors. 63 I Gaussian Variational Inference 
+
+We review the relevant details on the Fisher metric and Bures-Wasserstein manifold which are needed to implement Algorithm 1. There are many references on the latter; see e.g. Takatsu (2011), Malagò et al. (2018), Bhatia et al. (2019). Then, we provide some additional details on our experimental methodology. 
+
+I.1 The Fisher and Bures-Wasserstein Metrics 
+
+The space of non-degenerate Gaussian distributions on Rd can be viewed as a smooth man-ifold M, parametrized by the mean and covariance. For a smooth curve (m(t), Σ( t)) ∈
+
+Rd × Sd
+
+> ++
+
+, the velocity ( ˙ m(t), ˙Σ( t)) lies in Rd × Sd, where Sd denotes the space of d × d
+
+symmetric matrices. Thus, tangent spaces are identified as 
+
+Tm, ΣM ≡ Rd × Sd. (8.156) 
+
+Fisher Metric: The Fisher information defines 14 the following Riemannian metric on M⟨(u, U ), (v, V )⟩Fm, Σ := u⊤Σ−1v + 12 tr (
+
+Σ−1U Σ−1V )
+
+, (u, U ), (v, V ) ∈ Rd × Sd. (8.157) For a smooth function f : M → R, let ∇μf, ∇Σf denote its Euclidean (partial) gradients. To obtain the gradient with respect to the Fisher metric (i.e. the natural gradients ), consider 
+
+∇μf ⊤v + tr( ∇Σf · V ) = (Σ ∇μf )⊤Σ−1v + 12 tr(Σ −1(2Σ ∇Σf Σ)Σ −1V ) (8.158) 
+
+= ⟨(Σ ∇μf, 2Σ ∇Σf Σ) , (v, V )⟩Fm, Σ. (8.159) where (v, V ) ∈ Rd × Sd. Thus we have 
+
+∇nat  
+
+> μ
+
+f := Σ ∇μf, ∇nat  
+
+> Σ
+
+f := 2Σ ∇Σf Σ. (8.160) 
+
+> 14 See for example Skovgaard (1984).
+
+64 Bures-Wasserstein Metric: The 2-Wasserstein distance on M has a closed expression 
+
+W 22 (N (m1, Σ1), N (m2, Σ2)) = ∥m1 − m2∥22 + tr (
+
+Σ1 + Σ 2 − 2(Σ 1/21 Σ2Σ1/21 )1/2)
+
+. (8.161) This distance arises as the unique Riemannian distance associated with the Bures-Wasserstein 
+
+metric. For (u, U ), (v, V ) ∈ Rd × Sd, let LΣ(U ) denote the unique symmetric solution of the Lyapunov equation ΣX + XΣ = U . Then 
+
+⟨(u, U ), (v, V )⟩BW  
+
+> m, Σ
+
+:= u⊤v + tr (LΣ(U )Σ LΣ(V )) . (8.162) The corresponding Riemannian manifold is often referred to as the Bures-Wasserstein space 15 
+
+BW( Rd). The Riemannian gradient with respect to the BW metric is obtained as follows 
+
+∇μf ⊤v + tr( ∇Σf · V ) = ∇μf ⊤v + 2 tr( ∇Σf ΣLΣ(V )) (8.163) 
+
+= ⟨(∇μf, 2L−1Σ (∇Σf )) , (v, V )⟩BW  
+
+> μ, Σ
+
+. (8.164) Thus we have ∇BW  
+
+> μ
+
+f = ∇μf , and for the covariance 
+
+∇BW Σ f = 2 L−1Σ (∇Σf ) = 2(Σ ∇Σf + ∇Σf Σ) . (8.165) The exponential map is given below, and is well-defined for LΣ(U ) ≻ − I
+
+exp m, Σ(u, U ) := ( m + u, (I + LΣ(U ))Σ( I + LΣ(U ))) . (8.166) 
+
+Alternative Parametrization: It can be convenient to parameterize the covariance com-ponent of the tangent space in terms of X = LΣ(U ) rather than U itself. In these coordinates, the covariance component of the BW metric reduces to ⟨X1, X 2⟩Σ = tr( X1ΣX2), the expo-
+
+> 15 We note that various authors also use the term Bures-Wasserstein space/metric/distance to refer ex-clusively to a structure on the set of SPD matrices. Indeed, one can observe that the mean and covariance components of the metric decouple, and it is only the latter which is non-Euclidean.
+
+65 nential map to exp Σ(X) = ( I + X)Σ( I + X), while the BW gradient of f is simply 2∇Σf .This parametrization is adopted in some of the optimal transport literature (Lambert et al. 2022, Diao et al. 2023); we proceed with this convention as it simplifies our presentation. 
+
+I.2 Differential of the Exponential Map on BW( Rd)
+
+Following (8.166), the exp-map can be written as exp m, Σ(u, X ) = ( m + u, exp Σ(X)) . Then 
+
+D exp m, Σ(( u, X ))[( v, Y )] = ( v, D exp Σ(X)[ Y ]) ∈ Rd × Sd. (8.167) The differential of the covariance component of the exponential map is given below 16 :
+
+Lemma 8.14. For Σ ∈ Sd 
+
+> ++
+
+and X, Y ∈ Sd, such that X ≻ − I we have 
+
+D exp Σ(X)[ Y ] = Lexp Σ(X) (( X + I)Σ Y + Y Σ( X + I)) . (8.168) 
+
+Proof. Consider the curve Σ( t) = exp Σ(X + tY ). Its velocity at t = 0 is 
+
+Σ′(0) = ddt (I + X + tY )Σ( I + X + tY )|t=0 = ( I + X)Σ Y + Y Σ( I + X). (8.169) To get D exp Σ(X)[ Y ], we just need to convert parametrizations by applying Lexp Σ(X).For A, B ∈ Sd the matrix geometric mean (Bhatia 2009) is given by 
+
+A#B = A1/2(A−1/2BA −1/2)1/2A1/2. (8.170) The inverse of the exponential map (logarithmic map) is then 
+
+log m1,Σ1 (m2, Σ2) := ( m2 − m1, Σ−11 #Σ 2 − I). (8.171) 
+
+> 16 This is also provided in Malagò et al. (2018), we include it here for completeness.
+
+66 Letting log Σ1 (Σ 2) = Σ −11 #Σ 2 − I, we therefore have 
+
+TΣ1,Σ2 (X) := D exp Σ1 (log Σ1 (Σ 2))[ X] = LΣ2
+
+[
+
+(Σ −11 #Σ 2)Σ 1X + XΣ1(Σ −11 #Σ 2)]
+
+. (8.172) 
+
+I.3 Algorithm 1 - Representing, Updating, and Transporting H−1
+
+> s
+
+Let ℓ(x) denote the log-likelihood of N (μ, Σ) . The two components of the score are then 
+
+∇μℓ(x) = Σ −1(x − μ), ∇Σℓ(x) = 12Σ−1(x − μ)( x − μ)⊤Σ−1 − 12Σ−1. (8.173) The approximate Fisher information Hs is decomposed into parts which act separately on the mean and covariance parameters; we denote these Hμs ∈ Rd×d and HΣ 
+
+> s
+
+∈ Rd2×d2
+
+respectively. 
+
+Score Update (Mean): The score vector update for this component is 
+
+(Hμs+1 )−1 = ( Hμs )−1 − (1 + ( ϕμs+1 )⊤(Hμs )−1ϕμs+1 )−1 × (Hμs )−1ϕμs+1 (ϕμs+1 )⊤(Hμs )−1, (8.174) where ϕμs+1 = ∇μℓ(¯ ys+1 ) with ¯ys+1 ∼ N (μ(s), Σ(s)). The update is identical in the Euclidean and BW( Rd) versions of the algorithm. The latter does not require a transport operation since the mean component of the tangent space is Euclidean. 
+
+Score Update (Covariance): The covariance component HΣ 
+
+> s
+
+is a Rd2×d2
+
+matrix acting on the space of vectorized matrices 17 . Here, vec denotes an operation which stacks columns 
+
+vec(Σ) = [Σ 1,1, ..., Σd, 1, Σ1,2, ..., Σd, 2, ... ]⊺ for Σ ∈ Rd×d. The vec-space score update is then 
+
+(HΣ)−1 
+
+> s+1
+
+= ( HΣ)−1 
+
+> s+1 /2
+
+− cs × (HΣ)−1
+
+> s+1 /2
+
+vec( ϕΣ
+
+> s+1
+
+)vec( ˜ϕΣ
+
+> s+1
+
+)⊤(HΣ)−1
+
+> s+1 /2
+
+, (8.175) where ϕΣ 
+
+> s+1
+
+:= ∇Σℓ(¯ ys+1 ) for ¯ys+1 ∼ N (μ(s), Σ(s)), and 
+
+> 17
+
+We favor this over a half-vectorized representation as it simplifies the transport operation. This example is primarily demonstrative, hence we favor ease of implementation over modest efficiency gains. 
+
+67 cs = (1 + vec( ˜ϕΣ
+
+> s+1
+
+)⊤(HΣ)−1
+
+> s+1 /2
+
+vec( ϕΣ
+
+> s+1
+
+)) −1. (8.176) In the Euclidean setting ˜ϕΣ 
+
+> s+1
+
+= ϕΣ
+
+> s+1
+
+. For BW( Rd), recall that the metric on the covariance tangent space is ⟨X, Y ⟩Σ = tr( XΣY ). In vec-space this takes the form 
+
+⟨X, Y ⟩Σ = vec( X)⊤ 12 (I ⊗ Σ + Σ ⊗ I)
+
+︸ ︷︷ ︸
+
+> =GΣvec
+
+vec( Y ), X, Y ∈ Sd. (8.177) The modified score vector is then 
+
+vec( ˜ϕΣ
+
+> s+1
+
+) := GΣ(s) 
+
+> vec
+
+vec( ϕΣ
+
+> s+1
+
+) = 12vec(Σ (s)ϕΣ 
+
+> s+1
+
++ ϕΣ
+
+> s+1
+
+Σ(s)). (8.178) 
+
+Eigenvalue Normalization (Covariance): Since the score vectors ϕΣ are symmetric, the unscaled matrix (HΣ 
+
+> s
+
+)−1 receives no rank-1 updates on the antisymmetric subspace vec( Sd)⊥.Consequently, the scaled approximation (HΣ 
+
+> s
+
+)−1 = ( s + 1)( HΣ 
+
+> s
+
+)−1 can grow indefinitely on this subspace, which can cause numerical instability. This can be addressed by occasionally projecting onto vec( Sd)18 via the duplication matrix 19 Dd and its Moore-Penrose inverse 
+
+Dd : vech (Sd) → vec (Sd), D+ 
+
+> d
+
+: vec (Sd) → vech (Sd), (8.179) where D+ 
+
+> d
+
+Dd = I and DdD+ 
+
+> d
+
+= 12 (I + Kd,d ). Specifically, we occasionally do H−1 
+
+> s
+
+→
+
+DdD+ 
+
+> d
+
+H−1 
+
+> s
+
+D+ 
+
+> d
+
+Dd = 12 (I + Kd,d )H−1 
+
+> s
+
+to normalize its eigenvalues on vec (Sd)⊥. Note Kd,d 
+
+is very sparse, so this operation can be performed at low cost after every score update. 
+
+Transportation: In vec-space, the differentiated exponential map becomes 
+
+˜TΣ1,Σ2 := vec ◦ D exp Σ1 (log Σ1 (Σ 2)) ◦ vec −1 (8.180) 
+
+= ( P2 ⊗ P2)(Λ 2 ⊗ I + I ⊗ Λ2)−1(P2 ⊗ P2)⊤((Σ −11 #Σ 2)Σ 1 ⊗ I + I ⊗ (Σ −11 #Σ 2)Σ 1). (8.181) 
+
+> 18
+
+That is, where vec( Sd) := {vec( A) : A ∈ Sd}, and similarly for vech( Sd).
+
+> 19
+
+For more information on Dd, D + 
+
+> d
+
+, K d,d etc. see chapter 3 of Magnus & Neudecker (2019) 
+
+68 where Σ2 = P2Λ2P ⊤ 
+
+> 2
+
+is the eigendecomposition. The transport operation is then 
+
+(HΣ
+
+> s+1 /2
+
+)−1 := ˜TΣ(s−1) ,Σ(s) (HΣ 
+
+> s
+
+)−1 ˜TΣ(s),Σ(s−1) . (8.182) Since ˜T has a Kronecker product structure, the above operation has O(d5) complexity. This can be substantially accelerated on a GPU, e.g. via torch.einsum operations in PyTorch. Furthermore, one does not need to materialize the full d2 × d2 matrix representation of ˜T .In practice, we found the transport operation to be a small constant factor ( 2 − 5×) slower than the O(d4) score vector update across the examples considered. 
+
+I.4 Experiment Details - VI (Logistic Regression) 
+
+Let π = exp( −V )/Z be a probability density where V : Rd → R, and define: 
+
+L(μ, Σ) = KL( N (μ, Σ) | π). (8.183) 
+
+The partial derivatives of L are as follows, see e.g. appendices of Rezende et al. (2014), 
+
+∇μL(μ, Σ) = Eβ∼N (μ, Σ) [∇V (β)] , (8.184) 
+
+∇ΣL(μ, Σ) = 12 Eβ∼N (μ, Σ) [∇2V (β)] − 12 Σ−1. (8.185) 
+
+For the logistic regression model (6.1), the log-posterior is 
+
+log p(β | { xi, y i}ni=1 ) = 
+
+> n∑
+> i=1
+
+[yiβ⊤xi − log (1 + exp( β⊤xi))] − 12σ2 ∥β∥22   
+
+> ︸︷︷ ︸
+> := −V(β)
+
++C. (8.186) 
+
+Letting S(x) = 1 /(1 + e−x), one can show that: 
+
+∇V (β) = 
+
+> n∑
+> i=1
+
+(S(β⊤xi) − yi)xi + 1
+
+σ2 β, (8.187) 
+
+∇2V (β) = 
+
+> n∑
+> i=1
+
+S(β⊤xi)(1 − S(β⊤xi)) xix⊤ 
+
+> i
+
++ 1
+
+σ2 I. (8.188) 
+
+69 Update Directions: The update directions for each algorithm are based on the Euclidean stochastic gradients ̂ ∇μL in (8.184), and ̂ ∇ΣL in (8.185). These are estimated with a Monte Carlo sample size of B = 100 across all methods and datasets. The six algorithms differ in how these Euclidean gradients are transformed into update directions: 
+
+• Euc-GD: uses (̂ ∇μL,̂ ∇ΣL) directly. 
+
+• Euc-NGD: applies the transformation (8.160) giving (Σ ̂ ∇μL, 2Σ ̂∇ΣLΣ) .
+
+• Euc-NGD Approx: follows Algorithm 1 in the Euclidean setting. 
+
+• BW-GD: uses (̂ ∇μL, 2̂∇ΣL); the constant 2 arises from the X-parametrization. 
+
+• BW-NGD: applies (8.160), followed by conversion to X-parametrization 20 
+
+(Σ ̂∇μL, 2LΣ−1 (̂∇ΣL)) . (8.189) 
+
+• BW-NGD Approx: follows Algorithm 1 on BW( Rd).
+
+Retractions: The Euclidean (i.e., “Euc”) algorithms employ an additive step for both parameters; that is, given raw update directions (ˆ gμ, ˆgΣ) obtained as above, we do: 
+
+(μ(s+1) , Σ(s+1) ) = ( μ(s) − τs+1 ˆgμ, Clip η[Σ (s) − τs+1 ˆgΣ]) . (8.190) where τs+1 is the step size, and Clip η projects eigenvalues to [η, ∞); we let η = 10 −8 in the experiments. For the Bures-Wasserstein algorithms, we perform 
+
+(μ(s+1) , Σ(s+1) ) = ( μ(s) − τs+1 ˆgμ, Clip η[( I − τs+1 ˆgΣ)Σ (s)(I − τs+1 ˆgΣ)]) . (8.191)        
+
+> 20 Note that for S∈Sdwe have LΣ(Σ SΣ) = LΣ−1(S); this is easy to show.
+
+70 J Details of Stiefel Manifold Experiment 
+
+We review relevant details on the Stiefel manifold, and the implementation of our algorithms. 
+
+J.1 Geometric Preliminaries 
+
+The following standard properties of the Stiefel manifold can be found in Absil et al. (2009). 
+
+Background: The Stiefel manifold St( p, n ) is an embedded submanifold of Rn×p
+
+St( p, n ) := {X ∈ Rn×p | X⊤X = Ip}, p ≤ n. (8.192) The tangent space at X ∈ St( p, n ) forms a subspace of Rn×p given by 
+
+TX St( p, n ) = {Z ∈ Rn×p : Z⊤X + X⊤Z = 0 p×p}. (8.193) The Riemannian metric on this tangent space is ⟨Y, Z ⟩SX = tr( Y ⊤Z); i.e., the ordinary Euclidean metric. The orthogonal projection operator onto TX St( p, n ) is 
+
+Proj X M = ( I − XX ⊤)M + Xskew( X⊤M ), M ∈ Rn×p (8.194) 
+
+= M − Xsym( X⊤M ), (8.195) where sym( A) := ( A + A⊤)/2 and skew( A) := ( A − A⊤)/2. For a differentiable function 
+
+f : Rn×p → R, with Euclidean gradient ∇E 
+
+> X
+
+f (X) at X ∈ St( p, n ) its Riemannian gradient is 
+
+∇X f (X) := Proj X (∇E 
+
+> X
+
+f (X)) . (8.196) 
+
+Retraction & Transport: For X ∈ St( p, n ) and U ∈ TX St( p, n ), define 
+
+WU := PX U X ⊤ − XU ⊤PX , PX = I − 12XX ⊤. (8.197) 71 The Cayley transform retraction (Zhu 2017) is 
+
+RX (U ) = 
+
+> (
+
+I − 12WU 
+
+> )−1(
+
+I + 12WU
+
+> )
+
+X. (8.198) The associated isometric vector transport (Zhu 2017, Lemma 3) is 
+
+TU (V ) = 
+
+> (
+
+I − 12WU 
+
+> )−1(
+
+I + 12WU
+
+> )
+
+V, V ∈ TX St( p, n ), (8.199) which maps TX St( p, n ) → TRX (U )St( p, n ).
+
+J.2 Algorithm Details 
+
+The variational parameter θ = ( W1, W 2, b 1, b 2) belongs to the product manifold 
+
+M = St( d, d ) × St( d, d ) × Rd × Rd. (8.200) Closed-form expressions for the Euclidean score ∇E 
+
+> θ
+
+log qθ(y) and the negative ELBO gradient 
+
+∇E 
+
+> θ
+
+L(θ) are derived in Appendix A.5 of Godichon-Baggioni et al. (2024); both are estimated by sampling from the base distribution N (0 , I ) of the normalizing flow. The Riemannian gradients are obtained by projecting the Stiefel components onto the tangent space via (8.194). Concretely, for the score (and similarly for the ELBO gradient), 
+
+∇θ log qθ(y) = Proj θ(∇E 
+
+> θ
+
+log qθ(y)) := (Proj W1 [∇E 
+
+> W1
+
+log qθ(y)] , Proj W2 [∇E 
+
+> W2
+
+log qθ(y)] , ∇E 
+
+> b1
+
+log qθ(y), ∇E 
+
+> b2
+
+log qθ(y)) . (8.201) 
+
+In the following, the retraction Rθ on M applies the Cayley retraction to the Stiefel com-ponents W1, W 2, and the standard additive update for b1, b 2.
+
+Riemannian Stochastic Gradient Descent: This is given by 72 θ(s+1) = Rθ(s) (−τs+1 ∇θ̂ L(θ(s))) , (8.202) where ∇θ̂ L(θ(s)) = Proj θ(s) [∇E 
+
+> θ̂
+
+L(θ(s))] is the stochastic Riemannian NELBO gradient. 
+
+Riemannian Natural Gradient: This method follows the limited-memory variant of Algorithm 1 described in Remark 4.3 to move and update H−1 
+
+> s
+
+. The update is 
+
+θ(s+1) = Rθ(s) (−τs+1 H−1
+
+> s+1
+
+∇θ̂ L(θ(s))) . (8.203) This matrix is updated using a sliding window of the K = 500 most recent score vectors; see Appendix H. The intercept parameters b1, b 2 are Euclidean, so the corresponding score updates are straightforward and require no transportation. The Stiefel blocks are updated using the Riemannian score components ∇W log qθ(y), with past vectors transported to the current tangent space via (8.199). Since this transport is isometric, μ = ν in the inverse representation of the H−1 
+
+> s
+
+, which simplifies the sliding window update. 
+
+Extrinsic Natural Gradient: This method applies the Euclidean inversion-free approach of Godichon-Baggioni et al. (2024), with W1, W 2 constrained to the Stiefel manifold 
+
+θ(s+1) = Rθ(s)
+
+> (
+
+−τs+1 Proj θ(s)
+
+> [
+
+(Hext 
+
+> s+1
+
+)−1∇E 
+
+> θ̂
+
+L(θ(s))]) 
+
+. (8.204) There are three key differences relative to the Riemannian natural gradient method. First, the Euclidean gradient ∇E 
+
+> θ̂
+
+L is used in place of the Riemannian gradient. Second, the inverse Fisher approximation (Hext  
+
+> s
+
+)−1 is constructed in the embedding space Rd×d × Rd×d × Rd ×
+
+Rd. This is also updated with a sliding window of K = 500 score vectors, albeit with no transportation. Third, the update direction (Hext  
+
+> s
+
+)−1∇E 
+
+> θ̂
+
+L(θ(s)) does not necessarily lie in the tangent space, hence the projection before applying the retraction. 73

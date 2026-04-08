@@ -1,0 +1,988 @@
+Title: Geometrically-Constrained Radar-Inertial Odometry via Continuous Point-Pose Uncertainty Modeling
+
+URL Source: https://arxiv.org/pdf/2604.02745v1
+
+Published Time: Mon, 06 Apr 2026 00:27:52 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+> IEEE ROBOTICS AND AUTOMATION LETTERS. PREPRINT VERSION. ACCEPTED MARCH, 2026 1
+
+# Geometrically-Constrained Radar-Inertial Odometry via Continuous Point-Pose Uncertainty Modeling 
+
+Wooseong Yang 1, Dongjae Lee 1, Minwoo Jung 1, and Ayoung Kim 1∗
+
+Abstract —Radar odometry is crucial for robust localization in challenging environments; however, the sparsity of reli-able returns and distinctive noise characteristics impede its performance. This paper introduces geometrically-constrained radar–inertial odometry and mapping that jointly consolidates point and pose uncertainty. We employ the continuous trajec-tory model to estimate the pose uncertainty at any arbitrary timestamp by propagating uncertainties of the control points. These pose uncertainties are continuously integrated with het-eroscedastic measurement uncertainty during point projection, thereby enabling dynamic evaluation of observation confidence and adaptive down-weighting of uninformative radar points. By leveraging quantified uncertainties in radar mapping, we construct a high-fidelity map that improves odometry accuracy under imprecise radar measurements. Moreover, we reveal the effectiveness of explicit geometrical constraints in radar-inertial odometry when incorporated with the proposed uncertainty-aware mapping framework. Extensive experiments on diverse real-world datasets demonstrate the superiority of our method, yielding substantial performance improvements in both accuracy and efficiency compared to existing baselines. 
+
+Index Terms —Localization, SLAM, Range Sensing 
+
+I. I NTRODUCTION 
+
+Radar odometry has gained notable attention in robotics due to its robustness in adverse weather conditions [1], yet it still suffers from data sparsity. Recent approaches address these limitations by scan-to-submap registration, enforcing geometric consistency through denser structural priors from accumulated scans [2]. While these can also mitigate abrupt drift [3], the distinctive noise characteristics of radar impede reliable submap construction and further lead to erroneous pose estimation. Signal penetrability due to long wavelength exhibits inherent difficulty in distinguishing meaningful mea-surements from spurious noise [4]. Overcoming this ambiguity, most existing radar odome-try and mapping strategies rely primarily on dynamic ob-ject filtering using velocity measurements [5, 6]. These fail to suppress sensor-induced artifacts, thus contaminating the submap and further degrading scan-to-submap registration [7]. This limitation motivates a rigorous point assessment, for which uncertainty modeling provides a promising approach to quantify the reliability of each measurement [8]. 
+
+Manuscript received: November 17, 2025; Revised: January 21, 2026; Accepted: February 28, 2026. This paper was recommended for publication by Editor Javier Civera upon evaluation of the Associate Editor and Reviewers comments. 
+
+> †
+
+This work was supported by the Technology Innovation Program (1415187329, 20024355, Development of autonomous driving connectivity technology based on sensor-infrastructure cooperation) funded by the Ministry of Trade, Industry & Energy (MOTIE, Korea)  
+
+> 1
+
+W. Yang, D. Lee, M. Jung and A. Kim are with the Dept. of Mechanical Engineering, SNU, Seoul, S. Korea [yellowish, pur22, moonshot, ayoungk]@snu.ac.kr 
+
+Digital Object Identifier (DOI): see top of this page. Planar Point & Uncertainty Non -Planar Point & Uncertainty    
+
+> Trajectory Control Point
+> Ignoring Pose Uncertainty Consolidate Point -Pose Uncertainty
+> Estimated Noise
+> Inaccurate Geometry & Odometry Accurate Geometry & Odometry
+> Pose Uncertainty
+
+Fig. 1: We jointly model and continuously consolidate point-pose uncertainty in radar odometry and mapping, enabling the effective usage of explicit local geometry. 
+
+Two key considerations are indispensable for reliable un-certainty analysis for radar odometry and mapping: (i) model-ing heteroscedastic, view-dependent measurement uncertainty [9], (ii) addressing pose-uncertainty-aware propagation, which affects accurate registration and consistent mapping [10]. However, prior studies have discussed modeling measurement uncertainty only and have underexplored its propagation dur-ing accumulation [11]. This omission compromises mapping consistency by failing to account for erroneous point projec-tions stemming from pose drift. Radar’s low angular resolution exacerbates this issue, amplifying minor pose estimate errors into significant spatial ambiguities. To address these limitations, we close this gap by intro-ducing a radar-inertial odometry and mapping framework that jointly addresses both challenges in uncertainty analysis of the radar. By adopting a continuous trajectory, our method enables pose uncertainty modeling at arbitrary timestamps based on the uncertainty of each control point. As shown in Fig. 1, we then compound the pose uncertainty with each point-wise uncertainty to perform a continuous uncertainty propagation during point projection. Through our uncertainty modeling, we reveal that the use of explicit geometrical constraints, such as planar observation models or localizability analysis, becomes more effective even with sparse and imprecise radar returns. We also achieved a high-fidelity map by selectively retaining points with low uncertainty during map maintenance. Extensive experiments on real-world benchmarks demonstrate that our proposed framework achieves accurate odometry and high-fidelity maps in real-time, outperforming state-of-the-art baselines. Our contributions are summarized as follows:  
+
+> •
+
+Jointly consolidating point-pose uncertainty in radar odometry and mapping: We propose a unified frame-   
+
+> arXiv:2604.02745v1 [cs.RO] 3 Apr 2026 2IEEE ROBOTICS AND AUTOMATION LETTERS. PREPRINT VERSION. ACCEPTED MARCH, 2026 Localizability -constrained
+> Update
+> Control Point
+> Propagation
+> Data
+> Collection
+> State Estimation
+> Uncertainty Propagation
+> Database
+> Residual Computation
+> Uncertainty -Aware
+> Point Selection
+> Uncertainty -Aware
+> Radar Mapping
+> 4D Radar
+> Preprocessing
+> Y
+> N
+> IMU
+> Dynamic
+> Removal
+> Control Point &
+> Covariance Queue
+> Input
+> Previous
+> Velocity
+> Ego -velocity
+> Estimation Converged? Updated
+> State
+
+Fig. 2: Our method consists of preprocessing, state estimation, and mapping. In preprocessing, we remove dynamic points from radar measurements using ego-velocity estimates and perform data association for the measurements used in the state update. The state estimation module iteratively performs residual computation, uncertainty propagation, and localizability-constrained IEKF updates until convergence. After convergence, we utilize high-confidence points to enhance mapping accuracy. 
+
+work that jointly propagates the measurement and pose uncertainty in radar odometry and mapping. Our uncer-tainty analysis enables robust down-weighting of uninfor-mative points in the observation model. Furthermore, we iteratively refine the map by replacing high-uncertainty points with lower-uncertainty measurements, thereby en-hancing odometry accuracy while preserving map fidelity.  
+
+> •
+
+Revealing the effectiveness of explicit geometrical constraint in radar odometry: We demonstrate that the use of explicit local geometric features and localiz-ability analysis, which were overlooked in existing radar odometry baselines, can yield a noticeable performance improvement with our uncertainty-aware approach.  
+
+> •
+
+Extensive experiments in real-world datasets: We val-idate our system on diverse datasets, including indoor and outdoor sequences across structured, unstructured, and degenerate environments, demonstrating substantial improvements in accuracy during real-time operation. II. R ELATED WORK 
+
+A. Radar Odometry with Scan Registration 
+
+With advances in the accuracy of radar returns with auto-motive radar development, subsequent studies began to exploit point cloud registration in radar odometry. Zhang et al. [9] proposed an adaptive probabilistic distribution Generalized ICP (APD–GICP) that models measurement covariance dur-ing sequential registration. Building on this, Yang et al. [4] introduced cluster-based weighting and Xu et al. [11] mod-eled point-wise uncertainty to enable probability-guided cor-respondence, improving registration accuracy. Nevertheless, these methods are based on scan-to-scan matching, which is susceptible to sudden drift in sequential odometry and remains vulnerable to noise-dominant measurements due to sparsity and limited field of view (FOV). To mitigate these issues, several methods integrate local maps into radar odometry. Li et al. [12] performed Normal Distribution Transform (NDT)-based scan-to-submap regis-tration, while Zhuang et al. [5] adopted point-to-distribution residuals to improve alignment. Wu et al. [13] proposed corre-spondence weighting strategies to reduce the impact of outliers during submap matching. Herraez et al. [6, 7] refined scan-to-submap matching by incorporating Doppler velocity and further leveraging ground information to enhance localization precision [14]. However, many of these approaches accumu-lated scans without quantifying the measurement reliability during map construction. As a result, artifacts often persisted in the aggregated map, degrading odometry accuracy. We therefore propose a reliability quantification methodology with novel uncertainty modeling over the aggregated map, thereby improving map fidelity and odometry performance. 
+
+B. Uncertainty in Range-Sensor SLAM 
+
+Uncertainty in simultaneous localization and mapping (SLAM) has been classically formalized as the covariance of the estimated state [15]. Recently, sophisticated uncertainty analysis has become central to Light Detection and Ranging (LiDAR) SLAM. For instance, Yuan et al. [10] propagated uncertainty into adaptive voxel mapping, while Jung et al. [8] incorporated uncertainty to mitigate inter-sensor discrepancies. Huang et al. [16] proposed uncertainty analysis by exploiting surface characteristics. These advancements address uncertain-ties by quantifying confidence in poses and landmarks, thereby enhancing the robustness of point matching and odometry. In contrast, the treatment of uncertainty is absent in the radar SLAM domain. While Xu et al. [11] incorporated per-point uncertainty into radar registration, their approach omitted uncertainty propagation to the global map level, which could lead to biased or noisy landmarks. To address this issue, we propose the radar-inertial odometry and mapping with compounded uncertainty analysis. III. P RELIMINARY 
+
+The lower letter without bold represents the scalar (e.g., a), the lower letter with bold represents the vector (e.g., a), and the upper letter with bold represents the matrix (e.g., A). We adopt the iterated extended Kalman filter (IEKF)-based continuous trajectory estimation model with cubic B-spline [17]. t(t) ∈ R3 and q(t) ∈ S3 denote the translation and orientation in quaternion at time t ∈ [ti−1,ti). These state variables are parametrized by control points tn ∈ R3, qn ∈ S3
+
+at knots (same as timestamp) tn (n = i − 3, · · · , i) in fixed time interval ∆t as follows: 
+
+t(t) = ti−3, ti−2, ti−1, ti
+
+ Mu , u = [ 1, u, u2, u3]⊤, (1) 
+
+where M = 16
+
+ 1 −3 3 −14 0 −6 31 3 3 −30 0 0 1
+
+
+
+is the basis matrix and u = ( t −
+
+ti−1)/∆t. The quaternion-based orientation is represented as the following cumulative equation: YANG et al. : GEOMETRICALLY-CONSTRAINED RADAR-INERTIAL ODOMETRY VIA CONTINUOUS POINT-POSE UNCERTAINTY MODELING 3
+
+q(t) = qi−4 ⊗
+
+> i
+
+## ∏
+
+> k=i−3
+
+Exp (λkδδδ k), (2) 
+
+where ⊗ denotes the quaternion multiplication, and δδδ k =
+
+Log (q−1 
+
+> k−1
+
+⊗ qk) is the increment of the orientation control points. The cumulative basis function λk are given as follows: 
+
+[λ i−3, λ i−2, λ i−1, λ i]⊤ = eMu , (3) 
+
+where eM = 16
+
+ 6 0 0 05 3 −3 11 3 3 −20 0 0 1
+
+
+
+is the cumulative blending matrix. Our radar-inertial system utilizes the spline-state-space modeling with inertial measurement unit (IMU) biases as below: 
+
+xk = [ xpk
+
+> ⊤
+
+, xqk
+
+> ⊤
+
+, b⊤ 
+
+> a
+
+, b⊤ 
+
+> g
+
+]⊤ ∈ R30 , (4) 
+
+xpk =
+
+h
+
+t⊤
+
+> i−3
+
+, t⊤
+
+> i−2
+
+, t⊤
+
+> i−1
+
+, t⊤
+
+> i
+
+i⊤
+
+∈ R12 , (5) 
+
+xqk =
+
+h
+
+δδδ ⊤
+
+> i−3
+
+, δδδ ⊤
+
+> i−2
+
+, δδδ ⊤
+
+> i−1
+
+, δδδ ⊤
+
+> i
+
+i⊤
+
+∈ R12 , (6) 
+
+where xp and xq indicate the translation control points and the increment of orientation control points, and ba and bg are acceleration and gyroscope biases, respectively. The prediction step of IEKF is performed as follows: 
+
+xk|k−1 = Ak−1xk−1|k−1, (7) 
+
+Pk|k−1 = Ak−1Pk−1|k−1A⊤ 
+
+> k−1
+
++ Qk−1, (8) 
+
+with the state mean xk−1|k−1 and the corresponding covariance 
+
+Pk−1|k−1 from the previous step. Qk−1 denotes the propagation noise term. We adopt transition matrix following [17] with translation and rotation submatrices Ap and Aq:
+
+Ak−1 = diag [Ap, Aq, I, I] , (9) 
+
+Ap =
+
+
+
+0 I 0 00 0 I 00 0 0 I
+
+−I 0 2I 0
+
+ , Aq =
+
+
+
+0 I 0 00 0 I 00 0 0 I0 I 0 0
+
+ . (10) 
+
+Then the Kalman gain K j and motion increment are com-puted as follows: 
+
+K j = ( H jR jH−1 
+
+> j
+
++ P−1
+
+> k|k−1
+
+)−1H⊤ 
+
+> j
+
+R−1 
+
+> j
+
+, (11) 
+
+δ x j| j = K j(z j − h(x j)) − (I − K jH j)( x j − xk|k−1). (12) 
+
+with the observation model z j − h(x j) = 0, Jacobian H j, and measurement covariance R j.The iterative update step is initialized with x j = xk|k−1
+
+at j = 0. At the j-th step, the state is updated by x j+1 =
+
+x j + δ x j+1| j, while δ x j+1| j denotes the projection of state increment, which will be described in §IV-A. At every update step, we utilize the radar and IMU measurements between the last updated control point and the newly added control point. IV. M ETHODOLOGY 
+
+This section presents the details of our algorithm, which is illustrated in Fig. 2. We first preprocess each radar scan with ego-velocity-based dynamic removal [18], and stabilize the dynamic filtering by reusing the previous ego-velocity when abrupt changes occur [6]. The remaining subsections describe our localizability-constrained update, continuous-time point-pose uncertainty propagation, scan-to-submap registration us-ing explicit local geometry, and IMU residuals. 
+
+A. Localizability-Constrained IEKF update 
+
+Unlike existing methods, we construct a localizability Hes-sian and regularize the control point update using a constrained IEKF to handle geometrical degeneracy. For the point p ∈ R3
+
+with its normal vector n ∈ R3, we derive the Hessian matrix from [19] for localizability estimation: 
+
+ΛΛΛ =
+
+ΛΛΛtt ΛΛΛrt 
+
+ΛΛΛtr ΛΛΛrr 
+
+
+
+= L⊤L ∈ R6×6, L = [ n⊤, (p × n)⊤], (13) 
+
+where the ΛΛΛtt , ΛΛΛrr ∈ R3×3 denote the translational and rota-tional blocks of the localizability Hessian, respectively. With their eigen matrix Et , Er ∈ R3×3, we define its 6-DoF lo-calizability score vector s(p) = 
+
+
+
+n⊤Et ,
+
+ p×n
+
+> ∥p×n∥2
+
+⊤
+
+Er
+
+
+
+. The point p is deemed informative on i-axis if |si| > η. If the number of informative points for an axis is insufficient, we regard that axis as under-constrained. Let C be the constraint matrix whose rows are the eigenvectors corresponding to the under-constrained axes, so that the admissible update satisfies C δ x = 0. To suppress update components along these degenerate directions, we project the motion increment onto the null space N (C) of the constraint matrix C as follows: 
+
+δ x j+1| j[18 : ] = ( I − ϒϒϒC) δ x j| j[18 : ], ϒϒϒ = C⊤(CC ⊤)−1. (14) 
+
+We iterate until || δ x j+1| j|| 2 < ε, then update the state and covariance as: 
+
+xk|k = x j+1, Pk|k = ( I − K jH j)Pk|k−1. (15) 
+
+B. Continuous Propagation of Point-Pose Uncertainties 
+
+Compared to the discrete-time formulation, the continuous-time trajectory effectively accommodates asynchronous radar and IMU measurements by enabling pose estimation and world-frame transformation of each radar return at its measure-ment timestamp. However, adopting continuous-time represen-tation alone is not guaranteed to improve odometry accuracy, as shown in Table. IV. This is because the reliability of each transformed point is jointly governed by (i) pose uncertainty and (ii) sensor measurement uncertainty. In this section, we derive these uncertainty terms from our state models and describe their continuous propagation processes. According to (1), t(t) can be rewritten as follows: 
+
+t(t) = B(u) t⊤
+
+> i−3
+
+, t⊤
+
+> i−2
+
+, t⊤
+
+> i−1
+
+, t⊤
+
+> i
+
+⊤ , (16) 
+
+B(u) = [ m0(u)I, m1(u)I, m2(u)I, m3(u)I] ∈ R3×12 , (17) 
+
+Mu = [ m0(u), m1(u), m2(u), m3(u)] ⊤, (18) 
+
+while B(u) is the Jacobian of translation w.r.t. control points. Let the uncertainty of translation control point be ΣΣΣtk . Then, we can estimate the uncertainty of the translation as follows: 
+
+ΣΣΣt(t) = B(u)
+
+
+
+ΣΣΣti−3 · · · 0
+
+... . . . ...
+
+0 · · · ΣΣΣti
+
+ B(u)⊤
+
+=
+
+> 3
+
+## ∑
+
+> k=0
+
+(mk(u)) 2ΣΣΣti−3+k . (19) 
+
+Similarly, let the uncertainty of the orientation control point 
+
+δδδ i be ΣΣΣδδδ i . According to (2), orientation q and its Jacobian w.r.t. 
+
+δδδ j can be rewritten as follows: 4 IEEE ROBOTICS AND AUTOMATION LETTERS. PREPRINT VERSION. ACCEPTED MARCH, 2026 
+
+q(t) = qi−4 ⊗
+
+> j−1
+
+## ∏
+
+> k=i−3
+
+Exp (λkδδδ k) ⊗ Exp (λ jδδδ j) ⊗
+
+> i
+
+## ∏ 
+
+> k=j+1
+
+Exp (λkδδδ k)=
+
+"
+
+qi−4 ⊗
+
+> j−1
+
+## ∏
+
+> k=i−3
+
+Exp (νννk)
+
+#
+
+> L
+
+" i
+
+## ∏ 
+
+> k=j+1
+
+Exp (νννk)
+
+#
+
+> R
+
+Exp (ννν j),
+
+Jq, j = ∂ q
+
+∂ δ δδ j
+
+= λ j
+
+"
+
+qi−4 ⊗
+
+> j−1
+
+## ∏
+
+> k=i−3
+
+Exp (νννk)
+
+#
+
+> L
+
+" i
+
+## ∏ 
+
+> k=j+1
+
+Exp (νννk)
+
+#
+
+> R
+
+∂ Exp (ννν j)
+
+∂ ν νν j
+
+,
+
+(20) 
+
+where νννl = λl δδδ l and [ · ]L and [ · ]R denote the left and right matrix representations of the quaternion multiplication. More-over, because our quaternion parameterization accumulates over successive states, the orientation of the lagged state qi−4
+
+must be addressed. The Jacobian w.r.t. the lagged quaternion can be computed as follows: 
+
+q(t) = 
+
+" i
+
+## ∏
+
+> k=i−3
+
+Exp (νννk)
+
+#
+
+> L
+
+qi−4,
+
+Jq,(i−4) = ∂ q
+
+∂ qi−4
+
+=
+
+" i
+
+## ∏
+
+> k=i−3
+
+Exp (νννk)
+
+#
+
+> L
+
+. (21) 
+
+With (20) and (21), the uncertainty of the estimated orientation can be computed as follows: 
+
+ΣΣΣq(t) =
+
+> i
+
+## ∑
+
+> k=i−3
+
+
+
+Jq,kΣΣΣδδδ i J⊤
+
+> q,k
+
+
+
++ Jq,(i−4)ΣΣΣqi−4 J⊤
+
+> q,(i−4)
+
+. (22) 
+
+Now, assume that we have the measured point expressed in the radar frame Rp at time t, which has measurement uncer-tainties σr, σa, and σe for the range, azimuth, and elevation, respectively. These are propagated to Cartesian coordinates, with the following equation: 
+
+ΣΣΣRp = ΓΓΓ
+
+σ 2 
+
+> r
+
+0 00 σ 2 
+
+> a
+
+00 0 σ 2
+
+> e
+
+ ΓΓΓ⊤, (23) 
+
+where ΓΓΓ is the Jacobian of the spherical-coordinate mapping. Then the measured point can be projected to the world frame: 
+
+> W
+
+p = t(t) + R(t)
+
+
+
+RIR Rp + ItIR 
+
+
+
+= t(t) + R(t)Ip, (24) 
+
+with extrinsic parameter between the body frame and radar frame RIR , ItIR . R(t) denotes the orientation in SO(3) mani-fold. Finally, the uncertainty of the point measurement in the world frame can be achieved from (19), (22), and (23): 
+
+ΣΣΣIp = RIR ΣΣΣRpR⊤
+
+> IR
+
+, (25) 
+
+ΣΣΣWp = ΣΣΣt(t) + R(t)[ Ip]×ΣΣΣR(t)[Ip]⊤×R(t)⊤ + R(t)ΣΣΣIpR(t)⊤. (26) 
+
+The uncertainty in SO(3)  ΣΣΣR(t)
+
+ can be computed from the uncertainty in quaternion space (22). With (26), we can consolidate both uncertainties that affect the point projection and propagation into the global map frame. Fig. 3 illustrates the conceptual diagram of our uncertainty propagation method. if planar 
+
+> Control Point with Uncertainty
+> Measured Point with Uncertainty
+> Interpolated Pose with Uncertainty
+> Planar Point from Local Map
+> 𝑡
+> 𝐱 !"#
+> 𝐱 !"$
+> 𝐱 !"%
+> 𝐱 !
+> Non -planar Point from Local Map
+> if non -planar
+
+Fig. 3: Conceptual diagram of our uncertainty propagation module. Uncertainties of B-spline control points are propagated to the pose at the radar timestamp and subsequently to individual radar returns. The resulting per-point uncertainties in the global frame perform as confidence weights in the observation model for local geometry-guided scan-to-submap registration. 
+
+C. Scan-to-Submap Registration with Explicit Local Geometry 
+
+Retaining the reliable point in the map enables explicit local geometry assumption in the radar odometry framework. Unlike existing methods that focused solely on rough Gaussian distribution [5, 12], we shift the main attention to the explicit representation of local geometry. For each achieved radar point 
+
+> R
+
+p at time t, five neighbor points are extracted and fitted into the planar model with the local planarity assumption. The point-to-plane measurement model with its Jacobian is computed with a sample point ppl in the plane: 
+
+hpl = n⊤ 
+
+t(t) + R(t)
+
+
+
+RIR Rp + ItIR 
+
+
+
+− ppl 
+
+
+
+, (27) 
+
+Hpl =
+
+"
+
+n⊤B(t), n⊤ ∂ R(t)  RIR Rp + ItIR 
+
+
+
+∂ q(t)
+
+∂ q(t)
+
+∂ xq , 0, 0
+
+#
+
+. (28) 
+
+We adaptively reweight these measurement models with the uncertainties, with the uncertainty threshold τu:
+
+ΣΣΣpl =
+
+> 4
+
+## ∑
+
+> i=0
+
+τu − tr (ΣΣΣpi )
+
+∑4 
+
+> j=0
+
+τu − tr (ΣΣΣp j )
+
+!2
+
+ΣΣΣpi . (29) 
+
+We deem the fitted plane unreliable if tr (ΣΣΣpl ) > τpl . In this case, we switch from the point-to-plane residual to a point-to-distribution residual. The corresponding distribution is es-timated with Radar Cross Section (RCS) augmented fitting as follows: 
+
+ppt = ∑4 
+
+> i=0
+
+rcs pi · pi
+
+∑4 
+
+> i=0
+
+rcs pi
+
+. (30) The point-to-distribution measurement model and its Jacobian are computed using the following equation: 
+
+hpt = wrcs || t(t) + R(t)
+
+
+
+RIR Rp + ItIR 
+
+
+
+− ppt || 2, (31) 
+
+Hpt = wrcs 
+
+
+
+B(t), ∂ R(t)(RIR Rp+ItIR )    
+
+> ∂q(t)
+> ∂q(t)
+> ∂xq
+
+, 0, 0
+
+
+
+|| t(t) + R(t)  RIR Rp + ItIR 
+
+ − ppt || 2
+
+. (32) 
+
+Since RCS encodes material-dependent scattering, we miti-gate distributional mismatch by assigning an RCS-informed weight to each correspondence: wrcs = 1/|rcs μ − rcs Rp| where 
+
+rcs μ = 15 ∑4 
+
+> i=0
+
+rcs pi . The propagated uncertainties from (26) are assigned as the measurement covariance of non-planar points. In addition to spatial measurements, we incorporate the rel-ative radial velocity information using the following Doppler measurement model and Jacobian: YANG et al. : GEOMETRICALLY-CONSTRAINED RADAR-INERTIAL ODOMETRY VIA CONTINUOUS POINT-POSE UNCERTAINTY MODELING 5
+
+TABLE I: Evaluation Results in HeRCULES                                                                                                     
+
+> Parking Lot 03 Library 01 Sports Complex 01 Street 01 Bridge 01
+> ATE RPE tRPE rATE RPE tRPE rATE RPE tRPE rATE RPE tRPE rATE RPE tRPE r
+> Fast-LIO2 (LiDAR) 2.345 0.287 0.432 10.372 0.142 0.480 10.884 0.191 1.004 3.784 0.298 0.273 412.212 1.730 0.312 Go-RIO 5.744 0.459 0.221 22.514 1.083 0.509 29.275 0.233 1.190 ---248.884 0.839 1.173 PUA-RIO 6.111 0.390 0.937 296.136 1.876 0.856 20.816 0.269 1.280 39.024 0.371 1.184 ---EKFRIO-TC 4.503 0.160 0.331 17.491 0.239 0.255 20.848 0.218 0.964 24.662 0.318 0.272 ---Ours 1.054 0.208 0.127 1.555 0.090 0.164 6.922 0.149 0.392 2.556 0.104 0.139 7.430 0.050 0.105
+
+The best results are in bold , and the second-best are in underline. 
+
+TABLE II: Evaluation Results in SNAIL-Radar                                                                                              
+
+> 20240113_1 20240113_3 20240115_2 20240123_2 20240123_3
+> ATE RPE tRPE rATE RPE tRPE rATE RPE tRPE rATE RPE tRPE rATE RPE tRPE r
+> Fast-LIO2 (LiDAR) 1.958 0.144 0.372 26.605 0.160 0.161 50.688 0.171 0.186 46.456 0.407 0.164 6.896 0.153 0.200 Go-RIO 13.760 0.636 0.581 175.247 0.837 1.180 ------112.141 0.783 1.641 PUA-RIO 7.964 0.123 1.081 ------------EKFRIO-TC 12.192 0.417 1.136 278.009 2.958 1.528 346.083 3.558 1.999 511.418 1.815 0.733 41.953 1.551 0.821 Ours 0.617 0.054 0.180 16.871 0.061 0.099 44.064 0.103 0.092 36.761 0.068 0.094 5.968 0.054 0.105
+
+hv =
+
+
+
+RIR Rp
+
+⊤ h
+
+R(t)⊤˙t(t) + ωωω(t) × ItIR 
+
+i
+
+, (33) 
+
+Hv =
+
+
+
+RIR Rp
+
+⊤
+
+[G1, G2, 0, 0] , (34) 
+
+G1 = R(t)⊤
+
+ ∂ ˙t(t)
+
+∂ xp
+
+
+
+, G2 = ∂ R(t)˙t(t)
+
+∂ q(t)
+
+∂ q(t)
+
+∂ xq − [ItIR ]∧ ∂ ω ωω(t)
+
+∂ xq .
+
+Additionally, we exploit environment-dependent coefficients 
+
+wpl = Npl   
+
+> Npl +Npt
+
+, wpt = Npt   
+
+> Npl +Npt
+
+in each measurement model. Npl 
+
+and Npt denote the counts of planar and non-planar points in associated measurements, respectively. These weights reg-ulate the relative influence of planar and non-planar residuals under varying environmental conditions. In highly structured environments (e.g., urban areas) where planar features are dominant, the weights emphasize explicit planar constraints. Conversely, in unstructured environments where spurious pla-nar detections are more common, the influence of planar measurements is attenuated. 
+
+D. IMU Residual with Online Gravity Estimation 
+
+For IMU gyroscope readings at time t, we leverage the following measurement model and Jacobian: 
+
+hgyro = ωωω(t) + bg, (35) 
+
+Hgyro =
+
+
+
+03×12 , ∂ ω ωω(t)
+
+∂ xq , 03, I3
+
+
+
+. (36) 
+
+For the accelerometer readings, we isolate the gravity direc-tion from each accelerometer sample and constrain orientation by enforcing collinearity between the estimated gravity vector 
+
+g(t) and the known world-frame gravity Wg. Accordingly, the gravity residual is formulated on the unit-sphere manifold S2:
+
+g(t) = R(t)( ˆa − ba) − ¨t(t), (37) 
+
+hgrav = 1 −
+
+> W
+
+g⊤
+
+|| Wg|| 2
+
+· g(t)
+
+|| g(t)|| 2
+
+, (38) 
+
+Hgrav =
+
+> W
+
+g⊤
+
+|| Wg|| 2
+
+I − g(t)
+
+|| g(t)|| 2
+
+g(t)⊤
+
+|| g(t)|| 2
+
+!
+
+·
+
+
+
+¨B(t), − ∂ R(t)( ˆa − ba)
+
+∂ q(t)
+
+∂ q(t)
+
+∂ xq , R(t), 0
+
+
+
+. (39) 
+
+E. Uncertainty-aware Radar Mapping 
+
+After the state estimation, we transform the newly acquired radar measurements into the world frame and treat them as the mapping candidate. The estimated uncertainties during state estimation are also regarded as a measure of confidence in point selection during the mapping process. During point insertion in ikd-tree [20], any existing point whose estimated uncertainty exceeds that of the incoming sample is pruned and replaced. As shown in Fig. 6, the iterative replacement of high-uncertainty points with lower-uncertainty observations improves map fidelity, ensuring the preservation of reliable radar measurements. V. E XPERIMENT 
+
+A. Experimental Setup and Baselines 
+
+We evaluate our radar-inertial odometry system on three public datasets using 4D Continental radar: HeRCULES [21], 
+
+SNAIL-Radar [22], and HKUST [11]. For HeRCULES ,we utilize Parking Lot 03 , Library 01 , Sports Complex 01 , Street 01 , Bridge 01 , including the campus-scale, city-scale scene with degenerate environ-ment. In SNAIL-Radar , 20240113_1 , 20240113_3 ,
+
+20240115_2 , 20240123_2 , 20240123_3 are exploited for the experiment, covering all sequences in the dataset with SUV. We utilize all three sequences in HKUST for the small-scale indoor evaluation. We compare ours with recent state-of-the-art radar-inertial odometry algorithms: Go-RIO (scan-to-scan matching) [4], PUA-RIO (point uncertainty-aware scan-to-scan matching) [11], and EKFRIO-TC (odometry without scan registration) [23]. We also benchmark our algorithm with LiDAR-Inertial Odometry, Fast-LIO2 [20]. Unfortunately, due to the ab-sence of LiDAR at HKUST , the comparison with LiDAR-Inertial Odometry was only conducted using HeRCULES 
+
+and SNAIL-Radar . Evaluation is performed in root mean square error (RMSE) of Absolute Translation Error (ATE) [m], Relative Pose Error (RPE) on translation (RPE t ) [m /m] and rotation (RPE r) [ ◦/m] with evo evaluator [24]. 
+
+B. Evaluation Result 
+
+Quantitative evaluation results in outdoor datasets are sum-marized in Table. I and II. Cluster-weighted scan-to-scan 6 IEEE ROBOTICS AND AUTOMATION LETTERS. PREPRINT VERSION. ACCEPTED MARCH, 2026 
+
+TABLE III: Evaluation Results in HKUST                                                     
+
+> Sequence_1 Sequence_2 Sequence_3
+> ATE RPE tRPE rATE RPE tRPE rATE RPE tRPE r
+> Go-RIO 5.771 1.348 1.346 6.146 1.808 10.955 3.901 0.903 5.464 PUA-RIO 0.199 0.106 1.880 0.246 0.167 1.839 1.064 0.202 7.542 EKFRIO-TC 0.372 0.122 2.472 0.264 0.167 2.154 3.286 0.372 11.694 Ours 0.146 0.066 0.236 0.656 0.064 0.563 0.356 0.044 0.546 100 50 050 100 150 200
+> x (m)
+> 250
+> 200
+> 150
+> 100
+> 50
+> 0
+> 50
+> y (m)
+> 250
+
+100 50 0 50 100 150 200 
+
+x (m) 
+
+250 
+
+200 
+
+150 
+
+100 
+
+50 
+
+0
+
+50 
+
+> y (m)
+
+250Ground Truth EKFRIO -TC Ours KISS -ICP PUA -RIO 
+
+Fig. 4: Estimated trajectory for Street . Our method (blue) shows the best alignment with the ground-truth trajectory (black) and even surpasses LiDAR-Inertial Odometry (red). 
+
+matching in Go-RIO suffers from sparse radar point clouds, which leads to incorrect residual weighting. Meanwhile, PUA-RIO relies solely on a single source of uncertainty (mea-surement uncertainty) for weighted scan-to-scan matching. Although prior pose estimate inherently influences landmark accuracy, disregarding pose uncertainty during propagation results in inconsistent landmark generation. Furthermore, de-pendency on a single-scan landmark sacrifices geometrical consistency, further degrading odometry estimation. As shown in Fig. 4, this effect is particularly pronounced in Street ,where frequent sensor occlusions are caused by traffic conges-tion. EKFRIO-TC’s performance remains limited due to the omission of spatial information. This strategy can guarantee accuracy in campus-level sequences, but its shortcomings become pronounced in large-scale urban environments. Con-trastingly, our method achieves superior performance in both ATE and RPE by comprehensively propagating the pose uncer-tainty and measurement uncertainty and selecting informative points for robust registration. Moreover, integrating explicit local geometry-guided registration with rigorous uncertainty-aware filtering allows our method to achieve LiDAR-level localization, as illustrated in Fig. 5. Unlike other datasets, HKUST is characterized by indoor en-vironments. Our method consistently demonstrates robust per-formance as represented in Table. III. Interestingly, PUA-RIO achieved the second-best performance. Pose uncertainty accu-mulation is negligible under short-horizon motion, where mea-surement uncertainty-driven weighting remains more effective. The absence of geometric constraints reduces EKFRIO-TC’s sensitivity to substantial wall-induced multipath, yielding per-formance comparable to other baselines. Go-RIO incurs the poor ATE due to registration without reliability quantifica-tion. Additionally, the scarcity of ground returns undermines 
+
+TABLE IV: Ablation study on uncertainty analysis                                                
+
+> Library 01 20240123_2 Sequence_3
+> ATE RPE tRPE rATE RPE tRPE rATE RPE tRPE r
+> EKFRIO-TC 17.491 0.239 0.255 511.418 1.815 0.733 3.286 0.372 11.694 w/o Unc. 21.454 0.138 0.988 72.841 0.256 0.509 0.697 0.213 0.597 w/o Pose Unc. 5.114 0.139 0.976 69.458 0.231 0.481 0.479 0.191 0.589 Full 1.555 0.090 0.164 36.761 0.068 0.094 0.356 0.044 0.546
+
+(a) Proposed (b) Fast-LIO2 (LiDAR) 
+
+Fig. 5: Comparison of odometry and mapping on Parking Lot 
+
+between the proposed method and LiDAR-Inertial Odometry (Fast-LIO2). Our proposed method yields a well-aligned odometry and mapping result, and also achieves LiDAR-level map consistency. 
+
+ground-optimized filtering. Notably, ours achieves higher ATE on Sequence_2 ,which involves high-dynamic maneuvers of a toy racing car. In this scenario, rapid acceleration and deceleration degrade gravity estimation by the IMU, inducing sudden drift in the gravity residual. Despite this, our continuous propagation of both uncertainty effectively mitigates these drifts, resulting in the best performance in RPE. 
+
+C. Effect of Our Uncertainty Analysis 
+
+To demonstrate the benefit of our complete uncertainty propagation in radar, we compare our full method (Full) against two variants: (i) omitting uncertainty analysis (w/o Unc.), (ii) disregarding pose uncertainty propagation while retaining only the measurement uncertainty (w/o Pose Unc.). As Xu et al. [11] have already established the effectiveness of measurement uncertainty, our focus is on the impact of jointly integrating point-pose uncertainty. The quantitative results are summarized in Table. IV. This result clearly shows that our complete uncertainty module outperforms w/o Pose Unc. and uncertainty-ignorant variant w/o Unc., highlighting the necessity of consolidating both pose and measurement un-certainties for a comprehensive analysis in the radar odometry system. However, in large-scale sequence 20240123_2 , the performance gap between w/o Unc. and w/o Pose Unc. is neg-ligible, indicating that without pose-uncertainty propagation, the uncertainty-driven weighting becomes ineffective, and thus yields similar performance to removing uncertainty entirely. Fig. 6 illustrates the qualitative mapping result in Library ,and also demonstrates the effectiveness of jointly consolidating both uncertainty for accurate odometry and mapping. We also conduct experiments to evaluate odometry accuracy under varying uncertainty thresholds used in the mapping process. (The default setting is 0.5.) As shown in Fig. 7, perfor-mance remains stable over a broad range of uncertainties and consistently outperforms other baselines across all datasets. This insensitivity to the uncertainty threshold underscores the YANG et al. : GEOMETRICALLY-CONSTRAINED RADAR-INERTIAL ODOMETRY VIA CONTINUOUS POINT-POSE UNCERTAINTY MODELING 7High 
+
+> Low
+
+(a) Raw mapping without uncertainty 
+
+(b) Odometry and mapping without pose uncertainty 
+
+(c) Odometry and mapping with proposed full uncertainty 
+
+Fig. 6: (a) Raw mapping result without radar uncertainty in 
+
+Library . The points are color-coded by their uncertainty, rang-ing from low (blue) to high (red). Noises from radar returns are projected into the map. (b) Odometry and mapping result without leveraging pose uncertainty propagation. The erroneous measurement still remains on the map. (c) Odometry and mapping result with our full uncertainty module. Our method effectively handles the noise, retaining the reliable points from the measurement. 
+
+TABLE V: Ablation study between uncertainty-aware mapping (Unc. Map) and planar residual (Plane Res.)                                      
+
+> Unc. Map Plane Res. Sports Complex 20240123_3
+> ATE RPE tRPE rATE RPE tRPE r
+> ××9.712 0.203 0.826 17.773 0.246 0.817
+> ×✓20.036 0.354 1.249 22.815 0.251 0.839
+> ✓×7.531 0.192 0.598 15.707 0.247 0.758
+> ✓✓6.922 0.149 0.392 5.968 0.054 0.105
+
+robustness of the proposed pipeline and reduces the need for heuristic hyperparameter tuning. 
+
+D. Enabling Planarity Constraints via Uncertainty 
+
+Explicit modeling of local geometry is mainstream in LiDAR odometry, but is overlooked in radar-based systems due to the sparsity of returns and high measurement noise. We hypothesize that our uncertainty-guided pipeline can restore the utility of planar constraints within radar–inertial odometry. Table. V indicates that the effectiveness of the planarity residual depends critically on the mapping strategy. We evalu-ate this ablation on structured environments where planar con-straints are prominent. Preserving only low-uncertainty returns and combining them with a geometric residual yields sub-stantial odometry gains, whereas applying a planarity residual directly to an unfiltered map degrades performance because the local planarity assumption is frequently violated. Therefore, our central insight is the necessity of the refinement stage during local map construction to enable effective enforcement of planarity constraints. Exploring other scan-wise refinement 0.5 1.0 1.5 2.0 5.0 10.0 Threshold 0510 ATE  Fast-LIO2: 10.372 
+
+(a) HeRCULES: Library 01 0.5 1.0 1.5 2.0 5.0 10.0 Threshold 012ATE  Fast-LIO2: 1.958 
+
+(b) SNAIL-Radar: 20240113_1 0.5 1.0 1.5 2.0 5.0 10.0 Threshold 0.0 0.5 1.0 ATE  PUA-RIO: 1.064 
+
+(c) HKUST: Sequence_3 
+
+Fig. 7: Evaluation result with different uncertainty thresholds in the proposed method (orange, ATE). The gray line denotes the result from second-best baseline. The proposed method maintains stable accuracy across thresholds and still outperforms other baselines. 
+
+TABLE VI: Effect of localizability-constrained update                               
+
+> Library 01 Bridge 01 20240123_2
+> ATE RPE tRPE rATE RPE tRPE rATE RPE tRPE r
+> w/o Loc. 13.082 0.140 0.982 45.836 0.123 0.643 132.911 0.217 0.583 Ours 1.555 0.090 0.164 7.430 0.050 0.105 36.761 0.068 0.094
+
+strategies that could further improve the validity of local geometric assumptions is left for future work. 
+
+E. Effect of Localizability-constrained IEKF update 
+
+The effect of our localizability-constrained update is pre-sented in Table. VI. We use sequences with repetitive struc-tures to induce geometric degeneracy. During the experiment, we observed substantial performance degradation in estimation accuracy without constrained update (w/o Loc.), indicating that our method is effective in suppressing drift under these challenging conditions. The impact of the constrained update becomes evident in Bridge and 20240123_2 , which con-tain repetitive geometrical features on the bridge and tunnel. Although Doppler residual can partially mitigate geometric degeneracy, relying solely on proprioceptive measurements leads to failures in highly dynamic or high-speed scenarios, as shown in the results from EKFRIO-TC in Table. I and II. 
+
+F. Computational Time Analysis 
+
+We analyze the computational cost for 20240115_2 in the SNAIL-Radar dataset, which has the longest distance in our experiments. Analysis was conducted on an Intel i7-12700 CPU with 64 GB of RAM. As illustrated in Fig. 8, our system can fully support real-time operation (over 20 Hz). These find-ings indicate that our approach retains sufficient computational room for extension to fusion with other modalities or multi-radar configurations. 8 IEEE ROBOTICS AND AUTOMATION LETTERS. PREPRINT VERSION. ACCEPTED MARCH, 2026 0 5000 10000 15000 20000 Frame Count 020 40 60 Runtime (ms)   
+
+> Preprocessing Association KF update Mapping Radar Publish Rate: 50ms/scan
+> Fig. 8: Runtime analysis in 20240115_2
+
+VI. C ONCLUSION 
+
+In this paper, we presented a robust uncertainty-aware continuous radar–inertial odometry and mapping framework. We proposed a novel continuous uncertainty propagation method that consolidates point and pose uncertainty in the radar system, yielding adaptive covariances that down-weight uninformative observations and preserve a consistent map for robust registration. Building on this, we find out that exploiting the explicit geometric constraints delivers tangible accuracy improvements when combined with our mapping system. We further incorporated a localizability-constrained IEKF to stabilize estimation in challenging scenarios. Exten-sive experiments on diverse real-world datasets demonstrate consistent improvements over state-of-the-art baselines while maintaining real-time performance. REFERENCES 
+
+[1] K. Harlow, H. Jang, T. D. Barfoot, A. Kim, and C. Heck-man, “A new wave in robotics: Survey on recent mmwave radar applications in robotics,” IEEE Trans. Robot. ,vol. 40, pp. 4544–4560, 2024. [2] D. Lee, M. Jung, W. Yang, and A. Kim, “Lidar odometry survey: recent advancements and remaining challenges,” 
+
+Intl. Service Robot. , vol. 17, no. 2, pp. 95–118, 2024. [3] I. Vizzo, T. Guadagnino, B. Mersch, L. Wiesmann, J. Behley, and C. Stachniss, “Kiss-icp: In defense of point-to-point icp–simple, accurate, and robust registra-tion if done the right way,” IEEE Robot. and Automat. Lett. , vol. 8, no. 2, pp. 1029–1036, 2023. [4] W. Yang, H. Jang, and A. Kim, “Ground-optimized 4d radar-inertial odometry via continuous velocity integra-tion using gaussian process,” in Proc. IEEE Intl. Conf. on Robot. and Automat. , 2025, pp. 3815–3821. [5] Y. Zhuang, B. Wang, J. Huai, and M. Li, “4d iriom: 4d imaging radar inertial odometry and mapping,” IEEE Robot. and Automat. Lett. , vol. 8, no. 6, pp. 3246–3253, 2023. [6] D. C. Herraez, M. Zeller, L. Chang, I. Vizzo, M. Hei-dingsfeld, and C. Stachniss, “Radar-only odometry and mapping for autonomous vehicles,” in Proc. IEEE Intl. Conf. on Robot. and Automat. , 2024, pp. 10 275–10 282. [7] D. C. Herraez, M. Zeller, D. Wang, J. Behley, M. Heid-ingsfeld, and C. Stachniss, “Rai-slam: Radar-inertial slam for autonomous vehicles,” IEEE Robot. and Automat. Lett. , vol. 10, no. 6, pp. 5257–5264, 2025. [8] M. Jung, S. Jung, and A. Kim, “Asynchronous multiple lidar-inertial odometry using point-wise inter-lidar un-certainty propagation,” IEEE Robot. and Automat. Lett. ,vol. 8, no. 7, pp. 4211–4218, 2023. [9] J. Zhang, H. Zhuge, Z. Wu, G. Peng, M. Wen, Y. Liu, and D. Wang, “4dradarslam: A 4d imaging radar slam system for large-scale environments based on pose graph optimization,” in Proc. IEEE Intl. Conf. on Robot. and Automat. , 2023, pp. 8333–8340. [10] C. Yuan, W. Xu, X. Liu, X. Hong, and F. Zhang, “Efficient and probabilistic adaptive voxel mapping for accurate online lidar odometry,” IEEE Robot. and Au-tomat. Lett. , vol. 7, no. 3, pp. 8518–8525, 2022. [11] Y. Xu, Q. Huang, S. Shen, and H. Yin, “Incorporating point uncertainty in radar slam,” IEEE Robot. and Au-tomat. Lett. , vol. 10, no. 3, pp. 2168–2175, 2025. [12] X. Li, H. Zhang, and W. Chen, “4d radar-based pose graph slam with ego-velocity pre-integration factor,” 
+
+IEEE Robot. and Automat. Lett. , vol. 8, no. 8, pp. 5124– 5131, 2023. [13] X. Wu, Y. Chen, Z. Li, Z. Hong, and L. Hu, “Efear-4d: Ego-velocity filtering for efficient and accurate 4d radar odometry,” IEEE Robot. and Automat. Lett. , vol. 9, no. 11, pp. 9828–9835, 2024. [14] D. C. Herraez, F. Kaschner, M. Zeller, D. Muhle, J. Behley, M. Heidingsfeld, D. Cremers, and C. Stach-niss, “Ground-aware automotive radar odometry,” in 
+
+Proc. IEEE Intl. Conf. on Robot. and Automat. , 2025. [15] M. Kaess, A. Ranganathan, and F. Dellaert, “isam: In-cremental smoothing and mapping,” IEEE Trans. Robot. ,vol. 24, no. 6, pp. 1365–1378, 2008. [16] K. Huang, J. Zhao, J. Lin, Z. Zhu, S. Song, C. Ye, and T. Feng, “Log-lio2: A lidar-inertial odometry with efficient uncertainty analysis,” IEEE Robot. and Automat. Lett. , vol. 9, no. 10, pp. 8226–8233, 2024. [17] Z. Cao, W. Talbot, and K. Li, “Resple: Recursive spline estimation for lidar-based odometry,” IEEE Robot. and Automat. Lett. , vol. 10, no. 10, pp. 10 666–10 673, 2025. [18] S. Jung, W. Yang, and A. Kim, “Co-ral: Complementary radar-leg odometry with 4-dof optimization and rolling contact,” in Proc. IEEE/RSJ Intl. Conf. on Intell. Robots and Sys. , 2024, pp. 13 289–13 296. [19] F. Pomerleau, F. Colas, and R. Siegwart, “A review of point cloud registration algorithms for mobile robotics,” 
+
+Foundations and Trends® in Robotics , vol. 4, pp. 1–104, 05 2015. [20] W. Xu, Y. Cai, D. He, J. Lin, and F. Zhang, “Fast-lio2: Fast direct lidar-inertial odometry,” IEEE Trans. Robot. ,vol. 38, no. 4, pp. 2053–2073, 2022. [21] H. Kim, M. Jung, C. Noh, S. Jung, H. Song, W. Yang, H. Jang, and A. Kim, “Hercules: Heterogeneous radar dataset in complex urban environment for multi-session radar slam,” in Proc. IEEE Intl. Conf. on Robot. and Automat. , 2025. [22] J. Huai, B. Wang, Y. Zhuang, Y. Chen, Q. Li, and Y. Han, “Snail radar: A large-scale diverse benchmark for evaluating 4d-radar-based slam,” Intl. J. of Robot. Research , p. 02783649251329048, 2024. [23] C. Kim, G. Bae, W. Shin, S. Wang, and H. Oh, “Ekf-based radar-inertial odometry with online temporal cali-bration,” IEEE Robot. and Automat. Lett. , vol. 10, no. 7, pp. 7230–7237, 2025. [24] M. Grupp, “evo: Python package for the evaluation of odometry and slam.” https://github.com/MichaelGrupp/ evo, 2017.

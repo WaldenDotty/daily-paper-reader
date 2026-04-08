@@ -6,40 +6,56 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-04-07
-- 运行时间：2026-04-07 20:24:53 UTC
+- 最新运行日期：2026-04-08
+- 运行时间：2026-04-08 19:57:22 UTC
 - 运行状态：成功
-- 本次总论文数：6
-- 精读区：2
-- 速读区：4
+- 本次总论文数：12
+- 精读区：1
+- 速读区：11
 
 ### 今日简报（AI）
-今日精选 6 篇前沿论文，深度解析航天器在轨姿态估计与非高斯约束下的轨迹控制技术。
-核心突破在于利用事件相机与类脑芯片提升姿态估计效率，并提出解析法解决非高斯环境下的机会约束控制难题。
-建议关注低功耗神经形态硬件在极端环境下的实战表现，以及复杂动力系统中的鲁棒滤波方案。
-- 详情：[/202604/07/README](/202604/07/README)
+今日深度解析亚米级月球地形重建技术，并速览无人机复杂避障与混合系统控制的前沿进展。
+- 详情：[/202604/08/README](/202604/08/README)
 
 ### 精读区论文标签
-1. [Efficient Onboard Spacecraft Pose Estimation with Event Cameras and Neuromorphic Hardware](/202604/07/2604.04117v1-efficient-onboard-spacecraft-pose-estimation-with-event-cameras-and-neuromorphic-hardware)  
+1. [Sub-metre Lunar DEM Generation and Validation from Chandrayaan-2 OHRC Multi-View Imagery Using an Open-Source Pipeline](/202604/08/2604.01032v2-sub-metre-lunar-dem-generation-and-validation-from-chandrayaan-2-ohrc-multi-view-imagery-using-an-open-source-pipeline)  
    标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：自主交会对接与近距离操作的航天器位姿估计
-2. [Analytic Non-Gaussian Confidence Boundary Method for Chance-Constrained Trajectory Control](/202604/07/2604.04304v1-analytic-non-gaussian-confidence-boundary-method-for-chance-constrained-trajectory-control)  
-   标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：轨道力学中的机会约束轨迹控制
+   evidence：用于表面移动和着陆点特征描述的月球数字高程模型生成
 
 ### 速读区论文标签
-1. [On distinguishing genuine from spurious chaos in planar singular and nonsmooth systems: A diagnostic approach](/202604/07/2603.29243v1-on-distinguishing-genuine-from-spurious-chaos-in-planar-singular-and-nonsmooth-systems-a-diagnostic-approach)  
+1. [Vision-Based End-to-End Learning for UAV Traversal of Irregular Gaps via Differentiable Simulation](/202604/08/2604.02779v1-vision-based-end-to-end-learning-for-uav-traversal-of-irregular-gaps-via-differentiable-simulation)  
+   标签：评分：7.0/10、query:cislunar-dyn-nav
+   evidence：SE(3)中基于视觉的自主导航与控制
+2. [Learning Kalman Policy for Singular Unknown Covariances via Riemannian Regularization](/202604/08/2604.05071v1-learning-kalman-policy-for-singular-unknown-covariances-via-riemannian-regularization)  
+   标签：评分：7.0/10、query:cislunar-dyn-nav
+   evidence：未知噪声协方差下的卡尔曼滤波估计
+3. [Finite-Step Invariant Sets for Hybrid Systems with Probabilistic Guarantees](/202604/08/2604.05102v1-finite-step-invariant-sets-for-hybrid-systems-with-probabilistic-guarantees)  
+   标签：评分：7.0/10、query:cislunar-dyn-nav
+   evidence：混合系统中周期轨道的稳定性分析
+4. [Differentiable Invariant Sets for Hybrid Limit Cycles with Application to Legged Robots](/202604/08/2604.05108v1-differentiable-invariant-sets-for-hybrid-limit-cycles-with-application-to-legged-robots)  
+   标签：评分：7.0/10、query:cislunar-dyn-nav
+   evidence：计算周期性行为和极限环的不变集
+5. [Families of periodic solutions of the 4- and 6-body problem using a gradient-free continuation method](/202604/08/2604.05653v1-families-of-periodic-solutions-of-the-4--and-6-body-problem-using-a-gradient-free-continuation-method)  
+   标签：评分：7.0/10、query:cislunar-dyn-nav
+   evidence：利用延拓法求解N体问题的周期解
+6. [Hi-LOAM: Hierarchical Implicit Neural Fields for LiDAR Odometry and Mapping](/202604/08/2604.01720v1-hi-loam-hierarchical-implicit-neural-fields-for-lidar-odometry-and-mapping)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：自主动力系统中的混沌行为分析
-2. [The Variational Approach in Filtering and Correlated Noise](/202604/07/2604.03001v1-the-variational-approach-in-filtering-and-correlated-noise)  
+   evidence：用于自主导航的激光雷达里程计与建图
+7. [ROS 2-Based LiDAR Perception Framework for Mobile Robots in Dynamic Production Environments, Utilizing Synthetic Data Generation, Transformation-Equivariant 3D Detection and Multi-Object Tracking](/202604/08/2604.02109v1-ros-2-based-lidar-perception-framework-for-mobile-robots-in-dynamic-production-environments-utilizing-synthetic-data-generation-transformation-equivariant-3d-detection-and-multi-object-tracking)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：非线性滤波的变分公式
-3. [Steering with Contingencies: Combinatorial Stabilization and Reach-Avoid Filters](/202604/07/2604.03405v1-steering-with-contingencies-combinatorial-stabilization-and-reach-avoid-filters)  
+   evidence：移动机器人的激光雷达感知与多目标跟踪
+8. [Site selection constraints and options for LILA-Pioneer and LILA-Horizon](/202604/08/2604.02405v1-site-selection-constraints-and-options-for-lila-pioneer-and-lila-horizon)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：自主导航与着陆稳定控制
-4. [CT-VoxelMap: Efficient Continuous-Time LiDAR-Inertial Odometry with Probabilistic Adaptive Voxel Mapping](/202604/07/2604.03747v1-ct-voxelmap-efficient-continuous-time-lidar-inertial-odometry-with-probabilistic-adaptive-voxel-mapping)  
+   evidence：月面任务约束与地月系统动力学
+9. [Geometrically-Constrained Radar-Inertial Odometry via Continuous Point-Pose Uncertainty Modeling](/202604/08/2604.02745v1-geometrically-constrained-radar-inertial-odometry-via-continuous-point-pose-uncertainty-modeling)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：用于稳定精确定位的多传感器融合
+   evidence：用于鲁棒定位的多传感器融合与不确定性建模
+10. [Inversion-Free Natural Gradient Descent on Riemannian Manifolds](/202604/08/2604.02969v1-inversion-free-natural-gradient-descent-on-riemannian-manifolds)  
+   标签：评分：6.0/10、query:cislunar-dyn-nav
+   evidence：黎曼流形上的自然梯度下降用于统计优化
+11. [Periodic Event-Triggered Explicit Reference Governor for Constrained Attitude Control on SO(3)](/202604/08/2604.04041v1-periodic-event-triggered-explicit-reference-governor-for-constrained-attitude-control-on-so3)  
+   标签：评分：6.0/10、query:cislunar-dyn-nav
+   evidence：受限姿态控制与几何指向约束
 
 
 <div class="dpr-home-promo-card">
