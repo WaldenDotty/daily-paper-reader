@@ -1,0 +1,684 @@
+Title: Unifying UAV Cross-View Geo-Localization via 3D Geometric Perception
+
+URL Source: https://arxiv.org/pdf/2604.01747v1
+
+Published Time: Fri, 03 Apr 2026 00:37:16 GMT
+
+Number of Pages: 15
+
+Markdown Content:
+# Unifying UAV Cross-View Geo-Localization via 3D Geometric Perception 
+
+## Haoyuan Li a, Wen Yang* a, Fang Xu b, Hong Tan c, Haijian Zhang a, Shengyang Li c,d and Gui-Song Xia b
+
+> a
+
+School of Electronic Information, Wuhan University, Wuhan 430072, China 
+
+> b
+
+School of Artificial Intelligence, Wuhan University, Wuhan 430072, China 
+
+> c
+
+Technology and Engineering Center for Space Utilization and the Key Laboratory of Space Utilization, Chinese Academy of Sciences, Beijing 100094, China 
+
+> d
+
+School of Aeronautics and Astronautics, University of Chinese Academy of Sciences, Beijing 100049, China 
+
+A R T I C L E I N F O 
+
+Keywords :Cross-view Geo-localization Unmanned Aerial Vehicle Optical Imagery 
+
+A B S T R A C T 
+
+Cross-view geo-localization for Unmanned Aerial Vehicles (UAVs) operating in GNSS-denied environments remains challenging due to the severe geometric discrepancy between oblique UAV imagery and orthogonal satellite maps. Most existing methods address this problem through a decoupled pipeline of place retrieval and pose estimation, implicitly treating perspective distortion as appearance noise rather than an explicit geometric transformation. In this work, we propose a geometry-aware UAV geo-localization framework that explicitly models the 3D scene geometry to unify coarse place recognition and fine-grained pose estimation within a single inference pipeline. Our approach reconstructs a local 3D scene from multi-view UAV image sequences using a Visual Geometry Grounded Transformer (VGGT), and renders a virtual Bird’s-Eye View (BEV) representation that orthorectifies the UAV perspective to align with satellite imagery. This BEV serves as a geometric intermediary that enables robust cross-view retrieval and provides spatial priors for accurate 3 Degrees of Freedom (3-DoF) pose regression. To efficiently handle multiple location hypotheses, we introduce a Satellite-wise Attention Block that isolates the interaction between each satellite candidate and the reconstructed UAV scene, preventing inter-candidate interference while maintaining linear computational complexity. In addition, we release a recalibrated version of the University-1652 dataset with precise coordinate annotations and spatial overlap analysis, enabling rigorous evaluation of end-to-end localization accuracy. Extensive experiments on the refined University-1652 benchmark and SUES-200 demonstrate that our method significantly outperforms state-of-the-art baselines, achieving robust meter-level localization accuracy and improved generalization in complex urban environments. The data, model, and code will be released at https://github.com/Collebt/Uni-CVGL. 
+
+## 1. Introduction 
+
+Unmanned Aerial Vehicle (UAV) geo-localization serves as the cornerstone for autonomous navigation in GNSS-denied environments (Workman et al., 2015; Zheng et al., 2020; Zhu et al., 2023). A fundamental challenge in this task lies in cross-view matching between oblique UAV imagery and orthogonal satellite maps. Due to the drastic viewpoint discrepancy, vertical structures that are clearly visible from the UAV perspective are often collapsed into roofs or become completely invisible in satellite images, resulting in the well-known facade-to-roof ambiguity (Ye et al., 2024b). This severe geometric inconsistency makes reliable cross-view correspondence extremely difficult and remains a long-standing bottleneck for UAV geo-localization systems. Most existing UAV cross-view geo-localization meth-ods(Shetty and Gao, 2019; Li et al., 2024) address this challenge through a decoupled pipeline, where coarse satellite retrieval, view alignment, and pose estimation are treated as separate stages. In such pipelines, retrieval is typically performed using an appearance-based 2D encoder to extract global descriptors for feature matching, while pose estimation is conducted as a subsequent image registration step, as illustrated in Figure 1 (a). Although this design simplifies optimization, features optimized for global place recognition 
+
+> ∗
+
+Corresponding author 
+
+often lack precise geometric interpretability, while pose estimation requires spatially consistent and geometry-aware representations. As a result, errors accumulated during re-trieval cannot be effectively corrected during pose estimation, leading to unstable localization performance under large viewpoint changes. Recent advances (Wang et al., 2025; Mildenhall et al., 2021; Kerbl et al., 2023) in geometry-aware visual repre-sentations provide an opportunity to revisit this problem from a unified perspective. In particular, foundation models with explicit geometric grounding, such as Visual Geometry Grounded Transformers (VGGT), enable the extraction of fea-tures that are simultaneously discriminative at the scene level and informative at the geometric level. Nevertheless, existing methods often exploit such representations only partially, either for retrieval or for alignment, without fully integrating them into a single coherent localization framework. These observations motivate a geometry-centric for-mulation of UAV geo-localization, where retrieval, view alignment, and pose estimation are no longer treated as isolated components, but as tightly coupled sub-tasks operating on a shared geometric representation. Rather than relying on multiple task-specific features or stage-wise processing, we argue that all three tasks should be jointly supported by a single geometry-aware feature space, ensuring spatial consistency throughout the localization process. Page 1 of 15   
+
+> arXiv:2604.01747v1 [cs.CV] 2 Apr 2026 Local Matching Place Recognition
+> 2D -view Distortion Separated Processes
+> Unified Model 3D -spatial Perception
+> Satellite Reference
+> UAV Query
+> Retrieval
+> PnP
+> (a) Previous
+> (b) Ours
+> Camera Pose
+> Place Recognition
+> Pose
+> Estimation
+> 3-DoF Pose BEV view
+> View
+> Alignment
+> UAV Multi -view
+> Satellite Reference
+> Encoder
+> Encoder
+> 3D Encoder Figure 1: Framework Comparison. We show the comparison with existing two-stage UAV geo-localization methods and our unified UAV geo-localization framework.
+
+In this paper, we propose a unified geometry-aware UAV geo-localization framework that integrates satellite retrieval, view alignment, and precise pose estimation within a single model. As illustrated in Figure 1 (b), our approach reconstructs a local 3D scene from UAV image sequences and renders a satellite-aligned bird’s-eye-view (BEV) repre-sentation for pose estimation, both of which are derived from a single 3D feature representation. This unified feature serves as the common geometric foundation for all localization sub-tasks: it supports coarse satellite retrieval, guides cross-view alignment through BEV rendering, and enables fine-grained 3-DoF pose regression within a geometry-consistent inference pipeline. By eliminating task-specific feature frag-mentation, our framework effectively mitigates the facade-to-roof ambiguity and enforces geometric consistency across all stages of localization. Our contributions extend beyond architectural unification to the structural design of cross-view interaction under multi-ple location hypotheses. In large-scale UAV geo-localization, retrieval and alignment are inevitably performed against a gallery of satellite candidates. When all retrieved candidates are processed within a shared attention space, standard atten-tion mechanisms allow feature interference across competing hypotheses, leading to degraded geometric consistency and unnecessary computational overhead. To address this issue, we introduce a Satellite-wise Attention Block, which enforces hypothesis-isolated interaction between the reconstructed UAV scene and each satellite candidate. Instead of jointly attending to all satellite features, our design conditions the cross-view interaction on individual satellite hypotheses, ensuring that each candidate is aligned independently within its own feature context. This structural isolation not only preserves the geometric integrity required for precise align-ment and pose estimation, but also reduces the computational complexity of multi-candidate registration from quadratic to linear with respect to the number of satellite candidates. Finally, to rigorously evaluate fine-grained localization performance under this unified setting, we release a recali-brated version of the University-1652 dataset with precise 3-DoF pose annotations and spatial overlap-aware evalu-ation protocols. Extensive experiments demonstrate that this geometry-first and hypothesis-isolated design signif-icantly outperforms state-of-the-art baselines, achieving robust meter-level localization accuracy and strong zero-shot generalization across diverse environments. The main contributions of this work are summarized as follows: 
+
+• We introduce a unified UAV geo-localization frame-work that jointly performs satellite retrieval, view align-ment, and pose estimation within a single model, using a shared geometry-aware VGGT feature representation. 
+
+• We propose a Satellite-wise Attention Block that enables interference-free alignment between the re-constructed UAV scene and multiple satellite candi-dates with linear computational complexity, improving robustness in large-scale search scenarios. 
+
+• We contribute a recalibrated version of the University-1652 dataset with precise coordinate annotations and spatial overlap-aware evaluation protocols, facilitat-ing rigorous assessment of end-to-end UAV geo-localization performance. Our model achieves robust performance in meter-level UAV geo-localization, demonstrating superior robustness in challenging large-scale environments. The remainder of this paper is organized as follows. Sec-tion 2 reviews related work on cross-view geo-localization, fine-grained pose estimation, and end-to-end geo-localization. Section 3 describes the proposed framework in detail, includ-ing an overview of the pipeline, the satellite-wise attention module, and the unified camera pose prediction process. Experimental results are presented in Section 4, where we evaluate the proposed approach on multiple datasets and provide a comprehensive analysis of its robustness and generalization ability. Further discussion is provided in Section 5. Finally, Section 6 concludes the paper. 
+
+## 2. Related Work 
+
+This section reviews recent advancements pertinent to this study, categorizing the literature into three primary streams: UAV cross-view retrieval, fine-grained image matching, and end-to-end geo-localization architectures. 
+
+2.1. UAV Cross-View Retrieval 
+
+Cross-view image retrieval constitutes the coarse-level phase of geo-localization, tasked with identifying the most 
+
+> Page 2 of 15
+
+relevant satellite patch from a large-scale database using an oblique UAV query (Zheng et al., 2020; Zhu et al., 2023). Early approaches (Workman et al., 2015; Krizhevsky et al., 2017) were predominantly based on Convolutional Neural Networks (CNNs) trained with metric learning objectives. Foundational works (Liu and Li, 2019) employed Siamese architectures with VGG or ResNet backbones, optimizing Contrastive or Triplet losses to learn view-invariant global descriptors (Simonyan and Zisserman, 2014; He et al., 2016). To address the spatial information loss inherent in global pooling, partition-based strategies, such as the Local Pattern Network (LPN) (Wang et al., 2021), introduced square-ring partitioning to enforce rotation-invariant spatial correspondence. While this strategy became a cornerstone for processing nadir imagery, it struggles with the severe projective distortions characteristic of oblique UAV views. Recently, the paradigm has shifted toward Vision Trans-formers (ViTs) (Dosovitskiy, 2020) and large-scale Foun-dation Models (Woo et al., 2023; Oquab et al., 2024). Architectures such as TransGeo (Zhu et al., 2022), Sam-ple4Geo (Deuser et al., 2023), and FSRA (Dai et al., 2022) leverage self-attention mechanisms to capture long-range dependencies, implicitly modeling geometric layouts to achieve state-of-the-art retrieval performance. More recently, research has focused on bridging the “domain gap” via novel view synthesis and multimodal learning. For instance, the Panorama-to-BEV network (Ye et al., 2024a), Satellite-to-Street models (Toker et al., 2021), and UAV-to-Satellite networks (Tian et al., 2022) explicitly synthesize ground or BEV representations to mitigate perspective discrepancies. Concurrently, multimodal approaches like MMGeo (Ji et al., 2025) and CrossText2Loc (Ye et al., 2025) augment visual features with textual descriptions, enhancing retrieval robust-ness in repetitive environments through semantic reasoning. 
+
+2.2. Fine-Grained UAV Image Matching 
+
+While retrieval constrains the search space, fine-grained matching is essential for achieving meter-level precision. This task involves establishing dense pixel-wise correspondences between perspective UAV images and orthographic satellite maps. Conventional handcrafted descriptors, such as SIFT (Lowe, 2004), lack robustness against the extreme viewpoint changes inherent in this domain. Consequently, the field has adopted deep feature matching paradigms. The combination of SuperPoint and SuperGlue (DeTone et al., 2018; Sarlin et al., 2020; Lindenberger et al., 2023) marked a significant advancement, utilizing graph neural networks to reject geo-metrically inconsistent outliers effectively. The current state-of-the-art has evolved toward detector-free methods like LoFTR series (Sun et al., 2021; Wang et al., 2024), which perform dense or semi-dense matching on coarse feature grids using transformers. It demonstrates supe-rior efficacy in low-texture regions where traditional keypoint detectors fail. However, geometric verification remains a bot-tleneck for these 2D-based approaches. Standard Perspective-n-Point (PnP) solvers (Zheng et al., 2013) typically rely on a “planarity assumption”, treating the satellite map as a flat surface. This simplification introduces significant errors when matching facade points in UAV images to roof points in satellite maps, often leading to substantial pose drift in urban canyons (Dhaouadi et al., 2025). 
+
+2.3. End-to-End Geo-Localization Architectures 
+
+To scale visual geo-localization to large environments, early studies (Sarlin et al., 2019; Hughes et al., 2020; Li et al., 2023) adopted hierarchical pipelines that decouple global retrieval from local feature matching. While effective in practice, these designs rely on stage-wise optimization, which often leads to suboptimal representations for downstream pose estimation. To alleviate this limitation, more recent efforts have explored end-to-end architectures that integrate retrieval and matching into a single differentiable framework (Shetty and Gao, 2019; Song et al., 2025). In parallel, several works in the ground-to-aerial domain (Berton et al., 2022; Trivigno et al., 2023) have investigated direct regression of meter-level locations from street-view imagery, aiming to bypass explicit matching altogether. More recently, the emergence of 3D perception models has enabled a new class of UAV geo-localization approaches that incorporate explicit geometric reasoning (Li et al., 2025; Liu et al., 2025; Ju et al., 2025). These methods leverage 3D reconstruction paradigms, such as Neural Radiance Fields (NeRF) (Mildenhall et al., 2021), 3D Gaussian Splatting (3DGS) (Kerbl et al., 2023), and the Visual Geometry Grounded Transformer (VGGT) (Wang et al., 2025), marking a departure from purely implicit “black-box” regression. By explicitly reconstructing the underlying 3D scene, these approaches show potential to predict camera poses that are geometrically consistent with physical constraints, offering improved interpretability over heatmap-based or coordinate-regression models. Despite their promise, existing geometry-explicit methods face notable practical limitations. Many 3D reconstruction pipelines are computationally expensive, rely on slow Structure-from-Motion (SfM) initialization (Schonberger and Frahm, 2016; Pan et al., 2024), or are restricted to offline training-time augmentation. As a result, their deployment in large-scale or time-sensitive localization scenarios remains challenging. Consequently, the field still lacks a unified end-to-end framework that combines explicit geometric modeling with efficient and scalable inference. From a broader perspective, current methods can be categorized into two paradigms: implicit models, which offer high computational efficiency but lack explicit geometric interpretability, and explicit reconstruction-based models, which provide accurate geometric reasoning at the cost of substantial computational overhead. Our work positions itself between these two extremes. By anchoring the lo-calization pipeline on the VGGT, we retain the efficiency and generalization capability of implicit representations while enabling instant, explicit 3D scene prediction without SfM initialization. Building upon this representation, we synthesize a satellite-aligned BEV that orthorectifies the UAV perspective and enforces geometric consistency. This design yields a unified framework that jointly supports retrieval,     
+
+> Page 3 of 15 BEV View
+> Absolute Pose
+> Final 3 -DoF Position
+> UAV Patch Tokens VGGT UAV Multi -view Query
+> Offline Satellite Gallery
+> Top -k Satellite
+> Patch Tokens
+> Satellite -wise
+> Attention
+> Feature
+> Retrieval
+> BEV Prediction
+> DINO
+> DINO
+> DINO
+> View
+> Alignment
+> Frame
+> Atten
+> Global
+> Atten
+> Updated BEV
+> Satellite Pose
+> Scene Ground
+> BEV Pose
+> Lat : 34.05
+> Lon: -78.24
+> Yaw: 45 °
+
+Figure 2: Overview of the unified UAV geo-localization pipeline. Given a sequence of oblique UAV query images, the pipeline extracts the representation using VGGT to reconstruct a local 3D scene. Based on this shared representation, a satellite-aligned BEV is rendered to support coarse-level satellite retrieval. The retrieved satellite candidates are then independently aligned with the reconstructed 3D scene within the same feature space, enabling fine-grained regression of the absolute 3-DoF UAV pose (GPS coordinates and heading). 
+
+alignment, and pose estimation, achieving a favorable balance between localization accuracy and inference efficiency. 
+
+## 3. Methodology 
+
+To address the fundamental geometric inconsistency between oblique UAV imagery and orthogonal satellite maps, we propose a unified, geometry-aware UAV geo-localization framework that jointly performs place retrieval, view alignment, and absolute pose estimation within a single inference pipeline. Rather than treating these tasks as separate stages, our framework formulates them as coupled inference objectives supported by a shared geometric representation. 
+
+3.1. Unified UAV Geo-localization Framework 
+
+As illustrated in Figure 2, a multi-view UAV query sequence and a satellite image gallery are processed to finally regress the absolute 3-DoF UAV pose (geographic position and heading). At the core of the framework lies a shared 3D perspective transformer, VGGT, which explicitly recon-structs the local scene geometry from the UAV inputs. This reconstructed scene serves as a persistent geometric substrate throughout the pipeline, enabling retrieval, alignment, and pose estimation to be performed consistently within the same spatial context. Specifically, VGGT simultaneously predicts a local 3D scene representation and synthesizes a satellite-aligned Bird’s-Eye View (BEV). The BEV acts as a geometric bridge that orthorectifies the oblique UAV perspective, allowing direct interaction with satellite imagery while preserving spatial consistency. Crucially, all subsequent inference steps operate on this unified geometry-aware representation, without introducing decoupled task-specific features. Based on this formulation, the proposed framework sup-ports three tightly coupled inference objectives: (1) Unified Spatial Scene Representation , which explicitly reconstructs the local 3D geometry and renders a satellite-aligned BEV; (2) Geometry-Aware Coarse Retrieval , which performs place recognition directly in the BEV space to identify plausible satellite candidates; and (3) Fine-Grained Pose Estimation via View Alignment , which integrates the retrieved satellite imagery with the reconstructed 3D scene to refine the absolute UAV pose. Together, these objectives form a single geometry-consistent inference process, enabling accurate and robust UAV geo-localization. 
+
+Unified Spatial Scene Representation. To address the severe geometric deformations inherent between oblique UAV imagery and orthogonal satellite maps, we employ a spatial geometry model that projects both modalities into a unified canonical space. Initially, the UAV branch processes the 𝑁 input image sequence (𝑢 ) = { 𝐼 (𝑢 )1 , ..., 𝐼 (𝑢 ) 
+
+> 𝑁
+
+} to predict an initial 3D scene representation. This procedure yields both the estimated extrinsic parameters of the UAV cameras and a dense point cloud of the underlying scene. Subsequently, the model generates a BEV estimation to explicitly simulate a satellite-aligned viewpoint from the reconstructed scene. This BEV representation serves as a spatial intermediary, transforming the UAV perspective into a global, orthogonal coordinate system compatible with satellite imagery. By unifying the geometric embedding space, we effectively mitigate the perspective distortions that typically degrade cross-view feature matching performance. 
+
+Geometry-Aware Coarse Retrieval. In large-scale UAV geo-localization environments, efficient place recognition is a prerequisite for constraining the search space. Conventional 
+
+Page 4 of 15 methods typically extract global descriptors directly from UAV oblique images for matching against a satellite gallery. However, the extreme perspective disparity between oblique UAV photography and orthogonal satellite maps frequently results in feature misalignment and retrieval failure. To cir-cumvent this limitation, we utilize the BEV representation to construct global features. Since the synthesized BEV shares the orthogonal projection characteristics of satellite imagery, it yields significantly more robust feature correspondences. We extract a global descriptor 𝐠 (𝐵 ) from the predicted BEV image. Correspondingly, global descriptors are extracted from the satellite gallery, denoted as 𝑠 = { 𝐠 (𝑠 )1 , ..., 𝐠 (𝑠 ) 
+
+> 𝑀
+
+}. We formulate the place recognition task as a retrieval problem to identify the top-𝑘 satellite candidates: 
+
+𝐶 𝑘 = { 𝐼 (𝑠 )1 , ..., 𝐼 (𝑠 ) 
+
+> 𝑘
+
+}= arg max 𝑠 {𝑑 (𝐠 (𝐵 ), 𝐠 (𝑠 )1 ), ..., 𝑑 (𝐠 (𝐵 ), 𝐠 (𝑠 ) 
+
+> 𝑀
+
+)} , (1) where 𝐶 𝑘 denotes the satellite candidates with top-𝑘 highest score, and 𝑑 (⋅, ⋅) denotes the distance between features. 
+
+Fine-Grained Pose Estimation. After identifying a set of plausible satellite candidates, the proposed framework refines the UAV location by performing geometry-consistent view alignment within the shared 3D representation. Rather than treating pose estimation as a separate post-retrieval step, alignment is formulated as the core geometric operation that jointly validates satellite candidates, updates the BEV view, and estimates precise camera poses. Specifically, each retrieved satellite image is independently registered against the reconstructed 3D scene predicted by VGGT. Both UAV scene features and satellite features are embedded in the same feature space, enabling direct spatial correspondence without introducing task-specific representations. The model estimates relative camera poses that are consistent with the underlying scene geometry. The final absolute 3-DoF UAV pose is obtained by aggregating the alignment results across satellite candidates, favoring geometrically consistent hypotheses. 
+
+3.2. Visual Patch Feature Extraction 
+
+Visual patch features serve as the fundamental com-ponents for converting raw images into high-dimensional features for both 3D scene representation and global place recognition. The input image 𝐼 𝑖 ∈ ℝ𝐻 ×𝑊 ×3 is patchified into patches through a pre-trained DINOv2 backbone, yielding a set of patch tokens 𝐭 (𝑖 ) ∈ ℝ𝐿 ×𝐷 , where 𝐿 is the number of patches and 𝐷 is the feature dimension. These tokens are then utilized in two distinct pathways: 
+
+Geometry Scene Construction. To capture the 3D structure of the scene, the patch tokens 𝐭 (𝑖 ) of image 𝐼 𝑖 are fed into the attention layers of the VGGT. Here, the tokens undergo frame-wise and global self-attention mechanisms to effectively model the spatial relationships and learn the underlying scene geometry. The output VGGT features are utilized for camera pose estimation and point cloud prediction. 
+
+Global Feature Representation. For coarse-level place recognition, we aggregate the patch tokens of BEV images and satellite images into a compact global descriptor 𝐠 𝑖 .We employ Generalized Mean (GeM) pooling to suppress background noise and emphasize salient features: 
+
+𝐠 𝑖 = GeM (𝐭 (𝑖 )) = 
+
+(
+
+1
+
+𝐿 
+
+> 𝐿
+
+∑
+
+> 𝑗 =1
+
+(𝐭 (𝑖 ) 
+
+> 𝑗
+
+)𝑝 
+
+) 1
+
+> 𝑝
+
+, (2) where 𝐭 (𝑖 ) 
+
+> 𝑗
+
+denotes the 𝑗 -th token of image 𝐼 𝑖 and 𝑝 = 3 is the pooling parameter. This yields a robust global representation suitable for efficient retrieval. 
+
+3.3. Bird’s Eye View Prediction 
+
+Prior methods typically learn implicit semantic consis-tency between cross-view pairs directly from 2D images. However, these pairs often contain inherent view biases specific to the collection dataset, causing models to overfit and limiting generalization. We posit that effective cross-view geo-localization relies fundamentally on extracting spatial geometry perspectives from images. We hypothesize that geometry-centric models like VGGT hold significant potential for cross-view geo-localization by predicting a BEV representation that explicitly bridges the viewpoint gap. We then predict the BEV feature using the output point cloud from the VGGT prediction heads. 
+
+BEV Camera Pose Prediction. To synthesize a satellite-compatible view, we estimate a BEV camera, parameterized by extrinsics [𝐑 BEV |𝐓 BEV ], that aligns with the geometric ground plane of the reconstructed scene. First, we estimate the dominant ground plane 𝜋 𝑔𝑟𝑜𝑢𝑛𝑑 by analyzing the spatial distribution of the reconstructed 3D point cloud 𝐩 using a plane fitting algorithm (e.g., RANSAC). We determine the plane parameters such that points 𝐱 on the plane satisfy 𝐧 ⊤𝐱 + 𝑑 = 0 , where 𝐧 ∈ ℝ3 denotes the unit normal vector and 𝑑 is the scalar offset. The rotation matrix 𝐑 BEV is constructed to align the virtual camera’s optical axis with the scene’s vertical axis (parallel to 𝐧 ), ensuring the BEV camera plane is parallel to 𝜋 𝑔𝑟𝑜𝑢𝑛𝑑 . To determine the translation vector 𝐓 BEV , we position the virtual camera to cover the semantic center of the reconstructed scene. We calculate the centroid ̄ 𝐩 of the reconstructed 3D point cloud. The virtual camera center 
+
+𝐂 BEV is then placed above this anchor along the normal vector: 
+
+𝐂 BEV =̄ 𝐩 + 𝐧 . (3) Finally, the translation vector is derived as 𝐓 BEV =−𝐑 BEV 𝐂 BEV . This formulation ensures that the synthesized BEV image effectively orthorectifies the scene, mitigating the perspective distortions that typically degrade cross-view feature matching performance. 
+
+BEV Feature Aggregation. Once the virtual BEV cam-era pose is established, we aggregate the BEV features map for retrieval. Given the reconstructed scene point cloud   
+
+> Page 5 of 15 Satellite -wise
+> Attention
+> Layer ×N
+> Feature
+> Validation
+> Geometric
+> Validation
+> Cameras
+> Pointcloud
+> Decoder
+> Final
+> Feature
+> UAV Images  Satellite 1  Satellite N
+> Frame -wise
+> Attention
+
+𝑲 , 𝑽 
+
+𝑸 𝒊 Figure 3: Satellite-wise Attention Block. The proposed satellite-wise attention block lets the satellite tokens attend to the UAV tokens independently, followed by the candidate validations. 
+
+𝐩 ∈ ℝ𝑁 𝑝 ×3 and associated color features 𝐜 ∈ ℝ𝑁 𝑝 ×3 , we first transform all points into the BEV camera coordinate system: 
+
+𝐩 ′ = 𝐑 BEV 𝐩 + 𝐓 BEV . (4) To generate a scale-invariant representation robust to varying scene densities, we employ an adaptive orthographic projection. The coordinates are normalized to the unit interval to fit within the viewport: 
+
+𝐮 = 𝐩 ′ −̄ 𝐩 ′
+
+2 ⋅ 𝑆 𝑚𝑎𝑥 
+
++ 0 .5, (5) where 𝑆 𝑚𝑎𝑥 denotes the maximum spatial extent of point cloud, ̄ 𝐩 ′ denotes the centroid of transformed planar coordi-nates. Finally, the normalized points 𝐮 are discretized onto a downsampled pixel grid 𝟙 ∈ ℝ𝐻 ′×𝑊 ′×3 . The pixel values at grid location (𝑢 𝑥 , 𝑢 𝑦 ) are assigned the corresponding color values 𝐜 , resulting in the BEV query feature used for satellite retrieval. 
+
+3.4. Candidate Satellite Pose Estimation 
+
+To robustly anchor the local 3D reconstruction to the global satellite frame, we evaluate the geometric consistency of the retrieved satellite candidates relative to the UAV scene. This process involves effective candidate geometric prediction and selecting the optimal reference for final geo-localization, as illustrated in Figure 3. 
+
+Satellite-wise Attention. When passing the satellite candidates to the VGGT feature, this process necessitates an interaction between the satellite tokens and the UAV scene tokens on frame-wise attention and global attention. Let 𝐭 (𝑢 ) ∈
+
+ℝ𝑁 𝑢 ×𝐷 denote the set of UAV scene tokens derived from the VGGT reconstruction, and let 𝐭 (𝑠 ) = { 𝐭 (𝑠 ) 
+
+> 𝑖
+
+∈ ℝ𝑁 𝑠 ×𝐷 }𝐾 𝑖 =1 
+
+denote the sets of tokens for the 𝐾 retrieved satellite can-didates. The conventional global attention is suboptimal for two primary reasons: 1) Allowing attention interactions between 𝐭 (𝑠 ) 
+
+> 𝑖
+
+and 𝐭 (𝑠 ) 
+
+> 𝑗
+
+(𝑖 ≠ 𝑗 ) introduces noise and prevents the isolation of valid geometric cues. 2) The computational cost scales as 𝑂 (( 𝑁 𝑢 + ∑ 𝑁 𝑠 )2), which becomes prohibitive when processing dense satellite candidates. To address these challenges, we propose a streamlined at-tention mechanism derived from the properties of the VGGT architecture. The VGGT employs an alternating structure of frame-wise attention and global attention, governed by residual learning dynamics: 
+
+𝑍 = GlobalAttn (̂𝑍 ) + ̂ 𝑍, (6) where ̂ 𝑍 represents the output of the preceding frame-wise attention layer. We posit that the frame-wise attention is sufficient for aggregating the intrinsic context within a single satellite image (intra-view reasoning). Consequently, the subsequent global attention layer should be functionally decoupled to focus exclusively on inter-view geometric registration (alignment with the UAV scene). Decomposing the global attention update for the 𝑖 -th satellite candidate reveals: 
+
+Δ𝑍 (𝑠 ) 
+
+> 𝑖
+
+≈ 𝐴𝑡𝑡𝑛 (Self )
+
+⏟⏞⏞⏟⏞⏞⏟ 
+
+> Redundant Update
+
++ 𝐴𝑡𝑡𝑛 (UAV ↔Sat 𝑖 )
+
+⏟⏞⏞⏞⏞⏞⏞⏞⏞⏟⏞⏞⏞⏞⏞⏞⏞⏞⏟ 
+
+> Geometric Alignment
+
++ 𝐴𝑡𝑡𝑛 (Sat 𝑖 ↔Sat 𝑗 )
+
+⏟⏞⏞⏞⏞⏞⏞⏞⏞⏟⏞⏞⏞⏞⏞⏞⏞⏞⏟ 
+
+> Irrelevant Noise
+
+.
+
+(7) Since the intrinsic identity Δ𝑍 (𝑠 ) 
+
+> 𝑖
+
+is preserved via the residual connection, the 𝐴𝑡𝑡𝑛 (Self ) term provides marginal in-formation gain. The 3-th term between satellites incurs noise and high computational cost. Therefore, we hypothesize that the geometric alignment can be approximated by exclusively calculating the cross-correlation between the satellite queries and the UAV scene. Based on this derivation, we introduce the Satellite-wise Cross-Attention Block. Unlike standard global attention, we construct an asymmetric attention map where the satellite to-kens serve as queries, while the UAV scene tokens exclusively serve as keys and values. Formally, for the i-th satellite candidate 𝑡 (𝑠 ) 
+
+> 𝑖
+
+, we formulate the projection matrices as follows: 
+
+𝐐 𝑖 = 𝐖 𝑄 𝐭 (𝑠 ) 
+
+> 𝑖
+
+, 𝐊 = 𝐖 𝐾 𝐭 (𝑢 ), 𝐕 = 𝐖 𝑉 𝐭 (𝑢 ). (8) Here, 𝐊 and 𝐕 are shared across all satellite candidates, computed solely from the UAV scene tokens. The update rule for the satellite tokens is then defined as: Output (𝐭 (𝑠 ) 
+
+> 𝑖
+
+) = softmax 
+
+( 𝐐 (𝑠 ) 
+
+> 𝑖
+
+𝐊 ⊤
+
+√𝑑 𝑘 
+
+)
+
+𝑉 . (9) The updated feature 𝑍 (𝑠 ) 
+
+> 𝑖
+
+is obtained by adding this cross-attention output to the residual stream ̂ 𝑍 (𝑠 ) 
+
+> 𝑖
+
+.This design yields a substantial reduction in computa-tional complexity. By pruning the satellite tokens from the 
+
+Page 6 of 15 UAV Images of 0173      
+
+> Softmax !(𝑆 )
+> UAV Images of 0173
+> 𝑆
+> 0173 / ( GT )
+> 0152 / IoU= 0.5
+> 0146 / IoU= 0.4
+> 0238 / IoU=0
+> 0211 / IoU= 0.2
+> 0301 / IoU=0
+> 0159 / IoU=0
+> 0175 / IoU=0
+> 0347 / IoU=0
+> 0080 / IoU=0
+> Satellite Images
+> (ID / IoU)
+> 1.0
+> 0.0
+
+Figure 4: Similarity Score of Features. 
+
+Key/Value set, we transform the complexity from quadratic 
+
+𝑂 (( 𝑁 𝑢 + ∑ 𝑁 𝑠 )2) to linear with respect to the satellite candidates 𝑂 (𝑁 𝑢 ⋅∑ 𝑁 𝑠 ). This allows for the efficient parallel processing of multiple location hypotheses without cross-contamination, ensuring that the feature propagation remains theoretically sound via the residual path while maximizing inference speed. 
+
+Geometric Validation. For each retrieved satellite candi-date 𝐼 (𝑠 ) 
+
+> 𝑖
+
+∈ 𝐶 𝑘 , we estimate its camera pose [𝐑 sat | 𝐓 sat ] in the world coordinate of the above UAV 3D scene. We project this camera pose into the initial BEV coordinate [𝐑 BEV | 𝐓 BEV ]
+
+for validation: 
+
+𝐓 𝑖 = ( 𝐑 BEV )⊤(𝐓 𝑖  
+
+> sat
+
+− 𝐓 BEV ). (10) This local translation 𝐓 𝑖 represents the offset of the satellite candidate from the reconstructed scene center. We then employ a dual-criteria validation strategy based on visual coverage and spatial proximity: 1) Visual Coverage: We calculate the number of valid 3D points 𝑁 𝑖 𝑣𝑎𝑙𝑖𝑑 from the satellite view that exceed a dynamic confidence threshold 𝜏 𝑐𝑜𝑛𝑓 .2) Spatial Proximity: We compute the 𝐿 2 distance offset between the estimated bev view and the satellite poses in the 2D horizontal plane 𝑑 𝑖 = ‖𝐓 𝑖 [0 ∶ 2] − 𝐂 BEV [0 ∶ 2] ‖22.From the set of valid candidates, we select the optimal satellite reference by maximizing a combined score that rewards high visual coverage and penalizes spatial distance: 
+
+𝑆 𝑖 = 𝑁 𝑖 𝑣𝑎𝑙𝑖𝑑 
+
+∑ 𝑁 𝑣𝑎𝑙𝑖𝑑 
+
+− 𝑑 𝑖 
+
+max( 𝑑 ) . (11) The candidate 𝐼 ∗ 
+
+> 𝑠
+
+with the highest score 𝑆 ∗ is selected as the primary reference. Its pose 𝐄 ∗ 
+
+> 𝑠
+
+is then used to refine the BEV extrinsic [𝐑 BEV |𝐓 BEV ], and its corresponding high-confidence 3D points are merged into the rendering pipeline to enhance the final BEV visualization and pose estimation accuracy. 
+
+Feature Similarity Validation. Beyond explicit geomet-ric constraints, we explore an implicit semantic verification strategy leveraging the rich feature representations learned by VGGT. We posit that the high-dimensional VGGT features encode sufficient geometric and semantic information to dis-tinguish between true positive satellite matches and visually similar but geographically distinct distractors. To quantify this, we compute the feature similarity matrix between the retrieved satellite candidates and the UAV query sequence. For the 𝑖 -th satellite candidate and the 𝑗 -th UAV image, the similarity score 𝑆 𝑖,𝑗 is computed as the mean similarity between their VGGT feature tokens: 
+
+𝑆 𝑖,𝑗 = 1
+
+𝑁𝑀 
+
+> 𝑁
+
+∑
+
+> 𝑛 =1
+> 𝑀
+
+∑
+
+> 𝑚 =1
+
+(𝐟 (𝑖 ) 
+
+> 𝑛
+
+𝐟 (𝑗 )⊤𝑚 
+
+) , (12) where 𝐟 (𝑖 ) ∈ ℝ𝑁 ×𝐷 and 𝐟 (𝑗 ) ∈ ℝ𝑀 ×𝐷 denote the VGGT feature sets for the satellite and UAV images, respectively. As visualized in Figure 4, this similarity score 𝑆 (left) exhibits a strong correlation with spatial overlap. Satellite tiles that physically overlap with the UAV’s field of view— even with a marginal Intersection-over-Union (IoU) as low as 0.2—yield significantly higher similarity scores compared to non-overlapping neighbors. This indicates that the VGGT features successfully capture shared geometric substructures robust to viewpoint changes. By applying a softmax operation over the candidate scores, the ground-truth tile (or the candidate with maximum overlap) consistently emerges with a dominant probability score (right). This peaked distribution provides a highly reliable signal for positive sample selection, effectively filtering out geometric outliers that lack semantic and geometric consistency. 
+
+3.5. Absolute Pose Prediction 
+
+The geometry-aware model outputs relative pose esti-mates for both the UAV cameras and the retrieved satellite images in a shared, scale-ambiguous local coordinate system. To recover the absolute geo-coordinates (GPS and heading), we align the local reconstruction with the real-world scale and the global coordinate frame defined by the satellite imagery. 
+
+Spatial Scale Estimation. We first determine the metric scale factor 𝛼 relating the local reconstruction units to real-world meters. We extract high-confidence 3D points 
+
+𝐩 sat corresponding to the satellite view from the model’s predictions. The scale is computed by comparing the spatial range of these points against the known physical resolution of the satellite image: 
+
+𝛼 =
+
+√(𝑊 ⋅ 𝛿 )2 + ( 𝐻 ⋅ 𝛿 )2
+
+| max( 𝐩 sat ) − min( 𝐩 sat )|2
+
+, (13) where 𝑊 , 𝐻 are the satellite image dimensions in pixels, and 
+
+𝛿 is the ground resolution (meters/pixel) calibrated from the database. 
+
+UAV Coordinate Transformation. Let [𝐑 UAV |𝐓 UAV ]
+
+and [𝐑 sat |𝐓 sat ] denote the estimated camera-to-world ex-trinsics for a UAV frame and the satellite reference image, respectively. We transform the UAV position into the satellite-centered frame: 
+
+𝐓 𝑟𝑒𝑙 = 𝛼 ⋅ 𝐑 ⊤
+
+> sat
+
+(𝐓 UAV − 𝐓 sat ). (14) 
+
+Global Geo-Registration. Using the known GPS origin 
+
+(lat 0, lon 0) of the satellite image, we first convert this origin to 
+
+Page 7 of 15 meter-level UTM coordinate and calculate the global location of the UAV poses. We then convert the relative translation 
+
+𝐓 𝑟𝑒𝑙 = [Δ 𝐸, Δ𝑁, Δ𝑈 ]⊤ into global UTM coordinates 
+
+𝐓 𝑎𝑏𝑠 = ( 𝐸 0 + Δ 𝐸, 𝑁 0 + Δ 𝑁 ). The absolute UAV heading 
+
+𝜃 𝑎𝑏𝑠 is derived by projecting the local camera z-axis (view direction) onto the horizontal plane of the satellite frame: 
+
+𝐳 = 𝐑 ⊤
+
+> sat
+
+(𝐑 UAV ̂ 𝐳 )
+
+𝜃 𝑎𝑏𝑠 = arctan ( 𝐳 𝑦 
+
+> 𝐳 𝑥
+
+), (15) where ̂ 𝐳 = [0 , 0, 1] ⊤ represents the optical axis in the camera. This process yields the final absolute 3-DoF pose [𝐓 𝑎𝑏𝑠 , 𝜃 𝑎𝑏𝑠 ]
+
+for each UAV query frame. 
+
+## 4. Experiments 
+
+4.1. University-Pose Geo-localization Benchmark 
+
+To rigorously evaluate the fine-grained 3-DoF pose estimation capabilities of our framework, we extended the standard University-1652 dataset (Zheng et al., 2020). While the original dataset provides image-level correspondences, it lacks the precise absolute camera coordinates required for meter-level geo-localization evaluation. To address this, we recalibrated the dataset as University-Pose with 3-DoF UAV pose, by extracting and transforming the raw flight trajectory data from the Google Earth annotation files provided with the dataset. We derive the absolute camera coordinates from the target control parameters: longitude 𝜆 , latitude 𝜙 , and heading 𝜃 .The first critical enhancement in our recalibration is the explicit modeling of spatial overlaps in the satellite database. As illustrated in Figure 5, the satellite tiles in the gallery are not disjoint but exhibit significant spatial overlap. This overlap is advantageous for fine-grained localization: when a UAV query retrieves multiple overlapping satellite candidates, the redundancy allows for multi-view geometric verification, significantly improving pose estimation robustness compared to single-tile matching. Figure 5 visualizes this geometric relationship, showing the precise alignment between the 3-DoF UAV camera poses and the corresponding satellite tile center, situated within a dense grid of overlapping satellite imagery. We further quantify the spatial redundancy within the University-Pose dataset by analyzing the overlap distribution of satellite tiles. As depicted in Figure 6, we visualize the statistical distribution of the number of overlapping satellite tiles for every scene. Our analysis reveals that approximately 50% of the scenes are covered by more than one satellite tile. This implies that retrieved neighboring tiles—often classified as false positives in strict binary evaluation— contain substantial visual overlap with the query and can provide helpful geometric information for subsequent fine-grained pose estimation. This observation motivates our proposal of a refined retrieval metric (see Section 4.2) that considers these overlapped “semi-positive” samples, rather than relying solely on binary target identification. View -50   
+
+> View -15
+> 0003 0025
+> UAV Camera Poses and Satellite Tiles UAV Images
+> North (m)
+> East (m)
+
+Figure 5: Geometric Relationship between UAV Camera and Satellite Tiles. Visualization of the University-Pose dataset geometry. The red arrow represents the 3-DoF UAV pose. Notably, the dataset contains spatially overlapped satellite tiles, providing dense candidates that facilitate robust pose estimation. 800        
+
+> 400
+> 300
+> 200
+> 100
+> 0
+> Non -overlapped
+> Overlapped
+> Overlap > 6
+> 0123456>6
+> Overlap Number
+> Sample Count
+
+Figure 6: Overlapped Satellite Images Statistic. 
+
+4.2. Evaluation Metrics 
+
+To comprehensively assess the performance of our unified framework, we adopt a dual-metric evaluation protocol covering both the coarse-level retrieval stage and the fine-grained absolute pose estimation stage. 
+
+Recall@K (R@K): For the coarse-level place recogni-tion task, we employ standard information retrieval metrics to evaluate the quality of the top-ranked satellite candidates. This metric measures the percentage of query images for which the ground-truth satellite match appears within the top-
+
+𝐾 retrieved candidates. We report R@1, R@5, and R@10. R@1 is particularly critical as it reflects the model’s ability to identify the correct location immediately without further verification. 
+
+Average Precision (AP): To account for the ranking quality of all relevant candidates, we compute the Average Precision (AP), which is defined as the area under the precision-recall curve. The mean Average Precision (mAP) is reported as the average AP across all query samples. 
+
+Page 8 of 15 IoU-based Recall (R IoU @K): The standard Recall@K metric relies on a strict binary identification of the exact ground-truth image ID, often penalizing valid retrievals in datasets with spatially overlapping satellite tiles. In practice, neighboring tiles with significant overlap share substantial visual content with the UAV query, rendering them viable candidates for subsequent fine-grained pose estimation. To rigorously evaluate this, we define R IoU @K, which considers a retrieved candidate as a positive match if its spatial IoU with the ground-truth tile exceeds a predefined threshold 𝜏 .This metric validates the retrieval of any geometrically usable reference image, offering a more robust assessment of place recognition performance in dense grids. 
+
+Global Position Error (GPE): For the fine-grained localization task, we evaluate the accuracy of the estimated 3-DoF absolute pose (latitude, longitude, and heading). The GPE quantifies the planar distance in meters between the predicted location 𝐓 𝑝𝑟𝑒𝑑 = ( 𝜆 𝑝𝑟𝑒𝑑 , 𝜙 𝑝𝑟𝑒𝑑 ) and the ground truth location 𝐓 𝑔𝑡 = ( 𝜆 𝑔𝑡 , 𝜙 𝑔𝑡 ) in the Universal Transverse Mercator (UTM) grid system: 
+
+𝐸 𝑝𝑜𝑠 =
+
+√
+
+(𝜆 𝑝𝑟𝑒𝑑 − 𝜆 𝑔𝑡 )2 + ( 𝜙 𝑝𝑟𝑒𝑑 − 𝜙 𝑔𝑡 )2. (16) 
+
+Heading Error (HE): The heading error Δ𝜃 measures the absolute angular deviation between the predicted orienta-tion 𝜃 𝑝𝑟𝑒𝑑 and the ground truth heading 𝜃 𝑔𝑡 :
+
+Δ𝜃 = min( |𝜃 𝑝𝑟𝑒𝑑 − 𝜃 𝑔𝑡 |, 360 ◦ − |𝜃 𝑝𝑟𝑒𝑑 − 𝜃 𝑔𝑡 |). (17) 
+
+Meter-level Success Rate (SR@X): To provide a strict measure of usability for autonomous navigation, we report the Meter-level Success Rate (MSR@X), defined as the percentage of test queries where the positioning error falls within a specific threshold 𝑋 (e.g., 3 meters, 5 meters, 10 meters). A query is considered successfully localized if and only if 𝐸 𝑝𝑜𝑠 ≤ 𝑋 .MSR @𝑋 = 1
+
+𝑁 
+
+> 𝑁
+
+∑
+
+> 𝑖 =1
+
+𝟙 (𝐸 (𝑖 ) 
+
+> 𝑝𝑜𝑠
+
+≤ 𝑋 ), (18) where 𝑁 is the total number of queries and 𝟙 (⋅) is the indicator function. 
+
+4.3. Experimental Settings 
+
+UAV Geo-localization Datasets. We conduct compre-hensive evaluations of our method on two prominent UAV-to-satellite retrieval datasets: University-Pose and SUES-200 (Zhu et al., 2023). These benchmarks are renowned for the significant challenges imposed by the perspective discrepancy between oblique UAV imagery and orthogonal satellite maps. For the UAV query input, we randomly sample a continuous sequence of 𝑁 views from each scene, while the satellite gallery follows the standard test set protocols. 
+
+Implementation Details. Our framework is implemented using the PyTorch (Paszke et al., 2019) deep learning framework. We employ the pre-trained DINOv2 (Oquab et al., 2024) network as the backbone for robust feature extraction. The 3D perspective modeling is handled by the VGGT. During inference, the system processes continuous sequences of UAV frames as input. Ground plane estimation is performed using the RANSAC algorithm with an inlier threshold of 0.1. The number of retrieved satellite candidates is set to 𝐾 = 10 .
+
+4.4. Place Recognition Results 
+
+Retrieval Results. We present a comprehensive evalua-tion of our unified framework against existing state-of-the-art (SOTA) general methods on the University-1652 (Zheng et al., 2020) and SUES-200 (Zhu et al., 2023) benchmarks, as summarized in Table 1. To ensure a fair comparison, for the task-specific method (Zheng et al., 2020), we report its multi-view performance using the m-query setting from (Zheng et al., 2020; Zhu et al., 2023). For the zero-shot methods (Keetha et al., 2023; Garg et al., 2024), we implement these single-frame methods by processing the same UAV sequence frames and averaging the output features as a global descriptor, isolating the effect of frame quantity. The results demonstrate that our method establishes a new standard for UAV geo-localization. On University-1652, characterized by complex urban geometries, our ap-proach not only significantly outperforms the zero-shot baselines but also achieves superior Recall@1 and mAP scores compared to the supervised University-1652 baseline (m-query). Similarly, on the SUES-200 dataset, particularly at the challenging 150m altitude, our framework exhibits exceptional robustness to extreme viewpoint variations where traditional 2D matching methods typically fail. Crucially, this high precision does not come at the cost of speed; thanks to the linear complexity of our Satellite-wise Attention mechanism, our pipeline maintains high inference efficiency compared to computationally intensive iterative matching baselines. Furthermore, a key driver of this performance is the framework’s iterative refinement capability. We report results for two stages: the Initial BEV , derived directly from the UAV query, and the Refined BEV , which integrates geometric corrections from retrieved candidates. While the Initial BEV already provides a competitive baseline despite inherent translational and heading uncertainties, the Refined BEV effectively resolves these geometric offsets, yielding a substantial boost in retrieval performance. This confirms that our unified pipeline successfully transforms coarse initial estimates into precise geometric anchors. 
+
+Investigation on IoU-based Retrieval Metric. We ana-lyze the retrieval of spatially overlapping neighboring tiles by varying the Intersection-over-Union (IoU) threshold 𝜏 
+
+in our 𝑅 IoU @𝐾 metric. As shown in Table 2, relaxing the strict binary matching criterion to include overlapping candidates yields a consistent improvement in R@1 accuracy. This demonstrates that our method effectively retrieves neighboring tiles which, while distinct from the ground truth ID, share substantial visual content with the UAV query. At a threshold of 𝜏 = 0 .2, the high recall rate confirms the retrieval                                                                                             
+
+> Page 9 of 15 Table 1 Retrieval Result on University-1652 and SUES-200.
+> Methods University-1652 SUES-200 (150m) R@1 ↑R@5 ↑R@10 ↑AP ↑RIoU @1 ↑RIoU @5 ↑Time(s) ↓R@1 ↑AP ↑
+> University (Zheng et al., 2020) 69.3 86.7 91.2 73.1 --0.8 67.8 72.7 AnyLoc (Keetha et al., 2023) 36.2 59.1 57.3 36.2 37.2 60.2 1.9 30.0 42.7 SegVLAD (Garg et al., 2024) 56.8 68.1 76.9 56.9 60.2 69.3 16.1 56.0 59.1 UCVGL (Li et al., 2025) 54.5 63.2 77.9 66.2 57.1 74.1 62.3 56.0 60.5 Ours (Initial BEV) 58.8 78.7 84.2 63.2 63.2 79.2 3.5 56.5 61.6 Ours (Refined BEV) 79.0 88.0 89.3 81.1 83.9 88.4 9.6 68.0 74.5 Table 2 IoU-based Metric on Retrieval Results.
+> IoU Threshold 𝜏 RIoU @1 ↑RIoU @5 ↑RIoU @10 ↑
+> 0.1 84.9 89.2 89.9 0.2 83.9 88.4 89.4 0.5 80.6 88.3 89.4 0.8 79.9 88.2 89.3 1.0 79.0 88.2 89.3
+
+of these geometrically relevant “semi-positive” samples. Crucially, we argue that these overlapping tiles serve as valid geometric anchors rather than false positives. By providing essential context, they enable the subsequent fine-grained pose estimation module to accurately recover the absolute UAV position, proving that effective geo-localization need not rely solely on rigid, non-overlapping tile identification. 
+
+4.5. BEV View Alignment Results 
+
+BEV Refinement Iteration Analysis. We quantify the impact of iterative BEV refinement on retrieval performance in Table 3. The initial BEV representation, synthesized exclusively from the UAV query, inherently suffers from geometric uncertainties—primarily translational shifts and heading misalignments relative to the canonical satellite grid. These discrepancies constrain the initial retrieval accuracy. However, by assimilating the retrieved satellite candidates into the scene reconstruction pipeline, the BEV represen-tation undergoes iterative refinement. We observe that the primary geometric offsets are significantly rectified in the first iteration, yielding a substantial improvement in R@1. This validates the role of retrieved candidates as effective geomet-ric priors. While subsequent iterations continue to refine the scene, the marginal performance gains diminish. Empirically, we find that two iterations strike an optimal balance between retrieval accuracy and computational efficiency. 
+
+Visualization of BEV Refinement. Qualitative analysis of the BEV refinement process is presented in Figure 7. The process initiates with a baseline BEV rendering derived solely from the UAV query via ground plane estimation. Constrained by the unknown positive satellite tile, this Initial BEV                           
+
+> Refined BEV
+> Satellite GT
+> Figure 7: Visualization of the BEV Refinement. Table 3 Retrieval Results of BEV View Refinement.
+> Refine Time R@1 ↑R@5 ↑R@10 ↑AP ↑
+> 0 (Initial BEV) 58.8 78.7 84.2 63.2 166.8 84.0 87.9 70.6 279.0 88.0 89.3 81.1 380.5 89.2 89.2 82.2
+
+initial reconstruction often exhibits incomplete peripheral structures and geometric shift. Upon retrieving top-ranked satellite candidates, the system employs the Satellite-wise Attention Block to spatially register these references against the initial scene. The retrieved satellite imagery supplements the reconstruction with complementary orthogonal context, effectively rectifying geometric distortions. The refined BEV output demonstrates precise spatial alignment with the ground truth satellite map, confirming that our unified framework successfully fuses cross-view information to mitigate the domain gap effectively.                         
+
+> Page 10 of 15 Retrieval Only
+> Overall Prediction
+> Success Rate (MSR)
+> Position Error Threshold (meter) Figure 8: Curve of Meter-level Position Success Rate. Meter-level Success Rate (MSR@X) is the percentage of queries localized within the X-meter threshold.
+> Table 4 Result of Relative Pose Evaluation. We report the 3-DoF Relative Pose Error (RPE) of UAV frames. View Num. ̂𝐸 RMSE ↓̂𝐸 median ↓Δ̂𝜃 RMSE ↓Δ̂𝜃 median ↓
+> 44.36 2.71 1.84 1.24 12 4.65 2.85 1.96 1.03 18 6.93 2.91 3.37 1.07
+
+4.6. 3-DoF UAV Position Results 
+
+Global Pose Estimation. We first evaluate the global pose estimation accuracy on geo-localization. The model ingests a sequence of UAV images and outputs the absolute position for every frame. To quantify performance, we measure the error between the predicted pose and the ground-truth trajectory. We compare our full geometry-aware model against a baseline that relies solely on the retrieval stage, visualizing the results via the meter-level position threshold curve shown in Figure 8. In conventional retrieval-based methods, the location of the UAV’s position is naively assigned from the best-matching satellite tile. This inherently limits localization accuracy to the resolution of the satellite tiles. Consequently, as the success threshold drops below the tile size (e.g., 
+
+< 200 meters), the accuracy of the retrieval-only baseline degrades rapidly, even if the retrieval recall is high. In contrast, our proposed unified pipeline does not stop at retrieval; it further predicts the precise position within the retrieved tile. The results demonstrate a significant accuracy improvement, particularly at strict thresholds (e.g., 50 meters), validating that our pipeline successfully bridges the gap between tile-level coarse localization and meter-level fine-grained pose estimation. 
+
+Relative Pose Performance. We further assess the robust-ness of our internal geometric representation by evaluating the Relative Pose Error (RPE) between UAV frames. Table 4 summarizes the relative pose error ̂ 𝐸 and heading error 
+
+Δ̂ 𝜃 across different view counts. The results indicate that                                                    
+
+> Table 5 Ablation Study of the Proposed Modules. (a) Satellite-wise Attention (b) Geometric Validation (c) Feature Validation . (a) (b) (c) R@1 ↑𝐸 median ↓Δ𝜃 mean ↓Δ𝜃 median ↓
+> 67.2 60.1 22.9 5.2
+> ✓67.7 57.1 17.3 4.3
+> ✓71.6 42.1 19.3 4.2
+> ✓✓72.3 37.8 20.7 4.8
+> ✓✓79.0 26.2 12.2 4.1 Table 6 Impact of the Number of Input Images.
+> View Number R@1 ↑R@5 ↑R@10 ↑AP ↑
+> 464.9 79.0 82.9 68.2 12 79.0 88.0 89.3 81.1 18 77.8 86.4 90.6 83.1
+
+the overall error remains stable regardless of view variance, underscoring the strong capability of the VGGT backbone to maintain consistent geometric reasoning. As the number of views increases, the heading error decreases, suggesting that broader visual coverage helps constrain orientation. It shows that the system maintains high relative consistency, which is crucial for stable trajectory reconstruction. 
+
+4.7. Ablation Study 
+
+To empirically validate the contributions of our proposed modules, we conducted a comprehensive ablation study on the University-Pose dataset. We systematically investigate the impact of the (a) Satellite-wise Attention Block and evaluate two distinct candidate verification strategies: (c) Geometric Validation and (c) Feature Validation . The quantitative performance, measured by Refined BEV Recall (R@1), absolute global positioning error ( 𝐸 ), and heading error ( Δ𝜃 ), is detailed in Table 5. The baseline configuration (Row 1) employs a vanilla global attention mechanism without candidate verification, resulting in a suboptimal mean positioning error. We attribute this degradation to hypothesis interference where indepen-dent satellite candidates act as competing noise sources within the shared attention field, confounding the model’s ability to isolate the correct geometric context. Furthermore, the absence of a verification mechanism renders the model unable to filter out false positive retrieval targets, thereby degrading localization accuracy. 
+
+Impact of Satellite-wise Attention. The integration of the (a) Satellite-wise Attention Block structurally isolates the interaction between each satellite candidate and the UAV query. This modification yields a substantial performance gain in pose estimation. This improvement confirms that suppressing inter-satellite interference allows the model to extract distinct, discriminative geometric features for each hypothesis, thereby refining the precision of pose regression.           
+
+> Page 11 of 15 Negative Samples
+> Positive Samples
+> Number of Images
+> Negative Samples
+> Positive Samples
+> Negative Samples
+> Positive Samples
+> a) Number of Valided Points ( k ) b) Distance of Camera Poses c) Feature Similarity
+> Number of Images
+> Vanilla Global Attention
+> w/ Satellite -wise Attention
+> a) Number of Valided Points ( k ) b) Distance of Camera Poses c) Feature Similarity
+> Negative Samples
+> Positive Samples
+> Negative Samples
+> Positive Samples
+> Negative Samples
+> Positive Samples
+
+Figure 9: Overlapped Satellite Images Distribution Compari-son. 
+
+Comparison of Validation Strategies. We further evalu-ate two strategies for selecting the optimal satellite reference from the top-𝑘 candidates: 
+
+• Geometric Validation (b) : Candidates are selected based on point cloud confidence and pose consistency. While this approach effectively filters outliers with poor geometric convergence, it struggles to distinguish between spatially similar but distinct locations and relies heavily on sensitive, manually tuned thresholds. 
+
+• Feature Validation (c) : Prioritizing candidates with the highest implicit feature similarity to the UAV query results in superior error reduction. Txhis finding underscores that implicit feature consistency offers a more robust signal for place recognition than geometric statistics alone, as it effectively discriminates against semantically mismatched distractors that may other-wise satisfy loose geometric constraints. 
+
+4.8. Impact of Input Sequence 
+
+We investigate the influence of the UAV input sequence length on the overall geo-localization performance, as de-tailed in Table 6. The efficacy of the 3D perspective model is inherently dependent on the availability of multi-view observations to accurately reconstruct the scene geometry and align it with the satellite perspective. With sparse input sequences (e.g., fewer than 5 frames), we observe a marked degradation in retrieval performance, dropping to approx-imately 64%. This decline is attributed to the insufficient geometric cues required to constrain the 3D structure, leading to distorted BEV synthesis and poor cross-view alignment. As the sequence length increases, performance improves substantially, showing a robust balance of geometric coverage and feature redundancy. Extending the sequence beyond 18 views yields performance that fluctuates slightly due to the accumulation of feature noise, while the computational cost escalates linearly. 
+
+4.9. Feature Distribution Analysis 
+
+In Figure 9, we analyze the distribution of positive (green) and negative (red) satellite candidates across three key metrics: a) the number of predicted 3D points exceeding a 20% confidence threshold, b) the spatial distance between the predicted camera pose and the estimated BEV center, and c) the cosine feature similarity between candidate and UAV tokens. We compare these distributions under both the baseline vanilla global attention and our proposed Satellite-wise Attention. 
+
+Effectiveness of Satellite-wise Attention. A column-wise comparison reveals that introducing Satellite-wise Attention consistently enlarges the separation between pos-itive and negative candidates across all three metrics. This effect is particularly evident in metric (b), which directly reflects geometric consistency. Under vanilla global attention, predicted camera poses exhibit large variance and frequently drift away from the BEV center, indicating that irrelevant satellite candidates interfere with the shared attention context. In contrast, Satellite-wise Attention enforces independent interactions between each satellite candidate and the UAV scene, effectively isolating mutually exclusive hypotheses. As a result, valid candidates concentrate tightly around the BEV center, forming a compact and coherent geometric dis-tribution that is more amenable to accurate pose regression. 
+
+Superiority of Feature Similarity Verification. A row-wise comparison further highlights the relative effectiveness of different verification signals. Although explicit geomet-ric cues (a) the number of valid 3D points and (b) pose distance exhibit mild distributional shifts between positive and negative samples, substantial overlap remains, making it difficult to define reliable handcrafted thresholds. In contrast, the feature similarity metric in (c) achieves a markedly clearer separation, which is further amplified by Satellite-wise Attention. This observation indicates that learned fea-ture similarity provides a more discriminative and robust criterion for candidate verification than standalone geometric heuristics. Moreover, applying a softmax operation sharpens the similarity distribution into a sparse and peaked profile, suggesting that the model can reliably identify the true satellite candidate within a single forward pass, without complex heuristic filtering. 
+
+4.10. Qualitative Results 
+
+We present qualitative visualizations to substantiate the efficacy of our unified retrieval and pose estimation pipeline. Figure 10 showcases the top-5 retrieved satellite candidates for challenging UAV query sequences. The first column depicts the synthesized BEV query derived from the oblique UAV inputs. Within the retrieval rankings, the ground truth satellite tile is delineated by a red bounding box, while neighboring tiles sharing significant spatial overlap are 
+
+Page 12 of 15 BEV Query Top -5 Satellite Candidates Figure 10: Visualization of Retrieval Results. 
+
+highlighted in yellow. The frequent high ranking of these overlapping candidates indicates that our model effectively learns underlying geometric consistency rather than relying solely on transient texture patterns. This observation empiri-cally validates the utility of our IoU-based retrieval metric, which credits geometrically relevant matches. Furthermore, Figure 11 illustrates the fine-grained lo-calization performance. We observe a precise alignment between the predicted UAV trajectories and the ground truth poses, maintaining accuracy even in complex urban environments characterized by repetitive structures. This visual correspondence corroborates the low quantitative error metrics reported in Table 4, affirming the system’s capability to deliver robust and consistent pose estimation over extended flight durations. 
+
+## 5. Discussion 
+
+To further advance the field of unified cross-view geo-localization, this section focuses on addressing the following three critical questions: 
+
+How to train this model with end-to-end learning strategy? While our current framework leverages the robust zero-shot capabilities of pre-trained foundation models like 𝐸 " (m)   
+
+> Δ𝜃 %(deg)
+> Frame x(m)
+> y (m)
+> Figure 11: Visualization of the UAV Trajectory.
+
+DINOv2 and VGGT to bridge the domain gap, we recognize that these backbones are primarily optimized for general object classification or generic scene reconstruction rather than the specific nuances of cross-view geo-localization. Consequently, a domain gap persists between the natural images used for pre-training and the orthorectified satellite imagery encountered in our task. To address this, future research of this work should prioritize an end-to-end training strategy. The inherent differentiability of the VGGT rendering 
+
+> Page 13 of 15
+
+process offers a unique opportunity to propagate geometric alignment errors directly back to the feature extraction layers. By formulating a unified objective function that couples retrieval loss with pose regression accuracy, the network could be fine-tuned to learn feature descriptors that are explicitly invariant to the facade-to-roof transformation. Such a strategy would not only adapt the model to the specific texture distributions of satellite orthophotos but also allow the geometric reconstruction module to prioritize structural elements critical for geo-localization—such as road topologies and building footprints—over transient dynamic objects, thereby maximizing the efficacy of the proposed 3D scene alignment paradigm. 
+
+How to work with single-view unified perception? Aprincipal limitation of the proposed model is its reliance on multi-view image sequences to solve the reconstruction problem, which imposes specific flight trajectory require-ments and latency overheads. Our experiments indicate that reducing the number of input views degrades the geometric fidelity of the reconstructed scene, subsequently impairing cross-view alignment. However, the requirement for multi-view parallax is not an insurmountable barrier for the unified model architecture. Recent advancements in monocular depth estimation and generative diffusion models demonstrate that strong geometric priors can be learned from large-scale data, enabling the recovery of 3D structure from single images. We posit that the future of this unified framework lies in integrating such monocular depth priors directly into the scene representation module. By hallucinating the occluded geometry and recovering scale through learned semantic cues, the model could theoretically synthesize a reliable BEV representation from a single UAV frame. This evolution would decouple the system from the necessity of extended image sequences, extending the applicability of our geometry-aware alignment to instantaneous, snapshot-based localization scenarios where flight motion is restricted, or immediate positioning is critical. 
+
+How to achieve end-to-end implicit feature align-ment instead of explicit BEV construction? Currently, our pipeline necessitates the explicit rendering of a virtual BEV image to bridge the viewpoint discrepancy, a process that inherently incurs information loss through quantization, ras-terization, and the projection of high-dimensional semantics into a lower-dimensional RGB or feature space. While effec-tive, this intermediate representation acts as a bottleneck that filters out potentially discriminative uncertainty information and subtle feature correlations. We argue that the next logical step in “3D-aware” localization is to transcend explicit visual reconstruction in favor of implicit feature-level alignment. Future work could explore the construction of Neural Feature Fields, where the retrieval and localization processes occur directly via cross-attention mechanisms between satellite patch tokens and the 3D voxel tokens of the reconstructed scene. By skipping the generation of a 2D BEV image, the system could maintain the full integrity of the high-dimensional feature manifold, allowing the satellite queries to attend directly to the underlying 3D geometry. This would represent a shift towards a fully differentiable, feature-centric alignment pipeline that preserves rich semantic context and geometric probability distributions, further pushing the boundaries of accuracy in complex, large-scale environments. 
+
+## 6. Conclusion 
+
+In this work, we have presented a unified framework for UAV cross-view geo-localization that overcomes the limitations of conventional decoupled retrieval and pose estimation pipelines. Instead of treating coarse place recogni-tion and fine-grained localization as independent stages, our approach establishes a shared 3D geometric representation in which both tasks are jointly supported during inference. By leveraging geometry-grounded visual perception, we bridge the extreme viewpoint discrepancy between oblique UAV imagery and orthogonal satellite views through an intermediate BEV-aligned representation. This geometry-consistent representation enables robust feature alignment and stable pose reasoning without relying on task-specific training. Importantly, we further address the challenge of multi-candidate ambiguity by introducing the Satellite-wise Attention Block, which enforces hypothesis isolation and prevents interference among mutually exclusive satellite hypotheses, leading to more coherent geometric reasoning. Extensive experiments on the recalibrated University-1652 and SUES-200 benchmarks demonstrate that the proposed framework achieves strong zero-shot geo-localization perfor-mance, delivering reliable meter-level pose estimation under challenging cross-view conditions. 
+
+## References  
+
+> Berton, G., Masone, C. and Caputo, B., 2022. Rethinking visual geo-localization for large-scale applications. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, pp. 4878–4888. Dai, M., Hu, J., Zhuang, J. and Zheng, E., 2022. A transformer-based feature segmentation and region alignment method for uav-view geo-localization. IEEE Transactions on Circuits and Systems for Video Technology 32, pp. 4376–4389. DeTone, D., Malisiewicz, T. and Rabinovich, A., 2018. Superpoint: Self-supervised interest point detection and description. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition Workshops, pp. 224–236. Deuser, F., Habel, K. and Oswald, N., 2023. Sample4geo: Hard negative sampling for cross-view geo-localisation. In: IEEE/CVF International Conference on Computer Vision, pp. 16847–16856. Dhaouadi, O., Marin, R., Meier, J., Kaiser, J. and Cremers, D., 2025. Ortholoc: Uav 6-dof localization and calibration using orthographic geodata. arXiv preprint arXiv:2509.18350. Dosovitskiy, A., 2020. An image is worth 16x16 words: Transformers for image recognition at scale. arXiv preprint arXiv:2010.11929. Garg, K., Puligilla, S. S., Kolathaya, S., Krishna, M. and Garg, S., 2024. Revisit anything: Visual place recognition via image segment retrieval. In: European Conference on Computer Vision, Springer, pp. 326–343. He, K., Zhang, X., Ren, S. and Sun, J., 2016. Deep residual learning for image recognition. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, pp. 770–778. Hughes, L. H., Marcos, D., Lobry, S., Tuia, D. and Schmitt, M., 2020. A deep learning framework for matching of sar and optical imagery. ISPRS Journal of Photogrammetry and Remote Sensing 169, pp. 166–179.
+
+Page 14 of 15 Ji, Y., He, B., Tan, Z. and Wu, L., 2025. Mmgeo: Multimodal compositional geo-localization for uavs. In: Proceedings of the IEEE/CVF International Conference on Computer Vision, pp. 25165–25175. Ju, H., Huang, S., Liu, S. and Zheng, Z., 2025. Video2bev: Transforming drone videos to bevs for video-based geo-localization. In: Proceedings of the IEEE/CVF International Conference on Computer Vision, pp. 27073– 27083. Keetha, N., Mishra, A., Karhade, J., Jatavallabhula, K. M., Scherer, S., Krishna, M. and Garg, S., 2023. Anyloc: Towards universal visual place recognition. IEEE Robotics and Automation Letters. Kerbl, B., Kopanas, G., Leimkühler, T. and Drettakis, G., 2023. 3d gaussian splatting for real-time radiance field rendering. ACM Transactions on Graphics. Krizhevsky, A., Sutskever, I. and Hinton, G. E., 2017. Imagenet classification with deep convolutional neural networks. Communications of the ACM 60(6), pp. 84–90. Li, H., Wang, J., Wei, Z. and Xu, W., 2023. Jointly optimized global-local visual localization of uavs. arXiv preprint arXiv:2310.08082. Li, H., Xu, C., Yang, W., Mi, L., Yu, H., Zhang, H. and Xia, G.-S., 2025. Unsupervised multi-view uav image geo-localization via iterative rendering. IEEE Transactions on Geoscience and Remote Sensing 63, pp. 1–15. Li, H., Xu, C., Yang, W., Yu, H. and Xia, G.-S., 2024. Learning cross-view visual geo-localization without ground truth. IEEE Transactions on Geoscience and Remote Sensing 62, pp. 1–17. Lindenberger, P., Sarlin, P.-E. and Pollefeys, M., 2023. Lightglue: Local feature matching at light speed. In: Proceedings of the IEEE/CVF International Conference on Computer Vision, pp. 17627–17638. Liu, L. and Li, H., 2019. Lending orientation to neural networks for cross-view geo-localization. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, pp. 5624–5633. Liu, T., Ren, K. and Chen, Q., 2025. Diffusionuavloc: Visually prompted dif-fusion for cross-view uav localization. arXiv preprint arXiv:2511.06422. Lowe, D. G., 2004. Distinctive image features from scale-invariant keypoints. International Journal of Computer Vision 60, pp. 91–110. Mildenhall, B., Srinivasan, P. P., Tancik, M., Barron, J. T., Ramamoorthi, R. and Ng, R., 2021. Nerf: Representing scenes as neural radiance fields for view synthesis. Communications of the ACM 65(1), pp. 99–106. Oquab, M., Darcet, T., Moutakanni, T., Vo, H. V., Szafraniec, M., Khalidov, V., Fernandez, P. et al., 2024. DINOv2: Learning robust visual features without supervision. Transactions on Machine Learning Research. Pan, L., Barath, D., Pollefeys, M. and Schönberger, J. L., 2024. Global Structure-from-Motion Revisited. In: Proceedings of the European Conference on Computer Vision. Paszke, A., Gross, S., Massa, F., Lerer, A. et al., 2019. Pytorch: An imperative style, high-performance deep learning library. In: Advances in Neural Information Processing Systems, pp. 8024–8035. Sarlin, P.-E., Cadena, C., Siegwart, R. and Dymczyk, M., 2019. From coarse to fine: Robust hierarchical localization at large scale. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, pp. 12716–12725. Sarlin, P.-E., DeTone, D., Malisiewicz, T. and Rabinovich, A., 2020. Superglue: Learning feature matching with graph neural networks. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, pp. 4938–4947. Schonberger, J. L. and Frahm, J.-M., 2016. Structure-from-motion revisited. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, pp. 4104–4113. Shetty, A. and Gao, G. X., 2019. Uav pose estimation using cross-view geolocalization with satellite imagery. In: International Conference on Robotics and Automation, IEEE, pp. 1827–1833. Simonyan, K. and Zisserman, A., 2014. Very deep convolutional networks for large-scale image recognition. arXiv preprint arXiv:1409.1556. Song, Z., Zhang, Y., Li, K., Wang, L. and Guo, Y., 2025. A unified hierarchical framework for fine-grained cross-view geo-localization over large-scale scenarios. arXiv preprint arXiv:2505.07622. Sun, J., Shen, Z., Wang, Y., Bao, H. and Zhou, X., 2021. Loftr: Detector-free local feature matching with transformers. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, pp. 8922–8931. Tian, X., Shao, J., Ouyang, D. and Shen, H. T., 2022. Uav-satellite view synthesis for cross-view geo-localization. IEEE Transactions on Circuits and Systems for Video Technology 32(7), pp. 4804–4815. Toker, A., Zhou, Q., Maximov, M. and Leal-Taixé, L., 2021. Coming down to earth: Satellite-to-street view synthesis for geo-localization. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, pp. 6488–6497. Trivigno, G., Berton, G., Aragon, J., Caputo, B. and Masone, C., 2023. Divide&classify: Fine-grained classification for city-wide visual place recognition. In: 2023 IEEE/CVF International Conference on Computer Vision (ICCV), IEEE, pp. 11108–11118. Wang, J., Chen, M., Karaev, N., Vedaldi, A., Rupprecht, C. and Novotny, D., 2025. Vggt: Visual geometry grounded transformer. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognitio, pp. 5294–5306. Wang, T., Zheng, Z., Yan, C., Zhang, J., Sun, Y., Zheng, B. and Yang, Y., 2021. Each part matters: Local patterns facilitate cross-view geo-localization. IEEE Transactions on Circuits and Systems for Video Technology 32(2), pp. 867–879. Wang, Y., He, X., Peng, S., Tan, D. and Zhou, X., 2024. Efficient loftr: Semi-dense local feature matching with sparse-like speed. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, pp. 21666–21675. Woo, S., Debnath, S., Hu, R., Chen, X., Liu, Z., Kweon, I. S. and Xie, S., 2023. Convnext v2: Co-designing and scaling convnets with masked autoencoders. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, pp. 16133–16142. Workman, S., Souvenir, R. and Jacobs, N., 2015. Wide-area image geolocalization with aerial reference imagery. In: Proceedings of the IEEE International Conference on Computer Vision, pp. 3961–3969. Ye, J., Lin, H., Ou, L., Chen, D., Wang, Z., Zhu, Q., He, C. and Li, W., 2025. Where am i? cross-view geo-localization with natural language descriptions. In: Proceedings of the IEEE/CVF International Conference on Computer Vision, pp. 5890–5900. Ye, J., Lv, Z., Li, W., Yu, J., Yang, H., Zhong, H. and He, C., 2024a. Cross-view image geo-localization with panorama-bev co-retrieval network. In: European Conference on Computer Vision, Springer, pp. 74–90. Ye, Q., Luo, J. and Lin, Y., 2024b. A coarse-to-fine visual geo-localization method for gnss-denied uav with oblique-view imagery. ISPRS Journal of Photogrammetry and Remote Sensing 212, pp. 306–322. Zheng, Y., Kuang, Y., Sugimoto, S., Astrom, K. and Okutomi, M., 2013. Revisiting the pnp problem: A fast, general and optimal solution. In: Proceedings of the IEEE International Conference on Computer Vision, pp. 2344–2351. Zheng, Z., Wei, Y. and Yang, Y., 2020. University-1652: A multi-view multi-source benchmark for drone-based geo-localization. In: Proceedings of the 28th ACM International Conference on Multimedia, pp. 1395–1403. Zhu, R., Yin, L., Yang, M., Wu, F., Yang, Y. and Hu, W., 2023. Sues-200: A multi-height multi-scene cross-view image benchmark across drone and satellite. IEEE Transactions on Circuits and Systems for Video Technology 33(9), pp. 4825–4839. Zhu, S., Shah, M. and Chen, C., 2022. Transgeo: Transformer is all you need for cross-view image geo-localization. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, pp. 1162–1171. 
+
+Page 15 of 15
