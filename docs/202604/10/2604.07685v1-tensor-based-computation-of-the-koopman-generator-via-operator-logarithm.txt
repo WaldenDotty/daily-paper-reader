@@ -1,0 +1,840 @@
+Title: Tensor-based computation of the Koopman generator via operator logarithm
+
+URL Source: https://arxiv.org/pdf/2604.07685v1
+
+Published Time: Fri, 10 Apr 2026 00:22:31 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+## Tensor-based computation of the Koopman generator via operator logarithm 
+
+Tatsuya Kishimoto and Jun Ohkubo   
+
+> Graduate School of Science and Engineering, Saitama University 255 Shimo-Okubo, Sakura-ku, Saitama 338–8570, Japan
+> Identifying governing equations of nonlinear dynamical systems from data is challenging. While sparse iden-tification of nonlinear dynamics (SINDy) and its extensions are widely used for system identification, operator-logarithm approaches use the logarithm to avoid time di ff erentiation, enabling larger sampling intervals. How-ever, they still su ff er from the curse of dimensionality. Then, we propose a data-driven method to compute the Koopman generator in a low-rank tensor train (TT) format by taking logarithms of Koopman eigenvalues while preserving the TT format. Experiments on 4-dimensional Lotka–Volterra and 10-dimensional Lorenz–96 systems show accurate recovery of vector field coe ffi cients and scalability to higher-dimensional systems.
+> I. INTRODUCTION
+
+The identification of governing equations for nonlinear dy-namical systems from data has been actively studied in many fields, such as control theory, physics, and biology. This task is frequently challenging due to the inherent nonlinearity of the underlying systems. In the context of nonlinear parame-ter estimation, various methods have been developed to iden-tify the state dynamics of autonomous systems; sparse iden-tification of nonlinear dynamics (SINDy) [1] has attracted particular attention among these methods. SINDy identifies the vector field of deterministic dynamical systems by solv-ing a sparse regression problem using a predefined dictionary of candidate functions. Several extensions of this framework have already been carried out [2, 3]. In this paper, we focus on the method based on the Koop-man operator [4] framework, which have been applied in various research areas including molecular dynamics, mete-orology, and economics. By lifting nonlinear dynamics to an infinite-dimensional linear operator acting on observables, this framework facilitates the analysis of nonlinear systems using linear techniques. However, since the Koopman opera-tor is infinite-dimensional, it cannot be handled directly in nu-merical computations and necessitates approximation within a finite-dimensional space. To this end, several data-driven algorithms have been pro-posed. Dynamic mode decomposition (DMD) [5, 6] extracts spectral information of the Koopman operator from time-series data, and its variants have been applied to partial dif-ferential equations such as the Burgers equation. Extended dynamic mode decomposition (EDMD) [7] generalizes DMD by employing a dictionary of basis functions to obtain a finite-dimensional approximation. Applications of EDMD are ex-tensive, covering forecasting, system identification, and con-trol; see [8, 9] for more details. Recently, Koopman-based methods have been specifically adapted for system identification. The Koopman generator, which is the infinitesimal generator of the Koopman semi-group, describes the time derivative of observables. An exten-sion of EDMD, known as generator EDMD (gEDMD) [10], can estimate ordinary di ff erential equations or stochastic dif-ferential equations from data. Direct system identification methods, such as SINDy and gEDMD, aim to identify the governing vector field directly from data and typically require estimating time derivatives from data. This estimation is of-ten sensitive to measurement noise and the choice of sampling interval. In contrast, indirect methods that solve an initial value prob-lem avoid explicit derivative estimation, thereby allowing for longer sampling intervals. While solving an initial value prob-lem typically involves nonlinear least-squares optimization, an operator-logarithm-based method [11] o ff ers an alternative by identifying the system via a linear least-squares problem. This approach involves computing a finite-dimensional Koop-man operator using EDMD and subsequently taking its loga-rithm to approximate the Koopman generator. However, for high-dimensional systems, these methods suf-fer from the curse of dimensionality, resulting in computa-tional costs and memory requirements that grow exponentially with dimensionality. As the number of entries in a tensor grows exponentially with dimensionality, low-rank tensor for-mats requiring only a tractable number of parameters become essential. Prominent examples include the canonical format [12], the Tucker format [13], and the tensor train (TT) format [14, 15], all of which represent high-dimensional tensors as networks of lower-dimensional components. The TT format is also known as matrix product state (MPS) [16, 17] in quan-tum physics, and was applied to many fields, such as machine learning [18] and the numerical solution of partial di ff erential equations [19]. Recent studies have leveraged such formats to represent the Koopman operator and its eigenfunctions in high-dimensional settings. For instance, the AMUSEt algorithm [20] e ffi ciently computes Koopman eigenfunctions in the TT format, and a method combining the TT format with gEDMD (tgEDMD) [21] computes the generator directly in the TT format. De-spite these advances, the operator-logarithm-based method for computing the Koopman generator within the TT format re-mains undeveloped, primarily because computing a matrix logarithm while preserving the TT structure presents a sig-nificant challenge. We propose a data-driven method to compute the Koop-man generator in the TT format by extending the operator-logarithm approach. Our proposed method introduces a way to take the operator logarithm directly in the TT format by leveraging eigendecomposition. Specifically, we first com-pute the Koopman eigenvalues and the corresponding eigen-functions represented in the TT format. We then take the 
+
+> arXiv:2604.07685v1 [cs.LG] 9 Apr 2026
+
+2logarithm of the eigenvalues and use the resulting eigende-composition to assemble the Koopman generator in the TT format. In this way, eigendecomposition serves as the key mechanism that enables a TT-format logarithm without ex-plicitly computing a matrix logarithm or breaking the TT structure. We demonstrate the e ff ectiveness of the proposed method through numerical experiments on a 4-dimensional Lotka–Volterra system and a 10-dimensional Lorenz–96 sys-tem, the latter serving as a benchmark for higher-dimensional dynamics. This paper is organized as follows. In Sec. II, we review the Koopman operator, the Koopman generator, and methods for identifying the Koopman generator from data. In Sec. III, we revisit the relationship between the Koopman operator and its generator, particularly focusing on their eigendecomposition. In Sec. IV, we present the proposed method to compute the Koopman generator in the TT format in a data-driven manner. In Sec. V, we demonstrate the e ff ectiveness of the proposed method through numerical experiments. Finally, we conclude the paper in Sec. VI.   
+
+> II. BACKGROUND A. Dynamical systems and Koopman theory
+
+We consider the continuous-time nonlinear dynamical sys-tem ˙x = F(x), x(t) ∈ Rd, (1) where F : Rd → Rd is a nonlinear vector field. Although F
+
+is nonlinear, the Koopman operator is a linear time-evolution operator acting on a lifted (function) space, whose elements are called observables. Let f : Rd → C ∈ F be an observable, and let S t : Rd → Rd denote the flow map generated by F
+
+over a time interval t ≥ 0. That is, if x(t) is the solution of the initial value problem with x(0) = x0, then S t(x0) = x(t). The Koopman operator Kt is defined by 
+
+Kt f = f ◦ S t. (2) By the properties of the flow map, it is easy to verify that {K t}t≥0 forms a semigroup. The Koopman semigroup is strongly continuous and generated by the infinitesimal gener-ator 
+
+L f D lim 
+
+> t→0
+
+Kt f − ft . (3) If the observable function are di ff erentiable, we can verify that the Koopman generator is such that 
+
+∂( f ◦ S t)
+
+∂t = ∇ f · F = L f. (4) Here, ∂( f ◦ S t)/∂ t is the “time derivative” of the observable function f along the flow map S t, and we denote it by ∂ f /∂ t
+
+for brevity. If L is a bounded operator, 
+
+Kt = etL (5) for each t ≥ 0.  
+
+> B. Identification of the Koopman generator matrix
+
+Since the Koopman operator and generator are infinite-dimensional operators, we need to approximate them in a finite-dimensional space. For this purpose, we consider ap-proximating the infinite-dimensional space F by a finite-dimensional subspace FN ⊂ F spanned by a set of basis functions {ψ1, . . . , ψ Ndic }, where Ndic is the size of the dictio-nary. The choice of basis functions is problem-dependent and should be selected based on the characteristics of the system being studied. In this paper, we define the dictionary as 
+
+ψ(x) = hψ1(x) · · · ψNdic (x)iT
+
+, (6) where ψi is the i-th basis function. Note that in [7], the dictionary is defined as a row vector, but in this paper, we consider it as a column vector. Given Ndata snapshot pairs 
+
+{(xk, yk)}Ndata  
+
+> k=1
+
+, where yk = S Ts (xk) and Ts is the sampling inter-val, the data matrices are defined as X = [x1, . . . , xNdata ] and 
+
+Y = [y1, . . . , yNdata ]. The finite-dimensional approximation of the Koopman operator K ∈ RNdic ×Ndic is then defined as the solution to 
+
+K = arg min 
+
+> eKNdata
+
+X
+
+> i=1
+
+∥ψ(yi) − eKψ(xi)∥2. (7) To derive a finite-dimensional approximation of the Koop-man generator L ∈ RNdic ×Ndic from K, we use the operator log-arithm shown in Eq. (5), i.e., 
+
+L = 1
+
+Ts
+
+log( K). (8) As Eq. (4) shows, the Koopman generator describes the time derivative of the observable function. Since L is the finite-dimensional approximation of the Koopman generator, it is possible to compute the time derivative of the basis function in the finite-dimensional space as 
+
+∂ψ j
+
+∂t =
+
+> Ndic
+
+X
+
+> i=1
+
+L ji ψi. (9)  
+
+> C. System identification using the Koopman generator
+
+We consider the vector field F(x) is of the form 
+
+Fk(x) = wT 
+
+> k
+
+ψ(x), (10) where ψ(x) is the dictionary and wT 
+
+> k
+
+= [wk,1, . . . , wk,Ndic ] is the coe ffi cient vector for the k-th dimension. In order to identify the vector field coe ffi cients wk, we add the full-state observ-able gk(x) = xk, k = 1, . . . , d to the dictionary. From the definition of the Koopman generator in Eq. (4), we have 
+
+Lgk =
+
+> Ndic
+
+X
+
+> i=1
+
+Fi(x) ∂gk
+
+∂xi
+
+= Fk(x) (11) 3in the finite-dimensional setting. Therefore, if we have the Koopman generator in a finite-dimensional space that includes the full-state observable, we can identify the vector field coef-ficients by 
+
+Fk =
+
+> Ndic
+
+X
+
+> i=1
+
+Lki ψi, (12) i.e., the k-th row of the L represents the vector field coe ffi -cients wT 
+
+> k
+
+. 
+
+> D. Example of system identification using the Koopman generator
+
+As a simple example of system identification via the Koop-man generator, we consider the van der Pol (vdP) oscillator ˙x1 = x2,
+
+˙x2 = (1 − x21)x2 − x1. (13) We assume that the vector field can be represented by a poly-nomial. Accordingly, we construct the dictionary of monomi-als up to degree two in each variable: 
+
+ψ(x) = h1 x1 x21 x2 x1 x2 x21 x2 . . . x21 x22
+
+iT
+
+. (14) We generate a single trajectory starting from the initial condition [x1, x2] = [1 .0, 1.0] using 
+
+scipy.integrate.solve_ivp in Python with the ex-plicit Runge–Kutta method of order 5(4) (RK45). We then sample 1000 snapshot pairs at a sampling interval of 
+
+Ts = 0.1. Figure 1 shows a segment of the resulting trajectory consisting of the first 100 data points, i.e., those from t = 0to t = 10. We apply EDMD to compute the Koopman matrix and then compute the generator via the matrix logarithm. To take the matrix logarithm, we employ scipy.linalg.logm 
+
+in Python. The transpose of the estimated generator LT is evaluated as follows: 
+
+LT =
+
+1 dx 1 dx 21 dx 2 · · · 
+
+
+
+1 0.00 0 .00 0 .01 0.00 
+
+x1 0.00 0 .00 0 .00 −1.00 
+
+x21 0.00 0 .00 0 .00 0.00 
+
+x2 0.00 1 .00 0 .00 1.00 · · · 
+
+x1 x2 0.00 0 .00 2 .00 0.00 
+
+x21 x2 0.00 0 .00 0 .00 −1.00 
+
+... ..., (15) where the rows correspond to the basis functions ordered as 1, x1, x21, x2, . . . , and the columns correspond to their time derivatives in the same order. For readability, the matrix en-tries are rounded to two decimal places. The estimated coe ffi -cients in the second and fourth columns match the true coe ffi -cients. 0 2 4 6 8 10 
+
+t             
+
+> 2
+> 1
+> 0
+> 1
+> 2
+> x
+> x1
+> x2
+> FIG. 1. Segment of the vdP oscillator trajectory data used for EDMD. The trajectory is generated from the initial condition [ x1,x2]=
+> [1 .0,1.0], and this plot shows the part from t=0 to t=10 sam-pled with a sampling interval of Ts=0.1.
+> III. REVISIT ON KOOPMAN GENERATOR ESTIMATION
+
+In this section, we revisit the relationship between the Koopman operator and its generator, focusing in particular on eigendecompositions and the matrix logarithm of the Koop-man operator.  
+
+> A. Koopman eigenvalues and eigenfunctions
+
+Consider the Koopman operator Kt associated with the flow map S t and its generator L. When both operators are bounded, their spectra σ(·) satisfy 
+
+σ(Kt) = etσ(L) = {eλt | λ ∈ σ(L)}, (16) for all t ≥ 0. An eigenfunction ϕ ∈ F \ { 0} of Kt and its corresponding eigenvalue μ ∈ C satisfy the following relation: 
+
+Ktϕ = μϕ = eλtϕ, ∀t ≥ 0. (17) Here, λ is the eigenvalue of L. Assuming Eq. (3) defines the Koopman generator, λ and ϕ are also an eigenvalue-eigenfunction pair for the Koopman generator L:
+
+Lϕ = λϕ. (18) We call ϕ a Koopman eigenfunction and λ the associated Koopman eigenvalue. The key points are that Kt and L share the same eigenfunction ϕ, and that their respective eigenval-ues, μ and λ, are related via the exponential map μ = eλt as shown in Eq. (16). 4
+
+B. Matrix logarithm and eigendecomposition 
+
+We now revisit the relationship between the Koopman op-erator and its generator in the finite-dimensional setting. If the Koopman operator matrix K is eigendecomposed as K =
+
+PΣP−1, the matrix logarithm is computed as 
+
+L = 1
+
+Ts
+
+log( PΣP−1) = 1
+
+Ts
+
+P log( Σ)P−1. (19) From this equation, we can see that the eigenvectors of K and 
+
+L are identical, and the eigenvalues of L are derived by taking the logarithm of the eigenvalues of K. This relationship is con-sistent with the relationship between the infinite-dimensional operators shown in Eqs. (16) and (17). However, in high-dimensional systems, the size of the Koopman matrix K grows exponentially with the dimension of the original system. If we use a dictionary of monomi-als up to degree n for each dimension when the system is d-dimensional, the size of the dictionary would be 
+
+Ndic = (n + 1) d. (20) For example, if we use monomials up to degree two in each variable for a 10-dimensional system, the size of the dic-tionary would be Ndic = 310 = 59 , 049. In this case, the Koopman matrix K would have 59 , 049 2 ≈ 3.5 × 10 9 en-tries, which is computationally infeasible to store and com-pute with. Therefore, storing and computing the Koopman matrix K and taking its logarithm become infeasible due to memory constraints. 
+
+IV. PROPOSAL: IDENTIFICATION OF THE KOOPMAN GENERATOR IN TT FORMAT 
+
+This section describes how to construct Koopman gen-erators in higher-dimensional systems. To obtain a finite-dimensional approximation, we consider tensor product spaces built from elementary subspaces of moderate dimen-sions. Accordingly, many quantities, such as the dictionary and the Koopman matrix, naturally admit a tensor structure. 
+
+A. TT format 
+
+The choice of the finite-dimensional subspace FN in Sec. II B is critical to the quality of the Koopman operator ap-proximation. A common way to obtain a rich approximation space is to take tensor products of functions from a collection of elementary subspaces of moderate dimensions. Here, we yield a brief introduction to the TT format. For details, see [15]. For example, we consider a tensor T. For our purposes, it is su ffi cient to view a tensor as a multi-dimensional array whose entries are indexed by p indices: 
+
+Ti1,..., ip ∈ R. (21) The number of indices p is called the order of the tensor. The indices are often referred to as modes , with mode sizes nk.The tensor product of p vectors v(k) ∈ Rnk is defined by 
+
+T =
+
+> p
+
+O
+
+> k=1
+
+v(k), Ti1,..., ip =
+
+> p
+
+Y
+
+> k=1
+
+v(k) 
+
+> ik
+
+, (22) which generalizes the outer product of two vectors. A tensor of this form is called a rank-one tensor. We will also use the tensor product for matrices, known as the Kronecker product, and denote it by the same symbol. In particular, for vectors, the Kronecker product corresponds to representing the result of the tensor product as a vector. For example, assuming two vectors a ∈ Rm and b ∈ Rn, the Kronecker product yields the following blockwise structures: 
+
+a ⊗ b =
+
+
+
+a1 b
+
+...
+
+am b
+
+ =
+
+
+
+a1b1
+
+...
+
+a1bn
+
+...
+
+amb1
+
+...
+
+ambn
+
+
+
+∈ Rmn . (23) The resulting vector has length mn ; when taking tensor prod-ucts across many vectors, this size grows exponentially. Every tensor can be expressed as a finite linear combination of rank-one tensors, but the required number of terms may be exponentially large. In many applications, tensors can be ap-proximated accurately with few parameters. Many such rep-resentations, known as tensor formats, have been proposed. Here, we focus on the TT format, in which a tensor is repre-sented via contractions of lower-order tensors. A tensor T is said to be in the TT format if 
+
+Ti1,..., id =
+
+> r0
+
+X
+
+> k0=1
+
+· · · 
+
+> rd
+
+X 
+
+> kd=1
+
+T(1)  
+
+> k0,i1,k1
+
+· · · T(d)  
+
+> kd−1,id,kd
+
+. (24) Equation (24) yields the specific i1, . . . , id component of the tensor T. In the context of the TT format, it is common to use the following notation: 
+
+T =
+
+> r0
+
+X
+
+> k0=1
+
+· · · 
+
+> rd
+
+X 
+
+> kd=1
+
+T(1)  
+
+> k0,:,k1
+
+⊗ · · · ⊗ T(d) 
+
+> kd−1,:,kd
+
+, (25) which represents the tensor T as a sum of rank-one tensors formed by tensor products of vectors. The tensors T(k) ∈
+
+Rrk−1×nk ×rk of order 3 are called TT cores, and the integers rk
+
+are called TT ranks ( k = 0, . . . , d). It holds that r0 = rd = 1. The TT ranks strongly a ff ect both the representational power of the TT format and the storage cost. We also represent TT cores as two-dimensional arrays con-taining vectors as elements. For a given TT format T ∈
+
+Rn1×···× nd with cores T(k) ∈ Rrk−1×nk ×rk , a single core is written as 
+
+qT(k)y =
+
+uwv
+
+T(k)1,:,1 · · · T(k)1,:,rk
+
+... . . . ...
+
+T(k) 
+
+> rk−1,:,1
+
+· · · T(k)
+
+> rk−1,:,rk
+
+}~ . (26) 5We then use the notation T = qT(1) y ⊗ · · · ⊗ qT(d)y for rep-resenting the TT format T. This notation can be regarded as a generalization of standard matrix multiplication. The dif-ference is that, instead of multiplying corresponding scalar entries, we take tensor products of the corresponding vector entries and then sum over the column and row indices, re-spectively. In this paper, we write TU to denote the contraction of two tensors over the last mode of T and the first mode of U, i.e., 
+
+TU =
+
+> r
+
+X
+
+> k=1
+
+T··· ,k ⊗ Uk,··· . (27)  
+
+> B. Direct evaluation of the Koopman generator matrix in TT format
+
+Computing the operator logarithm directly in the TT format is di ffi cult because no method has been known for comput-ing the matrix logarithm while preserving the TT structure. Therefore, we propose a method to compute the Koopman generator in the TT format by leveraging the eigendecompo-sition relationship in Eq. (19), which involves the eigenvalues and eigenvectors. In Eq. (19), if we have P in the TT format, then we can obtain the Koopman generator in the TT format. Figure 2 illustrates a comparison between the existing matrix-logarithm-based method and the proposed method. First, we define the dictionary as a tensor product of one-dimensional basis functions, i.e., 
+
+ψ(x) =
+
+> d
+
+O
+
+> i=1
+
+ψi(xi), (28) where ψi(xi) = ψi,1(xi), . . . , ψ i,n(xi) is the one-dimensional dictionary for the i-th dimension. With this definition, we can represent K and L as tensors. Next, we compute the Koopman eigenvalues λi and the ma-trix P of eigenvectors of the Koopman matrix K in the TT format by using the AMUSEt algorithm [20]; in Sec. A, we provide a brief explanation of the AMUSEt algorithm. In the following, we refer to the TT format of P as the Koopman eigentensor Ξ. The Koopman generator in the TT format can be computed as 
+
+L = Ξ · ΣL · Ξ+, (29) where ΣL is a diagonal matrix with diagonal elements μi =
+
+log( λi)/Ts, and Ξ+ is the pseudo-inverse of the Koopman eigentensor. When computing Eq. (29), the contraction is per-formed as illustrated in Fig. 3 to reduce memory consumption. The pseudo-inverse of the eigentensor Ξ is computed as fol-lows. The AMUSEt algorithm computes the Koopman eigen-tensor Ξ as 
+
+Ξ = UX,rΣX,r A, (30) where UX,r is the left-orthonormalized TT format, ΣX,r is the diagonal matrix, and A is the complex-valued matrix. Because (a) Matrix -logarithm approach 
+
+Snapshot pairs 𝒙 !, 𝒚 ! !"#
+
+> $!"#"
+
+EDMD 
+
+Koopman matrix 𝐾 
+
+Take logarithm of 𝐾 
+
+Koopman generator 
+
+𝐿 = log 𝐾 / 𝑇 %
+
+(b) Proposed method 
+
+Snapshot pairs 𝒙 !, 𝒚 ! !"#
+
+> $!"#"
+
+(Koopman matrix 𝐾 )
+
+(Eigendecomposition )
+
+Koopman eigenvalue 𝜆 & and eigentensor 𝚵 
+
+Take logarithm of 𝜆 &
+
+Koopman generator 
+
+𝐋 = 𝚵 ⋅ diag log 𝜆 & /𝑇 % ⋅ 𝚵 ' 
+
+> FIG. 2. Illustration of the proposed method for computing the Koop-man generator in the TT format. (a) shows the conventional matrix-logarithm-based approach, whereas (b) summarizes the proposed ap-proach based on the eigendecomposition relationship. In the pro-posed method, the logarithm is applied to the eigenvalues rather than to the Koopman matrix, enabling e ffi cient computation in high-dimensional settings. The Koopman matrix and its eigendecompo-sition are shown in parentheses to indicate that the eigenvalues and eigentensors can be computed directly using AMUSEt.
+
+the left-orthonormalized TT format satisfies an orthogonality relation analogous to that of an orthogonal matrix, the pseudo-inverse of Ξ can be computed as 
+
+Ξ+ = UX,rΣX,r A +
+
+=  ΣX,r A+ UT
+
+> X,r
+
+= A+Σ−1
+
+> X,r
+
+UT
+
+> X,r
+
+= nUX,rΣ−1
+
+> X,r
+
+A+ ToT
+
+. (31) The computation process is summarized in Sec. IV B. 6𝚵 
+
+𝚵 !
+
+Σ
+
+FIG. 3. Tensor contraction process for computing the Koopman gen-erator in the TT format. Ξ is the Koopman eigentensor, Σ is the diag-onal matrix of the eigenvalues of the Koopman generator, and Ξ+ is the pseudo-inverse of the Koopman eigentensor. By contracting the last mode of Σ and the first mode of Ξ+, we can obtain the Koopman generator L in the TT format. 
+
+Algorithm 1 Proposed method for Koopman generator iden-tification in the TT format 
+
+Input: Snapshot matrices X, Y ∈ Rd×Ndata 
+
+Output: The Koopman generator in the TT format L 
+
+> 1:
+
+Compute the Koopman eigentensor Ξ and eigenvalues λi via the AMUSEt algorithm.  
+
+> 2:
+
+Compute the pseudo-inverse of the Koopman eigentensor as 
+
+Ξ+ = nUX,r Σ−1
+
+> X,r
+
+A+ ToT
+
+. 
+
+> 3:
+
+Compute the eigenvalues of L: μi = log( λi)/Ts. 
+
+> 4:
+
+Compute the Koopman generator in the TT format as L = Ξ ·
+
+diag( μi) · Ξ+.
+
+V. NUMERICAL EXPERIMENTS 
+
+In this section, we show the results of numerical experi-ments using the proposed method. 
+
+A. Lotka–Volterra system 
+
+To evaluate the accuracy of the proposed method, we first use a 4-dimensional Lotka–Volterra system [22, 23] as a target system. The dynamics and the parameter are given by ˙x1 = −0.12 x1 x2 + 0.6x1,
+
+˙x2 = 0.12 x1 x2 − 0.14 x2 x3 + 0.4x2,
+
+˙x3 = 0.08 x2 x3 − 0.14 x3 x4 + 0.2x3,
+
+˙x4 = 0.06 x3 x4 − 0.42 x4.
+
+(32) We assume that the vector field is polynomial, so the dictio-nary is constructed using monomials of degree up to two in each variable; that is, the highest-degree term is Q4 
+
+> i=1
+
+x2 
+
+> i
+
+, and the tensor is constructed as 
+
+ψ(x) =
+
+> 4
+
+O
+
+> i=1
+
+
+
+1
+
+xi
+
+x2
+
+> i
+
+ . (33) In this setting, the Koopman matrix is of size 3 4 ×34 = 81 ×81, which is easily computed. Because of this, we compare the vector field coe ffi cients between the proposed method and the original matrix-logarithm-based method. 0 10 20 30 40 50 60 70 80 
+
+index 
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> value
+
+ˆw1        
+
+> true
+> predicted
+> 010 20 30 40 50 60 70 80
+
+index 
+
+> 0.1
+> 0.0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> value
+
+ˆw2        
+
+> true
+> predicted
+> 010 20 30 40 50 60 70 80
+
+index 
+
+> 0.1
+> 0.0
+> 0.1
+> 0.2
+> value
+
+ˆw3        
+
+> true
+> predicted
+> 010 20 30 40 50 60 70 80
+
+index 
+
+> 0.4
+> 0.3
+> 0.2
+> 0.1
+> 0.0
+> value
+
+ˆw4
+
+> true
+> predicted
+
+FIG. 4. Vector field coe ffi cients obtained for the Lotka–Volterra sys-tem. The horizontal axis represents the indices of the coe ffi cient vector, and the vertical axis represents the values of the coe ffi cient vector. The blue dots represent the true coe ffi cients, and the orange dots represent the estimated coe ffi cients. All coe ffi cients are nearly identical between the true and estimated values. 
+
+We employ scipy.integrate.solve_ivp function in Python with the explicit Runge–Kutta method of order 5(4) (RK45) to solve the ordinary di ff erential equations shown in Eq. (32) to generate the trajectories. As a parameter set-ting, we use absolute tolerance = 10 −6 and relative tolerance 
+
+= 10 −3. Under the parameter setting, we generate three trajec-tories using three di ff erent initial conditions: x1 = · · · = x4 =
+
+3.0, x1 = · · · = x4 = 5.0, and x1 = · · · = x4 = 8.0. From each trajectory, we sample 5,000 data pairs with a sampling interval of Ts = 0.1. We use Sec. IV B to identify the Koopman gener-ator from the snapshot pairs. For the AMUSEt algorithm, the 7truncation parameter is set to ϵ = 1 − 10 −6.Figure 4 shows the estimates ˆ wk of the coe ffi cients wk. The top panel of the figure shows the estimated vector field coef-ficients for the first dimension ˆ w1. For example, ˆ w1,1 (index 
+
+= 1) corresponds to the term x1, and ˆ w1,5 (index = 5) corre-sponds to the term x1 x2; these two terms appear in the true vector field defined in Eq. (32). The proposed method accu-rately estimates the coe ffi cients, and the estimated values are nearly identical to the true values. To quantitatively evaluate the accuracy, we compute the root-mean-square error (RMSE) defined as RMSE =
+
+vut 1
+
+dN dic 
+
+> d
+
+X
+
+> k=1
+> Ndic
+
+X
+
+> i=1
+
+ wk,i − ˆwk,i
+
+2 (34) and the normalized RMSE (NRMSE) defined as NRMSE =
+
+RMSE /w, where w is the mean of the absolute values of the non-zero coe ffi cients |wk,i|. The resulting errors are RMSE =
+
+1.83 × 10 −5 and NRMSE = 8.05 × 10 −5. The results show that the proposed method can accurately identify the coe ffi cients of the vector field. 
+
+B. Higher-dimensional system 
+
+Next, we use a 10-dimensional Lorenz–96 system [24] as a target system to show the e ff ectiveness of the proposed method in high-dimensional systems. The dynamics are given by the following equations for i = 1, . . . , 10: ˙xi = (xi+1 − xi−2)xi−1 − xi + 8.0, (35) where the indices are periodic, i.e., x−1 = x9, x0 =
+
+x10 , and x11 = x1. We employ the same dictionary as in the previous experiment, consisting of monomials of degree up to two in each variable. In this setting, the Koopman matrix is of size 3 10 ×310 = 59 , 049 ×59 , 049, which is di ffi cult to compute as a matrix due to memory constraints. We generate one trajectory from the initial state x1 = 8.1 and x2, . . . , x10 = 8.0 by using 
+
+TABLE I. Coe ffi cients of the xi+1 xi−1 terms in the Lorenz–96 system. The absolute error for each coe ffi cient is defined as the absolute value of the di ff erence between the true and estimated values, i.e., | ˆwk,i − 1|.Term Absolute error 
+
+x2 x10 5.30 × 10 −5
+
+x3 x1 5.52 × 10 −5
+
+x4 x2 5.50 × 10 −5
+
+x5 x3 6.91 × 10 −5
+
+x6 x4 7.55 × 10 −5
+
+x7 x5 7.92 × 10 −5
+
+x8 x6 6.64 × 10 −5
+
+x9 x7 6.18 × 10 −5
+
+x10 x8 8.02 × 10 −5
+
+x1 x9 8.05 × 10 −5
+
+scipy.integrate.solve_ivp function same as the previous experiment. After discarding the first 100,000 data pairs for initial relaxation, we sample 20,000 data pairs with a sampling interval of Ts = 0.001. The sampling interval is set to be small because the system is highly chaotic. Sec. IV B is used to identify the Koopman generator from the snapshot pairs. For the AMUSEt algorithm, the truncation parameter is set to ϵ = 1 − 10 −6.The number of vector field coe ffi cients is 3 10 = 59 , 049, and it is di ffi cult to check all the coe ffi cients due to the computa-tional cost of evaluating the values from the TT format. There-fore, we check only the coe ffi cients corresponding to terms of total degree up to two, i.e., linear terms xi and quadratic terms xi x j. The resulting errors for these coe ffi cients are RMSE = 5.20 × 10 −5 and NRMSE = 1.89 × 10 −5. Table I shows the estimated coe ffi cients ˆwk for the terms xi+1 xi−1,which appear in the true dynamics. Table II shows the co-effi cients for the terms xi xi+1 as examples of terms correctly identified as zero. The results show that the proposed method can accurately identify the coe ffi cients of the vector field. Furthermore, the memory consumption (defined as the number of elements in the tensor) of the Koopman genera-tor L for the proposed method is 4 .37 × 10 6. In contrast, the memory consumption for the original logarithm method is ex-pected as 59 , 049 2 ≈ 3.49 × 10 9. This result shows that the proposed method significantly reduces the memory consump-tion compared to the original logarithm method, especially in high-dimensional systems. 
+
+VI. CONCLUSION 
+
+In this paper, we proposed a method to identify the Koop-man generator in the TT format from data by using the oper-ator logarithm. The proposed method uses the AMUSEt al-gorithm to compute the Koopman eigenfunctions in the TT format, and then derives the Koopman generator by taking the logarithm of the eigenvalues. We demonstrated the ef-fectiveness of the proposed method through numerical exper-iments on a 4-dimensional Lotka–Volterra system, and a 10-
+
+TABLE II. Coe ffi cients of the xi xi+1 terms, which are not present in the Lorenz–96 system. The absolute error for each coe ffi cient equals the absolute value of the estimate, since the true value is zero. Term Absolute error 
+
+x1 x2 4.07 × 10 −6
+
+x2 x3 5.82 × 10 −6
+
+x3 x4 9.54 × 10 −7
+
+x4 x5 3.72 × 10 −6
+
+x5 x6 1.05 × 10 −5
+
+x6 x7 7.10 × 10 −6
+
+x7 x8 9.43 × 10 −6
+
+x8 x9 4.40 × 10 −6
+
+x9 x10 5.63 × 10 −6
+
+x10 x1 2.20 × 10 −58dimensional Lorenz–96 system. The results showed that the proposed method can accurately identify the coe ffi cients of the vector field while significantly reducing the memory con-sumption compared to the original logarithm method, espe-cially in higher-dimensional systems. This study provides an initial framework for identifying the Koopman generator in the TT format; however, several open problems remain. Further work includes investigating the ro-bustness of the proposed method to noise in the data and in-corporating sparsity-promoting regularization (e.g., LASSO) to obtain sparse coe ffi cient estimates. When the generator is obtained via the operator logarithm, it remains unclear how to enforce sparsity in the estimated coe ffi cients in a principled manner. In addition, the current implementation computes a truncated set of Koopman eigenvalues through matrix eigen-decomposition, which becomes computationally prohibitive for large-scale systems. An important direction for future re-search is to develop scalable algorithms that compute Koop-man eigenvalues e ffi ciently within the TT format. 
+
+Appendix A: Koopman eigenvectors in the TT format 
+
+In this section, we describe how to compute Koopman eigenvalues and eigenvectors in the TT format using the AMUSEt algorithm [20]. The approach first computes the global SVD [25, 26] of the transformed data tensors Ψ(X) and 
+
+Ψ(Y) in the TT format. From these decompositions, we con-struct a reduced Koopman matrix M and then solve an eigen-value problem for M to obtain the Koopman eigenvalues and the corresponding eigenvectors in the TT format. The reduced matrix M can be interpreted as a projection of the Koopman operator onto the subspace spanned by the left singular vectors of Ψ(X). Accordingly, M ∈ Rr×r, where r de-notes the truncation rank (i.e., the number of retained singular values). The procedure for the global SVD is summarized in Algorithm 2 and is otherwise identical to [20]. When comput-ing the truncated SVD, we use a truncation parameter ϵ and determine the threshold based on the cumulative sum of sin-gular values; specifically, we choose the smallest j satisfying 
+
+Σ jσ j
+
+Σiσi
+
+< ϵ. (A1) 
+
+Algorithm 2 Global SVD [25, 26] 
+
+Input: Transformed data tensor Ψ(X) in the TT format 
+
+Output: Global SVD of Ψ(X) in the form Ψ(X) = UX,r ΣX,r VT 
+
+> X,r
+> 1:
+
+for k = 1, . . . , d − 1 do  
+
+> 2:
+
+Reshape Ψ(X)(k) to a matrix T ∈ Rrk−1nk ×rk . 
+
+> 3:
+
+Compute the truncated SVD of T as T ≈ UΣVT with the truncation parameter ϵ. 
+
+> 4:
+
+Set Ψ(X)(k) to a reshaped version of U. 
+
+> 5:
+
+Set Ψ(X)(k+1) to a reshaped version of ΣVTΨ(X)(k+1) . 
+
+> 6:
+
+end for  
+
+> 7:
+
+Reshape Ψ(X)(d) to a matrix T ∈ Rrd−1nd ×rd . 
+
+> 8:
+
+Compute the truncated SVD of T as T ≈ UΣVT with the trunca-tion parameter ϵ. 
+
+> 9:
+
+Set Ψ(X)(d) to a reshaped version of U. 
+
+> 10:
+
+Set Ψ(X)(d+1) to a reshaped version of VT. 
+
+> 11:
+
+Define UX,r = JT(1) K ⊗ · · · ⊗ qT(d)y, ΣX,r = Σ , and VX,r = V.
+
+Algorithm 3 The AMUSEt algorithm [20] 
+
+Input: Snapshot matrices X, Y ∈ Rd×Ndata 
+
+Output: TT approximation of Koopman eigentensor Ξ and eigen-values λi (of K) 
+
+> 1:
+
+Compute global SVDs of Ψ(X) and Ψ(Y), i.e., Ψ(X) =
+
+UX,r ΣX,r VT 
+
+> X,r
+
+and Ψ(Y) = UY,r ΣY,r VT 
+
+> Y,r
+
+. 
+
+> 2:
+
+Compute the reduced matrix M = Σ −1 
+
+> X,r
+
+UT 
+
+> X,r
+
+UY,r ΣY,r VY,r VT 
+
+> X,r
+
+. 
+
+> 3:
+
+Compute eigenvalues λi of M and eigenvectors vi. 
+
+> 4:
+
+Express the eigentensor with respect to the original basis as Ξ =
+
+UX,r ΣX,r [v1 · · · vr ]. Σ!,#       
+
+> $%
+> 𝐔 !,#
+> &
+> 𝚿 𝑌
+> 𝚿 𝑋 &
+> 𝐔 !,#Σ!,#
+> $%
+> Σ!,#
+> $%
+> 𝐔 !,#
+> &
+> 𝐔 ',#Σ',#𝑉 ',#𝑉 !,#
+> &
+
+# =
+
+FIG. 5. Graphical representation of the reduced-matrix computation. The tensors UX,r and UY,r are left-orthonormalized so that the contrac-tions can be performed e ffi ciently. Since we define Ψ(Y) = KΨ(X), the tensor contraction sequence di ff ers from that in the original algo-rithm. 
+
+Using the global SVD, we obtain the decompositions 
+
+Ψ(X) = UX,rΣX,rVT 
+
+> X,r
+
+and Ψ(Y) = UY,rΣY,rVT
+
+> Y,r
+
+, where UX,r and 
+
+UY,r are orthogonal tensors in the TT format, ΣX,r and ΣY,r are diagonal matrices, and VX,r and VY,r are orthogonal matrices. The reduced matrix M is then computed as 
+
+M = Σ −1
+
+> X,r
+
+UT
+
+> X,r
+
+UY,rΣY,rVY,rVT
+
+> X,r
+
+. (A2) 9In this paper, some tensor contractions in Eq. (A2) di ff er from those in [20] due to our convention of defining the dictionary as a column vector. The detailed computation of M is sum-marized in Algorithm 3, and an overview of the contraction sequence is illustrated in Fig. 5. 
+
+ACKNOWLEDGMENTS 
+
+This work was supported by JST FOREST Program (Grant Number JPMJFR216K, Japan). 
+
+[1] S. L. Brunton, J. L. Proctor, and J. N. Kutz, “Discovering gov-erning equations from data by sparse identification of nonlinear dynamical systems,” Proc. Natl. Acad. Sci. , vol. 113, no. 15, pp. 3932–3937, March 2016. DOI:10.1073 /pnas.1517384113 [2] L. Boninsegna, F. N¨ uske, and C. Clementi, “Sparse learning of stochastic dynamical equations,” J. Chem. Phys. , vol. 148, no. 24, article no. 241723, March 2018. DOI:10.1063 /1.5018409 [3] Y. Huang, Y. Mabrouk, G. Gompper, and B. Sabass, “Sparse in-ference and active learning of stochastic di ff erential equations from data,” Sci. Rep. , vol. 12, no. 1, article no. 21691, Decem-ber 2022. DOI:10.1038 /s41598-022-25638-9 [4] B. O. Koopman, “Hamiltonian systems and transformation in Hilbert space,” Proc. Natl. Acad. Sci. , vol. 17, no. 5, pp. 315– 318, May 1931. DOI:10.1073 /pnas.17.5.315 [5] C. W. Rowley, I. Mezi´ c, S. Bagheri, P. Schlatter, and D. S. Henningson, “Spectral analysis of nonlinear flows,” 
+
+J. Fluid Mech. , vol. 641, pp. 115–127, December 2009. DOI:10.1017 /S0022112009992059 [6] P. J. Schmid, “Dynamic mode decomposition of numerical and experimental data,” J. Fluid Mech. , vol. 656, pp. 5–28, August 2010. DOI:10.1017 /S0022112010001217 [7] M. O. Williams, I. G. Kevrekidis, and C. W. Rowley, “A data– driven approximation of the Koopman operator: extending dy-namic mode decomposition,” J. Nonlinear Sci. , vol. 25, no. 6, pp. 1307–1346, December 2015. DOI:10.1007 /s00332-015-9258-5 [8] I. Mezi´ c, “Koopman operator, geometry, and learning of dy-namical systems,” Notices Amer. Math. Soc. , vol. 68, no. 7, pp. 1087–1105, August 2021. DOI:10.1090 /noti2306 [9] S. L. Brunton, M. Budiˇ si´ c, E. Kaiser, and J. N. Kutz, “Modern Koopman theory for dynamical systems,” SIAM Rev. , vol. 64, no. 2, pp. 229–340, May 2022. DOI:10.1137 /21M1401243 [10] S. Klus, F. N¨ uske, S. Peitz, J.-H. Niemann, C. Clementi, and C. Sch¨ utte, “Data-driven approximation of the Koopman generator: model reduction, system identification, and con-trol,” Physica D , vol. 406, article no. 132416, May 2020. DOI:10.1016 /j.physd.2020.132416 [11] A. Mauroy, and J. Goncalves, “Koopman-based lifting tech-niques for nonlinear systems identification,” IEEE Trans. Au-tomat. Contr. , vol. 65, no. 6, pp. 2550–2565, June 2020. DOI:10.1109 /TAC.2019.2941433 [12] J. D. Carroll, and J.-J. Chang, “Analysis of individual di ff er-ences in multidimensional scaling via an n-way generalization of “Eckart-Young” decomposition,” Psychometrika , vol. 35, no. 3, pp. 283–319, September 1970. DOI:10.1007 /BF02310791 [13] L. R. Tucker, “Some mathematical notes on three-mode factor analysis,” Psychometrika , vol. 31, no. 3, pp. 279–311, Septem-ber 1966. DOI:10.1007 /BF02289464 [14] I. V. Oseledets, “A new tensor decomposition,” Dokl. Math. , vol. 80, no. 1, pp. 495–496, August 2009. DOI:10.1134 /S1064562409040115 [15] I. V. Oseledets, “Tensor-train decomposition,” SIAM J. Sci. Comput. , vol. 33, no. 5, pp. 2295–2317, January 2011. DOI:10.1137 /090752286 [16] D. Perez-Garcia, F. Verstraete, M. M. Wolf, and J. I. Cirac, “Matrix product state representations,” Quantum Info. Comput. ,vol. 7, no. 5, pp. 401–430, July 2007. [17] U. Schollw¨ ock, “The density-matrix renormalization group in the age of matrix product states,” Ann. Phys. , vol. 326, no. 1, pp. 96–192, January 2011. DOI:10.1016 /j.aop.2010.09.012 [18] A. Novikov, D. Podoprikhin, A. Osokin, and D. Vetrov, “Ten-sorizing neural networks,” Proc. NIPS’15, vol. 1, pp. 442–450, December 2015. [19] A. Chertkov, and I. Oseledets, “Solution of the Fokker–Planck equation by cross approximation method in the tensor train for-mat,” Front. Artif. Intell. , vol. 4, article no. 668215, August 2021. DOI:10.3389 /frai.2021.668215 [20] F. N¨ uske, P. Gelß, S. Klus, and C. Clementi, “Tensor-based computation of metastable and coherent sets,” Phys-ica D, vol. 427, article no. 133018, December 2021. DOI:10.1016 /j.physd.2021.133018 [21] M. L¨ ucke, and F. N¨ uske, “tgEDMD: approximation of the Kol-mogorov operator in tensor train format,” J. Nonlinear Sci. , vol. 32, no. 4, article no. 44, August 2022. DOI:10.1007 /s00332-022-09801-0 [22] A. J. Lotka, “Contribution to the theory of periodic reactions,” 
+
+J. Phys. Chem. , vol. 14, no. 3, pp. 271–274, March 1910. DOI:10.1021 /j150111a004 [23] N. S. Goel, S. C. Maitra, and E. W. Montroll, “On the Volterra and other nonlinear models of interacting populations,” 
+
+Rev. Mod. Phys. , vol. 43, no. 2, pp. 231–276, April 1971. DOI:10.1103 /RevModPhys.43.231 [24] E. N. Lorenz, “Predictability – a problem partly solved,” Proc. Seminar on Predictability , vol. 1, pp. 1–18, September 1995. [25] S. Klus, P. Gelß, S. Peitz, and C. Sch¨ utte, “Tensor-based dy-namic mode decomposition,” Nonlinearity , vol. 31, no. 7, pp. 3359–3380, July 2018. DOI:10.1088 /1361-6544 /aabc8f [26] P. Gelß, S. Klus, J. Eisert, and C. Sch¨ utte, “Multidimensional approximation of nonlinear dynamical systems,” J. Comput. Nonlinear Dyn. , vol. 14, no. 6, article no. 061006, April 2019. DOI:10.1115 /1.4043148

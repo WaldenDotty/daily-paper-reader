@@ -1,0 +1,295 @@
+Title: On-board Telemetry Monitoring in Autonomous Satellites: Challenges and Opportunities
+
+URL Source: https://arxiv.org/pdf/2604.08424v1
+
+Published Time: Fri, 10 Apr 2026 01:31:31 GMT
+
+Number of Pages: 15
+
+Markdown Content:
+# On-board Telemetry Monitoring in Autonomous Satellites: Challenges and Opportunities 
+
+## Lorenzo Capelli 1 Leandro de Souza Rosa 1
+
+## Maurizio De Tommasi 1 Livia Manovi 1 Andriy Enttsel 1
+
+## Mauro Mangia 1 Riccardo Rovatti 1 Ilaria Pinci 2
+
+## Carlo Ciancarelli 2 Eleonora Mariotti 3
+
+## Gianluca Furano 31 University of Bologna, Italy {l.capelli, leandro.desouzarosa, maurizio.detommasi, livia.manovi, andriy.enttsel, mauro.mangia, riccardo.rovatti}@unibo.it  
+
+> 2
+
+## Thales Alenia Space Italia, Rome, Italy {ilaria.pinci, carlo.ciancarelli}@thalesaleniaspace.com  
+
+> 3
+
+## European Space Agency (ESA-ESTEC), Netherlands {eleonora.mariotti,gianluca.furano}@esa.int 
+
+Abstract 
+
+The increasing autonomy of spacecraft demands fault-detection sys-tems that are both reliable and explainable. This work addresses eX-plainable Artificial Intelligence for onboard Fault Detection, Isolation and Recovery within the Attitude and Orbit Control Subsystem by introducing a framework that enhances interpretability in neural anomaly detectors. We propose a method to derive low-dimensional, semantically annotated encodings from intermediate neural activations, called peepholes. Applied to a convolutional autoencoder, the framework produces interpretable in-dicators that enable the identification and localization of anomalies in reaction-wheel telemetry. Peepholes analysis further reveals bias detec-tion and supports fault localization. The proposed framework enables the semantic characterization of detected anomalies while requiring only a marginal increase in computational resources, thus supporting its feasi-bility for on-board deployment. 
+
+# 1 Introduction 
+
+The rapidly evolving space segment is expected to grow in mission scope and market size, redefining the boundaries between ground and onboard operations 1
+
+> arXiv:2604.08424v1 [cs.AI] 9 Apr 2026
+
+[1, 2, 3]. Satellites are progressively shifting from passive to active systems, ca-pable of interpreting telemetry, reacting to anomalies, and making time-critical decisions directly in orbit [4]. This paradigm shift, marked by the massive intro-duction of on-board intelligence, promises to enhance autonomy, reduce latency, and improve resilience against unforeseen conditions [5, 6, 7]. However, it intro-duces fundamental challenges concerning reliability, certification, and trust, as understanding and explaining the on-board autonomous decision-making pro-cess is as important as its raw performance [8, 9]. Among the various spacecraft subsystems, we consider a Fault Detection, Isolation and Recovery (FDIR) block as a strong motivating example as it rep-resents a particularly relevant case to study autonomy. In conventional architec-tures, FDIR logic relies on predefined thresholds, confirmation times, and oper-ator supervision [10]. While effective for known failure modes, this deterministic approach cannot anticipate slow degradations or unknown faults, especially in long-duration missions, and is not adequate for real-time applications due to its ground dependency. To overcome these shortcomings, recent works focus on embedding critical parts of the FDIR chain on-board, such as the monitoring of actuators of the Attitude and Orbit Control Subsystem (AOCS), dramatically reducing reaction times [11, 12]. Yet, delegating anomaly detection and identi-fication actions to a Machine Learning (ML)-based onboard system raises a key question: how can we trust an algorithm that operates autonomously in orbit? Despite the success of black-box Deep Neural Networks (DNNs) for anomaly detection, their opacity is unacceptable given that they offer limited insights on why the anomalies are detected [13]. For safety-critical applications such as spacecraft control, operators must trace the reasoning behind autonomous deci-sions to validate their correctness and ensure accountability [14, 15]. Therefore, eXplainable Artificial Intelligence (XAI) becomes a foundational requirement, not an optional feature, for the deployment of trustworthy onboard autonomy [8, 16], motivating the emergence of Explainable Anomaly Detection (EAD) for spacecraft telemetry and model-level diagnostics to support verification, valida-tion, and operator acceptance [17]. In this context, explainability, beyond post-hoc visualization, must be em-bedded into the decision loop. For on-board FDIR, this entails generating inter-pretable health indicators linked to physical quantities (e.g., current, vibration, or torque signatures) and conveying them to ground control together with confi-dence levels and causal evidence [18, 19, 20]. A possible approach envisages the adoption of Physics-informed models, a promising path toward this goal. They combine data-driven adaptability with physically meaningful structure and con-straints, improving robustness and interpretability [21, 18]. Embedding such models in an autonomous on-board loop can facilitate human understanding of the system’s behavior, enable verifiable responses, and ultimately reinforce trust in satellite autonomy [16, 8]. Nevertheless, the deployment of these ap-proaches on a platform with limited capabilities could represent a constraint to their usability. Differently, this paper addresses these challenges and opportunities by in-troducing a framework that extracts high-level information directly from the 2internal activations of a fully data-driven model. Specifically, we consider the case of an advanced FDIR system that integrates a neural anomaly detector and enriches its decisions with semantic side information. The objective is to provide, for each alert, concise evidence describing the shape of the event and where the event is more evident. This auxiliary output facilitates the localiza-tion of the probable fault source. We also provide evidence that such semantic characterization can surface potential monitoring biases, revealing when and how the model’s internal focus may drift or over-emphasize specific channels, modes, or operating conditions. As a case study, we implemented the proposed approach using a Convolu-tional Neural Network (CNN)-based Autoencoder as an anomaly detector that processes telemetry data from four Reaction Wheel (RW) units controlled by the AOCS. The network is coupled with the proposed non-neural processing chain applied to its intermediate activations to generate human-interpretable, compact descriptors. We emphasize that the framework is designed to trans-form raw detections into actionable and transparent evidence, supporting both on-board decision-making and post-event analysis. The remainder of this paper is organized as follows. Section 2 formalizes the proposed framework, detailing its three main stages: dimensionality reduction, statistical characterization, and semantic mapping. Section 3 applies the frame-work to an advanced FDIR use case within the AOCS, describing the reference scenario, the autoencoder-based anomaly detector, the synthetic anomaly mod-els, and the adopted evaluation protocol. Section 3.2 summarizes the numerical evidence, while Section 4 discusses the main findings, current limitations, and outlines directions for future work focused on bias analysis. 
+
+# 2 Mathematical model for peephole extraction 
+
+As a reference, we consider a general DNN that accepts an input tensor X
+
+and produces an output ℓ(X). This mapping is realized through a sequence of intermediate layers, each of which transforms the input activations x into the output tensor y.Our framework processes the intermediate activations of a DNN to produce a peephole vector, which represents a semantically annotated, low-dimensional encoding that enables high-level inspection of the network’s internal behavior. Starting from the model’s activation in a single layer, our framework employs a three-stage non-neural processing pipeline as depicted in Fig. 1: i) a dimen-sionality reduction step that reduces the high-dimensional activation vector to a compact and equivalent representation of its information content, called 
+
+corevector v; ii ) a statistical characterization of those vectors to capture the structure of the corevectors by clustering their typical positions in the v sig-nal space; iii ) a semantic mapping where the positions of the corevectors with respect to the identified clusters are associated with a set of high-level, human-interpretable features, which facilitate the network’s output interpretation and are summarized in the final peephole vector ⃗p.3DR   
+
+> SC SM
+> High level Features
+> p
+> vd
+
+Figure 1: Block scheme of the proposed framework extracting peephole vectors ⃗p from a target layer involving three stages: dimensionality reduction (DR), statistical characterization (SC), and semantic mapping (SM). As the main structure for the target layer, we focus on dense linear layers, which produce an output y according to an affine transformation of the input 
+
+x:
+
+y = [ W |b]
+
+x
+
+1
+
+
+
+= A
+
+x
+
+1
+
+
+
+, (1) where W and b are a matrix and a vector containing the neurons’ weights and the corresponding biases, while A remains implicitly defined. Most often, this kind of layer is followed by non-linear blocks, normalization, or aggregation layers 1.
+
+## 2.1 Dimensionality reduction 
+
+To derive a reduced-dimensional representation of y that preserves the role of the neurons’ parameters, we construct an auxiliary output v based on the Singular Value Decomposition (SVD) [22] of the mapping in eq. (1). 
+
+A = P ΣQ⊤, (2) where P and Q are square orthonormal matrices containing left and right sin-gular vectors, respectively, while Σ is a rectangular diagonal matrix containing the singular values, conventionally sorted in non-increasing order. Let Q′ and Σ′ denote the matrices containing the first κ columns of Q, and the first κ singular values of Σ, respectively. It is then possible to define a rank-κ approximation A′ = P Σ′Q′⊤ such that the Frobenius norm ∥A − A′∥F
+
+is minimized. 
+
+> 1Note that (1) is a general form that models also other classes of layers, e.g., convolutional layers.
+
+4This property enables the definition of an auxiliary k-dimensional vector that preserves the effect of A on x, defined as follows: 
+
+v = Q′⊤ 
+
+x
+
+1
+
+
+
+. (3) 
+
+## 2.2 Statistical characterization 
+
+This step aims to characterize, from a statistical perspective, how the vectors 
+
+v are distributed within their k-dimensional space. To this end, all vectors are normalized to have zero mean and unit variance, after which a clustering algorithm is applied to capture their distribution. The statistical distribution of the normalized corevectors is modeled using a Gaussian Mixture Model (GMM) [23], which defines C Gaussian components. Each component is associated with a membership probability function γi : Rκ →
+
+R+, estimating the likelihood that a given v belongs to the i-th cluster. The estimated likelihoods are then grouped in a membership vector d ∈ RC with components 
+
+di = γi(v)
+
+PC−1 
+
+> j=0
+
+γj (v) (4) For each cluster, GMM gives as output a center ⃗μ ∈ R κ, a covariance matrix 
+
+K ∈ Rκ×κ, and a weight ϕi such that 
+
+γi(v) = ϕi
+
+p(2 π)κ det( Ki) exp 
+
+
+
+− 12 (v −⃗μ i)⊤K−1 
+
+> i
+
+(v −⃗μ i)
+
+
+
+(5) Note that d in (4) is a C-tuple of non-negative real numbers that can be interpreted as probability assignments to C mutually exclusive events. 
+
+## 2.3 Semantic mapping 
+
+This final stage produces a vector that links the information passing through the target layer to a set of high-level, human-interpretable features. This is achieved by associating the statistical characterization obtained from the clustering stage with a set of human-inspectable tags. Following the ap-proach in [24], this relationship is modeled through two functions, c : Rκ 7 →{0, . . . , C − 1} and g : Rκ 7 → { 0, . . . , T − 1}, which map each corevector re-spectively to a cluster and to a tag. The connection between c(v) and g(v) can be expressed in probabilistic form as 
+
+Pr {g(v) = i} =
+
+> C−1
+
+X
+
+> j=0
+
+Pr {g(v) = i|c(v) = j} Pr {c(v) = j} (6) where d can be interpreted as a probability distribution such that Pr {c(v) = 
+
+j} = dj . The conditional probabilities U i,j = Pr {g(v) = i | c(v) = j} form a matrix that must be empirically estimated from data. Assuming that a set of 5examples is given such that for each instance in that set we know the conceptual label, we may compute the number ui,j of joint events 
+
+ui,j = |{ ℓ(vt) = i ∧ c(vt) = j}| (7) and finally estimate the matrix U as follows 
+
+Ui,j = ui,j L−1X
+
+> k=0
+
+uk,j 
+
+(8) Once estimated, U is used to generate the final auxiliary output ⃗p = U d that is named peephole . In other words, the peephole relates Low-Level Feature (LLF) learned by the DNN with High-Level Feature (HLF), which have meaning to humans through means of the empirical posterior knowledge encoded in U .Note that two parameters control the peephole extraction and tailor the proposed generic inspection mechanism to a specific application, optimizing its performance, namely the corevectors dimension κ, and number of clusters C
+
+used to estimate the relationships between LLFs and HLFs through U .
+
+# 3 Numerical Evidence 
+
+## 3.1 Reference scenario 
+
+As discussed in Section 1, we focus on the detection of anomalies performed by an advanced FDIR controlling the operation of the AOCS. In particular, the reference case considered in this study is the detection of anomalous events in telemetry data from an on-board AOCS equipped with four RWs, data collected during an ESA Earth Observation mission. The RWs provide continuous and precise attitude control by compensating for environmental disturbances. Each RW is driven by an electric motor, whose sensor’s telemetry is processed by the FDIR system. The focus of this work is on the first FDIR stage, detecting potential sources of non-ideal behavior. Telemetry associated with the RW includes parameters such as motor per-formance, rotational dynamics, and thermal conditions, offering a detailed char-acterization of their operational states. The dataset used in this study contains data from four RWs (RW0–RW3), each providing four time series, for a total of 16 telemetry channels. These channels are processed by a detector designed to identify previously unseen anomalous events. The dataset is segmented into chunks X ∈ R16 ×16 , where the first dimension represents the window length, i.e., the number of samples per time series, and the second dimension corresponds to the number of time series included in each window. The subset of chunks representing the nominal system behavior is used for training and validation to determine the parameters of the detector. The training set consists of 8.5 × 10 5 samples, while validation and test sets include 
+
+2.1 × 10 5 and 1.2 × 10 5 samples, respectively. 6For anomaly detection, we employ an Autoencoder, a neural architecture composed of two main networks. The first network, the encoder, compresses the input X into a latent representation ⃗z, which resides in a lower-dimensional manifold capturing the most salient information. The second stage, the decoder, takes ⃗z as input and reconstructs an output tensor ˆX that aims to replicate the original input X.More specifically, the encoder stage consists of two convolutional blocks (lay-ers with 38 and 76 filters, stride set to 1, and a kernel size of 3 ×3), followed by a flattening layer and a fully connected layer that produces the latent rep-resentation ⃗z ∈ R 256 . The decoder mirrors the encoder architecture, employing transposed convolutional layers to reconstruct the input from the latent space. The model architecture comprises a total of approximately two million param-eters. The networks’ parameters are trained by minimizing a loss function given by the Mean Squared Error (MSE) computed as the expectation of ∥X − ˆX∥2 
+
+> F
+
+,where MSE acts also as an anomaly score. The reference model achieved a validation loss of 8.64 × 10 −5.To simulate different fault conditions, normal instances are synthetically corrupted to generate anomalous samples [25], denoted as X′ in the following discussion. These anomalies are parameterized to maintain a Signal-to-Noise Ratio (SNR) of 0 dB , ensuring a challenging detection scenario. Five distinct types of synthetic anomalies are introduced into the dataset. Each anomaly type is mathematically defined and controlled through parameters that regulate the severity of the perturbation. Specifically, given a single telemetry channel 
+
+w (column of X): 
+
+Additive noise (GWN): Zero-mean white Gaussian noise is added to each element of the data instance w. The anomalous instance is defined as 
+
+w′ = w + aν,
+
+where ν ∼ N (0, I), with I the identity matrix and a ∈ R+ determines the intensity of the injected anomaly. 
+
+Offset: A constant offset with a random sign is uniformly applied to all elements of each data instance w. The anomaly is modeled as 
+
+w′ = w ± a1,
+
+where 1 is an all-ones vector. 
+
+Impulse: A spike with a random sign is inserted at randomly selected positions in each telemetry. The position j of the spike is uniformly sampled in 
+
+{0, . . . , 15 }.
+
+w′ = w ± aej ,
+
+where ej is the indicator (canonical basis) vector with a one at position j
+
+and zeros elsewhere. 7Power Spectral Alteration (PSA): Nominal instances are corrupted by ap-plying a random rotation matrix Rθ , i.e., 
+
+w′ = Rθ w,
+
+where the rotation angle θ ∈ [0 , π ] controls the degree of alteration in the data and is set as θ = arccos(1 − a2/2) .
+
+Step: As in the constant offset anomaly, the telemetry signal is perturbed by adding an offset with a random sign. In this case, however, the offset is applied only to a subset of the first 8 or the last 8 time samples within the current w.
+
+w′ = w ± a
+
+> i+7
+
+X
+
+> j=i
+
+ej ,
+
+with i uniformly selected in {0, 8}.More precisely, we generate two different versions of X′. In a first case, we apply the same anomaly to all 16 channels of X, and we denote it as X′ 
+
+> I
+
+. In a second scenario, we apply the same anomaly only to those channels associated with a specific RW. The corresponding dataset is identified as X′ 
+
+> II
+
+. In both cases, for each anomaly, the intensity a is set such that the anomalies and nor-mal signals have the same expected energy, i.e. E[∥w′∥22] = E[∥w∥22], ensuring 
+
+SNR = 0 dB .The autoencoder, trained to minimize the MSE on nominal inputs, is sub-sequently used to generate anomaly scores that discriminate between nominal instances X and anomalous instances X′ 
+
+> I
+
+or X′ 
+
+> II
+
+. To assess its performance, the distributions of the scores assigned to nominal and anomalous samples are compared using the AUC (Area Under the Receiver Operating Characteristic Curve) metric [26]. The AUC represents the probability that the score assigned to a nominal instance X is lower than that assigned to an anomalous instance 
+
+X′ 
+
+> I
+
+or X′ 
+
+> II
+
+. An AUC value approaching 1 indicates a perfect detector, whereas 
+
+AUC = 0 .5 corresponds to a purely random predictor. The obtained results, summarized in Tab. 1, indicate that the trained au-toencoder performs as an almost perfect anomaly detector. Finally, a threshold is applied to the anomaly score to produce a binary output: a label of 0 de-notes predicted nominal behavior, while a label of 1 indicates the detection of an anomalous or uncommon pattern. The threshold value is chosen such that the false positive rate remains below 0.001 . Each label of 1 activates the block that, using the proposed framework, extracts a peephole vector from the dense layer producing the latent representation ⃗z (see Fig. 2). 
+
+## 3.2 Semantic analysis 
+
+The peephole extractor described in Sec. 2 is an interpretability tool that goes a step further in the direction of identification and isolation. Furthermore, 8Table 1: AUC values for the five types of synthetic anomalies. GWN Offset Impulse PSA Step 
+
+X′ 
+
+> I
+
+1 1 1 1 1
+
+X′ 
+
+> II
+
+1 0.97 1 1 1
+
+Figure 2: Block diagram of the autoencoder producing anomaly score, including semantic extraction from the encoder’s last layer it enhances a better understanding of how the autoencoder is performing the detection task. In detail, we conduct some experiments that aim to verify the ability to extract information about both the type of anomaly and its location directly from the analysis of the internal activations of the layer that produces the latent-space representation, without introducing any additional neural classification blocks. This is done by using κ = 50 and C = 50 . The adoption of a neural classifier would lead to two undesirable effects: on one hand, it would reintroduce an opaque classification module requiring a dedicated training phase and offering no benefits in terms of explainability; on the other hand, it would risk making the detection and classification mechanism too computationally demanding to be deployed onboard. To inspect the capability of the proposed framework to extract semantic information from the internal activation, avoiding the need for a further neural block, we analyze the peepholes generated respectively from X′ 
+
+> I
+
+and X′ 
+
+> II
+
+under the condition that such instances are marked as anomalous by the autoencoder-based detector. Regarding the former case, starting from the anomalies described in Sec-tion 3.1, we generate corrupted versions of both the validation and test sets, each containing the same number of instances for every anomaly type. These anomaly types also serve as the HLFs used to derive the matrix U in (8). The second scenario considers X′ 
+
+> II
+
+as the anomalous instances. In this case, anomalies are injected only into the channels associated with a specific RW target, which defines the second class of HLFs. As in the previous scenario, an analysis of the anomaly types can still be carried out. Moreover, it is possible to generate distinct sets of peepholes based on the particular RW where the anomalies have been injected, treating the RW as a HLF. Note that this enables 9(a) Perturbation applied to all channels. (b) Perturbation applied to a single RW. 
+
+Figure 3: Anomaly identification when applied to all channels or to a single RW. identifying which part of the monitored subsystem is causing the anomaly. Concerning the ability to identify the specific anomaly type triggered by the autoencoder, the corresponding confusion matrices for the two considered scenarios are presented in Fig. 3. Each matrix entry represents the estimated probability of classifying an anomaly of the type indexed by the row as the one indexed by the column, with darker shades denoting higher probabilities. Reported results evidence that the peephole is well aligned with this first task, the autoencoder tends to separate anomalies with different shapes except for the PSA case, where the detection partially overlaps with GWN and Step. In the second scenario, when anomalies corrupt the telemetries associated with one RW, although the ability to distinguish the anomaly shapes is less pronounced than in the first scenario, a tendency to group semantically similar anomalies can be observed. In particular, GWN and PSA appear partially overlapped, as do the constant and step anomalies. By considering the identification of the perturbed RW through peepholes 
+
+in the second scenario, the results are reported in Figure 4(a). The obtained results show that there is a slight differentiation among the different RW; how-ever, a strong bias towards the first RW is visible. This result highlights a bias exhibited by the trained autoencoder. This preliminary result was further inves-tigated by analyzing whether the identification of the RW was influenced by the typology of applied anomaly. As the confusion matrices presented in Fig. 4(b)– (f) show, the bias towards RW0 is not uniformly visible on all anomalies. In particular, impulse and GWN perturbation are easily identified on all 4 RW. The bias towards RW0 is instead particularly evident on the remaining families of anomalies. In Figure 5 we report the application of the proposed framework for the identification of a real anomaly present in the test set and identified by domain experts. In this last case, the sequence of peephole generated in correspondence with a real anomaly found in the dataset is presented. Specifically, Fig. 5 first shows the 16 telemetry signals, followed by the Autoencoder’s score profile, 10 (a) Overall (b) Offset (c) GWN   
+
+> (d) Impulse (e) PSA (f) Step
+
+Figure 4: Confusion matrices for RW identification using Peephole for five anomalies. and finally a visual representation of all the computed peephole vectors. The latter highlights a semantic signature of the anomaly, which is confirmed by the telemetry data, displaying a trend consistent with an offset- or step-type anomaly. 
+
+# 4 Conclusion 
+
+This work introduces a framework for explainable onboard anomaly detection in autonomous spacecraft, based on low-dimensional, semantically annotated encoding vectors derived from neural activations, named peephole . Applied to a convolutional autoencoder trained on real reaction wheel telemetry, the approach enables interpretable insights into the detected anomalies. The peephole allows the identification of the type and origin of anomalies directly from the latent representation, without additional neural classifiers, thus maintaining transparency and low computational cost. Preliminary results also revealed its potential for bias inspection, highlighting how detection behavior may vary across reaction wheels and anomaly types. 11 Figure 5: Telemetries of a true anomalous event along with the autoencoder’s score and the corresponding peepholes vectors visualized as a heatmap. 12 5 Acknowledgment 
+
+This study was partially carried out within the FAIR - Future Artificial Intelli-gence Research and received funding from the European Union Next-Generation EU (Piano Nazionale di Ripresa e Resilienza (PNRR) – Missione 4 Compo-nente 2, Investimento 1.3 – D.D. 1555 11/10/2022, PE00000013, and PE7 -CUP J33C22002810001, D.D. 341 15/03/2022 PE00000014). This manuscript reflects only the authors’ views and opinions, neither the European Union nor the European Commission can be considered responsible for them. 
+
+# References 
+
+[1] European Space Agency (ESA). ESA Earth Observation Science Strategy. Technical report, European Space Agency (ESA), sep 2024. [2] National Aeronautics and Space Administration (NASA). Earth Science to Action. Technical report, National Aeronautics and Space Administration (NASA), 2024. [3] Planet Labs PBC. Pelican-2 & 36 SuperDoves Arrived in Vandenberg, California For Launch, December 2024. Planet Pulse news article; describes Pelican-2 equipped with NVIDIA Jetson for edge AI. [4] Gianluca Furano, Gabriele Meoni, Aubrey Dunne, David Moloney, Veronique Ferlet-Cavrois, Antonis Tavoularis, Jonathan Byrne, Léonie Buckley, Mihalis Psarakis, Kay-Obbe Voss, et al. Towards the use of artifi-cial intelligence on the edge in space systems: Challenges and opportunities. 
+
+IEEE Aerospace and Electronic Systems Magazine , 35(12):44–56, 2020. [5] Gianluca Giuffrida, Luca Fanucci, Gabriele Meoni, Matej Batic, Leonie Buckley, Aubrey Dunne, Chris Van Dijk, Marco Esposito, John Hefele, Nathan Vercruyssen, Gianluca Furano, Massimiliano Pastena, and Josef Aschbacher. The Φ-Sat-1 Mission: The First On-Board Deep Neural Net-work Demonstrator for Satellite Earth Observation. IEEE Transactions on Geoscience and Remote Sensing , 60:1–1, 2022. Cited by: 114; All Open Access, Hybrid Gold Open Access. [6] Georges Labreche, David Evans, Dominik Marszk, Tom Mladenov, Vasund-hara Shiradhonkar, Tanguy Soto, and Vladimir Zelenevskiy. OPS-SAT Spacecraft Autonomy with TensorFlow Lite, Unsupervised Learning, and Online Machine Learning. In 2022 IEEE Aerospace Conference (AERO) ,volume 2022-March, pages 1–17, 2022. Cited by: 26. [7] Gonzalo Mateo-Garcia, Josh Veitch-Michaelis, Cormac Purcell, Nicolas Longepe, Simon Reid, Alice Anlind, Fredrik Bruhn, James Parr, and Pierre Philippe Mathieu. In-orbit demonstration of a re-trainable machine learning payload for processing optical imagery. Scientific Reports , 13(1), 2023. Cited by: 18; All Open Access, Gold Open Access. 13 [8] Luca Nannini, Jose Maria Alonso-Moral, Alejandro Catalá, Manuel Lama, and Senén Barro. Operationalizing explainable AI in the EU regulatory ecosystem. IEEE Intelligent Systems , 2024. [9] Nancy G. Leveson. Engineering a Safer World: Systems Thinking Applied to Safety . MIT Press, Cambridge, MA, 2011. [10] Xavier Olive. FDI (R) for satellites: How to deal with high availability and robustness in the space domain? International Journal of Applied Mathematics and Computer Science , 22(1):99–107, 2012. [11] Yuxue Zheng, Haijun Dou, Hutao Cui, and Minqiang Xu. Control moment gyroscope anomaly detection based on sparse autoencoder. In Journal of Physics: Conference Series , number 1, page 012061. IOP Publishing, 2024. [12] Kuan Zhang, Shuchen Wang, Saijin Wang, and Qizhi Xu. Anomaly detec-tion of control moment gyroscope based on working condition classification and transfer learning. Applied Sciences , 13(7):4259, 2023. [13] Lukas Ruff, Jacob R. Kauffmann, Robert A. Vandermeulen, Grégoire Mon-tavon, Wojciech Samek, Marius Kloft, Thomas G. Dietterich, and Klaus-Robert Müller. A Unifying Review of Deep and Shallow Anomaly Detec-tion. Proceedings of the IEEE , 109(5):756–795, 2021. [14] Marco Tulio Ribeiro, Sameer Singh, and Carlos Guestrin. “Why should I trust you?” Explaining the predictions of any classifier. In Proceedings of the 22nd ACM SIGKDD international conference on knowledge discovery and data mining , pages 1135–1144, 2016. [15] Zachary C Lipton. Mythos of Model Interpretability. Queue , 16(3):31–57, 2018. [16] Andrew Schumann. Four Principles of Explainable Artificial Intelligence .Number NIST.IR.8312 in NIST Technical Series Publications. National In-stitute of Standards and Technology, 2021. [17] Sara Cuéllar Carrillo, Matilde Santos Peñas, Fernando Alonso, Ernesto Fabregas, and Gonzalo Farias. Explainable anomaly detection in spacecraft telemetry. Engineering Applications of Artificial Intelligence , 133:1–15, 02 2024. [18] Diyin Tang, Mengtong Gong, Limei Tian, Jinsong Yu, Jiyang Zhang, and Qiang Zhang. Health indicator construction of high-speed rotating bearings in aerospace CMG based on physics-inspired machine-learning approach. 
+
+IEEE Transactions on Instrumentation and Measurement , 71:1–11, 2022. [19] Carlo Ciancarelli, Eleonora Mariotti, Francesco Corallo, Salvatore Cognetta, Livia Manovi, Alex Marchioni, Mauro Mangia, Riccardo Rovatti, and Gianluca Furano. Innovative ml-based methods for automated on-board spacecraft anomaly detection. In International Conference on Ap-plied Intelligence and Informatics , pages 213–228. Springer, 2022. 14 [20] Junfu Chen, Dechang Pi, Zhiyuan Wu, Xiaodong Zhao, Yue Pan, and Qiang Zhang. Imbalanced satellite telemetry data anomaly detection model based on Bayesian LSTM. Acta Astronautica , 180:232–242, 2021. [21] Yuandi Wu, Brett Sicard, and Stephen Andrew Gadsden. Physics-informed machine learning: A comprehensive review on applications in anomaly detection and condition monitoring. Expert Systems with Applications ,255:124678, 2024. [22] Shmuel Friedland and Anatoli Torokhti. Generalized Rank-Constrained Matrix Approximations. SIAM Journal on Matrix Analysis and Applica-tions , 29(2):656–659, 2007. [23] A. P. Dempster, N. M. Laird, and D. B. Rubin. Maximum Likelihood from Incomplete Data Via the EM Algorithm. Journal of the Royal Statistical Society: Series B (Methodological) , 39(1):1–22, 12 2018. [24] Yu han Liu and Sercan O. Arik. Explaining Deep Neural Networks using Unsupervised Clustering, 2020. [25] Andriy Enttsel, Silvia Onofri, Alex Marchioni, Mauro Mangia, Gianluca Setti, and Riccardo Rovatti. A General Framework for the Assessment of Detectors of Anomalies in Time Series. IEEE Transactions on Industrial Informatics , 20(10):12051–12061, 2024. [26] Tom Fawcett. An introduction to ROC analysis. Pattern Recognition Let-ters , 27(8):861–874, 2006. ROC Analysis in Pattern Recognition. 15
