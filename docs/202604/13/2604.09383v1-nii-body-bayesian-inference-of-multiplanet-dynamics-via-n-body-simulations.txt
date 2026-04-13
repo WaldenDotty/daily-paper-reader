@@ -1,0 +1,937 @@
+Title: Nii-body: Bayesian Inference of Multiplanet Dynamics via N-body Simulations
+
+URL Source: https://arxiv.org/pdf/2604.09383v1
+
+Published Time: Mon, 13 Apr 2026 01:14:31 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+Astronomical Techniques and Instruments, Vol. 1, September 2024, 560–566 
+
+Article Open Access 
+
+# Nii-body : Bayesian Inference of Multiplanet Dynamics via N-body Simulations 
+
+Hong-Fei Jia 1 , Sheng Jin ∗1 , Dong-Hong Wu 1 and Shang-Fei Liu 2,3   
+
+> 1Department of Physics, Anhui Normal University, Wuhu, Anhui 241002, China; jins@ahnu.edu.cn
+> 2School of Physics and Astronomy, Sun Yat-sen University, Zhuhai 519082, China;
+> 3CSST Science Center for the Guangdong-Hong Kong-Macau Great Bay Area, Sun Yat-sen University, Zhuhai 519082, China
+
+*Correspondence: jins@ahnu.edu.cn Received: March 26, 2023; Accepted: October 26, 2023; Published Online: December 26, 2023; https://doi.org/10.61977/ati2024999 
+
+©2024 Editorial Office of Astronomical Techniques and Instruments, Yunnan Observatories, Chinese Academy of Sciences. This is an open access article under the CC BY 4.0 license (http://cretivecommons.org/licenses/by/4.0/) Citation: Jia, H.-F. et al. 2024. Nii-body : Bayesian Inference of Multiplanet Dynamics via N-body Simulations , Astronomical Techniques and Instruments , 1(5), 560–566, https://doi.org/10.61977/ati2024999 
+
+Abstract: Many exoplanetary systems are multiplanet configurations whose long-term dynamics are governed by N-body gravitational interactions. Consequently, their detection signatures cannot be adequately described by Keplerian orbits. Accurately interpreting the observational data of these systems—including radial velocity (RV), astrometry, and transit timing variations (TTVs)—requires N-body integration. Motivated by this need, we developed a Bayesian fitting framework that couples N-body integration with Markov chain Monte Carlo (MCMC) to retrieve the system parameters of multiplanet systems. The code, named Nii-body , integrates an adaptive Runge–Kutta–Fehlberg 7(8) (RKF78) solver with an automated parallel tempering MCMC algorithm. Using simplified synthetic astrometric observations, we evaluated the efficiency and robustness of Nii-body ’s N-body orbit retrieval on an idealized two-planet model, demonstrating its potential for future application to real observational data. The N-body fitting workflow can be readily extended to RV, TTVs, or combined datasets, providing a versatile engine for high-precision orbital inference in multiplanet systems. 
+
+Keywords: methods: numerical — methods: statistical — celestial mechanics — planetary systems 
+
+1. INTRODUCTION 
+
+Over the past three decades, exoplanet surveys have revealed that planetary systems are a common result of star formation [1–4] . These systems exhibit a wide range of architectures, including multiplicity, orbital spacing, and dynamical structure [2, 5–8] . Statistics from the transit detections by the Kepler space telescope have revealed the prevalence of compact, multiplanet systems and have also enabled population-level constraints on occurrence rates and system architectures [9–11] . Ongoing catalog curation and follow-up observations have shifted the exoplanet re-search from discovery-driven to characterization-driven [1] .This expanding field of study calls for quantitative, dy-namic models that link observed architectures to forma-tion channels, migration histories, and long-term stability. Such models are particularly important for multiplanet systems, where planet–planet interactions can reshape configurations on secular timescales [12, 13] .Characterizing an exoplanetary system encompasses fitting observational data obtained by several detec-tion techniques from different missions. RV monitor-ing measures the host star’s line-of-sight reflex mo-tion and remains a workhorse for constraining planetary masses [14, 15] . TTVs encode planet–planet interactions and can constrain planetary masses and eccentricities, particularly in compact and resonant systems [16, 17] .High-precision astrometry measures the sky-plane reflex motion and can break the m sin i degeneracy by constrain-ing inclination and the full three-dimensional architec-ture [18–22] .Bayesian inference provides robust posterior con-straints on orbital parameters for time-series data from various detection methods [23] . For multiplanet systems, 
+
+> arXiv:2604.09383v1 [astro-ph.EP] 10 Apr 2026
+
+Bayesian orbital fitting requires generating a time se-ries at every likelihood evaluation, an operation that becomes computationally expensive when N-body integra-tion is used. Consequently, many widely used tools—e.g. 
+
+EXOFIT [24] and ORVARA [25] —adopt a Keplerian superposi-tion approach in which the orbital motion of a multiplanet system is modeled as a linear sum of independent two-body orbits. This approximation is adequate for short data spans or when planet-planet interactions are weak. However, it fails catastrophically when perturbations ac-cumulate [26] . This situation is encountered in resonant, or near-resonant, configurations and in tightly packed architectures [27] . In these regimes, mutual planetary perturbations can drive long-term drifts in the observables from RV, astrometry, and TTVs, which invalidate the Keplerian superposition method. In such cases, accurate characterization of the system parameters can only be achieved using a self-consistent N-body forward model. To obtain rigorous Bayesian fits of multiplanet systems, several codes now incorporate direct N-body integration. Examples include PlanetPack [28, 29] ,
+
+Exo-Striker [30] , and orbitize! [31] , the latter pro-viding seamless interfaces to REBOUND and its high-precision IAS15 integrator [32, 33] . In this work, we in-troduce Nii-body 1, an open source orbit fitting code that integrates the RKF78 integrator with an automatic parallel tempering Markov chain Monte Carlo (MCMC) algorithm [34, 35] . Based on retrieval tests using idealized synthetic astrometric observations, Nii-body is able to recover orbital parameters from the full parameter space through blind searches, demonstrating its potential for future application to real observational data. This paper is organized as follows. Section 2. describes the implementation details of our N-body MCMC fit-ting algorithm. Section 3.1 benchmarks the accuracy and speed of the internal RKF78 integrator of Nii-body with the REBOUND package. Section 3.2 validates the retrieval performance of Nii-body by fitting synthetic astrometric observations of the Kepler-9 system. Section 4. provides a brief summary. 
+
+2. BAYESIAN N-BODY FITTING 
+
+2.1 RKF78 Orbit Integrator 
+
+Although Keplerian superposition provides an efficient method for calculating the orbits of multiplanet systems due to its computational efficiency, this approximation can cause significant long-term drifts in the phase and amplitude of observables, particularly in systems with  
+
+> 1https://github.com/shengjin/nii-body.git
+
+Table 1: Parameters used to generate the synthetic as-trometric signals of the Kepler-9 system, taken from the TTVs fitting results [40] .               
+
+> Planet Mp(M⊕)P(days) ei(deg) Kepler-9 b 41.71 19.247 0.0638 88.94 Kepler-9 c 30.79 38.944 0.0680 89.18
+
+strong planet-planet interactions and resonant or near-resonant architectures [16, 17, 26] .Figure 1 compares the synthetic astrometric observa-tions of the host star’s wobble in the two-planet Kepler-9 system, as calculated using N-body integrations that account for the mutual interactions between the planets, with those obtained by superposing two independent Keplerian signals (i.e., assuming each planet orbits the star independently, without interactions with the other). The parameters used to generate the synthetic astrometric observations of the Kepler-9 system are listed in Table 1. The Kepler-9 system features two planets, Kepler-9 b and Kepler-9 c, in a 2:1 mean motion resonance, resulting in strong gravitational perturbations between them. As shown in Figure 1, the signal obtained via Keplerian superposition is inadequate for reproducing the long-term drift of the system, illustrating the importance of N-body integrations for accurately interpreting the ob-servables of multiplanet systems. Note that the magnitude of the astrometric signals is far below the precision of the current GAIA mission [36] . The main purpose of this test case is to assess the retrieval capability of N-body dynamics of the Nii-body code. Such capability is essen-tial for future high-precision missions, including concepts such as THEIA [37, 38] and CHES [39] , for which dynamical signatures at the microarcsecond level are expected to be achievable. 
+
+Nii-body integrates the gravitational N-body dy-namics with an embedded RKF78 solver that has local-error tolerance and adaptive step-size control [41, 42] . For each object, we track its three-dimensional state vector described by 
+
+ξi = ( xi, y i, z i, v x,i , v y,i , v z,i ) (1) where xi, y i, z i give the barycentric position and 
+
+vx,i , v y,i , v z,i give the velocity of the i-th object. The RKF78 solver then integrates the standard Newtonian N -body equations of motion in barycentric coordinates, 
+
+dri
+
+dt = vi, dvi
+
+dt = ∑ 
+
+> j̸=i
+
+mj
+
+rj − ri
+
+|rj − ri|3 , (2) where ri = ( xi, y i, z i) and vi = ( vx,i , v y,i , v z,i ) are the barycentric position and velocity vectors of the ith body,   
+
+> Astronomical Techniques and Instruments, 1(5), 560–566, 2024
+
+561 Fig. 1: Synthetic astrometric signals of the host star in the Kepler-9 system, influenced by gravitational perturbations from two planets in a 2:1 resonance. The first and third panels show the time series of the astrometric offsets of right ascension (∆ α) and declination (∆ δ), respectively. The red curve is calculated using N-body integrations that account for the mutual interactions between the planets, while the blue curve is obtained by superposing two independent Keplerian signals. The second and fourth panels show the residuals between the two models (defined as N-body minus Keplerian) for ∆ α and ∆ δ, respectively, thereby making the dynamical perturbation signal more clearly visible. The system parameters used to generate the synthetic signals are listed in Table 1. respectively. In the code implementation, the Cartesian states are shifted to the system barycenter before inte-gration, and the equations are solved in code units with 
+
+G = 1. Our code provides conversion libraries between Cartesian coordinates and the Keplerian elements, specif-ically ( P, e, i, ω, Ω, M 0), where P is the orbital period, 
+
+e the eccentricity, i the inclination, ω the argument of periastron, Ω the longitude of the ascending node, and M0
+
+the mean anomaly. Both representations can be output on demand during the integration, enabling the N-body integration results to be translated into various synthetic observables without external preprocessing, such as RV, astrometry, TTVs. The RKF78 orbit integrator is implemented in the C programming language to facilitate easy combination with the automatic parallel tempering MCMC algorithm [35] ,which will be detailed in the next section. During the integration, lengths are expressed in astronomical units (AU), masses in solar masses ( M⊙), and time is converted to a dimensionless variable of t = 2 π · year, resulting in a gravitational constant of G = 1 in the code units. 
+
+2.2 Synthetic Observations 
+
+To convert three-dimensional orbital motion into ob-servable quantities of a planetary system, Nii-body im-plements internal modules that generate synthetic astro-metric and RV signals directly from N -body integrations. Our synthetic model neglects the difference between the barycenter and the photocenter, as well as the contribu-tion of planetary companions to the measured photocen-ter. The astrometric signal is therefore given entirely by the reflex motion of the host star. 
+
+562 www.ati.ac.cn Fig. 2: Schematic illustration of the coordinate system used for the synthetic astrometric and radial velocity ob-servables. The origin O is placed at the system barycenter. The host has a barycentric displacement described by ∆X⋆, ∆ Y⋆ , and ∆ Z⋆. The x–y plane represents the plane of the sky, and the positive Z axis points from the observer toward the system barycenter, so that the observer is located at z = −D.Figure 2 illustrates the coordinate system and the geometry underlying the synthetic observations. For syn-thetic astrometric observations, the three-dimensional barycentric position of the host star, as determined by N-body integration, is projected onto the right ascension and declination plane of the sky, simulating the exact viewing geometry of a real astrometric measurement. Let the stellar displacement from the system barycenter be the vector (∆ X⋆, ∆Y⋆, ∆Z⋆), and place the observer along the negative z axis at a distance D from the system barycenter. Under the small-angle approximation, the astrometric offsets are given by ∆α(t) ≃ ∆X⋆(t)
+
+D , ∆δ(t) ≃ ∆Y⋆(t)
+
+D , (3) where D is the distance from an observer on Earth, ∆ α(t)represents the astrometric offset in right ascension, ∆ δ(t)represents the offset in declination. The unit of astrometric wobbles in the code is microarcseconds ( μas). Our simple astrometric model neglects parallax, proper motion and any bulk drift of the system. It considers only the barycen-tric reflex motion of the host star. Note that, due to this omission, our work is intended only as a proof-of-concept for N-body orbit retrieval of theoretical two-planet pertur-bations, under strong simplifications that omit important parameters such as parallax, proper motion, and others. In realistic applications, we should perform simultaneous fitting of these parameters together with the planetary signal to resolve additional degeneracies. For synthetic RV observations, Nii-body uses the time derivative of the stellar barycentric displacement along the line of sight: 
+
+vRV (t) = − d ∆Z⋆
+
+dt . (4) We neglect the contribution from the Earth’s motion in the calculation of the RV signals. 
+
+Nii-body therefore enables a self-consistent numerical description of N-body gravitational interactions, facili-tating the accurate modeling of the astrometric and RV observations of multiplanet systems. 
+
+2.3 MCMC Fitting 
+
+N-body integrations produce synthetic astrometric and RV signals that are compared with observed data to compute the likelihood of a given parameter set. Likelihoods computed for the multitude of parameter sets explored by MCMC are combined with the priors to map the full posterior distribution, which is the cornerstone of Bayesian parameter inference. Finally, the marginal means (or modes) of the posterior distribution provide the maximum-a-posteriori (MAP) estimates of the orbital parameters. We adopt uniform priors for all model pa-rameters. Assuming we have obtained N measurements of a star’s astrometric motion over time, the likelihood function for the observed 2 N values of ∆ α(t) and ∆ δ(t), given a parameter set θ, is computed as follows: 
+
+L = A exp 
+
+{
+
+−
+
+> N
+
+∑
+
+> i=1
+
+[∆α′(ti) − ∆α(ti)]2
+
+2ϵ2
+
+> x
+
+}
+
+× exp 
+
+{
+
+−
+
+> N
+
+∑
+
+> i=1
+
+[∆δ′(ti) − ∆δ(ti)]2
+
+2ϵ2
+
+> x
+
+} (5) where 
+
+A = (2 π)−NN∏
+
+> i=1
+
+(ϵ2
+
+> x
+
+)−1/2
+
+> N
+
+∏
+
+> i=1
+
+(ϵ2
+
+> x
+
+)−1/2 (6) where ∆ α(ti) and ∆ δ(ti) denote the synthetic as-trometric offsets for the ith observation, while ∆ α′(ti)and ∆δ′(ti) represent the offsets computed from the model corresponding to parameter set θ at that epoch, 
+
+ϵx represents the adopted 1 σ measurement uncertainty. Note that in this synthetic observation model, we assume independent and isotropic Gaussian observational errors in right ascension and declination, such that the same uncertainty ϵx is adopted for both coordinates at all epochs. In real cases, this model should be replaced by a covariance-based formulation to make the methodology more general. We plan to implement such a realistic   
+
+> Astronomical Techniques and Instruments, 1(5), 560–566, 2024
+
+563 model in the future when real observational data become available. 
+
+Nii-body implements the automatic parallel-tempering MCMC framework given by the Nii-C 
+
+code [35] , which is a high-performance MCMC library written in modern C. The Nii-C MCMC sampler resolves challenges in sampling high-dimensional or multimodal distributions using two complementary techniques. First, parallel tempering helps chains escape local modes and enhances exploration of the global parameter space. Second, an automated control system activates during the initial tuning phase, optimizing each chain’s proposal distributions to ensure a high late-stage sampling acceptance rate. In general, the MCMC process is divided into an initial tuning stage and a subsequent production stage. During the tuning stage, the Gaussian proposal widths for each parameter are adjusted automatically to maintain a favorable acceptance rate while the parallel samplers explore the parameter space to locate the global mode. Once the tuning stage is complete, the sampler reverts to a standard parallel-tempering MCMC with fixed Gaussian proposals to preserve the Markovian property. Only this later production stage is used for posterior inference. A detailed illustration of this workflow can be found in Jin et al.(2024) [35] . We assess whether the MCMC chains have reached convergence using the Gelman-Rubin criterion 
+
+> [43]
+
+, applied to eight independent runs with different initial random seeds. In addition to the rapid convergence delivered from its built-in automatic parallel-tempering MCMC engine, 
+
+Nii-body gains further speed from its complete implemen-tation in the C programming language, ensuring a high computing efficiency. At least for the idealized synthetic astrometric observations used in this work, Nii-body can recover orbital parameters from the full parameter space through blind searches in most runs, with a computational cost that remains practical despite the intrinsic expense of 
+
+N -body MCMC fitting. Section 3.2 provides examples of the astrometric fit-ting of a two-planet system with a total of 15 parameters. Using one million MCMC steps on an Intel i7-12650H CPU laptop, Nii-body achieves convergence in approx-imately 24 hours. The computational cost of the present implementation is expected to increase with the number of planets, the number of observational epochs, and the modeled time span, because each likelihood evaluation re-quires an N -body integration over the full fitting baseline together with the computation of synthetic observables at the prescribed epochs. A systematic characterization of this scaling is beyond the scope of the present validation paper and will be investigated in future work. Our cur-rent work is intended only to demonstrate the accuracy and practical feasibility of N-body orbit retrieval using 
+
+Nii-body with a simple two-planet model. 
+
+3. NUMERIC TESTS 
+
+3.1 N-body Benchmarks 
+
+To verify both the accuracy and speed of our RKF78 N-body integrator, we ran a suite of benchmarks against the REBOUND code [32] . The test case is a miniature solar system containing only the Sun, Earth and Jupiter (SEJ). We integrated this SEJ configuration for 10,000 years, with a 100-year output cadence, using identical starting conditions and compared the trajectories and execution times produced by Nii-body ’s RKF78 inte-grator and REBOUND ’s IAS15 integrator for a set of pre-scribed error tolerances ( err toler ) applied at each timestep: 10 −14 , 10 −12 , 10 −10 , 10 −8. All benchmarks were executed on a laptop with an Intel i7-12650H CPU. Figure 3 compares the x, y, and z coordinate discrepancies between the trajectories computed by 
+
+Nii-body /RKF78 and REBOUND /IAS15 for the SEJ bench-mark. Both codes employ an error tolerance of 10 −14 . The residuals between the two trajectories remain negligibly small throughout the 10,000-year integration, confirming close numerical agreement between the implementations. To quantify the relative precision of REBOUND ’s IAS15 integrator, we computed the Root Mean Square Error (RMSE) as a metric, defined as: RMSE = 
+
+√√√√ 1
+
+N
+
+> N
+
+∑
+
+> k=1
+
+∥∥rA(tk) − rB (tk)∥∥2. (7) where N is the number of equally spaced timeseries points 
+
+tk (k = 1, . . . , N ) output by the two integrators over 10,000 years, and rA(tk) and rB (tk) denote the three-dimensional position vectors returned by Nii-body and 
+
+REBOUND at epoch tk, respectively. Table 2 summarizes the execution times of Nii-body ’s RKF78 integrator and REBOUND ’s IAS15 integrator for all the benchmarks. It gives the RMSE computed with a 100-year output cadence, corresponding to N = 100 in Equation 7. The negligible RMSEs between the two integrators confirm that the trajectories computed by the two codes are identical, as shown in Figure 3. Table 2 also compares the computational efficiency of the two codes by averaging the execution times across 5 independent runs, demonstrating that the RKF78 integrator implemented in Nii-body is computationally efficient. It is important to note that these benchmarks are intended to validate 
+
+564 www.ati.ac.cn Table 2: Benchmarks between Nii-body ’s RKF78 and 
+
+REBOUND ’s IAS15 integrators on the SEJ system over 10,000 years.                          
+
+> err toler tNii-body tREBOUND RMSE (s) (s) (AU) 10 −14 4.984 5.193 2.158 ×10 −14
+> 10 −12 2.712 2.821 4.601 ×10 −12
+> 10 −10 1.727 1.891 2.615 ×10 −10
+> 10 −80.993 1.135 4.682 ×10 −8
+
+the accuracy and numerical performance of Nii-body ’s RKF78 integrator for orbit-fitting problems, and are not meant to recommend it as a general-purpose choice for all long-term N -body applications. A direct end-to-end comparison with other existing N -body fitting frameworks using the same synthetic Kepler-9 data set lies beyond the scope of the present work. We leave such a comparison to future studies. 
+
+3.2 Astrometric fitting 
+
+Since the primary purpose of Nii-body is orbital fitting of multiplanet systems, we assess its performance using synthetic astrometric signals. The Kepler-9 system, listed in Table 1, is ideal for testing N-body fitting of planetary gravitational interactions because it hosts two planets in a 2:1 near-resonant configuration. We therefore selected the first five years of the host star’s astrometric time series, as shown by the red curves in Figure 1, sampled with a uniform cadence of 5 days. We also added Gaussian observational noise with a standard deviation of 1 μas to each coordinate at every epoch, correspond-ing to ϵx = 1 μas in Equation 5 , i.e., an identical isotropic uncertainty adopted for both right ascension and declination. Since this work only aims to be a proof-of-concept validation based on synthetic observation, rather than an analysis of real astrometric measurements, our current model retains only the reflex motion of the host star about the system barycenter, and does not include proper motion, parallax, or the bulk barycentric drift of the system. The additional parameters and degeneracies that would arise from these effects are therefore beyond the scope of the present paper, but will be addressed in future applications to real observational data. Figure 4 shows the theoretical astrometric wobbles and synthetic observations generated assuming a Gaussian observational bias of 1 μas in both right ascension and declination. Using these synthetic astrometric data, we performed Bayesian orbital fitting by coupling automatic parallel-tempering MCMC sampling with N-body orbital integra-tion. For the Kepler-9 integrations used in the present fitting experiment, we also monitored the relative conser-vation of the total energy and angular momentum over the five-year fitting window. Here, the total energy and angular momentum are defined as 
+
+E = ∑
+
+> i
+
+12 miv2 
+
+> i
+
+− ∑
+
+> i<j
+
+mimj
+
+rij 
+
+, (8) 
+
+L = ∑
+
+> i
+
+mi(ri × vi), (9) and the corresponding relative drifts are evaluated as 
+
+∣∣∣∣
+
+E(t) − E0
+
+E0
+
+∣∣∣∣ ,
+
+∣∣∣∣
+
+|L(t)| − | L0||L0|
+
+∣∣∣∣ . (10) The maximum values of these two quantities are 1 .27 ×
+
+10 −13 and 1 .62 × 10 −14 , respectively, indicating that no significant secular drift is present at the adopted integra-tion tolerance. Every model parameter was assigned a uniform prior whose bounds are listed in Table 3. Due to the robust global-convergence capabilities in-herited from the Nii-C MCMC engine [35] , the N-body fitting to the synthetic astrometric data can converge from a blind search—no initial guesses required—within 1,000,000 iterations. A typical MCMC run of this length finishes in ∼ 24 hours on an Intel i7-12650H laptop. Figure 5 presents the corner plot using the last 500,000 iterations from one N-body fitting. For a two-planet system, there are a total of 15 system parameters: a planetary mass and six orbital elements for each planet, plus the standard deviation of the Gaussian observational bias. The posterior means from the MCMC sampling are consistent with the values used to generate the synthetic observational data listed in Table 1. Note that astrometric data alone cannot uniquely determine the angular param-eters Ω and ω, due to the degeneracy between Ω and Ω + π, or ω and ω + π. Complementary information— such as radial velocity measurements—can help break this ambiguity. The fitted astrometric motion corresponding to the parameters obtained from the N-body MCMC retrieval is also presented in Figure 4. The consistency between the theoretical wobbles and the fitted motion demonstrates 
+
+Nii-body ’s N-body fitting capability. To test the robustness of the N-body fitting, we conducted eight automatic parallel tempering MCMC runs using Nii-body . All control parameters for the eight runs were set to the same values, with the only difference being the initial random seeds for the MCMC. Table 4 summarizes the major system parameters of the Kepler-9 system retrieved from eight N-body fitting MCMC runs. The results show that 6 of the 8 runs — a 75% recovery   
+
+> Astronomical Techniques and Instruments, 1(5), 560–566, 2024
+
+565 Fig. 3: The differences in the x, y, and z coordinates (∆ x, ∆ y and ∆ z) between the trajectories computed by 
+
+Nii-body /RKF78 and REBOUND /IAS15 for the SEJ benchmark. The residuals remain small over the full 10,000-year integration, confirming the close numerical agreement between the two codes. Table 3: Prior distributions of the planetary orbital pa-rameters.                             
+
+> Parameter Prior Min Max
+> P(days) Uniform 1.0 100
+> Mp( M⊕)Uniform 1.0 100
+> eUniform 00.5
+> iUniform 090 ΩUniform 02πωUniform 02πM0Uniform 02πϵx(μas) Uniform 0.1 10
+
+rate — successfully retrieved the planetary parameters of the Kepler-9 system. Run 4 did not achieve convergence; it exhibits a large lower uncertainty in the fitted orbital period of the first planet, reported as 19 .23 +0 .01 
+
+> −12 .48
+
+. This large lower error bar arises because there is another high-density island at longer periods in the posterior distribution, and the MCMC in Run 4 has not yet reached global convergence. A plausible explanation is that the uniform time sampling used in our model to generate synthetic astrometric data can introduce harmonics, lead-ing to local maxima in the likelihood function. Another failed run is Run 3. Although it correctly recovers the planetary mass and orbital period, it yields a higher eccentricity and lower inclination, indicating a potential degeneracy between these two parameters. The higher-eccentricity, lower-inclination combination found in Run 3 yields a marginally lower posterior probability, and forward integration shows that this configuration is long-term unstable. Runs 3 and 4 show that, while Nii-body 
+
+reliably retrieves planetary masses and orbital periods, 
+
+566 www.ati.ac.cn Fig. 4: The black lines show the theoretical astrometric wobbles of the simulated Kepler-9 star over the five-year period, assuming a distance of 5 pc. The dots and their error bars represent the synthetic observations of the system, generated by adding Gaussian observational noise with a standard deviation of σ = 1 μas on the theoretical astrometric wobbles. The red lines depict the fitted astrometric motion corresponding to the parameters obtained from the N-body MCMC retrieval. The close agreement between the black and red lines demonstrates the effectiveness of Nii-body ’s N-body fitting approach. independent MCMC chains remain essential to confirm full global convergence. To verify the necessity of using N-body MCMC fitting, we repeated the retrieval exercise with eight independent automated parallel tempering MCMC runs employing a Keplerian superposition model [35] . The lower half of Table 4 summarizes the resulting posteriors: none of the eight MCMC runs recovered the true parameters, and the extremely broad credible intervals indicate a failure to converge. Therefore, for systems like Kepler-9, where planets b and c reside in a 2:1 mean motion resonance, the Keplerian superposition model is inadequate, and N-body fitting is essential for accurately determining the system parameters. The explanation is straightforward: the Keplerian superposition model ignores planet–planet perturbations that are dynamically dominant in compact, interacting architectures, whereas the N-body forward model incorporates them self-consistently. 
+
+4. SUMMARY 
+
+We introduce Nii-body , an open source N-body MCMC fitting code primarily developed for the Bayesian retrieval of orbital parameters in multiplanet systems. The code implements an RKF78 integrator to track the gravitational interactions within a planetary system with high accuracy and practical computational performance. Equipped with the automatic parallel tempering MCMC engine inherited from Nii-C [35] , Nii-body provides an effective framework for Bayesian retrieval of orbital pa-rameters in dynamically interacting multiplanet systems.   
+
+> Astronomical Techniques and Instruments, 1(5), 560–566, 2024
+
+567 Fig. 5: Corner plot displaying the marginal posterior distributions of all 15 parameters obtained from a N-body MCMC fitting run. Note that this corner plot corresponds to Run 8, which converges to a single mode of Ω and ω. Thus, no post-processing was needed to merge potential bimodal distributions for these parameters. However, this is not always the case for general runs, which can sometimes yield bimodal distributions of Ω and ω.We tested the N-body orbital fitting performance of 
+
+Nii-body using synthetic astrometric observations mod-eled after the Kepler-9 two-planet system, assuming a distance of 5 pc. Nii-body reached convergence from ran-dom starting points in the full 15-dimensional parameter space in 75% of the runs within approximately 24 hours on an i7-12650H laptop. This performance indicates that N-body orbital retrieval is computationally practical for the synthetic test cases considered in this work. Our test case with the Kepler-9 system further demonstrates that, for compact multiplanet systems exhibiting strong dynamical interactions, particularly those near mean motion reso-nances, N-body orbital integration is mandatory to accu-
+
+568 www.ati.ac.cn Table 4: Principal parameters of the synthetic Kepler-9 system retrieved from eight N -body fittings (upper block) and eight Keplerian-superposition fittings (lower block). Six of the eight N -body runs successfully recovered the planetary parameters, whereas Run 4 did not achieve convergence and Run 3 converged to a degenerate but dynamically unstable solution. None of the Keplerian-superposition fittings recovered the true parameters. 
+
+Case M1 (M⊕) P1 (days) e1 i1 M2 (M⊕) P2 (days) e2 i2 Err obs 
+
+Input truth 41 .71 19 .25 0.06 88 .94 30 .79 38 .94 0.07 89 .18 1.00 Run 1 41 .76 +0 .87  
+
+> −0.87
+
+19 .24 +0 .00  
+
+> −0.00
+
+0.07 +0 .01  
+
+> −0.01
+
+89 .29 +0 .51  
+
+> −0.81
+
+30 .61 +0 .55  
+
+> −0.54
+
+38 .96 +0 .01  
+
+> −0.01
+
+0.02 +0 .00  
+
+> −0.00
+
+89 .02 +0 .65  
+
+> −0.87
+
+0.98 +0 .03 
+
+> −0.03
+
+Run 2 41 .85 +0 .84  
+
+> −0.87
+
+19 .24 +0 .00  
+
+> −0.00
+
+0.06 +0 .01  
+
+> −0.01
+
+89 .32 +0 .48  
+
+> −0.79
+
+30 .58 +0 .55  
+
+> −0.55
+
+38 .96 +0 .01  
+
+> −0.01
+
+0.02 +0 .01  
+
+> −0.01
+
+89 .02 +0 .64  
+
+> −0.89
+
+0.99 +0 .03 
+
+> −0.03
+
+Run 3 41 .71 +1 .23  
+
+> −1.10
+
+19 .22 +0 .00  
+
+> −0.00
+
+0.40 +0 .00  
+
+> −0.00
+
+85 .78 +0 .36  
+
+> −0.58
+
+29 .88 +0 .62  
+
+> −0.60
+
+39 .05 +0 .01  
+
+> −0.01
+
+0.00 +0 .00  
+
+> −0.00
+
+86 .19 +1 .18  
+
+> −0.53
+
+1.13 +0 .03 
+
+> −0.03
+
+Run 4 41 .77 +42 .05  
+
+> −1.49
+
+19 .24 +0 .01  
+
+> −12 .48
+
+0.08 +0 .01  
+
+> −0.01
+
+89 .30 +0 .51  
+
+> −0.86
+
+30 .58 +0 .57  
+
+> −0.53
+
+38 .97 +0 .01  
+
+> −0.03
+
+0.02 +0 .01  
+
+> −0.01
+
+89 .05 +0 .64  
+
+> −0.86
+
+0.98 +0 .03 
+
+> −0.02
+
+Run 5 41 .77 +0 .85  
+
+> −0.86
+
+19 .24 +0 .00  
+
+> −0.00
+
+0.07 +0 .01  
+
+> −0.01
+
+89 .31 +0 .48  
+
+> −0.76
+
+30 .60 +0 .55  
+
+> −0.53
+
+38 .98 +0 .01  
+
+> −0.02
+
+0.02 +0 .03  
+
+> −0.02
+
+88 .99 +0 .67  
+
+> −0.88
+
+0.98 +0 .03 
+
+> −0.03
+
+Run 6 41 .77 +0 .88  
+
+> −0.88
+
+19 .24 +0 .00  
+
+> −0.00
+
+0.07 +0 .01  
+
+> −0.01
+
+89 .29 +0 .51  
+
+> −0.81
+
+30 .57 +0 .55  
+
+> −0.54
+
+38 .97 +0 .01  
+
+> −0.01
+
+0.01 +0 .01  
+
+> −0.01
+
+89 .02 +0 .65  
+
+> −0.88
+
+0.98 +0 .03 
+
+> −0.03
+
+Run 7 41 .92 +0 .82  
+
+> −0.82
+
+19 .24 +0 .00  
+
+> −0.00
+
+0.06 +0 .02  
+
+> −0.01
+
+89 .37 +0 .45  
+
+> −0.77
+
+30 .51 +0 .54  
+
+> −0.55
+
+38 .97 +0 .01  
+
+> −0.01
+
+0.03 +0 .02  
+
+> −0.02
+
+89 .19 +0 .53  
+
+> −0.82
+
+1.00 +0 .03 
+
+> −0.03
+
+Run 8 41 .58 +0 .87  
+
+> −0.90
+
+19 .24 +0 .00  
+
+> −0.00
+
+0.07 +0 .01  
+
+> −0.01
+
+89 .31 +0 .48  
+
+> −0.75
+
+30 .60 +0 .57  
+
+> −0.55
+
+38 .96 +0 .01  
+
+> −0.01
+
+0.01 +0 .01  
+
+> −0.01
+
+89 .06 +0 .62  
+
+> −0.85
+
+0.98 +0 .03 
+
+> −0.02
+
+Run 1 48 .47 +1 .91  
+
+> −30 .43
+
+6.75 +32 .16  
+
+> −0.00
+
+0.06 +0 .02  
+
+> −0.04
+
+67 .53 +12 .50  
+
+> −25 .14
+
+18 .50 +6 .32  
+
+> −0.56
+
+38 .91 +0 .01  
+
+> −19 .66
+
+0.04 +0 .03  
+
+> −0.02
+
+29 .87 +6 .28  
+
+> −28 .27
+
+0.98 +0 .03 
+
+> −0.03
+
+Run 2 47 .52 +2 .53  
+
+> −29 .51
+
+6.76 +32 .16  
+
+> −0.00
+
+0.05 +0 .02  
+
+> −0.03
+
+42 .45 +6 .24  
+
+> −0.05
+
+18 .78 +6 .11  
+
+> −0.81
+
+38 .90 +0 .01  
+
+> −19 .65
+
+0.04 +0 .04  
+
+> −0.02
+
+58 .09 +0 .04  
+
+> −28 .25
+
+0.98 +0 .03 
+
+> −0.03
+
+Run 3 48 .25 +1 .92  
+
+> −23 .81
+
+6.75 +12 .50  
+
+> −0.00
+
+0.06 +0 .01  
+
+> −0.01
+
+17 .30 +15 .68  
+
+> −0.04
+
+18 .58 +59 .49  
+
+> −0.61
+
+38 .91 +0 .01  
+
+> −34 .47
+
+0.02 +0 .02  
+
+> −0.01
+
+14 .17 +31 .41  
+
+> −0.03
+
+0.98 +0 .03 
+
+> −0.03
+
+Run 4 24 .59 +44 .24  
+
+> −6.33
+
+19 .25 +19 .66  
+
+> −14 .82
+
+0.06 +0 .02  
+
+> −0.04
+
+17 .24 +47 .15  
+
+> −6.25
+
+18 .32 +31 .05  
+
+> −0.43
+
+38 .91 +0 .01  
+
+> −32 .15
+
+0.04 +0 .05  
+
+> −0.02
+
+51 .83 +0 .04  
+
+> −25 .14
+
+0.98 +0 .03 
+
+> −0.02
+
+Run 5 24 .44 +0 .60  
+
+> −0.18
+
+19 .25 +19 .66  
+
+> −0.00
+
+0.06 +0 .02  
+
+> −0.03
+
+45 .52 +37 .72  
+
+> −18 .83
+
+18 .28 +30 .88  
+
+> −0.39
+
+38 .91 +0 .01  
+
+> −32 .16
+
+0.03 +0 .03  
+
+> −0.02
+
+80 .07 +9 .47  
+
+> −65 .91
+
+0.98 +0 .03 
+
+> −0.03
+
+Run 6 49 .08 +21 .39  
+
+> −24 .55
+
+6.75 +12 .50  
+
+> −2.79
+
+0.07 +0 .01  
+
+> −0.01
+
+79 .96 +6 .29  
+
+> −50 .27
+
+18 .13 +0 .32  
+
+> −0.32
+
+38 .91 +0 .01  
+
+> −0.01
+
+0.02 +0 .02  
+
+> −0.01
+
+32 .99 +34 .55  
+
+> −6.29
+
+0.98 +0 .03 
+
+> −0.03
+
+Run 7 66 .13 +5 .07  
+
+> −47 .69
+
+3.97 +34 .93  
+
+> −0.00
+
+0.06 +0 .02  
+
+> −0.03
+
+36 .12 +6 .33  
+
+> −15 .70
+
+18 .23 +5 .89  
+
+> −0.37
+
+38 .91 +0 .01  
+
+> −19 .66
+
+0.02 +0 .03  
+
+> −0.01
+
+39 .28 +12 .59  
+
+> −28 .26
+
+0.98 +0 .03 
+
+> −0.03
+
+Run 8 24 .14 +0 .81  
+
+> −6.06
+
+19 .25 +19 .66  
+
+> −0.00
+
+0.06 +0 .02  
+
+> −0.04
+
+20 .42 +21 .99  
+
+> −15 .71
+
+18 .44 +53 .07  
+
+> −0.52
+
+38 .91 +0 .01  
+
+> −34 .94
+
+0.04 +0 .03  
+
+> −0.03
+
+32 .97 +25 .15  
+
+> −12 .55
+
+0.98 +0 .03 
+
+> −0.03
+
+rately capture the mutual gravitational perturbation and, consequently, to precisely determine the orbital elements. In this paper, we focus solely on astrometric observa-tions of multiplanet systems. However, the fitting frame-work can be readily extended to enable joint dynamical modeling of astrometry, RV, and TTV data, allowing for more comprehensive studies of the dynamical evolution of real exoplanetary systems. A further important direction involves implementing explicit dynamical stability con-straints within MCMC sampling to guarantee long-term stability of fitted orbital configurations. We reserve these developments for future work and intend to incorporate them in subsequent releases. Moreover, Nii-body serves as a general retrieval tool for N-body gravitational interactions across various disci-plines in astrophysics. With additional pipelines for syn-thetic observations, Nii-body can facilitate the fitting of a broad range of N-body gravitational systems, spanning stellar kinematics to galactic-scale dynamics. 
+
+ACKNOWLEDGEMENTS 
+
+This work is supported by National Natural Science Foundation of China (Grant No. 11973094, 12033010, 12573076), the incubation programme for recruited talents (2023GFXK153), and the doctoral start-up funds from Anhui Normal University. 
+
+AUTHOR CONTRIBUTIONS 
+
+Sheng Jin, Dong-Hong Wu, and Shang-Fei Liu con-ceived the ideas. Dong-Hong Wu designed the N-body integration scheme. Hongfei Jia and Sheng Jin wrote the code, performed the numerical experiment, and wrote the manuscript. Shang-Fei Liu validated the N-body benchmarks. All authors read and approved the final manuscript. 
+
+DECLARATION OF INTERESTS 
+
+The authors declare no competing interests. 
+
+Astronomical Techniques and Instruments, 1(5), 560–566, 2024 569 REFERENCES 
+
+[1] Winn, J. N., & Fabrycky, D. C. 2015. The Occurrence and Architecture of Exoplanetary Systems. Annual Review of Astronomy and Astrophysics , 53 , 409–447. [2] Zhu, W., & Dong, S. 2021. Exoplanet Statistics and Theoretical Implications. Annual Review of Astronomy and Astrophysics , 59 , 291–336. [3] Petigura, E. A., Howard, A. W., & Marcy, G. W. 2013. Prevalence of Earth-size planets orbiting Sun-like stars. Proceedings of the National Academy of Science ,
+
+110 (48), 19273–19278. [4] Mulders, G. D., Pascucci, I., Apai, D., et al. 2018. The Exoplanet Population Observation Simulator. I. The Inner Edges of Planetary Systems. The Astronomical Journal , 156 (1), 24. [5] Fang, J., & Margot, J.-L. 2012. Architecture of Planetary Systems Based on Kepler Data: Number of Planets and Coplanarity. The Astrophysical Journal , 761 (2), 92. [6] Lissauer, J. J., Ragozzine, D., Fabrycky, D. C., et al. 2011. Architecture and Dynamics of Kepler’s Candidate Multiple Transiting Planet Systems. Astrophysical Journal, Supplement Series , 197 (1), 8. [7] Muresan, A., Persson, C. M., & Fridlund, M. 2024. Diversities and similarities exhibited by multi-planetary systems and their architectures: I. Orbital spacings. 
+
+Astronomy and Astrophysics , 692 , A122. [8] Mishra, L., Alibert, Y., Udry, S., et al. 2023. Framework for the architecture of exoplanetary systems. I. Four classes of planetary system architecture. Astronomy and Astrophysics , 670 , A68. [9]Borucki, W. J., Koch, D., Basri, G., et al. 2010. Kepler Planet-Detection Mission: Introduction and First Results. Science , 327 (5968), 977. [10] Batalha, N. M., Rowe, J. F., Bryson, S. T., et al. 2013. Planetary Candidates Observed by Kepler. III. Analysis of the First 16 Months of Data. Astrophysical Journal, Supplement Series , 204 (2), 24. [11]Fabrycky, D. C., Lissauer, J. J., Ragozzine, D., et al. 2014. Architecture of Kepler’s Multi-transiting Systems. II. New Investigations with Twice as Many Candidates. The Astrophysical Journal , 790 (2), 146. [12] Pu, B., & Wu, Y. 2015. Spacing of Kepler Planets: Sculpting by Dynamical Instability. The Astrophysical Journal , 807 (1), 44. [13] Smith, A. W., & Lissauer, J. J. 2009. Orbital stability of systems of closely-spaced planets. Icarus , 201 (1), 381– 394. [14] Mayor, M., & Queloz, D. 1995. A Jupiter-mass compan-ion to a solar-type star. Nature , 378 (6555), 355–359. [15] Lovis, C., & Fischer, D. 2010, in Exoplanets, 27–53 [16] Holman, M. J., & Murray, N. W. 2005. The Use of Transit Timing to Detect Terrestrial-Mass Extrasolar Planets. Science , 307 (5713), 1288–1291. [17] Lithwick, Y., Xie, J., & Wu, Y. 2012. Extracting Planet Mass and Eccentricity from TTV Data. The Astrophysical Journal , 761 (2), 122. [18] Sozzetti, A. 2005. Astrometric Methods and Instrumentation to Identify and Characterize Extrasolar Planets: A Review. Publications of Astronomical Society of the Pacific , 117 (836), 1021– 1048. [19] Perryman, M., Hartman, J., Bakos, G. ´A., et al. 2014. Astrometric Exoplanet Detection with Gaia. The Astrophysical Journal , 797 (1), 14. [20] Lindegren, L., Hern´ andez, J., Bombrun, A., et al. 2018. Gaia Data Release 2. The astrometric solution. 
+
+Astronomy and Astrophysics , 616 , A2. [21]Ji, J.-H., Li, H.-T., Zhang, J.-B., et al. 2022. CHES: A Space-borne Astrometric Mission for the Detection of Habitable Planets of the Nearby Solar-type Stars. Research in Astronomy and Astrophysics , 22 (7), 072003. [22] Huang, X., Ji, J., Bao, C., et al. 2025. Closeby Habitable Exoplanet Survey (CHES). III. Retrieval of Planetary Masses in Binaries Using the N-body Model with Radial Velocity and Astrometry Synergy. The Astrophysical Journal , 984 (1), 82. [23] Ford, E. B. 2005. Quantifying the Uncertainty in the Orbits of Extrasolar Planets. The Astronomical Journal , 129 (3), 1706–1717. [24] Balan, S. T., & Lahav, O. 2009. EXOFIT: orbital parameters of extrasolar planets from radial velocities. 
+
+Monthly Notices of the Royal Astronomical Society ,
+
+394 (4), 1936–1944. [25] Brandt, T. D., Dupuy, T. J., Li, Y., et al. 2021. orvara: An Efficient Code to Fit Orbits Using Radial Velocity, Absolute, and/or Relative Astrometry. The Astronomical Journal , 162 (5), 186. [26] Laughlin, G., & Chambers, J. E. 2001. Short-Term Dynamical Interactions among Extrasolar Planets. The Astrophysical Journal Letters , 551 (1), L109–L113. [27] Agol, E., Steffen, J., Sari, R., et al. 2005. On detecting terrestrial planets with timing of giant planet transits. 
+
+Monthly Notices of the Royal Astronomical Society ,
+
+359 (2), 567–579. [28] Baluev, R. V. 2013. PlanetPack: A radial-velocity time-series analysis tool facilitating exoplanets de-tection, characterization, and dynamical simulations. 
+
+Astronomy and Computing , 2, 18–26. [29] Baluev, R. V. 2018. PlanetPack3: A radial-velocity and transit analysis tool for exoplanets. Astronomy and 
+
+570 www.ati.ac.cn Computing , 25 , 221–229. [30] Trifonov, T. 2019, The Exo-Striker: Transit and radial velocity interactive fitting tool for orbital analysis and N-body simulations, Astrophysics Source Code Library, record ascl:1906.004, , [31] Blunt, S., Wang, J. J., Angelo, I., et al. 2020. orbitize!: A Comprehensive Orbit-fitting Software Package for the High-contrast Imaging Community. The Astronomical Journal , 159 (3), 89. [32] Rein, H., & Liu, S.-F. 2012. REBOUND: an open-source multi-purpose N-body code for collisional dynamics. 
+
+Astronomy and Astrophysics , 537 , A128. [33] Rein, H., & Spiegel, D. S. 2015. IAS15: a fast, adap-tive, high-order integrator for gravitational dynamics, accurate to machine precision over a billion orbits. 
+
+Monthly Notices of the Royal Astronomical Society ,
+
+446 (2), 1424–1437. [34] Jin, S., Ding, X., Wang, S., et al. 2022. Nii: a Bayesian orbit retrieval code applied to differential astrometry. 
+
+Monthly Notices of the Royal Astronomical Society ,
+
+509 (3), 4608–4619. [35] Jin, S., Jiang, W., & Wu, D.-H. 2024. Automatic Parallel Tempering Markov Chain Monte Carlo with Nii-C. 
+
+Astrophysical Journal, Supplement Series , 274 (1), 10. [36] Lammers, C., & Winn, J. N. 2026. On the Exoplanet Yield of Gaia Astrometry. The Astronomical Journal ,
+
+171 (1), 18. [37] Malbet, F., L´ eger, A., Anglada Escud´ e, G., et al. 2016. Microarcsecond astrometric observatory Theia: from dark matter to compact objects and nearby earths. In Society of Photo-Optical Instrumentation Engineers (SPIE) Conference Series. DOI: 10.1117/12.2234425 
+
+[38] The Theia Collaboration, Boehm, C., Krone-Martins, A., et al. 2017. Theia: Faint objects in motion or the new astrometry frontier. arXiv e-prints , . [39] JI, J., & WANG, S. 2020. China’s Future Missions for Deep Space Exploration and Exoplanet Space Survey by 2030. Chinese Journal of Space Science , 40 (5), 729. [40] Freudenthal, J., von Essen, C., Dreizler, S., et al. 2018. Kepler Object of Interest Network. II. Photodynamical modelling of Kepler-9 over 8 years of transit observa-tions. Astronomy and Astrophysics , 618 , A41. [41] Fehlberg, E. 1968, Classical Fifth-, Sixth-, Seventh-, and Eighth-Order Runge-Kutta Formulas with Stepsize Control, NASA Technical Report NASA-TR-R-287, National Aeronautics and Space Administration, nTRS Document ID 19680027281 [42] Dormand, J. R., & Prince, P. J. 1978. New Runge-Kutta Algorithms for Numerical Simulation in Dynamical Astronomy. Celestial Mechanics , 18 (3), 223–232. [43]Gelman, A., & Rubin, D. B. 1992. Inference from Iterative Simulation Using Multiple Sequences. 
+
+Statistical Science , 7, 457–472.   
+
+> Astronomical Techniques and Instruments, 1(5), 560–566, 2024
+
+571
