@@ -1,0 +1,1043 @@
+Title: Top-P Sensor Selection for Target Localization
+
+URL Source: https://arxiv.org/pdf/2604.07020v1
+
+Published Time: Thu, 09 Apr 2026 01:15:34 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# Top-P Sensor Selection for Target Localization 
+
+Kaan Buyukkalayci †*, Kyle Pak †*, Merve Karakas †, Xinlin Li †, and Christina Fragouli ††University of California, Los Angeles Email: {kaanbkalayci, whilewak, mervekarakas, xinlinli, christina.fragouli }@ucla.edu 
+
+Abstract —We study set-valued decision rules in which per-formance is defined by the inclusion of the top-p hypotheses, rather than only the single best or true hypothesis. This criterion is motivated by sensor selection for target tracking, where inexpensive measurements are used to identify a list of sensor nodes that are likely to be closest to a target. We analyze the performance of top-p versus top-1 selection under sequential hypothesis testing, propose a geometry-aware sensor selection algorithm, and validate the approach using real testbed data. 
+
+I. I NTRODUCTION 
+
+In a substantial body of information-theoretic work, the decoder or decision rule is permitted to produce a set-valued output rather than a single estimate. This framework includes list decoding in channel coding, where the decoder outputs a list of candidate codewords, as well as list-based hypothesis testing, in which the decision rule returns a subset of hypothe-ses. In both settings, the fundamental performance criterion is the probability that the true codeword or hypothesis is not contained in the output set. However, in some applications, the performance criterion is not limited to the inclusion of the true codeword or hypothesis in the output list. Instead, we may have a distance (or simi-larity) metric on the hypothesis or codeword space and want to evaluate the decoder or decision rule based on whether the output list contains a specified collection of nearest neighbors of the true element (e.g., the first, second, or k-th closest elements under this metric). In such a setting, error occurs not merely when the true codeword or best hypothesis is missing from the list, but when the list fails to include the metric-defined best-k codewords or hypotheses. This paper considers such a criterion in the context of sensor selection for target localization. We study a scenario in which a target moves within an area monitored by sensor nodes and leverage low-cost sensing modalities, such as acoustic measurements, to generate a list of sensor nodes that are most likely to be closest to the target. The motivation is that higher-fidelity sensing modalities, such as video, are available at the sensor nodes but are not intended to be activated ubiquitously. Instead, we are interested in an algorithm that uses inexpensive measurements to identify a subset of candidate sensors, so that we activate the higher-fidelity modalities only at these nodes. For our algorithm, performance is not determined solely by the identification of the single closest sensor, but by the quality of the entire selected list: since all selected sensors are activated, 
+
+> * indicates equal contribution. The work was supported by the Army Research Laboratory grant under Cooperative Agreement W911NF-17-2-0196.
+
+the objective is to ensure that each sensor in the list is among the closest to the target to be informative for tracking. Our contributions in this paper are as follows:  
+
+> •
+
+We analytically examine how localization accuracy varies under top-p list selection for different p-values within a sequential hypothesis testing framework.  
+
+> •
+
+We then propose an algorithm that takes advantage of geometry, such as implicitly the fact that the top p sensors would be close to each other geographically. We extend this algorithm both for the case of a single and multiple target localization.  
+
+> •
+
+We experimentally explore how top-p instead of top-1
+
+accuracy changes over real testbed data, using data driven modeling of the sensor measurements. 
+
+Related Work. Traditional target tracking and localization in WSNs typically use continuous-state estimators (e.g., Kalman filters) and sequential change detection [1]–[4], where sensor activation is then optimized for estimation accuracy or detec-tion delay, with substantial work on energy-aware tracking and coordination to reduce sensing/communication costs [5]–[8]. These approaches are tailored to persistent state reconstruction and generally do not produce ranked or set-valued outputs aligned with downstream actions. With increasing on-node compute and edge communication in modern deployments, the bottleneck shifts from data acqui-sition to scalable distributed inference [9], [10]. This motivates selective processing and fusion over large sensor collections, including set-valued sensor selection for localization [11]. We take a related but distinct view: rather than estimating coordinates, we seek a small set of sensors likely to be closest to the target, motivated by hybrid sensing architectures where low-cost modalities trigger high-cost actions [12], [13]. Works such as [14], [15] similarly produce coarse spatial information via partitioning, and [16] proposes a Bayesian-estimation-based single-target method akin to our construction in Section IV; however, these do not study ordered set-valued sensor selection as a primary objective. On the theory side, prior work analyzes consis-tency/calibration of ordered top-k rules [17], [18] and adaptive prediction sets that trade list size for error control [19], with list-decodable learning returning small candidate sets under ambiguity/corruption [20]. These frameworks typically order by labels/posteriors and do not enforce metric-structured correctness, e.g., top-k nearest neighbors under a spatial metric. To our knowledge, the criterion studied here is new in sensor selection/localization. 
+
+> arXiv:2604.07020v1 [cs.IT] 8 Apr 2026
+
+II. S ETUP AND NOTATION 
+
+We write ∥ · ∥ to denote the Euclidean distance, and 
+
+[i] = {1, 2, . . . , i } for any i ∈ N with i > 0, where N
+
+denotes the set of natural numbers. For an ordered index set 
+
+I = {i1, i 2, . . . , i |I|} with i1 < i 2 < · · · < i |I|, we define the vector v = [ ui]i∈I as v := ( ui1 , u i2 , . . . , u i|I| )⊤. We further use 1{·} to denote the indicator function of an event A, equal to 1 if A holds and 0 otherwise. We consider a target whose location ℓt at time t is unknown along with an area equipped with s sensor nodes whose loca-tions are denoted by {si}si=1 , each of which is endowed with multiple sensing modalities exhibiting different information characteristics. The aim is to leverage inexpensive and noisy modalities across all nodes to “recommend” a list of size p
+
+consisting of the sensor nodes that are most likely to be the closest p nodes to the target. For the sake of analysis in Section III and for the algorithm in Section IV, we define a finite set of hypothesis locations 
+
+H = {h1, . . . h|H| }, obtained by discretizing the problem area into an arbitrarily fine square grid, to which the true location 
+
+ℓt is assumed to belong. Furthermore, we assume that no two sensor nodes are at the same distance from any location in H
+
+and that target is stationary in each time block indexed by t.III. N ORMALIZED MAX VALUE SELECTION 
+
+Assuming a parametric propagation model is available, we consider a max-value selection baseline, which, at each time, normalizing the measurements, takes the top-p of these, and returns the associated sensor nodes as a candidate list for the closest-p set. The method is appealing in large de-ployments due to its minimal computational overhead. In addition, its error probability admits an exact characterization under Gaussian noise and is also reasonable for inexpensive sensing modalities, e.g., acoustic receivers, where standard RSS baselines are commonly approximated by Gaussians that reflect outdoor propagation variability. We next analyze this approach. 
+
+A. Modeling of Sensor Measurements 
+
+In many wireless communication and outdoor acoustic prop-agation settings, a common baseline model for the received signal strength (RSS) measurements zti (in dB), i ∈ [s],collected by s sensors from a source at location ℓt at time 
+
+t, is linear in the log-distance domain. 
+
+zti = Poi − ηi · 10 log 10 (dti) + ϵti,
+
+where Poi and ηi > 0 are, in our case, learnable parameters by ordinary least squares (OLS) regression, dti = ∥ℓt − si∥
+
+denotes the Euclidean distance between the target location and sensor i, and ϵti ∼ N (0 , σ 2 
+
+> i
+
+) is independent zero-mean Gaussian noise corrupting the measurement at sensor i. The noise terms {ϵti}i∈[s] are assumed independent across sensors. Figure 1 illustrates this fitting on real-world data obtained for different acoustic sensors scattered around the sensing area. 10 1                                  
+
+> Distance (m)
+> −20
+> 0
+> RSSI (dB)  RPi 1: P0=1.4, η=1.1, σ2=37
+> Measured RSSI
+> Fitted Model
+> 10 1
+> Distance (m)
+> −20
+> 0
+> RSSI (dB)  RPi 2: P0=4, η=1, σ2=23
+> Measured RSSI
+> Fitted Model
+> 10 1
+> Distance (m)
+> −20
+> 0
+> RSSI (dB)  RPi 3: P0=13, η=2, σ2=13
+> Measured RSSI
+> Fitted Model
+> 10 1
+> Distance (m)
+> −20
+> 0
+> RSSI (dB)  RPi 4: P0=11, η=1.9, σ2=18
+> Measured RSSI
+> Fitted Model
+> 10 010 1
+> Distance (m)
+> −20
+> 0
+> RSSI (dB)  RPi 5: P0=15, η=2.2, σ2=18
+> Measured RSSI
+> Fitted Model
+> 10 1
+> Distance (m)
+> −20
+> 0
+> RSSI (dB)  RPi 6: P0=27, η=2.7, σ2=14
+> Measured RSSI
+> Fitted Model
+> 10 1
+> Distance (m)
+> −20
+> 0
+> RSSI (dB)  RPi 7: P0=7.1, η=1.5, σ2=16
+> Measured RSSI
+> Fitted Model
+> 10 110 2
+> Distance (m)
+> −20
+> 0
+> RSSI (dB)  RPi 8: P0=9.2, η=1.8, σ2=24
+> Measured RSSI
+> Fitted Model
+> 10 010 110 2
+> Distance (m)
+> −20
+> 0
+> RSSI (dB)  RPi 9: P0=6, η=1.4, σ2=34
+> Measured RSSI
+> Fitted Model
+> 10 1
+> Distance (m)
+> −20
+> 0
+> RSSI (dB)  RPi 10: P0=13, η=2.4, σ2=16
+> Measured RSSI
+> Fitted Model
+
+Fig. 1: Fitted propagation models for different sensor nodes. 
+
+B. Error Probability under Top-p Selection 
+
+Without loss of generality, the measurements zti can be normalized so that the corresponding observations satisfy 
+
+˜zti = −10 log 10 (dti) + ˜ ϵti,
+
+where ˜ϵti ∼ N (0 , ˜σ2 
+
+> i
+
+) for i ∈ [s]. This is obtained from the original model by defining ˜zti :=  zti − Poi 
+
+/η i and absorbing the scaling into the noise variance. We drop the superscript t
+
+wherever the meaning is clear for the sake of notational clarity and write ˜zi, ˜ϵi, d i for the remainder of this paper. 
+
+Theorem 1. Consider the top-p decision rule bK =arg max |K|=p
+
+P 
+
+> i∈K
+
+˜zi. Equivalently bK is the index set of the 
+
+p largest normalized measurements. Let K(h) ⊆ [s] denote the index set of the p closest sensors to h. Then, under a uniform prior over H for the true location ℓt, the corresponding error probability, describing the event { bK̸ = K(ℓt)}, is given by 
+
+P (p) 
+
+> e
+
+= 1 − 1
+
+|H| 
+
+X
+
+> h∈H
+
+Φp(s−p)
+
+ 0; −mK(h)(h), ΣK(h)
+
+ ,
+
+where, for an index set K ⊆ [s] and location h ∈ H ,
+
+mK (h) :=  μi(h) − μj (h)  
+
+> (i,j )∈K×Kc
+
+,
+
+with μi(h) = −10 log 10 ∥h − si∥, i ∈ [s], and ΣK(h) has entries indexed by pairs (( i, j ), (i′, j ′)) ∈ (K(h) × K(h)c) ×
+
+(K(h) × K(h)c) given by Cov (˜ zi − ˜zj , ˜zi′ − ˜zj′ ) = ˜ σ2 
+
+> i
+
+1{i = i′} + ˜ σ2 
+
+> j
+
+1{j = j′}−˜σ2 
+
+> i
+
+1{i = j′} − ˜σ2 
+
+> j
+
+1{j = i′}.
+
+Here Φp(s−p)(·; m, Σ) denotes the CDF of a p(s − p)-dimensional Gaussian with mean m and covariance Σ, de-fined by Φp(s−p)(x; m, Σ) = R 
+
+> (−∞ ,x]
+
+N (u; m, Σ) du.Proof Outline. For all h ∈ H , let K(h) ⊆ [s] denote the true top-p index set, with complement K(h)c = [ s] \ K(h). For every i ∈ K(h) and j ∈ K(h)c, requiring that ˜zi − ˜zj >
+
+0 describes the correct event. Since ˜zi and ˜zj are Gaussian, 
+
+˜zi − ˜zj is also a Gaussian quantity for all (i, j ).We provide the full proof of Theorem 1 in Appendix A [21]. Theorem 1 implies that, although the error probability admits an exact characterization, its numerical evaluation re-quires computing multiple multivariate Gaussian CDFs, whose computational cost scales poorly as the number of nodes 
+
+s increases. Moreover, while the expression in Theorem 1 1 2 3 4 5 6 7 8 9 10    
+
+> p
+> 0.0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> 1.0
+> (K = K(h))
+> 2= 0.05
+> 2= 0.2
+> 2= 1
+
+Fig. 2: Accuracy vs. selection set size for different noise variances and s=20 placed randomly in [0 , 1] × [0 , 1] 
+
+naturally extends to settings with correlated sensor noise by appropriately modifying the covariance matrices ΣK (h), the special structure induced by independent noise across sensors can be exploited to express the error probability in terms of only one-dimensional Gaussian CDFs, leading to a formulation whose computational cost scales more favorably with s.
+
+Corollary 1. Under the top-p decision rule in Theorem 1, the error probability under a uniform prior over H admits the following equivalent one-dimensional integral representation: 
+
+P (p) 
+
+> e
+
+= 1 − 1
+
+|H| 
+
+X
+
+> h∈H
+
+Z ∞−∞ 
+
+" Y
+
+> i∈K(h)
+
+
+
+1 − Φ
+
+ v−μi(h)˜σi
+
+ #" X
+
+> j∈K(h)c
+
+1˜σj
+
+ϕ
+
+ v−μj (h)˜σj
+
+ Y
+
+> ℓ∈K(h)c\{ j}
+
+Φ
+
+ v−μℓ(h)˜σℓ
+
+#
+
+dv. 
+
+where ϕ(·) and Φ( ·) denote the probability density function and cumulative distribution function of the standard univariate normal distribution, respectively. 
+
+Proof Outline. Letting U (h) ≜ min i∈K(h) ˜zi and V (h) ≜
+
+max j∈K(h)c ˜zj , the correct event reduces to U (h) > V (h).Since the measurement noises are independent and Gaussian, the probability P(U (h) > V (h) | h) can be expressed as a one-dimensional integral by conditioning on V (h) and integrating over its marginal distribution. A complete proof is given in Appendix B [21]. Numerical evaluation of the expression in Corollary 1 reveals that accu-racy decreases rapidly as the output set size p increases. As illustrated in Fig. 2 for the uniform noise variance case, most of the performance loss occurs as p grows from 1 to a small number of candidates, where higher variance leads to a steeper initial drop and earlier saturation of accuracy. Beyond a modest value of p, accuracy saturates near zero, and further increases in the list size have little additional effect. Consequently, p
+
+should be selected as a function of the noise level to meet an application-specific accuracy threshold. IV. I MPROVED ALGORITHMS AND MODELING FOR LIST 
+
+CONSTRUCTION 
+
+Although the decision rule in Section III offers an easily scalable way to construct a list of estimated closest sensor nodes as the number of sensors grows, it does not exploit the inherent spatial structure of the problem, specifically, that mea-surements are geometrically correlated and that the p closest nodes are themselves likely to be physically close. Instead, a Bayesian estimation–based algorithm may be employed that first computes a posterior distribution over the grid locations 
+
+H, and then constructs the output list by selecting sensor nodes that are physically closest to the most probable locations. Although this approach offers improved robustness to noise, its computational cost grows linearly with |H| unless special heuristics are applied to approximate the posterior distribution. Sec. IV-A describes such an algorithm. 
+
+A. A Bayesian-Estimation Based Algorithm 
+
+When a model p(zi | h) for signal propagation over the sensing environment is available, and a uniform prior over H
+
+is assumed, the posterior probability of each h ∈ H being the true location ℓt can be computed as 
+
+p(h | { zi}si=1 ) ∝ p({zi}si=1 | h) p(h) ∝
+
+> s
+
+Y
+
+> i=1
+
+p(zi | h)
+
+where p(h) = P(h = ℓt), and the posterior is renormalized to sum to one. Although posterior inference under non-uniform priors is equally straightforward, it is possible to prefer uni-form priors in practice to account for potential discontinuities between time blocks in which the algorithm operates. We form the output set by selecting the k highest-posterior hypotheses {h(1) , . . . , h(k)} and, for each h(l), taking the indices of the m nearest sensors: 
+
+Ml = BottomM i∈[s] ∥si − h(l)∥
+
+where BottomM returns the m smallest elements of its argument. The output is the union bS = Skl=1 Ml. In practice, the top posterior hypotheses often cluster, so the sets {M l}kl=1 
+
+overlap and | bS| is typically well below the worst-case km .The full procedure is summarized in Algorithm 1, where 
+
+TopK returns the k largest elements of its argument. 
+
+Algorithm 1 Bayesian List Construction via Aggregation  
+
+> 1:
+
+for t = 1 , 2, . . . do  
+
+> 2:
+
+Observe measurements {zi}si=1  
+
+> 3:
+
+for each h ∈ H do  
+
+> 4:
+
+Compute p(h | { zi}si=1 ) ∝ Qsi=1 p(zi | h) 
+
+> 5:
+
+Select {h(1) , . . . , h(k)} ← TopK h∈H p(h | { zi}si=1 ) 
+
+> 6:
+
+for l = 1 , . . . , k do  
+
+> 7:
+
+Ml ← BottomM i∈[s] ∥si − h(l)∥2 
+
+> 8:
+
+Output bS ← Skl=1 Ml
+
+For evaluation, let K(ℓt) ⊆ [s] denote the indices of the true top-p nearest sensors to ℓt. We count time t as successful if K(ℓt) ⊆ bS, and report empirical accuracy as the fraction of time steps for which this holds. 
+
+B. Modeling via Spline Fitting 
+
+While the propagation model described in Section III-A pro-vides a simple way to normalize and compare measurements, one can adopt a linear spline-based modeling approach under a Bayesian estimation setting to capture the heterogeneous and environment-dependent effects observed in practice. Fig. 3: Fitted 8-bin linear spline models for various nodes. For each sensor node i, we partition the range of observed distances into L disjoint bins on a logarithmic scale. Within each bin, we fit a local log-distance model of the form 
+
+μi,w (d) = Po,i,w − ηi,w · 10 log 10 (d),
+
+where (Po,i,w , η i,w ) are bin-specific parameters for bin w, esti-mated from data. Imposing continuity constraints at bin bound-aries, one obtains a piecewise-linear spline in the log 10 (d)
+
+domain. The parameters can then be obtained by solving a constrained least-squares problem that minimizes the squared prediction error over all samples, subject to linear equality constraints enforcing continuity of μi,w (d) at adjacent bin endpoints. This results in a convex quadratic program with a unique global minimizer, which can be solved efficiently using standard solvers. Let (bi,w , b i,w +1 ) denote the distance range of bin w for sensor i. For any hypothesis h and sensor i, we compute the distance di = ∥h − si∥ and identify the corresponding bin w⋆ such that di ∈ (bi,w ⋆ , b i,w ⋆+1 ). The likelihood is then evaluated as 
+
+p(zi | h) = N zi; μi,w ⋆ (di), σ 2
+
+> i,w ⋆
+
+,
+
+where σ2 
+
+> i,w ⋆
+
+is the empirical residual variance estimated within that bin. Since all spline parameters are learned offline, online likelihood evaluation reduces to a constant-time bin lookup followed by a Gaussian density evaluation. A visualization of representative spline fits is shown in Fig. 3. 
+
+C. Localizing Multiple Targets 
+
+A further advantage of the Bayesian-based estimation algo-rithm described in Section IV-A is that it is possible to directly extend the procedure to N ≥ 2 simultaneously moving targets. A naive joint formulation would place the joint state in HN ,yielding posterior computations that scale as |H| N per time step. To obtain a scalable procedure, we instead restrict the search space by maintaining, for each target r ∈ [N ], a time-varying local hypothesis set Hr (t) ⊆ H .At synchronization times t ∈ { tsync , 2tsync , . . . }, we assume access to the true locations {ℓ(r) 
+
+> t
+
+}Nr=1 (e.g., from a higher-fidelity modality). We initialize each Hr (t) as a square subgrid of H centered at ℓ(r) 
+
+> t
+
+with a prescribed initial side length. Between synchronization times, we keep the center fixed and expand the region in discrete steps to account for target motion (equivalently, by adding an outer “ring” of grid points), where the step size is defined by the upper bound of the target’s velocity. Thus, at time t we perform inference only over the reduced joint 
+
+H1(t) × · · · × H N (t),
+
+whose size is typically far smaller than |H| N .Let ¯h ≜ (h(1) , . . . , h(N )) denote a joint hypothesis with 
+
+h(r) ∈ H r (t). Given a uniform prior over H1(t)×· · ·×H N (t),the posterior satisfies 
+
+p(¯h | { zi}si=1 ) ∝
+
+> s
+
+Y
+
+> i=1
+
+p(zi | ¯h),
+
+where we model multi-target superposition in the scalar domain. Letting μi,r (h) denote the learned mean RSS in dB during modeling at sensor i for target r at location 
+
+h, and defining the corresponding scalar-domain mean RSS 
+
+Pi,r (h) ≜ 10 μi,r (h)/10 , the measurement zi at sensor i is commonly modeled to be generated by, 
+
+zi = 10 log 10 
+
+> N
+
+X
+
+> r=1
+
+Pi,r 
+
+ h(r))
+
+!
+
++ ϵi,
+
+where ϵi ∼ N (0 , σ 2 
+
+> i
+
+) is the zero-mean independent Gaus-sian noise attributed to the sensor. We select the top-k joint hypotheses under this posterior, denoted by TopK. For each selected joint hypothesis ¯h, and for each target component h(r), we compute the index set of the m closest sensors to h(r):
+
+Mr (¯h) = BottomM i∈[s] ∥si − h(r)∥.
+
+The final recommended set is the union over the selected joint hypotheses and all targets, 
+
+bS =
+
+> N
+
+[
+
+> r=1
+
+[
+
+> ¯h∈TopK
+
+Mr (¯h),
+
+yielding a single set intended to cover sensors near all targets. For evaluation, let K(r)(ℓ(r) 
+
+> t
+
+) ⊆ [s] denote the indices of the true top-p nearest sensors to target r at time t. We declare success at time t if SNr=1 K(r)(ℓ(r) 
+
+> t
+
+) ⊆ bS, and report empirical accuracy as the fraction of successful time steps. The resulting procedure is summarized in Algorithm 2. V. E XPERIMENTAL RESULTS 
+
+In this section, we evaluate the proposed algorithms using real-world acoustic data collected from outdoor experiments involving both single and multiple moving vehicles. The data were obtained from a sensing field of approximately 
+
+10 ,000 m2 containing several buildings and minimal struc-tured background interference, with ambient noise primarily consisting of wind and natural outdoor sounds. In each experiment, one or two ATVs equipped with GPS transmitters followed the predefined trajectory (Fig. 4) at an Algorithm 2 Multi-Target Bayesian List Construction with Synchronized Local Grids  
+
+> 1:
+
+Initialize centers cr ← null ∀r ∈ [N ] and counter q ← 0 
+
+> 2:
+
+for t = 1 , 2, . . . do  
+
+> 3:
+
+Observe measurements {zi}si=1  
+
+> 4:
+
+if t mod tsync = 0 then  
+
+> 5:
+
+Obtain true locations {ℓ(r) 
+
+> t
+
+}Nr=1 , set q ← 0 
+
+> 6:
+
+for r = 1 , . . . , N do  
+
+> 7:
+
+cr ← ℓ(r) 
+
+> t
+> 8:
+
+else  
+
+> 9:
+
+q ← q + 1  
+
+> 10:
+
+for r = 1 , . . . , N do  
+
+> 11:
+
+Hr (t) ← square subgrid with center cr , side Bq 
+
+> 12:
+
+Compute p(¯h | { zi}si=1 ) over ¯h ∈ H 1(t)×· · ·×H N (t) 
+
+> 13:
+
+bHtop (t) ← TopK  p(¯h | { zi}si=1 ) 
+
+> 14:
+
+bS ← ∅  
+
+> 15:
+
+for each ¯h = ( h(1) , . . . , h(N )) ∈ bHtop (t) do  
+
+> 16:
+
+for r = 1 , . . . , N do  
+
+> 17:
+
+Mr (¯h) ← BottomM i∈[s] ∥si − h(r)∥ 
+
+> 18:
+
+bS ← bS ∪ M r (¯h) 
+
+> 19:
+
+Output bSRpi1 
+
+> Rpi2
+> Rpi4
+> Rpi5
+> Rpi6
+> Rpi7
+> Rpi8
+> Rpi9
+> Rpi3
+> Rpi10
+> Vehicle Trajectory
+> Raspberry Pi Microphone
+
+Fig. 4: Vehicle trajectory and sensor node placements average speed of approximately 3 m/s for 20 -30 minutes. Ten Raspberry Pi nodes were deployed across the field, each with a single-channel USB microphone transmitting received signal strength every 200 ms synchronized with GPS measurements. Implementation details of the proposed algorithms are pro-vided in Appendix C [21]. Performance is measured in terms of accuracy, defined as the fraction of trials in which the output set contains the p closest sensor nodes to (each) target. 
+
+A. Single Vehicle Experiment 
+
+We report performance as a function of the parameter triplet 
+
+(k, m, p ), where (k, m ) are the list-construction parameters of Algorithm 1, specifying the number of top-likelihood hypothe-ses considered and the number of nearest sensors selected per hypothesis, respectively, and p denotes the number of true nearest sensors that must be contained in the output set for the trial to be counted as correct. As shown in Fig. 5, accuracy increases with m for both methods, while Algorithm 1 consistently outperforms the nor-1 2 3 4 5 6 7
+
+m
+
+> 0
+> 10
+> 20
+> 30
+> 40
+> 50
+> 60
+> 70
+> 80
+> 90
+> 100
+> Accuracy (%)
+> p=1
+> p=2
+> p=3
+> p=4
+> p=5
+> Algorithm 1
+> Normalized
+
+Fig. 5: Algorithm 1 and the Normalized Max Value Selection described in Section III for different values of p where k = 1 1 2 3 4 5 6 7 8
+
+Mean output set size 
+
+> 50
+> 60
+> 70
+> 80
+> 90
+> 100
+> Accuracy (%)  p=1
+> p=2
+> p=3
+> p=4
+> p=5
+
+Fig. 6: Accuracy vs average output set size for Algorithm 1 malized max-value selection baseline described in Section III, especially at larger p. In this experimental setup, we fix k = 1 ,so the average output set size of Algorithm 1 is m, while the normalized max-value baseline is allowed to output the m
+
+largest normalized measurements (rather than p). Fig. 6 further illustrates the relationship between accuracy and the average output set size for different values of p under Algorithm 1. We observe a reliable, monotonic increase in accuracy as the output set size grows, highlighting the fundamental tradeoff between set size and top-p containment performance. 
+
+B. Multiple Vehicle Experiment 
+
+We next evaluate the multi-target list construction algorithm described in Algorithm 2 in a two-vehicle setting, where two ATVs traverse the sensing area simultaneously. Fig. 7 reports the top-p containment accuracy as a function of the synchronization interval tsync for different values of p,with fixed parameters k = 3 and m = 5 . We observe that, as expected, accuracy degrades as the synchronization interval increases, since longer intervals lead to larger local grids and consequently greater uncertainty in the posterior. 2 4 6 8 10 12 14 16 18 20  
+
+> s(seconds)
+> 50
+> 60
+> 70
+> 80
+> 90
+> 100
+> Accuracy (%)  p=1
+> p=2
+> p=3
+> p=4
+> p=5
+
+Fig. 7: Accuracy vs synchronization interval tsync for different 
+
+p values ( k = 3 , m = 5 ), with average output set size 8REFERENCES [1] F. Zhao, J. Shin, and J. Reich, “Information-driven dynamic sensor collaboration,” IEEE Signal Processing Magazine , vol. 19, no. 2, pp. 61–72, 2002. [2] E. S. Page, “Continuous inspection schemes,” Biometrika , vol. 41, no. 1/2, pp. 100–115, 1954. [Online]. Available: http://www.jstor.org/stable /2333009 [3] G. Lorden, “Procedures for reacting to a change in distribution,” Annals of Mathematical Statistics , vol. 42, no. 6, pp. 1897–1908, Ara 1971. [4] A. Tartakovsky and V. Veeravalli, “Quickest change detection in dis-tributed sensor systems,” in Sixth International Conference of Informa-tion Fusion, 2003. Proceedings of the , vol. 2, 2003, pp. 756–763. [5] S. Meguerdichian, F. Koushanfar, M. Potkonjak, and M. Srivastava, “Coverage problems in wireless ad-hoc sensor networks,” in Proceedings IEEE INFOCOM 2001. Conference on Computer Communications. ,vol. 3, 2001, pp. 1380–1387 vol.3. [6] W.-P. Chen, J. Hou, and L. Sha, “Dynamic clustering for acoustic target tracking in wireless sensor networks,” in 11th IEEE International Conference on Network Protocols , 2003, pp. 284–294. [7] J. Chen, C. Zang, W. Liang, and H. Yu, “Auction-based dynamic coalition for single target tracking in wireless sensor networks,” in 2006 6th World Congress on Intelligent Control and Automation , vol. 1, 2006, pp. 94–98. [8] K. Reddy Madhavi, M. N. Mohd Nawi, B. Bhaskar Reddy, K. Baboji, K. Hari Kishore, and S. Manikanthan, “Energy efficient target tracking in wireless sensor network using pf-svm (particle filter-support vector machine) technique,” Measurement: Sensors , vol. 26, p. 100667, 2023. [9] Y. Baek, B. Bae, H. Shin et al. , “Edge intelligence through in-sensor and near-sensor computing for the artificial intelligence of things,” npj Unconventional Computing , vol. 2, p. 25, 2025. [Online]. Available: https://doi.org/10.1038/s44335-025-00040-6 [10] X. Zou, L. Li, H. Du, and L. Zhou, “Intelligent sensing and computing in wireless sensor networks for multiple target tracking,” Journal of Sensors , vol. 2022, pp. 1–11, 04 2022. [11] A. Bhattacharya, C. Zhan, A. Maji, H. Gupta, S. R. Das, and P. M. Djuri´ c, “Selection of sensors for efficient transmitter localization,” 
+
+IEEE/ACM Transactions on Networking , vol. 30, no. 1, pp. 107–119, 2021. [12] P. Kulkarni, D. Ganesan, P. Shenoy, and Q. Lu, “Senseye: a multi-tier camera sensor network,” in Proceedings of the 13th Annual ACM International Conference on Multimedia , 2005, p. 229–238. [13] R. Jurdak, P. Corke, D. Dharman, and G. Salagnac, “Adaptive gps duty cycling and radio ranging for energy-efficient localization,” in 
+
+Proceedings of the 8th ACM Conference on Embedded Networked Sensor Systems , ser. SenSys ’10. New York, NY, USA: Association for Computing Machinery, 2010, p. 57–70. [Online]. Available: https://doi.org/10.1145/1869983.1869990 [14] K. Buyukkalayci, M. Karakas, X. Li, and C. Fragouli, “Enhancing binary search via overlapping partitions,” in 2025 IEEE International Symposium on Information Theory (ISIT) , 2025, pp. 1–6. [15] K. Buyukkalayci, X. Li, C. Fragouli, B. Krishnamachari, and G. Verma, “Refining search spaces with gradient-guided sensor activation,” in 2025 59th Asilomar Conference on Signals, Systems, and Computers , 2025. [16] K. Buyukkalayci, X. Li, M. Karakas, T. Sarkar, C. Fragouli, and B. Krishnamachari, “Keeping a target ”on the radar”, using model-based group sensor selection algorithms,” in MILCOM 2025 - 2025 IEEE Military Communications Conference (MILCOM , 10 2025, pp. 856–861. [17] M. Lapin, M. Hein, and B. Schiele, “Loss functions for top-k error: Analysis and insights,” in 2016 IEEE Conference on Computer Vision and Pattern Recognition (CVPR) , 2016, pp. 1468–1477. [18] F. Yang and S. Koyejo, “On the consistency of top-k surrogate losses,” in 
+
+Proceedings of the 37th International Conference on Machine Learning ,ser. Proceedings of Machine Learning Research, H. D. III and A. Singh, Eds., vol. 119. PMLR, 13–18 Jul 2020, pp. 10 727–10 735. [Online]. Available: https://proceedings.mlr.press/v119/yang20f.html [19] M. Sadinle, J. Lei, and L. Wasserman, “Least ambiguous set-valued classifiers with bounded error levels,” Journal of the American Statistical Association , vol. 114, 09 2016. [20] S. Karmalkar, A. Klivans, and P. Kothari, “List-decodable linear regres-sion,” in Advances in Neural Information Processing Systems , vol. 32. Curran Associates, Inc., 2019. [21] K. Buyukkalayci, K. Pak, M. Karakas, X. Li, and C. Fragouli, “Top-
+
+p Sensor Selection for Target Localization,” 2025, [Online]. Available: https://drive.google.com/file/d/1XmJTUsmzwAGTr9XH6HDFP2R4Z zAxHWLJ/view?usp=sharing. APPENDIX APROOF OF THEOREM 1For all h ∈ H , let μ(h) ≜ [μ1(h), . . . , μ s(h)] ⊤, and let K(h) ⊆ [s] denote the true unordered top-p index set, with complement K(h)c = [ s] \ K(h). Define the p(s − p)-dimensional difference vector 
+
+DK(h)(h) ≜  ˜zi − ˜zj
+
+ 
+
+> (i,j )∈K(h)×K(h)c
+
+∈ Rp(s−p).
+
+Then bK = K(h) if and only if DK(h)(h) ⪰ 0. Letting z = [˜ z1, . . . , ˜zs]⊤, we can write DK(h)(h) = AK(h)z, where 
+
+AK(h) ∈ Rp(s−p)×s is the matrix whose row indexed by a pair (i, j ) ∈ K(h) × K(h)c equals e⊤ 
+
+> i
+
+− e⊤ 
+
+> j
+
+, and hence 
+
+DK(h)(h) | h ∼ N   mK(h)(h), ΣK(h)
+
+,
+
+where mK(h)(h) ≜ AK(h)μ(h) and ΣK(h) ≜ AK(h)ΣsA⊤ 
+
+> K(h)
+
+with Σs = diag (˜ σ21 , . . . , ˜σ2 
+
+> s
+
+). This corresponds to, for 
+
+(i, j ), (i′, j ′) ∈ K(h) × K(h)c,  mK(h)(h) 
+
+> (i,j )
+
+= μi(h) − μj (h)
+
+and, Cov (˜ zi − ˜zj , ˜zi′ − ˜zj′ ) = ˜ σ2 
+
+> i
+
+1{i = i′} + ˜ σ2 
+
+> j
+
+1{j = j′} − ˜σ2 
+
+> i
+
+1{i = j′} − ˜σ2 
+
+> j
+
+1{j = i′}.
+
+Therefore, the conditional correct-classification probability is given by the orthant probability of a multivariate Gaussian, 
+
+P( bK = K(h) | h) = P(DK(h)(h) ⪰ 0 | h) = P(−DK(h)(h) ⪯ 0 | h) = Φ p(s−p)
+
+ 0; −mK(h)(h), ΣK(h)
+
+ .
+
+Finally, under a uniform prior on ℓt over the square grid H,
+
+P (p) 
+
+> e
+
+= 1 − 1
+
+|H| 
+
+X
+
+> h∈H
+
+P( bK = K(h) | h) = 1 − 1
+
+|H| 
+
+X
+
+> h∈H
+
+Φp(s−p)
+
+ 0; −mK(h)(h), ΣK(h)
+
+ .
+
+APPENDIX BPROOF OF COROLLARY 1For any fixed h ∈ H , the event { bK = K(h)} is equivalent to the system of inequalities ˜zi ≥ ˜zj for all i ∈ K(h) and 
+
+j ∈ Kc, which is equivalent to 
+
+min  
+
+> i∈K(h)
+
+˜zi > max  
+
+> j∈K(h)c
+
+˜zj ,
+
+since ties occur with probability zero under a continuous distribution. Define 
+
+U (h) ≜ min  
+
+> i∈K(h)
+
+˜zi, V (h) ≜ max  
+
+> j∈K(h)c
+
+˜zj .
+
+Then P( bK = K(h) | h) = P(U (h) > V (h) | h), and by conditioning on V (h),
+
+P(U (h) > V (h) | h) = 
+
+Z ∞−∞ 
+
+P(U (h) > v | h) fV (h)(v | h) dv. 
+
+For the first term, by independence within ˜zi,
+
+P(U (h) > v | h) = Y
+
+> i∈K(h)
+
+P(˜ zi > v | h) = Y
+
+> i∈K(h)
+
+
+
+1 − Φ
+
+ v−μi(h)˜σi
+
+ 
+
+.
+
+For the second term, since V (h) = max j∈K(h)c ˜zj and the variables {˜zj : j ∈ K(h)c} are independent, 
+
+P(V (h) ≤ v | h) = Y
+
+> j∈K(h)c
+
+Φ
+
+ v−μj (h)˜σj
+
+
+
+.
+
+Differentiating the above with respect to v gives the density 
+
+fV (h)(v | h) = X
+
+> j∈K(h)c
+
+1˜σj
+
+ϕ
+
+ v−μj (h)˜σj
+
+ Y
+
+> ℓ∈K(h)c\{ j}
+
+Φ
+
+ v−μℓ(h)˜σℓ
+
+
+
+.
+
+Hence, the probability of the correct event for all h ∈ H is, 
+
+P( bK = K(h) | h) = 
+
+Z ∞−∞ 
+
+" Y
+
+> i∈K(h)
+
+
+
+1 − Φ
+
+ v−μi(h)˜σi
+
+ #" X
+
+> j∈K(h)c
+
+1˜σj
+
+ϕ
+
+ v−μj (h)˜σj
+
+ Y
+
+> ℓ∈K(h)c\{ j}
+
+Φ
+
+ v−μℓ(h)˜σℓ
+
+#
+
+dv, APPENDIX CDETAILS ON EXPERIMENTAL RESULTS 
+
+A. Fitted Models for All Sensor Nodes Used in Section V 
+
+Figure 8 shows the fitted propagation models for all sensor nodes used in the experiments of Section V, based on the log-linear path loss model described in Section III-A. Similarly, Figure 9 presents the fitted models for all sensor nodes using the spline-based approach described in Section IV-B. 10 1
+
+> Distance (m)
+> −20
+> 0
+> RSSI (dB)
+
+RPi 1: P0=1.4, η=1.1, σ2=37 
+
+> Measured RSSI
+> Fitted Model
+> 10 1
+> Distance (m)
+> −20
+> 0
+> RSSI (dB)
+
+RPi 2: P0=4, η=1, σ2=23 
+
+> Measured RSSI
+> Fitted Model
+> 10 1
+> Distance (m)
+> −20
+> 0
+> RSSI (dB)
+
+RPi 3: P0=13, η=2, σ2=13 
+
+> Measured RSSI
+> Fitted Model
+> 10 1
+> Distance (m)
+> −20
+> 0
+> RSSI (dB)
+
+RPi 4: P0=11, η=1.9, σ2=18  
+
+> Measured RSSI
+> Fitted Model
+> 10 010 1
+> Distance (m)
+> −20
+> 0
+> RSSI (dB)
+
+RPi 5: P0=15, η=2.2, σ2=18 
+
+> Measured RSSI
+> Fitted Model
+> 10 1
+> Distance (m)
+> −20
+> 0
+> RSSI (dB)
+
+RPi 6: P0=27, η=2.7, σ2=14 
+
+> Measured RSSI
+> Fitted Model
+> 10 1
+> Distance (m)
+> −20
+> 0
+> RSSI (dB)
+
+RPi 7: P0=7.1, η=1.5, σ2=16  
+
+> Measured RSSI
+> Fitted Model
+> 10 110 2
+> Distance (m)
+> −20
+> 0
+> RSSI (dB)
+
+RPi 8: P0=9.2, η=1.8, σ2=24   
+
+> Measured RSSI
+> Fitted Model
+> 10 010 110 2
+> Distance (m)
+> −20
+> 0
+> RSSI (dB)
+
+RPi 9: P0=6, η=1.4, σ2=34 
+
+> Measured RSSI
+> Fitted Model
+> 10 1
+> Distance (m)
+> −20
+> 0
+> RSSI (dB)
+
+RPi 10: P0=13, η=2.4, σ2=16 
+
+> Measured RSSI
+> Fitted Model
+
+Fig. 8: Fitted propagation models for all 10 nodes Fig. 9: Fitted 8-bin linear spline models for all 10 nodes 
+
+B. Single Vehicle Experiment 
+
+Table I summarizes additional experimental parameters used in the single-vehicle experiment of Section V and in Figures 5 and 6. The spatial hypothesis set H is constructed as a 20 × 20 grid with uniform spacing of 7 m between adjacent locations, yielding |H| = 400 hypotheses. The propagation model is discretized into L = 8 bins and used to construct the fitted likelihood functions described in Section IV-B. In the experiments of Fig. 6, the list construction parameters k and m are varied over 
+
+{1, . . . , 7}, and the output set size is recorded after each list construction at each time t.TABLE I: Additional Parameters utilized in Fig. 5 
+
+Parameter Value(s) Description 
+
+L 8 Number of bins. Hypothesis spacing 7 m Spacing in between each hypothesis location. 
+
+H 20 2 = 400 Number of hypotheses. C. Multiple Vehicle Experiment 
+
+The multi-vehicle experiments follow the procedure described in Algorithm 2. The additional parameters governing spline modeling, hypothesis grid construction, and local grid evolution are summarized in Table II. Between synchronization times, let q ∈ { 0, 1, . . . , t sync − 1} denote the elapsed time index and define the grid side length as Bq := B⌊q/t inc ⌋. Figure 10 shows the corresponding average output set size for the experiments reported in Figure 7. TABLE II: Additional Parameters utilized in Fig. 7 
+
+Parameter Value(s) Description 
+
+L 8 Number of bins. Hypothesis spacing 6 m Spacing in between each hypothesis location. 
+
+H 27 2 = 729 Number of hypotheses. 
+
+q 0, 1, 2, ..., tsync − 1 Time indices in interval of tsync seconds long. 
+
+tinc 2 s Time for next hypothesis grid increase. 
+
+Bq 3, 5, 7, ..., 729 hypothesis locations Square grid side length for q = 0 , t inc , 2tinc , 3tinc , ... = 0 , 2 s, 4 s, 6 s, ... 2 4 6 8 10 12 14 16 18 20 
+
+## s (seconds) 
+
+0
+
+1
+
+2
+
+3
+
+4
+
+5
+
+6
+
+7
+
+8
+
+9
+
+10 
+
+> Set Size
+
+Fig. 10: Average set size corresponding with Fig. 7
