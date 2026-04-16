@@ -1,0 +1,539 @@
+Title: RMGS-SLAM: Real-time Multi-sensor Gaussian Splatting SLAM
+
+URL Source: https://arxiv.org/pdf/2604.12942v1
+
+Published Time: Wed, 15 Apr 2026 01:42:44 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+> 1
+
+# RMGS-SLAM: Real-time Multi-sensor Gaussian Splatting SLAM 
+
+Dongen Li 1,* , Yi Liu 1,* , Junqi Liu 3,* , Zewen Sun 1,* , Zefan Huang 1,* , Shuo Sun 4, Jiahui Liu 2, Chengran Yuan 1,Hongliang Guo 3, Francis E.H. Tay 1, and Marcelo H. Ang Jr. 1
+
+Abstract —Real-time 3D Gaussian splatting (3DGS)-based Si-multaneous Localization and Mapping (SLAM) in large-scale real-world environments remains challenging, as existing methods often struggle to jointly achieve low-latency pose estimation, 3D Gaussian reconstruction in step with incoming sensor streams, and long-term global consistency. In this paper, we present a tightly coupled LiDAR-Inertial-Visual (LIV) 3DGS-based SLAM framework for real-time pose estimation and photorealistic mapping in large-scale real-world scenes. The system executes state estimation and 3D Gaussian primitive initialization in parallel with global Gaussian optimization, thereby enabling continuous dense mapping. To improve Gaussian initialization quality and accelerate optimization convergence, we introduce a cascaded strategy that combines feed-forward predictions with voxel-based principal component analysis (voxel-PCA) geomet-ric priors. To enhance global consistency in large scenes, we further perform loop closure directly on the optimized global Gaussian map by estimating loop constraints through Gaussian-based Generalized Iterative Closest Point (GICP) registration, followed by pose-graph optimization. In addition, we collected challenging large-scale looped outdoor SLAM sequences with hardware-synchronized LiDAR–camera–IMU and ground-truth trajectories to support realistic and comprehensive evaluation. Extensive experiments on both public datasets and our dataset demonstrate that the proposed method achieves a strong balance among real-time efficiency, localization accuracy, and rendering quality across diverse and challenging real-world scenes. 
+
+Index Terms —Mapping, SLAM, Localization, Sensor Fusion. 
+
+I. I NTRODUCTION 
+
+# SLAM enables robots to estimate their pose while recon-structing the surrounding environment [1]. Conventional SLAM systems typically build geometry-centric maps [2]– [4], which offer limited support for photorealistic scene rep-resentation. This capability is essential for immersive visual applications and downstream robotic tasks such as navigation and grasping. Meanwhile, 3DGS [5] represents a scene using explicit anisotropic Gaussian primitives and enables efficient differentiable rasterization, providing an appearance-aware, continuous, and directly renderable map representation. These properties make 3DGS particularly attractive for SLAM, as a 3DGS-based map can serve not only as a geometric reference for pose estimation but also as a photorealistic representation for perception and interaction. 
+
+> *Dongen Li, Yi Liu, Junqi Liu, Zewen Sun, and Zefan Huang contributed equally to this work.
+> 1Dongen Li, Yi Liu, Zewen Sun, Zefan Huang, Chengran Yuan, Francis E.H. Tay, and Marcelo H. Ang Jr. are with the Advanced Robotics Centre, National University of Singapore.
+> 2Jiahui Liu is with the School of Aeronautics and Astronautics, Shanghai Jiao Tong University.
+> 3Junqi Liu and Hongliang Guo are with the College of Computer Science, Sichuan University.
+> 4Shuo Sun is with Singapore-MIT Alliance for Research and Technology.
+
+However, high-quality 3DGS reconstruction [5]–[7] has mainly been explored in offline settings, where full obser-vations are available and computation is less constrained. Extending 3DGS to real-time SLAM is substantially more challenging, since high-quality 3D Gaussian reconstruction typically depends on iterative optimization, whereas SLAM systems require both pose estimation and mapping to keep pace with incoming sensor streams. Although recent 3DGS-based SLAM systems have made encouraging progress, many existing methods [8]–[11] remain closer to online SLAM than to truly real-time SLAM. While supporting incremental pose estimation and Gaussian map updates, they generally struggle to sustain both processes under high-frequency continuous sensor inputs in practical robotic settings. By contrast, several recent LiDAR-assisted methods [12]–[16] better keep pace with continuous inputs, yet Gaussian initialization in these systems still often relies mainly on LiDAR observations with limited geometric assumptions, requiring further online refine-ment. In addition, explicit loop closure is often omitted to preserve runtime efficiency, which limits global consistency in large-scale environments. This paper aims to address these limitations with the following contributions:  
+
+> •
+
+We propose a real-time, tightly coupled LIV 3DGS-SLAM framework with explicit loop closure. The system supports non-blocking dense mapping by jointly execut-ing pose estimation and Gaussian initialization in parallel with global Gaussian map optimization.  
+
+> •
+
+We introduce a cascaded Gaussian initialization strategy that combines feed-forward predictions with geometric priors. It improves primitive initialization quality, accel-erates optimization convergence, and facilitates real-time Gaussian mapping.  
+
+> •
+
+We develop a 3DGS-based loop-closure method for large-scale scenes. It extracts target Gaussian sets from the global Gaussian map and constructs loop constraints for global optimization to suppress long-term drift.  
+
+> •
+
+We present a new real-world benchmark with synchro-nized solid-state LiDAR, camera, and IMU streams, together with ground truth for outdoor road scenes. It enables comprehensive evaluation of 3DGS-based SLAM systems under practical conditions.  
+
+> •
+
+We validate the effectiveness of RMGS-SLAM in real-world scenarios through both our own sequences and publicly available datasets. II. R ELATED WORK 
+
+A. 3DGS for Scene Reconstruction 
+
+3DGS [5] enables efficient, high-fidelity novel-view synthe-sis by representing scenes as 3D Gaussians and rendering them     
+
+> arXiv:2604.12942v1 [cs.RO] 14 Apr 2026 2Optimized States 3DGS Map Outputs
+> Synchronised
+> Frontend Pose IMU PCD Lidar
+> RGB Camera Sequential IESKF Backend RGB Image Pose Depth Image Geometry Priors
+>  
+> Cascaded Initialization Loop Detection 3D Gaussian Matching Pose Graph Optimization Gaussian Primitives Update Optimization Loop Closure
+>    
+> i
+> j
+> Feedforward Model Geometry Priors Normal Pointcloud
+> Gaussian-GIP Matching Loop Pair
+> History Window Current Window
+> Voxel-PCA Geometry Fitting
+> Normal Frame Loop Frame Key Frame Odometry Constraint Loop Constraint
+> Legend Current Time t
+> Current Time tLoop Frame
+
+Fig. 1. Overview of the proposed system. The framework follows a four-module design. (i) A LIV front-end first estimates ego-motion and produces time-synchronized poses, RGB images, projected depth maps, and voxel-PCA geometric priors. (ii) These outputs are then used to initialize 3D Gaussian primitives through a cascaded strategy that combines feed-forward predictions with geometry-aware priors. (iii) The global Gaussian map is then optimized asynchronously under photometric, structural, and geometric constraints. (iv) To improve global consistency, loop closure is performed directly on the Gaussian representation via Gaussian GICP, and the resulting loop constraints are jointly optimized with odometry in a pose graph. 
+
+with a differentiable tile-based rasterizer. Conventional 3DGS lacks sufficient geometric constraints in real-world scenes. Accordingly, recent methods [6], [7] incorporate temporal tracking and structural constraints to reduce volumetric over-lap and improve surface modeling. These optimization-based methods still require prolonged per-scene training. To bypass prolonged per-scene optimization, generalizable feed-forward models predict Gaussians from sparse images. Pose-required models use known camera poses to fuse multi-view features and regress depth distributions to anchor Gaus-sians [17]. To avoid brittle offline pose estimation under sparse views, pose-free models jointly infer scene geometry and cam-era registration, reconstructing geometrically consistent scenes from unposed images [18], [19]. These advances suggest that feed-forward Gaussian prediction provides an efficient and increasingly generalizable paradigm for 3DGS initialization. 
+
+B. 3DGS-based SLAM 
+
+Recent works have extended 3DGS to SLAM by exploiting its explicit and differentiable representation for joint pose es-timation and dense reconstruction. Early 3DGS-based SLAM systems were primarily developed for visual SLAM, including GS-SLAM [8], which combines adaptive densification with coarse-to-fine tracking, MonoGS [9] for monocular RGB-only SLAM, and SplaTAM [10] for efficient RGB-D map-ping. Nevertheless, visual 3DGS-based SLAM remains limited in unconstrained real-world environments, where viewpoint variation, illumination changes, and imperfect geometry often degrade both tracking robustness and reconstruction quality. To improve geometric perception and pose robustness, recent works incorporate LiDAR into 3DGS-based SLAM. Loosely coupled methods [11], [20]–[22] typically rely on a dominant sensing modality or perform asynchronous multi-sensor pose estimation while reconstructing the Gaussian map. Although such designs simplify system integration, the loose or asynchronous interaction between tracking and mapping makes it difficult to maintain real-time performance under high-rate sensor inputs. By contrast, tightly coupled methods jointly fuse multi-modal measurements within a unified estimator and inte-grate them with Gaussian mapping to improve spatiotempo-ral consistency. Gaussian-LIC [14], [15], LVI-GS [23], and FusionGS-SLAM [13] demonstrate the potential of deeper multi-modal integration, yet maintaining both real-time per-formance and global consistency remains challenging in large-scale environments. Several strictly stream-synchronous systems further improve efficiency by restricting the representation size or optimization scope. GS-LIVM [16] employs Voxel-GPR to regularize sparse and uneven LiDAR observations for more geometry-aware Gaussian primitives initialization, but still relies on continued optimization after the input stream ends to achieve satisfactory reconstruction quality. GS-LIVO [12] tightly couples Gaussian mapping with a sequential-update iterative error state Kalman filter (IESKF), and adopts sliding-window scheduling to op-timize local Gaussians, reducing optimization pressure, but limited real-time iteration budgets restrict the recovery of fine photorealistic details. Overall, existing frameworks still struggle to simultaneously keep pace with incoming sensor streams, achieve robust loop closure in large-scale scenes, and maintain high-quality Gaus-sian map optimization. These limitations motivate a framework that combines real-time Gaussian mapping with Gaussian-based loop closure for large-scale consistency. III. M ETHODOLOGY 
+
+The proposed system follows a four-module design, as illustrated in Fig. 1. We first present the Voxel-PCA-based geometric fitting process in Sec. III-A, followed by the cas-caded Gaussian initialization in Sec. III-B, the asynchronous Gaussian optimization in Sec. III-C, and the Gaussian-based loop closure in Sec. III-D. 3
+
+A. Voxel-PCA-based Geometric Fitting 
+
+To provide structured geometric priors for Gaussian ini-tialization, we employ a voxel-PCA-based geometric fitting scheme. We partition the latest front-end processed colored point cloud in the world frame into voxels using a hash-indexed octree structure [4], [24]. For each voxel, we com-pute the mean μ and covariance C, and perform eigen-decomposition to obtain ordered eigenvalues λmin ≤ λmid ≤
+
+λmax with corresponding eigenvectors vmin , vmid , and vmax ,forming an orthonormal eigenvector matrix V.Geometry is classified by the eigenvalue distribution to capture both planar and line-like local structures, avoiding sole reliance on planar fitting that may oversimplify or miss slender linear structures. Here, τp and τl denote the thresholds for planar and linear classification, and are fixed across all experiments. Specifically, if λmin < τp, the structure is classified as planar with normal vmin ; if λmax /λ min > τ l,it is classified as linear with direction vmax ; otherwise, it is treated as unreliable. To jointly characterize local geometry and its uncertainty, we define a geometric descriptor g = [ v⊤ 
+
+> k
+
+, μ⊤]⊤ ∈ R6, where 
+
+vk ∈ { vmin , vmax }, with vk = vmin for planar structures and 
+
+vk = vmax for linear structures. The uncertainty of the geometric descriptor is propagated from point-level covariances within each voxel. Each point 
+
+pWi is associated with a world-frame covariance ΣWi ∈ R3×3
+
+that models measurement noise and pose uncertainty. Follow-ing [24], [25], the Jacobian Ji is written as 
+
+Ji =
+
+"VF i
+
+1
+
+N I3
+
+#
+
+, Fi =
+
+
+
+f (min) 
+
+> i
+
+f (mid) 
+
+> i
+
+f (max) 
+
+> i
+
+ ,
+
+f (m) 
+
+> i
+
+=
+
+
+
+(pWi − μ)⊤
+
+N (λk − λm)
+
+ vmv⊤ 
+
+> k
+
++ vkv⊤
+
+> m
+
+ , m̸ = k, 
+
+01×3, m = k, 
+
+(1) where N denotes the number of points contained in the current voxel, and m ∈ { min , mid , max }. The descriptor covariance is then computed as 
+
+Σg =
+
+> N
+
+X
+
+> i=1
+
+JiΣWi J⊤ 
+
+> i
+
+. (2) Geometric reliability is quantified by the trace of the direc-tional covariance, and descriptors with large uncertainty are marked as unreliable. Each point is then assigned voxel-level attributes gi =  pWi , Rpca , spca , ci, m i
+
+, where ci ∈ R3 is the color and mi ∈ { 0, 1} denotes geometric reliability. For reliable structures, Rpca is given by the PCA eigenvectors and 
+
+spca is computed from the logarithm of the square roots of the corresponding eigenvalues. This results in a compact geometric representation with explicit orientation, scale, and reliability indicators, which serves as a structured prior for subsequent initialization. 
+
+B. Cascaded 3D Gaussian Primitives Initialization 
+
+From the synchronized front-end output stream, frames are periodically selected as keyframes based on a frame-index gap. i.  
+
+> ii .iii .Predicted Gaussian attributes
+> project to LiDAR point
+> Geometry Prior
+> Point Cloud
+> Geometry Prior
+> initialized Gaussian
+> Feedforward
+> Predicted Gaussian
+> Point Cloud
+> initialized Gaussian
+> Camera Frame
+> World Frame
+> Closest
+> Fig. 2. Cascaded Gaussian Primitives Initialization. (i) Each point is projected into the previous and current loopframe images, and the closer valid view is used. (ii) On the predicted per-pixel Gaussian attribute maps, only the closest point is retained at each pixel and its attributes are bilinearly interpolated. (iii) Model-initialized points are transformed to the world frame, while the rest are initialized from voxel-PCA priors or an isotropic heuristic.
+
+Each keyframe is associated with a corrected pose estimate, an RGB image, a projected depth map, and a voxel-PCA geometric prior. A subset of keyframes is further designated as loopframes when the relative motion with respect to the latest loopframe exceeds predefined translation or rotation thresholds. Successive loopframes partition the keyframe se-quence into local segments. When a new loopframe is created, observations from the keyframes between the previous and current loopframes are aggregated to initialize a new batch of Gaussians for that segment. Each new loopframe closes a local segment with the pre-vious one. We aggregate the 3D points observed within this segment and instantiate one Gaussian per point, initializing its world-frame mean at the point location and its DC component from the point color. The remaining attributes, including scale, rotation, opacity, and higher-order SH coefficients, are collec-tively denoted by Θ( p) and initialized through a cascaded strategy that combines feed-forward predictions with voxel-PCA geometric priors to improve initialization quality. 
+
+Θ( p) = 
+
+
+
+Θmodel (p), valid model prediction ,
+
+Θpca (p), invalid prediction ∧ geo-reliable ,
+
+Θheur (p), otherwise .
+
+(3) To obtain the model-based attributes Θmodel (p), the current and previous loopframe images are processed by a pre-trained feed-forward model that predicts per-pixel Gaussian attribute maps. For each instantiated 3D point, we project it into both views and assign to it the predicted attributes at the corresponding pixel location. If the point is visible in both views, the attributes from the closer view are selected (as shown in Fig. 2 (i)). To handle occlusion and projection conflicts, only the closest point is retained at each pixel, and the attributes are obtained by bilinear interpolation from the dense prediction maps (as shown in Fig. 2 (ii)). The predicted 4
+
+rotation, represented as a quaternion, is then transformed from the camera frame to the world frame using the current camera pose (as illustrated in Fig. 2 (iii)). Since the network predicts anisotropic proportions rather than absolute scales, we normalize the predicted scale to retain only its axis-wise shape ratio, denoted by a, and recover the output Gaussian scale in log-space, denoted by sout , by anchoring it to the LiDAR depth using the ratio between the point depth d and the camera focal length f :
+
+sout = log(( d/f ) · a) . (4) Under the PCA-based branch Θpca , the voxel-PCA prior provides rotation and anisotropic scale in log-space. The rotation is directly derived from the PCA eigenvectors. To avoid over-stretched Gaussians in uncertain regions, the PCA-derived scale is further adjusted by a bounded dynamic factor 
+
+β, determined by the ratio of points in the current accumulated segment that are geometrically reliable but have invalid model-predicted parameters to the total number of accumulated points. The final scale is computed as 
+
+sout = spca + log β, (5) where log β is added to each component of spca .Under the heuristic branch Θheur , the rotation is set to identity, and the scale is initialized isotropically using the depth-to-focal-length ratio: 
+
+sout = log( d/f ) . (6) For the two non-model branches, Θpca and Θheur , the opacity is initialized to a constant value for uniform contribution, and all higher-order SH coefficients are set to zero. This cascaded design integrates feed-forward appearance priors with geometry-aware fallback mechanisms, enabling robust initialization under incomplete or unreliable predictions and producing high-quality 3D Gaussian primitives that facil-itate faster convergence. 
+
+C. Optimization 
+
+Newly initialized Gaussians are inserted into the map, while redundant ones are filtered beforehand via a spatial proximity test in 3D Euclidean space to suppress duplicated structures in revisited regions. Optimization is supervised by keyframe images. Over the committed keyframes, we maintain two temporal windows: a recent window associated with the latest Gaussian segments and a history window containing earlier views. At each iteration, views are randomly sampled from both windows to balance fast adaptation and long-range consistency. To preserve previously optimized regions, only Gaussians in the most recent K segments are updated, while older segments remain frozen. Supervisory signals are obtained by rendering the current Gaussian map. To ensure stable supervision, we restrict op-timization to reliably reconstructed regions. Specifically, a geometric support mask Mgeo is derived from accumulated opacity, and a conservative interior mask Mint is obtained via morphological erosion: 
+
+Mint = Erode( Mgeo , r erode ), (7) where Erode( ·, r erode ) denotes binary erosion with radius 
+
+rerode . All supervision terms are evaluated within Mint to avoid unstable gradients in under-observed regions. Color rendering follows standard differentiable Gaussian splatting via alpha compositing along each ray. Depth is computed using the same compositing weights: 
+
+D(x) = 
+
+> N
+
+X
+
+> i=1
+
+ziTiαi(x), (8) where N denotes the number of Gaussians considered in alpha compositing along the ray, zi denotes the camera-frame depth of the i-th Gaussian, and Tiαi(x) defines its effective compositing weight along the ray. The overall objective L is defined as 
+
+L = λrgb Lrgb + λssim Lssim + λdepth Ldepth . (9) 
+
+Lrgb = 1
+
+|M int |
+
+X
+
+> x∈M int
+
+C(x) − ˜C(x) 1 , (10) 
+
+Lssim = 1 − SSIM 
+
+
+
+C |Mint , ˜C |Mint 
+
+
+
+, (11) 
+
+Ldepth = 1
+
+|M int |
+
+X
+
+> x∈M int
+
+D(x) − ˜D(x) , (12) where C(x) and ˜C(x) denote the rendered and observed RGB values, and D(x) and ˜D(x) denote the rendered and reference depths, respectively. The loss terms correspond to photometric, structural, and depth consistency. During optimization, visible and unfrozen Gaussians are refined by a sparse gradient-based optimizer. Meanwhile, low-opacity Gaussians are periodically pruned under a bounded removal ratio to suppress weak or redundant primitives. 
+
+D. Gaussian-based Loop Closure 
+
+To enforce global consistency in large-scale scenes, loop closure is performed directly on the global 3D Gaussian map. For each current loopframe, we search for historical loopframes based on spatio-temporal distance and retain those sufficiently separated in time and index as loop candidates. Each candidate pair defines a potential loop constraint, for which relative pose estimation is performed. Specifically, for a current loopframe i and a historical loopframe j, registration is carried out between a source Gaussian set Gsrc  
+
+> i
+
+and a target Gaussian set Gtar  
+
+> j
+
+.The source set Gsrc  
+
+> i
+
+is formed by the Gaussians associated with the current loopframe, represented under its current corrected pose. To construct the target set Gtar  
+
+> j
+
+, we extract Gaussians from the optimized global 3D Gaussian map that fall within the camera frusta of views around the historical loopframe j. This mitigates incompleteness and boundary inconsistency caused by optimization and pruning. To obtain a denser and more reliable target set, we use a set of neighboring keyframes around the historical loopframe j, denoted by Kj ,5
+
+as query views. For each Gaussian Gn in the global model with center μn, let pkc,n denote its coordinates in the camera frame of a surrounding keyframe k ∈ K j . A Gaussian is retained if there exists at least one keyframe k ∈ K j such that its projection π(pkc,n ) lies within the image domain Ωk.To suppress distant Gaussians with weak contributions, we further discard Gaussians whose centers are farther than dmax 
+
+from the world-frame position tkw, and exclude Gaussians in the source set Gsrc  
+
+> i
+
+. The final target set is defined as 
+
+Gtar  
+
+> j
+
+=
+
+(Gn | ∃ k ∈ K j , π  pkc,n 
+
+ ∈ Ωk,
+
+∥μn − tkw∥2 < d max , G n /∈ G src 
+
+> i
+
+)
+
+, (13) where Gn denotes the n-th Gaussian in the global model. Given Gsrc  
+
+> i
+
+and Gtar  
+
+> j
+
+, we estimate the loop constraint for pose-graph optimization via a Gaussian GICP registra-tion, which extends the GICP [26] formulation to Gaussian primitives. To improve registration robustness, each Gaus-sian covariance is regularized into a planar covariance form. Specifically, for the original source and target covariances 
+
+Σsrc  
+
+> m
+
+and Σtar  
+
+> n
+
+, we replace their eigenvalue matrices with 
+
+˜Λ = diag(1 , 1, 10 −3) to obtain the regularized covariances 
+
+˜Σsrc  
+
+> m
+
+and ˜Σtar  
+
+> n
+
+. Let T = ( R, t) ∈ SE (3) denote the rigid transform that aligns the source Gaussian set Gsrc  
+
+> i
+
+to the target Gaussian set Gtar  
+
+> j
+
+. For a correspondence (m, n ) between source and target Gaussians, the residual and its corresponding covariance are defined as 
+
+rmn (T) = μtar  
+
+> n
+
+− Tμsrc  
+
+> m
+
+, (14) 
+
+Σmn (T) = ˜Σtar  
+
+> n
+
++ R ˜Σsrc  
+
+> m
+
+R⊤. (15) The loop relative pose between Gaussian sets is estimated by 
+
+Tloop  
+
+> ij
+
+= arg min 
+
+> T∈SE (3)
+
+X
+
+> (m,n )∈C
+
+rmn (T)⊤Σmn (T)−1rmn (T),
+
+(16) where C is the correspondence set. A loop candidate is accepted only if the optimization converges and the residual error falls below a predefined threshold. The accepted alignment is subsequently converted into a loop edge and then jointly optimized with odometry con-straints in a GTSAM-based [27] pose graph. After pose-graph optimization, the updated corrected poses are propagated to the associated Gaussian segments in the global 3D Gaussian map, while the corresponding supervisory camera views are updated by the same rigid transform. This process enforces global consistency across the pose graph, the Gaussian map, and the associated views. IV. E XPERIMENTS 
+
+A. Experimental Setup 1) Datasets: To evaluate the proposed method in realis-tic scenarios, we build a strictly time-synchronized LiDAR– Camera–IMU device, comprising a Livox Avia LiDAR, a FLIR Blackfly S BFS-U3-51S5C camera, and an Arduino Mega microcontroller that provides a 10 Hz PWM trigger for hardware-level synchronization. Ground truth is provided by an Xsens MTi-680G RTK GNSS/INS device, allowing the collected dataset to complement existing solid-state LIV benchmarks with large-scale looped outdoor road scenes. In addition, we include representative sequences from the FAST-LIVO2 dataset [4] and the MARS-LVIG dataset [28] for com-prehensive evaluation. Overall, the dataset spans both indoor and outdoor environments, with trajectory lengths ranging from 44 m to 1,988 m, enabling a thorough evaluation under diverse conditions. The datasets collected are named Driving1 
+
+and Driving2 .
+
+2) Baselines and Metrics: We compare our method with representative 3DGS-based SLAM systems, including MonoGS [9], SplaTAM [10], GS-LIVM [16], and Gaussian-LIC2 [15]. For localization evaluation, we further include FAST-LIVO2 [4]. As MonoGS and SplaTAM cannot directly operate on streaming sensor input, they are evaluated on recorded bag data in offline settings, while all other methods are evaluated under real-time input streaming. Mapping quality is assessed using Peak Signal to Noise Ratio (PSNR), Struc-tural Similarity (SSIM), and Learned Perceptual Image Patch Similarity (LPIPS), while localization accuracy is evaluated using Absolute Trajectory Error (ATE) in RMSE. For render-ing evaluation, all reported results of our method are measured only on the held-out test images, which are strictly separated from the training images used for optimization. To directly quantify online efficiency, we define the Real-time factor as the total optimization runtime divided by the duration of the input sensor stream. 
+
+3) Implementation Details: All experiments are conducted on the same platform for fair comparison, equipped with an Intel Core i9-14900KS CPU, an NVIDIA RTX 4090 GPU, and 128 GB RAM, running Ubuntu 20.04 with ROS Noetic. The core modules are implemented in C++ and CUDA. 
+
+B. Results Evaluation 1) Evaluation of Rendering: Quantitative and qualitative evaluations are presented in Table I and Fig. 3, respectively. GS-LIVM over-relies on sweep reconstruction to enforce strict stream-synchronization. The assumption does not hold consistently in our sequences, resulting in degraded pose estimation and reconstruction quality. For evaluating SplaTAM and MonoGS, the LiDAR measurements have to be converted into depth maps, which are inherently sparse and noisy after projection. Since SplaTAM exploits depth information for pose optimization and also relies on depth for Gaussian initializa-tion, it is more sensitive to the quality of the input depth maps, resulting in inferior reconstruction quality. In contrast, MonoGS mainly relies on photometric residuals for tracking and is therefore less directly affected by projected depth quality. Our experiments show that MonoGS still achieves competitive reconstruction quality among the compared meth-ods. However, in highly unstructured road scenes, MonoGS incurs substantially higher runtime than the proposed method. Gaussian-LIC2 benefits from robust pose estimation and in-cremental Gaussian mapping, enabling a favorable trade-off between reconstruction quality and efficiency. However, its lack of loop closure limits global consistency in large-scale scenes. This is evident in the first row of Fig. 3, where the 6
+
+GS-LIC2 [15] GS-LIVM [16] MonoGS [9] SplaTAM [10] Ours Ground Truth 
+
+Fig. 3. Qualitative comparison of rendering results. The blue boxed region is enlarged and displayed in the corner for detailed visual inspection. TABLE I RENDERING QUALITY AND RUNTIME EFFICIENCY COMPARISON ON SELECTED DATASETS .Method Metric Lecture Center01 HKU Campus Retail Street CBD Building02 Driving1 Driving2 HKairport 03 HKisland 03 Gaussian-LIC2 [15] PSNR ↑ 31.28 27.08 24.52 22.30 22.34 23.72 14.55 17.59 SSIM ↑ 0.91 0.76 0.77 0.73 0.77 0.81 0.38 0.44 LPIPS ↓ 0.18 0.20 0.13 0.31 0.27 0.23 0.62 0.57 Real-time factor ↓ 1.11 1.52 1.04 1.34 1.15 2.72 ∞ ∞
+
+GS-LIVM [16] PSNR ↑ 23.34 12.34 16.76 14.37 16.14 14.83 × 2.96 SSIM ↑ 0.81 0.43 0.50 0.52 0.54 0.56 × 0.16 LPIPS ↓ 0.49 0.75 0.70 0.74 0.54 0.53 × 1.01 Real-time factor ↓ 1.04 1.04 1.02 1.02 1.02 1.01 ∞ 1.02 MonoGS [9] PSNR ↑ 29.81 30.36 22.81 21.76 23.01 22.41 16.17 13.71 SSIM ↑ 0.90 0.84 0.71 0.72 0.75 0.73 0.37 0.35 LPIPS ↓ 0.25 0.21 0.27 0.30 0.36 0.45 0.57 0.60 Real-time factor ↓ 6.49 6.38 6.35 ∞ 8.39 8.76 6.45 3.39 SplaTAM [10] PSNR ↑ 25.23 20.57 20.84 17.44 9.93 9.64 13.16 11.96 SSIM ↑ 0.81 0.65 0.66 0.58 0.31 0.29 0.29 0.23 LPIPS ↓ 0.33 0.33 0.26 0.45 0.65 0.67 0.62 0.74 Real-time factor ↓ 38.30 22.41 15.86 12.59 2.71 4.30 5.45 5.46 RMGS-SLAM (ours) PSNR ↑ 35.63 30.85 28.44 27.64 21.85 22.20 20.12 19.55 
+
+SSIM ↑ 0.95 0.88 0.91 0.93 0.80 0.82 0.57 0.67 
+
+LPIPS ↓ 0.11 0.12 0.07 0.09 0.24 0.23 0.36 0.37 
+
+Real-time factor ↓ 1.04 1.03 1.02 1.01 1.01 1.01 1.39 1.01     
+
+> Note: ×indicates invalid renderings, and a real-time factor of ∞indicates failure to complete the full sequence on our setup.
+
+reconstructed road markings overlap relative to the ground-truth image. In addition, the continuously expanding Gaussian map over long trajectories and incoming novel views increases the optimization load on the back end. Overall, the proposed method achieves the best or near-best performance on almost all evaluated sequences. As shown in Fig. 3, our method renders sharper RGB images with fewer artifacts under novel views. The first row further indicates that the introduced Gaussian-based loop closure improves global Gaussian map consistency in revisited large-scale scenes, leading to a more coherent reconstruction than the compared methods. The last two rows show that, with the proposed cascaded initialization, our method provides bet-ter attribute initialization for subsequent optimization, thereby enabling more faithful recovery of view-dependent lighting and shading effects. 7
+
+TABLE II POSE ACCURACY COMPARISON ON DIFFERENT DATASETS .Method Driving1 Driving2 HKairport03 HKisland03 FAST-LIVO2 [4] 3.60 2.74 1.44 2.73 Gaussian-LIC2 [15] 3.88 2.70 × ×
+
+GS-LIVM [16] 4.91 2.95 × 66.16 MonoGS [9] 4.17 12.82 92.38 129.99 SplaTAM [10] 63.32 101.96 117.12 159.93 RMGS-SLAM (ours) 0.41 0.93 1.36 2.71   
+
+> Note: ×denotes that the method failed to complete the full sequence.
+
+2) Evaluation of Localization: Table II summarizes the quantitative results, showing that the proposed method con-sistently achieves the best overall performance on all se-quences. By further introducing Gaussian-based loop closure, our method achieves better global consistency and reduced accumulated drift. As illustrated in Fig. 4, this advantage is particularly evident in the smaller drift along the vertical ( z-axis) direction. Moreover, our method achieves better trajec-tory closure and geometric consistency after a full traversal and revisit of previously mapped areas, whereas most baseline methods still exhibit residual offsets or heading inconsisten-cies. These results indicate that the proposed method not only improves localization accuracy but also enhances the global consistency of the 3D Gaussian map. Ground Truth Ours FAST-LIVO2 GS-LIVM GS-lic2  
+
+> −50 050 100
+
+X (m) 050 100 150 
+
+Y (m)     
+
+> −4 −2 0
+> 2
+> 4
+> Z (m)
+> 0510 15 20
+
+X (m) −10 −5 0510 
+
+> Y (m)
+> −1.0 −0.5 0.0 0.5 1.0
+
+Loop Closure (3D)     
+
+> −24 −22 −20 −18 −16
+> X (m)
+> 0.55
+> 0.60
+> 0.65
+> 0.70
+> 0.75
+> 0.80
+> 0.85
+> Z (m)
+
+X-Z (Zoomed)    
+
+> 510 15 20
+> X (m)
+> 138
+> 140
+> 142
+> 144
+> 146
+> Y (m)
+
+X-Y (Zoomed) 
+
+Fig. 4. Trajectory comparison for the Driving1 sequence. The upper-left subfigure shows the overall 3D trajectory, and the others show local zoomed-in views at approximately 8.3× magnification. 
+
+C. Runtime Analysis 
+
+We benchmark the runtime performance of our proposed method from both system-level and module-level perspectives. 0 25 50 75     
+
+> Time (s)
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> Module Share (%)
+> (a.1)
+> 050 100 150
+> Time (s)
+> (a.2)
+> HKU Campus Driving 1
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> Overall Share (%)  (b.1)
+> 0
+> 1
+> 2
+> 3
+> 4
+> 0
+> 1
+> 2
+> 3
+> 4
+> 5
+> 6
+> GPU (GB)
+> State Estimation
+> Map Expansion
+> GS Rendering
+> GS Optimization
+> Loop Closure
+> GPU Memory
+
+Fig. 5. Runtime analysis across mapping scales. The subfigure (a) presents the per-sample runtime breakdown over time, with samples recorded from online module snapshots at 0.5 s intervals. The subfigure (b) summarizes the corresponding time-weighted overall runtime composition using stacked bars. 
+
+Real-time operation is essential for long-term reliability and downstream applications such as online perception and au-tonomous navigation. An ideal system should continuously keep pace with incoming sensor streams for ego-pose esti-mation and 3D Gaussian mapping. 
+
+1) System-level runtime: As shown in Table I, the pro-posed method achieves Real-time factors close to 1 on most sequences, indicating near-real-time full-pipeline processing while maintaining strong rendering quality. In contrast, several baseline methods yield substantially larger factors, and some even fail to complete the full sequence. This is due to their heavier optimization overhead for pose refinement and Gaus-sian map updating, which makes it difficult to continuously keep pace with the incoming sensor stream. 
+
+2) Module-level runtime: We consider two representative sequences with markedly different mapping scales: HKU Cam-pus , a small-scale sequence with a trajectory length of 64 m, and Driving1 , a large-scale looped sequence with a trajectory length of 551 m. Fig. 5 illustrates both the temporal evolution and the overall runtime composition across these two scenes. In HKU Campus , the runtime is mainly dominated by state estimation and Gaussian primitives optimization. In contrast, in Driving1 , loop closure becomes the primary bottleneck once activated, accompanied by increased GPU memory usage. These results indicate that the dominant computational cost is scene dependent: in the small-scale case, it is mainly shared by front-end estimation and Gaussian optimization, whereas in the large-scale case, it shifts to loop closure. Despite these differences, the system meets the real-time requirement in both cases: it maintains ample runtime headroom in the small-8
+
+TABLE III ABLATION STUDY OF DIFFERENT COMPONENT CHOICES .
+
+Method HKU Campus Driving1 
+
+PSNR ↑ SSIM ↑ LPIPS ↓ PSNR ↑ SSIM ↑ LPIPS ↓
+
+DepthSplat 28.91 0.73 0.15 20.77 0.75 0.26 w/o voxel-PCA 27.98 0.81 0.16 20.76 0.75 0.27 w/o loop closure 30.88 0.88 0.11 19.82 0.74 0.30 RMGS-SLAM(ours) 30.85 0.88 0.12 21.79 0.80 0.24 
+
+Note: Ours denotes the full system using G3Splat as the feed-forward model. 
+
+scale sequence, and in the large-scale sequence, it still keeps pace with the sensor stream despite the added loop closure overhead. Overall, these results demonstrate stable real-time performance across different scene scales. 
+
+D. Ablation Study 
+
+We conduct an ablation study on the same representa-tive sequences, HKU Campus and Driving1 , to evaluate the effectiveness of the proposed components under different scene scales. We first compare two representative feed-forward models, DepthSplat [17] and G3Splat [18], [19], which are recent state-of-the-art approaches in the pose-required and pose-free paradigms, respectively. The results are summarized in Table III. Based on these observations, we adopt G3Splat in the cascaded initialization because it achieves better rendering performance than DepthSplat. We then remove voxel-PCA from the cascaded initialization and observe a clear drop in rendering quality, demonstrating its important role in reliable Gaussian initialization. Moreover, the results show that loop closure significantly improves rendering performance in the large-scale looped scene, while introducing no noticeable degradation in the smaller sequence despite the extra com-putational overhead. V. C ONCLUSIONS 
+
+We present RMGS-SLAM, a tightly coupled LIV 3DGS-based SLAM system. By combining feed-forward predic-tions with Voxel-PCA priors, the proposed cascaded Gaus-sian initialization produces geometrically reliable primitives, which improves optimization convergence and supports real-time 3DGS mapping. Furthermore, the introduced 3DGS-based loop closure enhances both pose estimation and map consistency. Extensive experiments demonstrate that RMGS-SLAM achieves a strong balance among real-time perfor-mance, localization accuracy, and rendering quality compared with state-of-the-art methods. However, the current system still relies on high-performance hardware to sustain stable online operation in large-scale environments. Future work will focus on improving computational efficiency and extending its applicability to downstream robotic tasks such as navigation and grasping. REFERENCES [1] C. Cadena, L. Carlone, H. Carrillo, Y. Latif, D. Scaramuzza, J. Neira, I. Reid, and J. J. Leonard, “Past, present, and future of simultaneous localization and mapping: Toward the robust-perception age,” IEEE Transactions on robotics , vol. 32, no. 6, pp. 1309–1332, 2017. [2] J. Zhang, S. Singh et al. , “Loam: Lidar odometry and mapping in real-time.” in Robotics: Science and systems , vol. 2, no. 9. Berkeley, CA, 2014, pp. 1–9. [3] R. Mur-Artal and J. D. Tard´ os, “Orb-slam2: An open-source slam system for monocular, stereo, and rgb-d cameras,” IEEE transactions on robotics , vol. 33, no. 5, pp. 1255–1262, 2017. [4] C. Zheng, W. Xu, Z. Zou, T. Hua, C. Yuan, D. He, B. Zhou, Z. Liu, J. Lin, F. Zhu et al. , “Fast-livo2: Fast, direct lidar–inertial–visual odometry,” IEEE Transactions on Robotics , vol. 41, pp. 326–346, 2024. [5] B. Kerbl, G. Kopanas, T. Leimk¨ uhler, and G. Drettakis, “3d gaussian splatting for real-time radiance field rendering,” ACM Transactions on Graphics , vol. 42, no. 4, July 2023. [6] X. Zhou, Z. Lin, X. Shan, Y. Wang, D. Sun, and M.-H. Yang, “Driv-inggaussian: Composite gaussian splatting for surrounding dynamic au-tonomous driving scenes,” in Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , 2024, pp. 21 634–21 643. [7] B. Huang, Z. Yu, A. Chen, A. Geiger, and S. Gao, “2d gaussian splatting for geometrically accurate radiance fields,” in ACM SIGGRAPH 2024 conference papers , 2024, pp. 1–11. [8] C. Yan, D. Qu, D. Xu, B. Zhao, Z. Wang, D. Wang, and X. Li, “Gs-slam: Dense visual slam with 3d gaussian splatting,” in CVPR , 2024. [9] H. Matsuki, R. Murai, P. H. Kelly, and A. J. Davison, “Gaussian splatting slam,” in Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , 2024, pp. 18 039–18 048. [10] N. Keetha, J. Karhade, K. M. Jatavallabhula, G. Yang, S. Scherer, D. Ramanan, and J. Luiten, “Splatam: Splat track & map 3d gaussians for dense rgb-d slam,” in Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , 2024, pp. 21 357–21 366. [11] T. Deng, W. Wu, J. He, Y. Pan, X. Jiang, S. Yuan, D. Wang, H. Wang, and W. Chen, “Vpgs-slam: Voxel-based progressive 3d gaussian slam in large-scale scenes,” arXiv preprint arXiv:2505.18992 , 2025. [12] S. Hong, C. Zheng, Y. Shen, C. Li, F. Zhang, T. Qin, and S. Shen, “Gs-livo: Real-time lidar, inertial, and visual multi-sensor fused odometry with gaussian mapping,” IEEE Transactions on Robotics , 2025. [13] T.-D. Phan and G.-W. Kim, “Fusiongs-slam: Multiple sensors fusion for localization and real-time photorealistic mapping,” IEEE Robotics and Automation Letters , 2025. [14] X. Lang, L. Li, C. Wu, C. Zhao, L. Liu, Y. Liu, J. Lv, and X. Zuo, “Gaussian-lic: Real-time photo-realistic slam with gaussian splatting and lidar-inertial-camera fusion,” in 2025 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2025, pp. 8500–8507. [15] X. Lang, J. Lv, K. Tang, L. Li, J. Huang, L. Liu, Y. Liu, and X. Zuo, “Gaussian-lic2: Lidar-inertial-camera gaussian splatting slam,” arXiv ,2025. [16] Y. Xie, Z. Huang, J. Wu, and J. Ma, “Gs-livm: Real-time photo-realistic lidar-inertial-visual mapping with gaussian splatting,” in Proceedings of the IEEE/CVF International Conference on Computer Vision , 2025, pp. 26 869–26 878. [17] H. Xu, S. Peng, F. Wang, H. Blum, D. Barath, A. Geiger, and M. Polle-feys, “Depthsplat: Connecting gaussian splatting and depth,” in Proceed-ings of the Computer Vision and Pattern Recognition Conference , 2025, pp. 16 453–16 463. [18] B. Ye, S. Liu, H. Xu, X. Li, M. Pollefeys, M.-H. Yang, and S. Peng, “No pose, no problem: Surprisingly simple 3d gaussian splats from sparse unposed images,” arXiv preprint arXiv:2410.24207 , 2024. [19] M. Hosseinzadeh et al. , “Geometrically consistent generalizable gaus-sian splatting,” arXiv preprint arXiv:2512.17547 , 2025. [20] S. Cheng, S. He, F. Duan, and N. An, “Tls-slam: Gaussian splatting slam tailored for large-scale scenes,” IEEE Robotics and Automation Letters ,vol. 10, no. 3, pp. 2814–2821, 2025. [21] S. Hong, J. He, X. Zheng, and C. Zheng, “Liv-gaussmap: Lidar-inertial-visual fusion for real-time 3d radiance field map rendering,” IEEE Robotics and Automation Letters , vol. 9, no. 11, pp. 9765–9772, 2024. [22] R. Xiao, W. Liu, Y. Chen, and L. Hu, “Liv-gs: Lidar-vision integration for 3d gaussian splatting slam in outdoor environments,” IEEE Robotics and Automation Letters , vol. 10, no. 1, pp. 421–428, 2024. [23] H. Zhao, W. Guan, and P. Lu, “Lvi-gs: Tightly-coupled lidar-visual-inertial slam using 3d gaussian splatting,” IEEE Transactions on Instru-mentation and Measurement , 2025. [24] C. Yuan, W. Xu, X. Liu, X. Hong, and F. Zhang, “Efficient and probabilistic adaptive voxel mapping for accurate online lidar odometry,” 
+
+IEEE Robotics and Automation Letters , vol. 7, no. 3, pp. 8518–8525, 2022. [25] Z. Liu and F. Zhang, “Balm: Bundle adjustment for lidar mapping,” 
+
+IEEE Robotics and Automation Letters , vol. 6, no. 2, pp. 3184–3191, 2021. 9
+
+[26] A. Segal, D. Haehnel, S. Thrun et al. , “Generalized-icp.” in Robotics: science and systems , vol. 2, no. 4. Seattle, WA, 2009, p. 435. [27] M. Kaess, H. Johannsson, R. Roberts, V. Ila, J. J. Leonard, and F. Dellaert, “isam2: Incremental smoothing and mapping using the bayes tree,” International Journal of Robotics Research , vol. 31, no. 2, pp. 216–235, 2012. [28] H. Li, Y. Zou, N. Chen, J. Lin, X. Liu, W. Xu, C. Zheng, R. Li, D. He, F. Kong et al. , “Mars-lvig dataset: A multi-sensor aerial robots slam dataset for lidar-visual-inertial-gnss fusion,” The International Journal of Robotics Research , vol. 43, no. 8, pp. 1114–1127, 2024.

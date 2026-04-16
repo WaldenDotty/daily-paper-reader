@@ -6,58 +6,56 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-04-14
-- 运行时间：2026-04-14 20:35:28 UTC
+- 最新运行日期：2026-04-16
+- 运行时间：2026-04-16 20:11:01 UTC
 - 运行状态：成功
-- 本次总论文数：12
-- 精读区：1
+- 本次总论文数：11
+- 精读区：0
 - 速读区：11
 
 ### 今日简报（AI）
-今日深度探索地月空间安全，重点解析利用月球门户进行碎片探测的 ISAC 机会性感知技术。
-满分论文 CisLunarSense 提出通感一体化新方案，配合多级旋转系绳运输研究，勾勒出未来地月交通与防御蓝图。
-建议关注深空基础设施中的通感融合趋势，并从动力学约束视角审视复杂系统的建模优化。
-- 详情：[/202604/14/README](/202604/14/README)
+今日速览 11 篇前沿论文，涵盖航空航天非线性建模、混沌动力学分析及近地天体起源研究。
+重点关注利用皮卡迭代优化飞行器参数估计，以及发现地球部分共轨天体可能源自月球的重要结论。
+建议航空航天工程师与天文爱好者深入了解非线性动力学建模及近地空间环境的新进展。
+- 详情：[/202604/16/README](/202604/16/README)
 
 ### 精读区论文标签
-1. [CisLunarSense: Opportunistic ISAC for Debris Detection at the Lunar Gateway](/202604/14/2604.10807v1-cislunarsense-opportunistic-isac-for-debris-detection-at-the-lunar-gateway)  
-   标签：评分：10.0/10、query:cislunar-dyn-nav
-   evidence：基于CR3BP的NRHO模型用于月球门户的地月空间感知与碎片检测
+- 本次无精读推荐。
 
 ### 速读区论文标签
-1. [Symplectic Constraints in Classical Reaction Dynamics: From Gromov's Camel to Reaction Rates](/202604/14/2604.10408v1-symplectic-constraints-in-classical-reaction-dynamics-from-gromovs-camel-to-reaction-rates)  
+1. [Picard Iteration for Parameter Estimation in Nonlinear Dynamic Models of Aircraft and Spacecraft](/202604/16/2604.12885v1-picard-iteration-for-parameter-estimation-in-nonlinear-dynamic-models-of-aircraft-and-spacecraft)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：法向双曲不变流形 (NHIMs) 与相空间输运
-2. [Space-Clock Elevator: Multi-Stage Orbital Transport via Rotating Tethers and Elliptical Nodes](/202604/14/2604.11221v1-space-clock-elevator-multi-stage-orbital-transport-via-rotating-tethers-and-elliptical-nodes)  
+   evidence：航天器非线性动力学参数估计
+2. [Melnikov Analysis of Deterministic and Stochastic Manifold Splitting in the Kuramoto--Sivashinsky Equation](/202604/16/2604.13099v1-melnikov-analysis-of-deterministic-and-stochastic-manifold-splitting-in-the-kuramoto--sivashinsky-equation)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：轨道运输与轨道间转移
-3. [Koopman Representations for Non-Vanishing Time Intervals: An Optimization Approach and Sampling Effects](/202604/14/2604.11715v1-koopman-representations-for-non-vanishing-time-intervals-an-optimization-approach-and-sampling-effects)  
+   evidence：稳定与不稳定流形分裂的Melnikov分析
+3. [The steady-state population of Earth's co-orbitals of lunar provenance](/202604/16/2604.13296v1-the-steady-state-population-of-earths-co-orbitals-of-lunar-provenance)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：用于复杂动力学系统的Koopman算子理论
-4. [Generalized saddle-node ghosts and their composite structures in dynamical systems](/202604/14/2604.05194v1-generalized-saddle-node-ghosts-and-their-composite-structures-in-dynamical-systems)  
+   evidence：地月动力学与地月共轨群体
+4. [Sum-of-Squares Stability Verification on Manifolds with Applications in Spacecraft Attitude Control](/202604/16/2604.13727v1-sum-of-squares-stability-verification-on-manifolds-with-applications-in-spacecraft-attitude-control)  
+   标签：评分：7.0/10、query:cislunar-dyn-nav
+   evidence：航天器姿态控制流形上的稳定性验证
+5. [Differentiable Environment-Trajectory Co-Optimization for Safe Multi-Agent Navigation](/202604/16/2604.06972v1-differentiable-environment-trajectory-co-optimization-for-safe-multi-agent-navigation)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：动力系统中不动点和瞬态动力学的表征
-5. [An RTK-SLAM Dataset for Absolute Accuracy Evaluation in GNSS-Degraded Environments](/202604/14/2604.07151v1-an-rtk-slam-dataset-for-absolute-accuracy-evaluation-in-gnss-degraded-environments)  
+   evidence：用于安全导航的可微轨迹优化
+6. [Vision-Language Navigation for Aerial Robots: Towards the Era of Large Language Models](/202604/16/2604.07705v1-vision-language-navigation-for-aerial-robots-towards-the-era-of-large-language-models)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：GNSS受限环境下的RTK-SLAM绝对精度评估
-6. [TinyDEVO: Deep Event-based Visual Odometry on Ultra-low-power Multi-core Microcontrollers](/202604/14/2604.08060v1-tinydevo-deep-event-based-visual-odometry-on-ultra-low-power-multi-core-microcontrollers)  
+   evidence：三维环境下航空机器人的自主导航
+7. [Stabilizability of first-order dynamics in second-order systems](/202604/16/2604.10757v1-stabilizability-of-first-order-dynamics-in-second-order-systems)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：微控制器上自主机器人的视觉里程计
-7. [Kozai-driven mass loss of the circumbinary disk in D9 in orbit around the supermassive black hole Sgr A*](/202604/14/2604.09856v1-kozai-driven-mass-loss-of-the-circumbinary-disk-in-d9-in-orbit-around-the-supermassive-black-hole-sgr-a)  
+   evidence：流形上动力系统与拉格朗日系统的稳定性控制
+8. [Angle-based Localization and Rigidity Maintenance Control for Multi-Robot Networks](/202604/16/2604.11754v1-angle-based-localization-and-rigidity-maintenance-control-for-multi-robot-networks)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：三体系统中的引力相互作用与希尔半径
-8. [GPU-Accelerated Continuous-Time Successive Convexification for Contact-Implicit Legged Locomotion](/202604/14/2604.09993v1-gpu-accelerated-continuous-time-successive-convexification-for-contact-implicit-legged-locomotion)  
+   evidence：三维空间中多机器人网络的测角定位与稳定性
+9. [3DRO: Lidar-level SE(3) Direct Radar Odometry Using a 2D Imaging Radar and a Gyroscope](/202604/16/2604.12027v1-3dro-lidar-level-se3-direct-radar-odometry-using-a-2d-imaging-radar-and-a-gyroscope)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：用于轨迹优化的连续凸化方法
-9. [Natural Gradient Gaussian Approximation Filter on Lie Groups for Robot State Estimation](/202604/14/2604.10057v1-natural-gradient-gaussian-approximation-filter-on-lie-groups-for-robot-state-estimation)  
+   evidence：SE(3) 状态估计与雷达里程计
+10. [RMGS-SLAM: Real-time Multi-sensor Gaussian Splatting SLAM](/202604/16/2604.12942v1-rmgs-slam-real-time-multi-sensor-gaussian-splatting-slam)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：机器人系统在李群流形上的状态估计
-10. [Consensus-based Recursive Multi-Output Gaussian Process](/202604/14/2604.10146v1-consensus-based-recursive-multi-output-gaussian-process)  
+   evidence：用于实时SLAM和建图的多传感器融合
+11. [Weakly-supervised Learning for Physics-informed Neural Motion Planning via Sparse Roadmap](/202604/16/2604.13204v1-weakly-supervised-learning-for-physics-informed-neural-motion-planning-via-sparse-roadmap)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：用于传感器场学习的分布式多输出高斯过程
-11. [Distributed State Estimation for Discrete-Time Systems With Unknown Inputs: An Optimization Approach](/202604/14/2604.11588v1-distributed-state-estimation-for-discrete-time-systems-with-unknown-inputs-an-optimization-approach)  
-   标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：分布式状态估计与传感器融合
+   evidence：复杂环境下的物理信息神经运动规划
 
 
 <div class="dpr-home-promo-card">
