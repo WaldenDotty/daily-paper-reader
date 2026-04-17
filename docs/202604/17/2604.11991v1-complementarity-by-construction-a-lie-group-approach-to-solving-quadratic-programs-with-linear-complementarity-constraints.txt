@@ -1,0 +1,811 @@
+Title: Complementarity by Construction: A Lie-Group Approach to Solving Quadratic Programs with Linear Complementarity Constraints
+
+URL Source: https://arxiv.org/pdf/2604.11991v1
+
+Published Time: Wed, 15 Apr 2026 00:16:04 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# Complementarity by Construction: A Lie-Group Approach to Solving Quadratic Programs with Linear Complementarity Constraints 
+
+Arun L. Bishop 1, Micah I. Reich 1, and Zachary Manchester 2
+
+Fig. 1: Quadratic programs with linear complementarity constraints can model a wide variety of robotics problems with non-smooth or “switching” constraints. Here we show a hopper hopping over a raised platform with contact and friction constraints (left), a rocket catch with state-triggered orientation and keep-out constraints to avoid collision and plume impingement on the catch tower (middle), and a quadrotor flying through racing gates with completion order constraints (right). 
+
+Abstract — Many problems in robotics require reasoning over a mix of continuous dynamics and discrete events, such as making and breaking contact in manipulation and locomotion. These problems are locally well modeled by linear complemen-tarity quadratic programs (LCQPs), an extension to QPs that introduce complementarity constraints. While very expressive, LCQPs are non-convex, and few solvers exist for computing good local solutions for use in planning pipelines. In this work, we observe that complementarity constraints form a Lie group under infinitesimal relaxation, and leverage this structure to perform on-manifold optimization. We introduce a retraction map that is numerically well behaved, and use it to parameterize the constraints so that they are satisfied by construction. The resulting solver avoids many of the classical issues with complementarity constraints. We provide an open-source solver, Marble, that is implemented in C++ with Julia and Python bindings. We demonstrate that Marble is competitive on a suite of benchmark problems, and solves a number of robotics problems where existing approaches fail to converge. 
+
+I. INTRODUCTION Many important planning and control problems in robotics involve optimizing over a mix of continuous and discrete elements. For example, manipulation and locomotion extend smooth motion planning to include decisions over when to make and break contact with the environment. Problems with binary goals or region-specific constraints like those in Figure 1 also introduce discrete decision variables [1], [2]. Solving these problems globally is known to be NP-hard and combinatorially expensive, but in many cases we are satisfied with local feasible solutions, such as in model-predictive control or as a heuristic in planning pipelines. 
+
+> 1Authors are with the Robotics Institute, Carnegie Mellon University
+> 2Author is with the Department of Aeronautics and Astronautics, Mas-sachusetts Institute of Technology
+
+It is well established that smooth nonlinear optimization problems are locally well modeled by quadratic programs (QPs) [3]. In the context of nonlinear trajectory optimiza-tion, contact-implicit methods model the physics of contact through complementarity constraints [4]. In these cases, a natural choice for local approximations are linear comple-mentary quadratic programs (LCQPs). LCQPs extend stan-dard QPs with linear complementarity constraints: s ≥ 0,
+
+t ≥ 0, and s ⊙ t = 0 , also denoted 0 ≤ s ⊥ t ≥ 0.LCQPs are very expressive, and are capable of capturing the local behavior of many non-smooth systems: Bi-level optimization, binary problems, and game-theoretic problems can all be modeled with LCQPs [5]. LCQPs are, however, non-convex and challenging to solve, and there has been relatively little research focused on developing fast local solvers that leverage the specific structure of these problem [6], [7], [8]. In this work, we present a novel approach for solving LCQPs that addresses many of the challenges of optimizing over complementarity constraints. Our approach solves a series of subproblems with relaxed complementarity con-straints similar to [9], but is the first to take advantage of the smooth manifold structure of the feasible set. Our work is inspired by [10], which introduced a log-domain parame-terization of relaxed complementarity constraints through an exponential retraction map for use in interior-point methods for convex QPs. Our contributions are:  
+
+> •
+
+A parameterization of relaxed complementarity that uses its Lie group structure to satisfy the constraints by construction  
+
+> •
+
+A proposed retraction map that avoids the numerical ill-conditioning of the exponential map  
+
+> arXiv:2604.11991v1 [cs.RO] 13 Apr 2026 •
+
+A corresponding LCQP solver with an open-source C++ implementation with Julia and Python bindings  
+
+> •
+
+Comparisons to LCQPow, a state-of-the-art LCQP solver on a standard benchmark suite and a variety of robotics problems, some of which LCQPow fails to solve, showing improved performance This paper is organized as follows. Section II presents the necessary mathematical background, and Section III reviews existing approaches for solving LCQPs. Section II-A introduces our reformulation and retraction map, while Section IV describes the proposed solver. Section VI presents the experimental results, and Section VII concludes with a discussion of limitations and directions for future work. II. B ACKGROUND 
+
+A. Complementarity Constraints 
+
+Complementarity constraints take the following form over vectors s ∈ Rp and t ∈ Rp where ⊙ denotes element-wise multiplication: 
+
+0 ≤ s ⊥ t ≥ 0 ⇐⇒ 
+
+(
+
+s ≥ 0, t ≥ 0
+
+s ⊙ t = 0 (1) The L-shaped feasible region for (1) is both non-convex and non-smooth at the corner (s, t ) = (0 , 0) , as shown in Figure 3. When combined with other linear constraints, disjoint feasible regions can occur. In addition, complemen-tarity constraints violate the linear independence constraint qualification (LICQ): At any solution ¯s = 0 , ¯t > 0, the gradients of the active constraints are linearly dependent: 
+
+∇(s) (¯ s, ¯t)
+
+=
+
+10
+
+
+
+, ∇(st ) (¯ s, ¯t)
+
+=
+
+¯t
+
+0
+
+
+
+LICQ is often a required condition for convergence of gen-eral nonlinear program (NLP) solvers as it ensures unique-ness of the Lagrange multipliers [11]. 
+
+B. Linear-Complementarity Quadratic Programs 
+
+LCQPs are optimization problems that minimize aquadratic cost subject to linear equality, inequality, and complementarity constraints: 
+
+min 
+
+> z,s,t
+
+12 z⊤Qz + g⊤z (2a) subject to Az + b ≥ 0 (2b) 
+
+Lz + l = s (2c) 
+
+Rz + r = t (2d) 
+
+0 ≤ s ⊥ t ≥ 0 (2e) Here, z ∈ Rn is the solution vector, A ∈ Rm×n and 
+
+L, R ∈ Rp×n are the constraint Jacobians for the inequality and complementarity constraints, respectively, b ∈ Rm and 
+
+l, r ∈ Rp are the affine terms for each constraint, and 
+
+s, t ∈ Rp are complementarity slack variables. A standard QP is comprised of the cost (2a) and constraints (2b), but the difficulty of solving (2) comes from the additional constraints (2c)–(2e) as discussed in Section II-A. 
+
+C. Lie Groups and Lie Algebras 
+
+Lie groups are groups that also have a smooth manifold structure (i.e. they are continuous). Common examples in robotics include the 2D and 3D rotation groups, SO (2) and 
+
+SO (3) , the group of 3D rigid-body motions SE (3) , and the unit quaternions SU (2) . An accessible introduction for roboticists can be found in [12]. Lie groups must be closed under a multiplication operation, and must have an identity element and inverse. Importantly for us, there is a very well-developed theory of optimization on Lie groups that takes advantage of their differentiability and algebraic structure [13]. While Lie groups are not vector spaces, they can be locally linearized to enable vector-space calculations in optimization algorithms. Roughly speaking, calculations involving gradi-ents, Jacobians, and Hessians can be performed on the Lie algebra, which is the linearization (i.e. tangent space) of a Lie group at the identity [14]. Vectors in this tangent space can then be mapped back onto the group via a retraction map [12], enabling many familiar algorithms like Newton’s method [13] and Kalman filters [15] to be easily ported. A major benefit of this approach is that algorithms operating in the Lie algebra do not need to explicitly reason about manifold constraints: the retraction map ensures that all iterates stay on the group manifold by construction. Perhaps the simplest illustrative example of a Lie group is the positive real numbers R+, with standard scalar multi-plication and the identity element 1. The corresponding Lie algebra is the real numbers R, and the standard retraction map is the exponential, i.e. every positive number x can be written as ea for some scalar a. By calculating optimization steps on the Lie algebra R and applying the exponential map, iterates are guaranteed to stay positive, and we do not need to explicitly enforce the constraint x ≥ 0.
+
+D. Interior-point and Barrier Methods 
+
+Interior point methods (IPMs) solve inequality-constrained problems of the form: 
+
+min 
+
+> z
+
+12 z⊤Qz + g⊤z (3a) subject to Az + b ≥ 0 (3b) by solving the following subproblem with slack variables 
+
+s and a log barrier with relaxation parameter κ > 0 that produces an infinite penalty as s approaches zero: 
+
+min 
+
+> z
+
+12 z⊤Qz + g⊤z − κ1⊤ log( s) (4a) subject to Az + b = s (4b) The stationarity condition with respect to s is 
+
+λ − κs = 0 (5) where λ is the Lagrange multiplier corresponding to the constraint Ax + b = s. Multiplying both sides by s gives 
+
+s ⊙ λ = κ, referred to as the relaxed complementarity condition. This paper builds on existing work in [10], which 0 0.5 1   
+
+> 0
+> 0.5
+> 1
+> 1.5
+> 2
+> s
+> t
+> κ= 0
+> κ= 0.36
+> κ= 0.64
+
+Fig. 2: Feasible sets of st = κ and (s − t + 2)( s + t − 1) = κ
+
+for varying κ. Three disjoint feasible points exist at κ = 0 
+
+which reduces to one as κ grows. recognized that solutions to s ⊙ λ = κ for positive s
+
+and λ form a smooth curve that can be parameterized by 
+
+s = √κe σ , λ = √κe −σ .III. E XISTING WORKS 
+
+A variety of approaches to the more general class of mathematical programs with complementarity constraints exist [11], [16] and fall into three main categories: mixed-integer reformulations, smoothing or relaxation methods, and penalty methods. 
+
+1) Mixed-Integer Reformulation: Complementarity con-straints (1) may be re-formulated using the big-M method with bounds ms ≥ s, m t ≥ t and binary variable δ ∈ { 0, 1}
+
+[17]: 
+
+0 ≤ s ⊥ t ≥ 0 ⇐⇒ 
+
+(
+
+0 ≤ s ≤ msδ
+
+0 ≤ t ≤ mt(1 − δ) (6) The resulting mixed integer programs are often solved with branch-and-bound methods implemented in commercial solvers like Gurobi [18]. Branch-and-bound methods scale combinatorially in the number of integer variables, leading to prohibitively long solution times. 
+
+2) Smoothing and Relaxation Methods: For a general review of smoothing and relaxation methods, including nonlinear program (NLP) reformulations, we refer to [19]. This work uses the relaxation introduced in II-D. Typically, methods in this category perform continuation , where a parameter is gradually varied to approach the true non-smooth solution. One challenge encountered with relaxation methods is that they can change the topology of the feasible set associated with complementarity constraints, unlike in interior-point methods for inequalities. For example, Figure 2 shows two overlapping complementarity constraints: s·t = κ
+
+and (s − t + 2) · (s + t − 1) = κ where, as κ increases, the number of solutions changes from three to one. This can bias the solution towards particular local minima, but is not inherently limiting provided that the relaxed feasible set approaches the original one as κ approaches zero.   
+
+> 00.51
+> 0
+> 0.5
+> 1
+
+σ
+
+> s
+> t
+
+Fig. 3: Relaxed complementarity feasible sets for different relaxation parameters. σ smoothly and globally parametrizes a feasible set for a fixed relaxation (black, red dot). 
+
+3) Penalty Methods: In penalty-based methods, con-straints are incorporated through penalty terms in the cost function to avoid issues like LICQ. Similar to relaxation methods, continuation is used to solve subproblems for increasing penalty values. LCQPow, an open-source software package for LCQPs, includes s ⊙ t = 0 as a quadratic penalty ρ · s⊤t, leaving the inequality constraints explicit, which forms a QP subproblem that can be solved with off-the-shelf solvers. This method suffers from two weaknesses: First, if the problem violates a constraint qualification called MPEC-LICQ described in [17], LCQPow often encounters failures that depend heavily on the lower-level QP solver since the subproblem solution is not unique. Second, the solver can stall at infeasible stationary points where both the quadratic cost and complementarity penalty are orthogonal to the boundary of the feasible region. IV. C OMPLEMENTARITY BY CONSTRUCTION 
+
+Our approach avoids the challenges associated with com-plementarity constraints by performing on-manifold opti-mization. The solution set defined by the complementarity constraints 0 ≤ s ⊥ t ≥ 0 for scalars s and t is a one-dimensional continuous curve that is non-smooth at s = t =0 and, therefore, does not admit a smooth parameterization. However, relaxing the constraint by replacing s ⊙ t = 0 with 
+
+s⊙t = κ for κ > 0 smooths this curve and the true constraint is recovered as κ → 0. Importantly, the relaxed feasible set forms a Lie group: feasible points (s, t ) and (p, q ) can be composed together to create a new feasible point through scaled element-wise multiplication: 
+
+(s, t ) ⊗ (q, r ) := 
+
+ sq 
+
+√κ , tr 
+
+√κ
+
+
+
+, (7) As first observed in [10], the relaxed complementarity man-ifold for a given κ can now be parameterized by a single variable, σ, in the Lie algebra as shown in Figure 3. Using the exponential map, we can map σ back to the group using 
+
+s = √κe σ and t = √κe −σ .
+
+A. Softplus Retraction Map 
+
+While the exponential map is a natural choice, we found that it can suffer from numerical ill-conditioning and over-flow errors due to its unbounded gradients. To address these issues, we note that any smooth function pκ(σ) : R → R+
+
+that satisfies pκ(σ)·pκ(−σ) = κ can be used to parameterize the feasible set, and we propose the following retraction map: 
+
+pκ(σ) = 
+
+√κ
+
+2
+
+ σ
+
+√κ +
+
+s σ
+
+√κ
+
+2
+
++ 4 
+
+ (8) This scaled softplus function is asymptotically linear outside the corner at σ = 0 , quickly approaching pκ(σ) = σ for positive σ and pκ(σ) = 0 for negative σ. The scaling σ√κ
+
+reflects the scaling in the group composition (7) and makes the gradients bounded between 0 and 1. This mapping also has the convenient property that pκ(σ) − pκ(−σ) = σ,enabling efficient gradient and Jacobian calculations. V. M ARBLE 
+
+We now introduce our solver algorithm, Marble. 
+
+A. Problem Formulation 
+
+Marble replaces the complementarity conditions (2c), (2d), and (2e) with the implicit softplus parameterization intro-duced in the previous section: 
+
+min 
+
+> z,w,σ
+
+12 z⊤Qz + g⊤z − κ1⊤ log( w) (9a) subject to Az + b = w (9b) 
+
+Lz + l = pκ(σ) (9c) 
+
+Rz + r = pκ(−σ), (9d) where κ is the relaxation parameter, pκ(σ) is our retraction function (8), and inequalities are enforced through a log-barrier. For brevity in the rest of our derivation, we represent the implicit complementarity constraints as Jz + c = h(σ),where: 
+
+J =
+
+LR
+
+
+
+, c =
+
+lr
+
+
+
+, h(σ) = 
+
+ pκ(σ)
+
+pκ(−σ)
+
+
+
+(10) We formulate and solve this problem using an augmented Lagrangian (AL). AL methods introduce a penalty term and use multiplier estimates to ensure convergence for a finite penalty parameter [3]. This gracefully handles infeasible subproblems and doesn’t require LICQ since the penalty reg-ularizes the multipliers [20]. The corresponding augmented Lagrangian for (9) is: 
+
+LA(z, w, σ ; κ, ρ, α, β ) = 12 z⊤Qz + g⊤z − κ1⊤ log( w)+
+
+αβ
+
+⊤  Az + b − wJz + c − h(σ)
+
+
+
++ ρ
+
+2
+
+ Az + b − wJz + c − h(σ)
+
+ 22
+
+,
+
+(11) where α and β are Lagrange multiplier estimates. Our solver consists of an inner loop that minimizes LA for fixed κ, ρ, α, β and an outer loop that updates κ, ρ, α, β as described in Section V-B. We use Newton’s method to minimize (11) in the inner loop. We derive the KKT system below, introducing substi-tutions to improve its conditioning. The KKT conditions are: 
+
+∂LA
+
+∂z = Qz + g +
+
+AJ
+
+⊤  α + ρ(Az + b − w)) 
+
+β + ρ(Jz + c − h(σ))) 
+
+
+
+= 0 
+
+(12a) 
+
+∂LA
+
+∂w = − (α + ρ(Az + b − w)) − κw = 0 (12b) 
+
+∂LA
+
+∂σ = −
+
+ ∂h ∂σ 
+
+⊤
+
+(β + ρ(Jz + c − h(σ))) = 0 (12c) The Jacobian ∂h/∂σ can be computed efficiently using properties of our retraction map (8): 
+
+∂h ∂σ =
+
+ p′
+
+> κ
+
+(σ)
+
+−p′
+
+> κ
+
+(−σ)
+
+
+
+=
+
+ p′
+
+> κ
+
+(σ)
+
+p′
+
+> κ
+
+(σ) − I
+
+
+
+(13) This system of equations in the primal variables z, w and 
+
+σ becomes ill-conditioned as the penalty ρ increases. We avoid this using a standard primal-dual reformulation [3] by introducing dual variables λw ∈ Rm and λσ ∈ R2p with the following relationships: 
+
+λw = α + ρ(Az + b − w) (14) 
+
+λσ = β + ρ(Jz + c − h(σ)) (15) Substituting λw into the stationarity condition for the in-equality slack w (12b) and multiplying both sides by the diagonal matrix diag (w) results in the interior-point re-laxed complementarity condition introduced in Section II-D, 
+
+diag( w)λw = −κ1. We satisfy this as in [10] using our retraction map pκ with variable v.
+
+w = pκ(v), λ w = −pκ(−v) (16) We now arrive at the following set of conditions, which we refer to as the KKT residual r, that we drive to zero in each inner loop: 
+
+
+
+Qz + g + A⊤λw + J⊤λσ
+
+λw + pκ(−v)
+
+−   ∂h ∂σ 
+
+⊤ λσ
+
+ρ−1(α − λw) + Az + b − pκ(v)
+
+ρ−1(β − λσ ) + Jz + c − h(σ)
+
+| {z }
+
+r(z, v, σ, λ w, λ σ )= 0 (17) This system has the following Jacobian, which we sym-metrize by multiplying the second row by −p′
+
+> κ
+
+(v) which lets us take advantage of fast linear solvers for sparse symmetric quasi-definite matrices. 
+
+
+
+Q A⊤ J⊤
+
+−p′
+
+> κ
+
+(−v) I
+
+− ∂2
+
+> ∂σ 2
+
+ h(σ)⊤λσ
+
+ − ∂h ∂σ 
+
+> ⊤
+
+A −p′
+
+> κ
+
+(v) −ρ−1IJ − ∂h ∂σ −ρ−1I
+
+| {z }
+
+∇r(z, v, σ, λ w, λ σ )
+
+(18) Algorithm 1 Marble Algorithm 
+
+Require: Problem data, optional initial guess for z 
+
+> 1:
+
+Initialize ρ ← ρ0, κ ← κ0, F ← ∅ 
+
+> 2:
+
+Initialize s ← [z, σ, v, λ w, λ σ ], [α, β ] ← [0 , 0]  
+
+> 3:
+
+for i = 1 , 2, . . . , N max do  
+
+> 4:
+
+Compute residual r, Jacobian ∇r from (17)  
+
+> 5:
+
+Initialize regularizer δ ← 0 
+
+> 6:
+
+loop  
+
+> 7:
+
+[L, D ] ← QDLDL (∇r, δ ) 
+
+> 8:
+
+if D has incorrect inertia then  
+
+> 9:
+
+δ ← max(10 2, 10 δ); continue  
+
+> 10:
+
+end if  
+
+> 11:
+
+∆s ← SOLVE KKT (L, D, r ) 
+
+> 12:
+
+s+ ← FILTER LINESEARCH (s, ∆s) 
+
+> 13:
+
+if line-search succeeds then  
+
+> 14:
+
+break  
+
+> 15:
+
+else  
+
+> 16:
+
+δ ← max(10 2, 10 δ) 
+
+> 17:
+
+end if  
+
+> 18:
+
+end loop  
+
+> 19:
+
+s ← s+ 
+
+> 20:
+
+if ∥ (17) ∥∞ ≤ ϵres then  
+
+> 21:
+
+if constraint violations ≤ ϵe, ϵ i, ϵ c then  
+
+> 22:
+
+return s ▷ Solution found  
+
+> 23:
+
+else if ρ < ρ max then  
+
+> 24:
+
+ρ ← min( γρ ρ, ρ max ) 
+
+> 25:
+
+else  
+
+> 26:
+
+κ ← max( γκ κ, κ min ) 
+
+> 27:
+
+[α, β ] ← [λw, λ σ ] 
+
+> 28:
+
+end if  
+
+> 29:
+
+end if  
+
+> 30:
+
+end for 
+
+B. Solver Strategy 
+
+Given the non-convexity of our problem, we adopt stan-dard strategies from the nonlinear programming literature. The inner problem is solved using Newton’s method with a filter line search for step evaluation and inertia correction to ensure descent as in IPOPT [3], [21]. The filter terms are similar to the ones defined in [9]. The KKT system is factorized and solved using QDLDL, a fast serial LDL factorization routine [22]. Similar to OSQP [22], we apply a fixed scaling computed using Ruiz equilibration for each linear solve to reduce floating point error [23]. The inner loop runs until the ∞-norm of the KKT residual defined by (17) is below a tolerance ϵr (default 10 −6). In the outer loop, we first update the penalty parameter ρ. Once 
+
+ρ = ρmax , we update κ geometrically with a scalar γκ
+
+(default 0.5) and update the Lagrange multiplier estimates. We check the norm of the KKT residual and the violation of the original constraints to determine solver convergence. The full Marble algorithm is summarized in Algorithm 1 where 
+
+s is the solution vector [z, σ, v, λ w, λ σ ].TABLE I: Solver parameters and their default values.                       
+
+> Name Symbol Value
+> Penalty Initial ρ010
+> Penalty Scaling γρ10
+> Penalty Max ρmax 10 7
+> Relaxation Initial κ00.1
+> Relaxation Scaling γκ0.5
+> Relaxation Min κmin 10 −9
+> Residual Tol. ϵres 10 −6
+> Equality Tol. ϵe10 −8
+> Inequality Tol. ϵi10 −8
+> Complementarity Tol. ϵc10 −8
+
+10 0 10 1 10 2
+
+0
+
+25 
+
+50 
+
+75 
+
+100 
+
+Performance ratio τ
+
+> % Problems solved
+
+Marble (ours) 
+
+LCQPow 
+
+Gurobi 
+
+Fig. 4: Total problems solved versus performance ratio (solve time scaled by minimum time per problem) for each solver. Marble is the fastest for 72% of problems and is at most 4.85x slower. VI. E XPERIMENTS 
+
+The Marble implementation and code to reproduce the following results are made publicly available 1
+
+We evaluate Marble on the standard MacMPEC bench-mark suite [24] and three robotics-specific problems, and compare the solutions to LCQPow and Gurobi, where Gurobi provides the ground truth global solution. The same set of solver parameters was used for all problems and is listed in Table I. Each problem was initialized with an all-zero initial guess. 
+
+A. MacMPEC Benchmark 
+
+The MacMPEC benchmarks contains a variety of com-plementarity problems from fields such as game theory, operations research, and structural dynamics [11]. We solved the 39 MacMPEC problems that are LCQPs and compare our solver’s performance against LCQPow [17], an SQP-based method using qp-OASES as the underlying QP solver, and Gurobi [18], a mixed integer branch-and-bound-based method. Our solver obtains feasible solutions for all problems and finds the global solution for 38 of 39 problems. LCQPow fails to achieve a complementarity tolerance less than 10 −5
+
+for one problem and finds the global solution for 33 prob-lems. For every problem, our method achieves an equal or better solution compared to LCQPow. We compare solution times using performance ratios τ for each problem, which is  
+
+> 1Code: https://roboticexplorationlab.org/Marble
+
+TABLE II: Solver comparison across robotics tasks.                                                    
+
+> Contact Dynamics
+> nz= 1560 , n e= 780 , n i= 540 , n c= 540
+> Progress Constraints
+> nz= 1706 , n e= 760 , n i= 1942 , n c= 120
+> State-triggered Constraints
+> nz= 678 , n e= 444 , n i= 718 , n c= 40
+> Solver Feasibility Objective Solve Time Feasibility Objective Solve Time Feasibility Objective Solve Time Gurobi [18] ✓29 .20 344 .56 s✓464 .46 ∗845 ms ✓380 .71 ∗45 ms LCQPow [17] ✓29 .21 55.11 s ✗——✗——Marble (ours) ✓31 .68 130 ms ✓465 .56 69 ms ✓381 .19 34 ms
+> ∗Indicates Gurobi achieves global optimum.
+
+the solve time per solver divided by the minimum time across all three solvers. Figure 4 plots the percent of problems solved with at most performance ratio τ for each solver, showing that Marble is the fastest for 69% of problems and is at most eight time slower. 
+
+B. Robotics Benchmarks 
+
+We formulate and solve three robotics-specific problems chosen to demonstrate the capabilities of LCQPs to model a wide variety of systems and behaviors. The feasibility, objective and solve times for each solver on each problem is shown in Table II. Marble is faster than LCQPow and Gurobi for all problems and is able to solve both problems LCQPow fails on. 
+
+1) Contact: We solve a trajectory optimization problem for a planar hopper traversing a raised platform with stairs as shown in Figure 1. Making and breaking contact is modeled as complementarity between the signed distance to the floor d and the normal force fn, avoiding force-at-a-distance or penetration artifacts. The hopper exerts a friction force against the ground, and complementarity constraints on the tangential velocity prevent slipping when in contact. Using vt as the tangential velocity, this is expressed as: 
+
+d ≥ 0 (19) 
+
+vt = v+ 
+
+> t
+
+− v− 
+
+> t
+
+(20) 
+
+v+ 
+
+> t
+
+, v − 
+
+> t
+
+≥ 0 (21) 
+
+0 ≤ v+ 
+
+> t
+
++ v− 
+
+> t
+
++ d ⊥ fn ≥ 0 (22) 
+
+−μf n ≤ ff ≤ μf n (23) where the positive slack variables v+ 
+
+> t
+
+, v − 
+
+> t
+
+upper-bound the absolute value of the tangential velocity through v+ 
+
+> t
+
++ v−
+
+> t
+
+which must be zero when the normal force is non-zero to prevent slip. The last constraint on the friction force ff
+
+represents the planar friction cone. We compute the signed distance using d = zfoot −h(xfoot )
+
+where h(xfoot ) is the height map of the stairs, represented as the sum of four shifted and scaled sign functions. Sign functions cannot be explicitly used in an LCQP, but can be implicitly represented through a linear program: 
+
+s = sgn( x) = arg min 
+
+> −1≤s≤1
+
+(−sx ). (24) We use the KKT conditions of the linear program as con-straints in the LCQP with additional decision variables for s
+
+and the Lagrange multipliers λ+, and λ−. Since the KKT conditions are necessary and sufficient, s = sgn( x) at a feasible solution to the LCQP. The hopper dynamics are linearized and represented as two point masses for the head and foot, where the state is their cartesian positions and velocities and the controls are prismatic forces between them. We use a quadratic tracking cost on the x position of both bodies, corresponding to translating with a fixed speed, and a small quadratic cost on the controls and their first derivatives. An additional quadratic cost penalizes the vertical distance between the two point masses. Figure 5 shows the solved trajectory for the hopper prob-lem with a regular hopping gait and hard contact events with forces that satisfy the friction cone. LCQPow, Gurobi, and Marble all achieve a feasible, locally optimal solution for this problem. Notably, Marble achieves a solution within 10% of LCQPow and Gurobi in orders of magnitude less time. Gurobi struggles to find a global optimum since many feasible points achieve near-identical objective values. 
+
+2) State-Triggered Constraints: State-triggered constraints (STCs) specify constraints h(z) ≥ 0 that are only applied when a trigger condition g(z) > 0 is active. This can be expressed as the implication g(z) > 0 = ⇒ h(z) ≥ 0
+
+and is transcribed as: 
+
+g+ − g− = g(z), g+, g − ≥ 0 (25) 
+
+h+ − h− = hi(z), h +, h − ≥ 0 (26) 
+
+0 ≤ g+ ⊥ h− ≥ 0 (27) The trigger condition can activate multiple constraints 
+
+h1, . . . , h n at once by modifying (27) to be: 
+
+0 ≤ g+ ⊥
+
+> n
+
+X
+
+> i=1
+
+h− 
+
+> i
+
+≥ 0 (28) We demonstrate STCs in a trajectory optimization problem to guide a rocket into a catch tower located at x = 0 with catch arms at a height of hcatch with length ℓarms . The rocket dynamics are planar and linearized about the upright state 
+
+θ = 0 with unit thrust-to-weight ratio, and the controls are thrust magnitude and engine gimbal deflection angle α. The STCs specify that when the rocket is within a specified range of the tower, both ends of the rocket must be in front of the tower with the engine pointed away from the tower to avoid plume impingement; these are written as: 
+
+g(y) = htrigger − y (29) 
+
+h1(p, θ ) = e⊤
+
+> 1
+
+
+
+p + R(θ)
+
+0
+
+ℓ
+
+ 
+
+(30) 
+
+h2(p, θ ) = e⊤
+
+> 1
+
+
+
+p + R(θ)
+
+ 0
+
+−ℓ
+
+ 
+
+(31) 
+
+h3(θ, α ) = θ + α, (32) where htrigger is the altitude at which the constraints become active, ℓ is the half-length of the rocket, p = [x, y ] is the rocket position, and R(θ) is a linearized body-to-world rotation matrix. These trigger and constraint functions are enforced using (25), (26), (28). The trigger region and catch trajectory are shown in 1. LCQPow fails to converge on this problem and encounters infeasibility within the underlying QP solver, while Marble finds a near-optimal solution compared to the global Gurobi solution. 
+
+3) Progress Constraints: We plan a trajectory for aquadrotor linearized about hover flying through a series of m rectangular gates in order, starting from an initial configuration. Gate completion is modeled with progress state γk ∈ Rm indicating whether a gate has been passed through, and progress control variables μk ∈ Rm that update 
+
+γk according to: 
+
+γk =
+
+(
+
+μk k = 1 
+
+γk−1 + μk 1 < k ≤ N (33) To ensure that all gates are completed in order by the end of the trajectory, we enforce: 
+
+γ(j) 
+
+> N
+
+= 1 1 ≤ j ≤ m (34) 
+
+γ(j) 
+
+> k
+
+≥ γ(j+1)  
+
+> k
+
+1 ≤ j < m, 1 ≤ k ≤ N (35) The progress control μ(j) 
+
+> k
+
+for gate j at timestep k may only be active when the drone passes through the bounds of the gate: 
+
+0 ≤ μ(j) 
+
+> k
+
+⊥ RjW
+
+
+
+rk − o(j)
+
++ s(j) 
+
+> k1
+
+≥ 0 (36) 
+
+−ℓ(j) ≤ s(j) 
+
+> k
+
+≤ ℓ(j), (37) where ℓ(j), o(j), and RjW are the half-extents, position, and orientation of gate j, respectively. We refer the interested reader to [25] for interpretation of these constraints. The L1
+
+norm in (36) is reformulated in terms of slack variables and a set of linear equality and inequality constraints in order to fit within the LCQP framework. Figure 6 shows the solution to this problem which exhibits binary progress controls: μ(j) 
+
+> k
+
+= 1 is satisfied for exactly one timestep per gate when the quadrotor flies through gate j and is zero otherwise throughout the trajectory. LCQPow again fails to converge on this problem and encounters infeasibility within the underlying QP solver, while Marble finds a near-optimal solution compared to the global Gurobi solution. 
+
+Fig. 5: Hopper trajectory with contact forces (red arrows). The hopper is shaded red to indicate contact (signed distance 
+
+≤ 10 −4 m. 
+
+Fig. 6: Gate traversal trajectory with progress constraints. The quadrotor is shaded red to indicate timesteps where the progress control variable μ(j) is equal to one for gate 1 ≤
+
+j ≤ 4.VII. C ONCLUSIONS , L IMITATIONS , AND FUTURE WORK 
+
+In this work, we develop an approach to solving LCQPs that leverages the Lie group structure of relaxed complemen-tarity constraints. We introduce a softplus retraction map that offers numerical advantages over the common exponential map, and demonstrate that the resulting solver is competi-tive across both standard benchmarks and robotics-specific problems. Our open-source solver, Marble, is implemented in C++ with Python and Julia bindings. LCQPs remain a challenging problem class that requires careful modeling. One limitation of our solver is the phe-nomenon discussed in Fig. 2, where relaxation can change the feasible set of a problem. This can occur, for example, in the hopper problem shown in Section VI-B: modeling the tangential velocity and distance complementarity separately, as opposed to the approach used in (22), can lead to solver failures. More work needs to be done to characterize the failure modes and robustness properties of this approach. There are several directions for future work: first, Marble is differentiable thanks to its relaxation strategy. These derivatives could be used in downstream learning or planning applications. Second, effective warm-starting strategies may be explored via learning. Finally, globalization strategies for challenging large-scale problems could be developed through sampling or learning approaches. REFERENCES 
+
+[1] M. Szmuk, T. P. Reynolds, and B. Ac ¸ıkmes ¸e, “Suc-cessive Convexification for Real-Time Six-Degree-of-Freedom Powered Descent Guidance with State-Triggered Constraints,” en, Journal of Guidance, Con-trol, and Dynamics , vol. 43, no. 8, pp. 1399–1413, Aug. 2020. [2] Y. Kim, S. Leyffer, and T. Munson, “MPEC Methods for Bilevel Optimization Problems,” en, in Bilevel Op-timization , S. Dempe and A. Zemkoho, Eds., vol. 161, Series Title: Springer Optimization and Its Applica-tions, Cham: Springer International Publishing, 2020, pp. 335–360. [3] J. Nocedal and S. J. Wright, Numerical Optimization 
+
+(Springer Series in Operations Research and Financial Engineering), en. Springer New York, 2006. [4] D. E. Stewart and J. C. Trinkle, “An Implicit Time-Stepping Scheme for Rigid Body Dynamics with In-elastic Collisions and Coulomb Friction,” en, Interna-tional Journal for Numerical Methods in Engineering ,vol. 39, no. 15, pp. 2673–2691, 1996. [5] M. C. Ferris and J. S. Pang, “Engineering and Eco-nomic Applications of Complementarity Problems,” en, SIAM Review , vol. 39, no. 4, pp. 669–713, Jan. 1997. [6] X. Chen and J. J. Ye, “A Class of Quadratic Pro-grams with Linear Complementarity Constraints,” en, 
+
+Set-Valued and Variational Analysis , vol. 17, no. 2, pp. 113–133, Jun. 2009. [7] L. Bai, J. E. Mitchell, and J.-S. Pang, “On convex quadratic programs with linear complementarity con-straints,” en, Computational Optimization and Appli-cations , vol. 54, no. 3, pp. 517–554, Apr. 2013. [8] D. Ralph and O. Stein, “The C-Index: A New Stability Concept for Quadratic Programs with Complementar-ity Constraints,” Mathematics of Operations Research ,vol. 36, no. 3, pp. 504–526, 2011. [9] T. A. Howell, S. L. Cleac’h, K. Tracy, and Z. Manch-ester, CALIPSO: A Differentiable Solver for Trajectory Optimization with Conic and Complementarity Con-straints , arXiv:2205.09255 [cs], Jan. 2023. [10] F. Permenter, “Log-domain interior-point methods for convex quadratic programming,” en, Optimization Let-ters , vol. 17, no. 7, pp. 1613–1631, Sep. 2023. [11] Z.-Q. Luo, J.-S. Pang, and D. Ralph, Mathematical Programs with Equilibrium Constraints , en. Cam-bridge University Press, Nov. 1996, Google-Books-ID: UcjLCgAAQBAJ. [12] J. Sol` a, J. Deray, and D. Atchuthan, A micro Lie theory for state estimation in robotics , arXiv:1812.01537 [cs], Dec. 2021. [13] P.-A. Absil, R. Mahony, and R. Sepulchre, Opti-mization Algorithms on Matrix Manifolds , en. Prince-ton University Press, Apr. 2009, Google-Books-ID: NSQGQeLN3NcC. [14] J. Stillwell, Naive Lie Theory , en. Springer Science & Business Media, Dec. 2008, Google-Books-ID: SuR5OAgxyDIC. [15] A. Barrau and S. Bonnabel, “Invariant Kalman Fil-tering,” en, Annual Review of Control, Robotics, and Autonomous Systems , vol. 1, no. 1, pp. 237–257, May 2018. [16] A. U. Raghunathan and L. T. Biegler, “An Interior Point Method for Mathematical Programs with Com-plementarity Constraints (MPCCs),” en, SIAM Journal on Optimization , vol. 15, no. 3, pp. 720–750, Jan. 2005. [17] J. Hall, A. Nurkanovic, F. Messerer, and M. Diehl, “LCQPow – A Solver for Linear Complementar-ity Quadratic Programs,” Mathematical Programming Computation , vol. 17, no. 1, pp. 81–109, Mar. 2025, arXiv:2211.16341 [math]. [18] Gurobi Optimization, LLC, Gurobi Optimizer Refer-ence Manual , 2026. [19] R. Fletcher* and S. Leyffer ‡, “Solving mathemat-ical programs with complementarity constraints as nonlinear programs,” en, Optimization Methods and Software , vol. 19, no. 1, pp. 15–40, Feb. 2004. [20] A. F. Izmailov, M. V. Solodov, and E. I. Uskov, “Global Convergence of Augmented Lagrangian Methods Applied to Optimization Problems with De-generate Constraints, Including Problems with Com-plementarity Constraints,” en, SIAM Journal on Opti-mization , vol. 22, no. 4, pp. 1579–1606, Jan. 2012. [21] A. W¨ achter and L. T. Biegler, “On the implementation of an interior-point filter line-search algorithm for large-scale nonlinear programming,” en, Mathematical Programming , vol. 106, no. 1, pp. 25–57, Mar. 2006. [22] B. Stellato, G. Banjac, P. Goulart, A. Bemporad, and S. Boyd, “OSQP: An Operator Splitting Solver for Quadratic Programs,” Mathematical Programming Computation , vol. 12, no. 4, pp. 637–672, Dec. 2020, arXiv:1711.08013 [math]. [23] D. Ruiz, A scaling algorithm to equilibrate both rows and columns norms in matrices , Chilton, 2001. [24] S. Leyffer, MacMPEC: AMPL collection of MPECs .[25] P. Foehn, A. Romero, and D. Scaramuzza, “Time-optimal planning for quadrotor waypoint flight,” en, 
+
+Science Robotics , vol. 6, no. 56, eabh1221, Jul. 2021.
