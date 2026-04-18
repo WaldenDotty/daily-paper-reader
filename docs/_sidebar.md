@@ -1,6 +1,9 @@
 * <a class="dpr-sidebar-root-link" href="#/">首页</a>
 * <a class="dpr-sidebar-root-link dpr-sidebar-noactive-link" href="javascript:void(0)" data-dpr-hash="#/tutorial/README">使用教程</a>
 * Daily Papers
+  * 2026-04-18 <!--dpr-date:20260418-->
+    * 速读区
+      * <a class="dpr-sidebar-item-link dpr-sidebar-item-structured" href="#/202604/18/2604.09834v1-observational-and-dynamical-constraints-on-an-unseen-outer-perturber-in-the-gj-436-hot-neptune" data-sidebar-item="{&quot;title&quot;: &quot;Observational and Dynamical Constraints on an Unseen Outer Perturber in the GJ 436 Hot Neptune&quot;, &quot;link&quot;: &quot;https://arxiv.org/abs/2604.09834v1-observational-and-dynamical-constraints-on-an-unseen-outer-perturber-in-the-gj-436-hot-neptune&quot;, &quot;score&quot;: &quot;6.0&quot;, &quot;tags&quot;: [{&quot;kind&quot;: &quot;query&quot;, &quot;label&quot;: &quot;cislunar-dyn-nav&quot;}], &quot;evidence&quot;: &quot;行星系统中的动力学过程与轨道架构&quot;}">Observational and Dynamical Constraints on an Unseen Outer Perturber in the GJ 436 Hot Neptune</a>
   * 2026-04-17 <!--dpr-date:20260417-->
     * 精读区
       * <a class="dpr-sidebar-item-link dpr-sidebar-item-structured" href="#/202604/17/2604.15028v1-nonlinear-backstepping-with-saturation-for-low-thrust-station-keeping-of-libration-point-orbits" data-sidebar-item="{&quot;title&quot;: &quot;Nonlinear backstepping with saturation for low-thrust station-keeping of libration point orbits&quot;, &quot;link&quot;: &quot;https://arxiv.org/abs/2604.15028v1-nonlinear-backstepping-with-saturation-for-low-thrust-station-keeping-of-libration-point-orbits&quot;, &quot;score&quot;: &quot;10.0&quot;, &quot;tags&quot;: [{&quot;kind&quot;: &quot;query&quot;, &quot;label&quot;: &quot;cislunar-dyn-nav&quot;}], &quot;evidence&quot;: &quot;地月系统平动点轨道的低推力驻留控制&quot;}">Nonlinear backstepping with saturation for low-thrust station-keeping of libration point orbits</a>
