@@ -1,0 +1,2025 @@
+Title: Trajectory Planning for Safe Dual Control with Active Exploration
+
+URL Source: https://arxiv.org/pdf/2604.15507v1
+
+Published Time: Mon, 20 Apr 2026 00:11:03 GMT
+
+Number of Pages: 20
+
+Markdown Content:
+# Trajectory Planning for Safe Dual Control with Active Exploration 
+
+Kaleb Ben Naveed 1, Manveer Singh 1, Devansh R. Agrawal 1, and Dimitra Panagou 1,2
+
+Abstract — Planning safe trajectories under model uncer-tainty is a fundamental challenge. Robust planning ensures safety by considering worst-case realizations, yet ignores un-certainty reduction and leads to overly conservative behavior. Actively reducing uncertainty on-the-fly during a nominal mission defines the dual control problem. Most approaches address this by adding a weighted exploration term to the cost, tuned to trade off the nominal objective and uncertainty reduction, but without formal consideration of when exploration is beneficial. Moreover, safety is enforced in some methods but not in others. We study a budget-constrained dual control problem, where uncertainty is reduced subject to safety and a mission-level cost budget that limits the allowable degradation in task performance due to exploration. In this work, we pro-pose Dual-gatekeeper , a framework that integrates robust planning with active exploration under formal guarantees of safety and budget feasibility. The key idea is that exploration is pursued only when it provides a verifiable improvement without compromising safety or violating the budget, enabling the system to balance immediate task performance with long-term uncertainty reduction in a principled manner. We provide two implementations of the framework based on different safety mechanisms and demonstrate its performance on quadrotor navigation and autonomous car racing case studies under parametric uncertainty. 
+
+I. I NTRODUCTION 
+
+Planning safe trajectories in the presence of model uncer-tainty is a fundamental challenge in control and robotics [1]– [4]. In many applications, the system must execute a nominal task such as reaching a goal or tracking a reference trajectory [5]–[8], while its dynamics depend on uncertain parameters (e.g., aerodynamic drag or tire–road friction). If these uncer-tainties are not properly accounted for during planning, the resulting trajectories may violate safety constraints. Robust planning and control methods including tube-based MPC [2], [9], sampling-based approaches [3], [10], control barrier function (CBF) methods [11], [12], and contraction-based approaches [4], [13] address this issue by explicitly accounting for model uncertainty when enforcing safety con-straints. However, these approaches actively do not consider how to reduce uncertainty in the unknown model parameters. As a result, the nominal task must be executed under conservative safety margins, which can degrade performance. A complementary line of work studies the dual control 
+
+problem [14], where the controller must simultaneously perform a task and reduce uncertainty in unknown but  
+
+> ∗The authors would like to acknowledge the support of the National Science Foundation (NSF) under grant no. 2223845 and grant no. 1942907.
+> 1Department of Robotics, University of Michigan, Ann Arbor, MI, 48109 USA.
+
+{kbnaveed@umich.edu }
+
+> 2Department of Aerospace Engineering, University of Michigan, Ann Arbor, MI, 48109 USA.
+
+learnable model parameters. Existing approaches typically address this objective in one of two ways. Some explicitly en-courage exploration by augmenting the control objective with information-seeking or uncertainty-reduction terms, thereby generating trajectories that are informative about unknown parameters [15]–[17]. Others rely on passive uncertainty reduction, where parameter estimates are updated only from data collected along nominal task execution, without deliber-ately selecting informative trajectories [16], [18], [19]. While these methods have shown that uncertainty can be reduced during control, most do not provide a principled mechanism to determine when exploration is actually worthwhile relative to nominal task progress, especially under constraints. In this work, we study a budget-constrained variant of the dual control problem , in which the system must (i) satisfy state and input constraints under bounded model un-certainty, (ii) actively reduce parametric uncertainty through exploration, and (iii) ensure that the total mission cost remains within a prescribed budget, which represents the maximum allowable degradation in task performance a user is willing to tolerate for enhanced model information. This formulation captures practical scenarios in which exploration may improve long-term performance, but only if it can be certified to not compromise safety or incur excessive cost. We propose a Dual-gatekeeper framework that in-tegrates safety, active exploration, and budget feasibility at the architectural level. The proposed framework is inspired by the gatekeeper paradigm [9]. At each planning cycle, 
+
+Dual-gatekeeper first computes a conservative, robust mission trajectory that guarantees safety while executing the task objective. In parallel, a set of informative candidate trajectories is generated to promote the identification of uncertain parameters. Each candidate is assigned a score based on its predicted uncertainty reduction and mission cost. A candidate is committed only if its execution is certified to remain safe and its predicted cost does not exceed the prescribed mission budget; otherwise, the system continues to execute the conservative mission trajectory. As a result, exploration is treated as a verifiable decision rather than an implicit optimization trade-off. 
+
+Contributions: In this paper, we  
+
+> •
+
+introduce a framework for safe dual control that de-termines when executing an informative trajectory is beneficial relative to the nominal task, rather than in-corporating information-seeking behavior as a weighted term in the objective. The framework ensures that informative trajectories are executed only when safety is preserved and the resulting deviation does not incur excessive cost;  
+
+> arXiv:2604.15507v1 [cs.RO] 16 Apr 2026 •
+
+demonstrate the modularity of the framework by instan-tiating it with different safety mechanisms, including tube-based robust MPC [2] and the gatekeeper 
+
+architecture [9], and evaluate it in two case studies: autonomous car racing and quadrotor navigation. II. R ELATED WORK 
+
+This section reviews prior work on (i) robust safety under model uncertainty, and (ii) dual control and uncertainty reduction during task execution. 
+
+A. Robust Safety Under Model Uncertainty 
+
+Robust planning and control methods address safety under model uncertainty by constructing trajectories or feedback policies that guarantee constraint satisfaction despite un-certain dynamics, disturbances, or model mismatch. Tube-based model predictive control (MPC) methods enforce safety by tightening constraints and maintaining the closed-loop state within a robust tube around a nominal trajectory; examples include dynamic tube MPC and related extensions [2], [18], [20], [21]. Sampling-based approaches provide an alternative route to robustness by approximating chance or risk constraints using scenario-based formulations such as particle control or sample average approximation (SAA) [3], [10], [22]. Safety can also be enforced using control barrier function (CBF) methods, which impose barrier constraints to guarantee forward invariance of safe sets under uncer-tainty and disturbances [11], [12], [23], [24]. Complementary approaches based on contraction theory provide robustness certificates by establishing incremental stability through con-traction metrics that certify the existence of safe feedback policies [4], [13]. While these approaches provide strong safety guarantees, they typically treat uncertainty as fixed and focus on ensuring safe task execution, rather than explicitly reasoning about how exploratory actions could reduce epis-temic uncertainty to improve downstream performance. 
+
+B. Dual Control and Active Uncertainty Reduction 
+
+A complementary perspective is offered by the dual con-trol problem, which explicitly balances exploitation (achiev-ing the control objective) with exploration (actively reducing uncertainty) [14]. In many control problems, uncertainty can be divided into two components: aleatoric uncertainty ,which reflects irreducible disturbances or noise, and epis-temic uncertainty , which arises from unknown but learnable model parameters. Dual control primarily focuses on the latter by selecting control actions that both accomplish the task and generate informative data that improve the model. A wide range of approaches have been proposed along these lines [15]–[19], [25]–[37]. Some methods decouple learning and control by first reducing model uncertainty through a dedicated exploration phase and subsequently computing robust control policies based on the learned model [25]– [28]. Other approaches rely on passive uncertainty reduction, where model parameters are updated only from data naturally collected while executing the nominal control policy [6], [16], [18], [19], [38]. More recent work considers active 
+
+exploration strategies that deliberately generate informative trajectories while simultaneously pursuing the mission ob-jective [15], [17], [29], [30]. Another line of work considers hybrid reinforcement learning methods that balance exploration and exploitation through optimism and pessimism, using optimistic compo-nents to encourage broader exploration and pessimistic com-ponents to improve value estimation and stabilize learning. These methods incorporate the optimism–pessimism trade-off directly within the actor-critic learning process through coupled actors, critics, or update rules [39]–[41]. However, in many of these approaches, the exploration– performance tradeoff is embedded directly within the op-timization objective or the learning update. As a result, exploration is encouraged implicitly, either through weighted uncertainty-reduction terms or through coupled optimistic– pessimistic updates, rather than being treated as a separate decision. While this can promote exploratory behavior, it does not provide a principled mechanism for determining when exploration should be preferred if it conflicts with safety guarantees or mission-level cost constraints. 
+
+C. Positioning of This Work 
+
+This work connects robust safety methods with uncertainty-reducing decision making. Rather than introducing exploration through weighted objective terms, we consider an architecture in which informative trajectories are treated as candidate decisions that must satisfy safety and mission-level cost requirements before execution. The system therefore maintains a conservative mission trajectory that guarantees safe task completion while evaluating informative candidate trajectories that may reduce parametric uncertainty. The proposed Dual-gatekeeper 
+
+framework commits to a candidate only if its safety can be certified and its predicted mission cost remains within the allowed budget; otherwise, execution continues along the conservative trajectory. A recent work [42] studied this problem by generating in-formative candidate trajectories and comparing them against a conservative baseline trajectory to determine whether they can safely reduce parameter uncertainty without violating a mission-level cost budget. In that work, the framework was formulated using a finite-horizon backup trajectory, assumed to be available over the remaining mission horizon. This work extends that formulation as follows:  
+
+> •
+
+We generalize the framework from a finite-horizon formulation, in which a safe backup trajectory must be known over the remaining mission horizon, to an infinite-horizon formulation that no longer requires such full-horizon backup information.  
+
+> •
+
+The modularity of the framework is demonstrated through two safety instantiations. In the first, the frame-work is implemented using tube MPC, where safety is enforced by maintaining the closed-loop state within a robust tube around a nominal trajectory. In the sec-ond, the framework is implemented using a robust 
+
+gatekeeper architecture resembling filtering-based safety methods that modify candidate trajectories to ensure constraint satisfaction under uncertainty.  
+
+> •
+
+Two case studies, namely quadrotor navigation and autonomous car racing, demonstrate these instantiations and illustrate how the same architecture can be inte-grated with different safety mechanisms while enabling uncertainty-reducing exploration. III. P RELIMINARIES & P ROBLEM FORMULATION 
+
+A. Notation 
+
+Let R, R≥0, and R>0 denote the reals, non-negative reals, and positive reals, and Sn 
+
+> ++
+
+the symmetric positive definite matrices in Rn×n
+
+B. System Model 
+
+Consider a class of nonlinear control-affine systems with parametric uncertainty and bounded additive disturbance: 
+
+˙x = f0(x) + F (x)θf + ( g0(x) + G(x)θg )u + w(t), (1) where x ∈ X ⊂ Rn is the state, u ∈ U ⊂ Rm
+
+is the control input, θf ∈ Θf ⊂ Rpf is the unknown drift parameter vector contained in a known compact set, and θg =
+
+h
+
+θg, 1 · · · θg,m 
+
+i
+
+∈ Θg ⊂ Rpg ×m is the unknown input parameter matrix contained in a known compact set, with θg,j ∈ Rpg denoting its j-th column. The uncertain parameters are collected into the vector as 
+
+θ =
+
+h
+
+θ⊤ 
+
+> f
+
+θ⊤ 
+
+> g, 1
+
+· · · θ⊤
+
+> g,m
+
+i⊤
+
+∈ Θ ⊂ Rpf +mp g . The functions f0 : Rn → Rn and g0 : Rn → Rn×m are the known nominal drift and input maps, respectively. The functions F : Rn → Rn×pf and G : Rn → Rn×pg are the known drift and input regressors, respectively. Furthermore, we denote f (x, θ f ) = f0(x) + F (x)θf and g(x, u, θ g ) = (g0(x) + G(x)θg )u.
+
+Assumption 1. The additive disturbance w : [ t0, ∞) → Rn
+
+is bounded sup t≥t0 ∥w(t)∥= w.
+
+Assumption 2. The full system state x(t) ∀t ∈ [t0, ∞) is assumed to be perfectly observed. 
+
+C. Linear in Parameter form & Parameter Identification 
+
+Under Assumption 1 and Assumption 2, the system dy-namics (1) can be rearranged to obtain a regression model that is linear in the unknown parameter vector θ. Specifically, define the signal 
+
+z(t) := ˙ x(t) − f0(x(t)) − g0(x(t)) u(t). (2) Substituting (1) yields 
+
+z(t) = F (x(t)) θf + ( G(x(t)) θg )u(t) + w(t). (3) Using the representation θg =
+
+h
+
+θg, 1 · · · θg,m 
+
+i
+
+, the input-dependent term can be written as 
+
+(G(x)θg )u =
+
+> m
+
+X
+
+> j=1
+
+uj G(x)θg,j . (4) Define the regressor matrix 
+
+Φ( x, u ) := [ F (x) u1G(x) · · · umG(x)] ∈ Rn×(pf +mp g ).
+
+(5) Then the dynamics admit the linear-in-parameters (LIP) representation 
+
+z(t) = Φ( x(t), u (t)) θ + w(t). (6) 
+
+1) Persistent Excitation: The LIP model (6) forms the basis for parameter identification. However, (6) depends on the state derivative ˙x(t), which may not be directly measur-able in practice. To remove this dependence, we integrate the dynamics over a finite time window as shown in [43]. Let ∆ > 0 denote the length of the integration window. Integrating (1) over the interval [t − ∆, t ] gives 
+
+x(t) − x(t−∆) = 
+
+Z tt−∆
+
+
+
+f0(x(s)) + F (x(s)) θf
+
+
+
+ds 
+
++
+
+Z tt−∆
+
+(g0(x(s)) + G(x(s)) θg )u(s) ds (7) 
+
++
+
+Z tt−∆
+
+w(s) ds. 
+
+Using the definition of Φ( x, u ), this can be rewritten as 
+
+x(t) − x(t − ∆) = 
+
+Z tt−∆
+
+(f0(x(s)) + g0(x(s)) u(s)) ds 
+
++
+
+Z tt−∆
+
+Φ( x(s), u (s)) ds θ (8) 
+
++
+
+Z tt−∆
+
+w(s) ds. 
+
+Define 
+
+Y (t) := x(t) − x(t − ∆) 
+
+−
+
+Z tt−∆
+
+(f0(x(s)) + g0(x(s)) u(s)) ds, (9) 
+
+F(t) := 
+
+Z tt−∆
+
+Φ( x(s), u (s)) ds, (10) and 
+
+W∆(t) := 
+
+Z tt−∆
+
+w(s) ds. (11) Then the dynamics admit the derivative-free regression model 
+
+Y (t) = F(t)θ + W∆(t). (12) The regression model (12) depends only on the measured state and input trajectories over the integration window and avoids direct use of ˙x(t). To ensure identifiability, the regressor in (12) must be persistently exciting (PE) [43], [44], which is formally defined as follows. 
+
+Definition 1 (Persistent Excitation [43, Def . 4.3]) . Consider the integral regression model in (12), where F(t) is the regressor. The regressor is said to be persistently exciting if there exist constants T > 0 and c > 0 such that for all 
+
+t ≥ t0,
+
+Z t+Tt
+
+F(τ )⊤F(τ ) dτ ≥ cI. (13) 
+
+2) Finite Excitation: The PE condition requires the tra-jectory to be sufficiently informative over every interval of length T . However, verifying PE online is difficult since it depends on the future trajectory and may require injecting probing signals into the control input. Instead, we store informative regression data collected along the trajectory. Let 
+
+Hk = {(Yj , Fj )}Mk 
+
+> j=1
+
+(14) denote a history stack containing Mk previously stored regression tuples, where each tuple (Yj , Fj ) is generated from (12). The stored data satisfy 
+
+Yj = Fj θ + W∆,j , j = 1 , . . . , M k. (15) Using these stored tuples, identifiability can be characterized through a finite excitation condition. 
+
+Definition 2 (Finite Excitation [43, Def . 4.5]) . The history stack Hk is said to satisfy the finite excitation (FE) condition if there exists a constant λFE > 0 such that 
+
+λmin 
+
+
+
+> Mk
+
+X
+
+> j=1
+
+F⊤ 
+
+> j
+
+Fj
+
+ ≥ λFE . (16) 
+
+3) Set Membership Identification (SMID): Under As-sumption 1, the regression relation (12) can be used to refine the parameter uncertainty set using set-membership identification (SMID) [45]. The key idea of SMID is to maintain a set of parameters that remain consistent with all observed regression data. Let Θk denote the feasible parameter set at time step k, defined as the set of all parameters consistent with the regression data collected up to time k. Let Hk = {(Yj , Fj )}Mk 
+
+> j=1
+
+denote the history stack introduced earlier, where each tuple satisfies 
+
+Yj = Fj θ + W∆,j , j = 1 , . . . , M k. (17) Given bounded disturbance, the set of parameters consistent with the data can be characterized by linear inequality constraints. Let Θ0 = Θ denote the initial uncertainty set. At time step k, the feasible parameter set is updated for 
+
+∀j ∈ { 1, . . . , M k} as 
+
+Θk = {θ ∈ Θk−1 | − ϵ1 ≤ Yj − F j θ ≤ ϵ1} , (18) where ϵ > 0 accounts for bounded disturbance and numerical integration error. The feasible parameter set Θk can be inter-preted as the intersection of halfspaces defined by the stored data. In practice, the bounds of Θk along each coordinate direction can be computed by solving linear programs. Let 
+
+θi denote the i-th component of θ. The lower and upper bounds on θi are obtained as 
+
+θk, − 
+
+> i
+
+= arg min  
+
+> θ
+
+θi, θk, + 
+
+> i
+
+= arg max  
+
+> θ
+
+θi, (19) subject to 
+
+−ϵ1 ≤ Yj − F j θ ≤ ϵ1, θ ∈ Θk−1. (20) The updated uncertainty set can then be written as the hyperrectangle 
+
+Θk = [ θk, − 
+
+> 1
+
+, θ k, +1 ] × · · · × [θk, − 
+
+> p
+
+, θ k, + 
+
+> p
+
+]. (21) The following result guarantees that the true parameter remains inside the identified set. 
+
+Lemma 1 ( [45, Lemma 7.3]) . Suppose Assumption 1 holds and the parameter sets {Θk} are generated using the SMID update described above. Then the sets satisfy 
+
+Θk ⊆ Θk−1 ⊆ Θ0 (22) 
+
+and the true parameter satisfies 
+
+θ ∈ Θk, ∀k ≥ 0. (23) Lemma 1 shows that the SMID update generates a nested sequence of parameter sets that always contains the true pa-rameter. As additional informative data are incorporated, the feasible parameter set shrinks monotonically. Consequently, the parametric uncertainty can be quantified by the width of the current feasible set Θk, defined next. 
+
+Definition 3 (Width of Parameter Set) . Let Θk ⊂ Rp denote the feasible parameter set at time k, and let D be a finite set of unit directions. For any direction d ∈ D , the width of Θk
+
+along d is defined as 
+
+wd(Θ k) = sup 
+
+> θ∈Θk
+
+d⊤θ − inf 
+
+> θ∈Θk
+
+d⊤θ. (24) This quantity measures the extent of the feasible parameter set along direction d. In the scalar case ( p = 1 ) with d = 1 
+
+and Θk = [ θmin , θ max ], the width reduces to 
+
+wd(Θ k) = θmax − θmin . (25) 
+
+D. Problem Statement 
+
+We consider a dual control setting in which a robot must complete a prescribed mission under bounded parametric uncertainty and additive disturbances. Safety is enforced through robust feedback policies that guarantee state and input constraint satisfaction for all admissible uncertainty realizations. A key challenge is that the mission cost under robust safety requirements depends on the size of the uncertainty set: larger uncertainty leads to more conservative behavior and higher cost. Reducing uncertainty during execution, therefore, enables less conservative robust behavior. In constrast to earlier work and formulations that con-tinuously encourage exploration through weighted mission-exploration objectives (e.g., mission cost plus a weighted ex-ploration term), uncertainty reduction in this work is pursued only when it remains feasible with respect to a prescribed exploration budget. Accordingly, the objective is to com-plete the mission safely under worst-case uncertainty while allowing uncertainty reduction during execution, subject to [a] Tube MPC Example 
+
+> Actual executed trajectory Planned nominal with invariant tube
+
+[b] gatekeeper Example  
+
+> Planned nominal with sampled uncertainty rollouts
+>        
+
+Fig. 1: Predicted Cost Example 
+
+safety constraints and an exploration budget that bounds the cumulative additional cost incurred by exploratory actions relative to the nominal mission behavior. Now we formulate the problem mathematically. We first define a trajectory: 
+
+Definition 4 (Trajectory) . Let T = [ t0, t f ] ⊂ R. Let Π
+
+denote the set of admissible feedback policies π : R × X → U. A trajectory induced by a policy π ∈ Π is a pair p =(px : T → X , p u : T → U ) such that 
+
+˙px(t) = f (px(t), ˆθf ) + g(px(t), π (t, p x(t)) , ˆθg ), ∀ t ∈ T .
+
+(26) Now consider the system (1) with parametric uncertainty set Θ and bounded disturbances. We define a robust feedback policy as follows. 
+
+Definition 5 (Robust feedback policy) . A feedback law 
+
+πrob : R × X → U is called a robust feedback policy if, when applied to the system (1), the resulting closed-loop trajectory x(t) satisfies 
+
+˙x(t) = f (x(t), θ f ) + g(x(t), θ g ) πrob (t, x (t)) + w(t), (27) and for all admissible uncertainties and disturbances 
+
+x(t) ∈ S , πrob (t, x (t)) ∈ U , ∀t ≥ t0, (28) for every θf ∈ Θf , θg ∈ Θg , and w(t) ∈ W .Definition 5 provides an abstract characterization of a robust feedback policy that guarantees constraint satisfaction for all admissible uncertainties and disturbances. In practice, 
+
+πrob  
+
+> k
+
+is implemented using specific robust control mech-anisms, such as tube MPC [2], robust CBF-based safety filters [24], or robust version of gatekeeper [9]. Let 
+
+πrob  
+
+> k
+
+: R × X → U denote the robust feedback policy available at planning time tk. Given this policy, we denote by prob  
+
+> k
+
+= ( prob  
+
+> x,k
+
+, p rob 
+
+> u,k
+
+) the corresponding robust trajectory induced by πrob  
+
+> k
+
+over the horizon Tk = [ tk, t k+1 ], in the sense of Definition 4. 
+
+Definition 6 (Predicted Cost) . Let πk : R × X → U denote an available feedback policy at planning time tk, let xk ∈ X 
+
+denote the state at time tk, and let Tk = [ tk, t k+1 ] be a finite horizon of length tk+1 − tk > 0. The predicted cost associated with πk is the functional J k→k+1 : Π ×X × 2R →
+
+R≥0
+
+(πk, x k, Tk) 7 → J k→k+1 (πk, x k, Tk), (29) which quantifies the predicted performance of executing the policy πk from state xk over the horizon Tk.
+
+Predicted Cost Examples : (I) In tube MPC [2], the robust policy πrob  
+
+> k
+
+is constructed from a finite-horizon nominal trajectory, an invariant tube, and an ancillary feedback con-troller that keeps the closed-loop state within the tube. The predicted cost J k→k+1 rob is evaluated along the nominal tube centerline over the horizon Tk = [ tk, t k+1 ]. (II) In a robust 
+
+gatekeeper framework [9], a candidate trajectory is first generated from a nominal planning policy and then subjected to a safety verification step under the uncertainty set Θk
+
+and disturbance set W. If the candidate trajectory satisfies the safety constraints for all admissible uncertainties, it is 
+
+committed and induces the robust policy πrob  
+
+> k
+
+. The predicted cost J k→k+1 rob is then estimated using N forward rollouts of the committed trajectory over the horizon Tk = [ tk, t k+1 ]
+
+under admissible uncertainty realizations, and taken as either the worst-case or expected mission cost across these N
+
+samples. Predicted cost of these methods is illustrated in Figure 1. 
+
+Problem 1. Consider the system (1) with initial state x0 and initial parametric uncertainty set Θ0. Let t0 < t 1 < · · · <tk < · · · denote replanning times, which are not necessarily uniformly spaced, and define Tk = [ tk, t k+1 ].At each replanning time tk, a robust reference policy 
+
+πrob ,ref  
+
+> k
+
+: X → U is available, representing the default robust task-execution behavior under the current uncertainty set Θk. The goal is to select a sequence of robust policies 
+
+{πrob ,sol  
+
+> k
+
+}∞ 
+
+> k=0
+
+so as to maximize cumulative uncertainty reduction over the replanning epochs, subject to safety constraints and a budget on the cumulative exploration cost ,defined as the excess predicted cost incurred relative to the robust reference behavior: 
+
+max  
+
+> {πrob ,sol
+> k}∞
+> k=0
+> ∞
+
+X
+
+> k=0
+
+∆wd(Θ k) (30a) 
+
+s.t. x(t) ∈ S , u(t) ∈ U , ∀t ≥ t0, (30b) 
+
+> ∞
+
+X
+
+> k=0
+
+∆J k 
+
+> exp
+
+≤ Bexp . (30c) 
+
+where the uncertainty width reduction over the k−th replan-ning interval is defined as 
+
+∆wd(Θ k) = wd(Θ k) − wd(Θ k+1 ), (31) Robust Trajectory Planner Low-level Controller Control input 
+
+Dual gatekeeper   
+
+> Generate candidates Check feasibility For each feasible candidate
+> Generate Informative Candidates Generate Robust Candidates Reject Unsafe Candidates Reject Budget Infeasible Predict Uncertainty Reduction Score Feasible Candidates
+> Mission objective Safety requirements Uncertain parameter(s) Last committed trajectory Robust conservative trajectory Uncertain bound Committed trajectory
+
+Fig. 2: The mission objective, safety requirements, and uncertainty bounds are used by a robust trajectory planner to compute a conservative backup trajectory. The dual gatekeeper generates informative and conservative candidates, rejects those that violate safety or budget constraints, predicts uncertainty reduction for the remaining candidates, and commits the highest-scoring feasible trajectory for execution by the low-level controller. 
+
+and the exploration cost incurred over Tk is defined as 
+
+∆J k 
+
+> exp
+
+:= max 
+
+n
+
+0, J k→k+1 rob ,sol − J k→k+1 rob ,ref 
+
+o
+
+. (32) 
+
+Remark 1. The exploration budget in (30c) is formulated in terms of the predicted exploration cost ∆J k
+
+> exp
+
+, rather than the cost incurred during execution. Constraining the executed exploration cost directly is generally intractable, as it depends on the particular, unknown realizations of the parametric uncertainty and disturbances encountered during each replanning interval. Instead, the predicted cost is evaluated prior to execution over the finite horizon Tk and may be defined as the worst-case cost over the admissible uncertainty and disturbance sets. Under this definition, bounding the cumulative predicted exploration cost guarantees that the executed exploration cost also remains within the prescribed budget Bexp , regardless of the realized uncertainty. IV. P ROPOSED SOLUTION FRAMEWORK 
+
+The overall framework is shown in Fig. 2 and illustrated through the pipeline example in Fig. 3. It is proposed as a solution to Problem 1. The objective is to actively reduce parametric uncertainty through exploration while guarantee-ing safety and respecting a mission-level cost budget. We first formalize the general framework and then show how it can be instantiated using two different safety mechanisms: tube MPC (Section VI) and the robust gatekeeper architecture (Section VII). 
+
+A. Framework Overview 
+
+The framework operates in a receding-horizon manner with decisions made at discrete, not necessarily uniformly spaced, replanning times. At each replanning time tk, a robust backup policy is first constructed to guarantee sat-isfaction of the state and input constraints under the cur-rent uncertainty set over the remaining mission horizon (Fig. 3[a]). This backup policy represents a conservative baseline behavior that optimizes the mission objective under worst-case uncertainty. Next, a collection of candidate policy segments is generated over finite horizons, including con-servative candidates that preserve the backup behavior and informative candidates designed explicitly to promote uncer-tainty reduction (Fig. 3[b]). Depending on their construction, informative candidates may incur additional mission cost and may not satisfy safety constraints a priori. Candidate policy segment pairs that cannot be certified as safe or that violate the mission-level budget are discarded (Fig. 3[c]). Among the remaining feasible candidates, the policy segment that achieves the largest predicted uncertainty reduction, discounted by horizon length, while remaining within the budget is selected and committed for execution (Fig. 3[d]). After execution, the uncertainty set is updated using newly collected data, and a new robust backup policy is constructed for the next replanning cycle (Fig. 3[e]). By iteratively refining the uncertainty set and recomputing the robust backup policy, the framework enables progres-sively less conservative behavior while maintaining safety and budget feasibility throughout the mission. 
+
+B. Robust Backup Policy Construction 
+
+At each replanning time tk, the framework begins by constructing a robust backup policy that guarantees safe mission execution under the current uncertainty set. 
+
+Definition 7 (Robust backup policy) . At replanning time tk,a robust backup policy is a feedback law πrob ,B k : R×X → U 
+
+together with a fixed backup horizon TB > 0 such that, when applied to the system (1), the resulting closed-loop trajectory satisfies x(t) ∈ S (t), ∀w(t) ∈ W , ∀t ∈ [tk, t k + TB ], and for all admissible uncertainty realizations θ ∈ Θk.The robust backup policy πrob ,B k defines a conservative baseline behavior that guarantees constraint satisfaction un-der worst-case uncertainty over the fixed horizon [tk, t k +
+
+TB ]. The framework then proceeds to generate candidate policy segments that may temporarily deviate from the backup behavior in order to reduce parametric uncertainty. 
+
+Remark 2. The backup horizon TB may be selected either as a fixed constant throughout the mission or adapted at each replanning time tk. Both choices are compatible with the proposed framework. Concrete examples of fixed and adap-tive selections of TB are provided in the two instantiations presented in Sections VI and VII. 
+
+C. Candidate Policy Segment Generation 
+
+At each replanning time tk, candidate policies are gener-ated in pairs over a common finite horizon: a conservative policy segment that preserves the robust backup behavior and an informative policy segment that may deviate in order to reduce uncertainty in the unknown parameter θ.Candidate horizons are generated by uniformly increasing the horizon length in increments of Tc, with the horizon length capped by the backup horizon TB . Accordingly, the set of candidate horizon lengths is defined as 
+
+T ck = { T c,k i : T c,k i = min {iT c, T B } } Nk
+
+> i=1
+
+, (33) where Nk := ⌈TB /T c⌉. Each candidate horizon length T c,k i
+
+induces the time interval [tk, t k + T c,k i ] over which both the conservative and informative policy segments are generated and evaluated. 
+
+Definition 8 (Conservative candidate policy segment) . The 
+
+i−th conservative candidate policy segment generated at time tk over the horizon T c,k i is defined as the restriction of the robust backup policy πrob ,B k,i to the interval [ tk, t k +
+
+iT c ], and therefore preserves the backup behavior over this horizon. 
+
+Definition 9 (Informative candidate policy segment) . The 
+
+i−th informative candidate policy segment generated at time 
+
+tk over the horizon T c,k i is a feedback policy πIk,i defined on [ tk, tk + iT c ] and designed to reduce uncertainty in the unknown parameter θ. The informative policy segment is required to satisfy a terminal recoverability condition: the closed-loop state at time tk +iT c must lie in a set from which the robust backup policy πrob ,B k can be safely applied for the remainder of the mission. 
+
+Definition 10 (Candidate policy segment pair) . The i−th 
+
+candidate policy segment pair generated at time tk is the pair 
+
+(πIk,i , π rob ,B k,i )
+
+defined over the common horizon T c,k i = [ tk, tk + iT c ],where πIk,i is an informative policy segment and πrob ,B k,i 
+
+denotes the restriction of the robust backup policy πrob ,B k
+
+to the same horizon. Depending on how the informative policy segment is constructed, safety may or may not be ensured over the candidate horizon. We therefore define a notion of validity 
+
+to identify those candidate policy segment pairs for which safety can be certified. 
+
+Definition 11 (Valid candidate policy segment pair) . Acandidate policy segment pair (πIk,i , π rob ,B k,i ) associated with horizon T c,k i is said to be valid if there exists a corresponding 
+
+robustified informative policy segment πrob ,I k,i , defined over the same horizon T c,k i , such that when applied to the system (1), the resulting closed-loop behavior satisfies the state and input constraints for all admissible uncertainty realizations and disturbances over T c,k i .The set of all valid candidate policy segment pairs gener-ated at time tk is defined as 
+
+Vck =
+
+n
+
+(πrob ,I k,i , π rob ,B k,i ) | pair valid by Def . 11 
+
+o
+
+. (34) We also define the set of all conservative candidates as 
+
+Vcons  
+
+> k
+
+= { πrob ,B k,i }Nk
+
+> i=1
+
+. (35) 
+
+D. Committing a Candidate Policy Segment 
+
+Having defined the set of valid candidate policy segment pairs Vck and the set of conservative policy segments Vcons  
+
+> k
+
+,the final step at replanning time tk is to decide which policy segment to commit for execution. The guiding principle is to drive uncertainty reduction as rapidly as possible while never compromising safety or violating the mission-level budget. Each valid candidate policy segment pair 
+
+(πrob ,I k,i , π rob ,B k,i ) ∈ V ck is assigned a score that reflects the predicted uncertainty reduction achieved by its informative policy segment over the common horizon. To prioritize early information gain, this score is discounted by the horizon length: 
+
+sc,k i = exp ( − λT c,k i ) ∆ ξi, λ > 0, (36) where ∆ξi denotes the predicted reduction in the average 
+
+directional width of the uncertainty set. Specifically, if Θk denotes the uncertainty set at time 
+
+tk and Θk+1 ,i denotes the predicted uncertainty set after executing candidate i, then 
+
+∆ξi = 1
+
+|D| 
+
+X
+
+> d∈D
+
+
+
+wd(Θ k) − wd(Θ k+1 ,i )
+
+
+
+, (37) where wd(Θ) is defined in Def . 3. The prediction of Θk+1 ,i 
+
+and the computation of wd(Θ) are detailed in Section V. To enforce budget feasibility, let J k 
+
+> exec
+
+denote the accu-mulated predicted exploration cost incurred up to replanning time tk, defined as 
+
+J k 
+
+> exec
+
+:= 
+
+> k−1
+
+X
+
+> j=0
+
+∆J j
+
+> exp
+
+. (38) For a candidate policy segment indexed by i, define the predicted exploration cost incurred over its candidate horizon 
+
+T c,k i = [ tk, t k + T c,k i ] as the excess predicted cost relative to the conservative segment: 
+
+∆J k
+
+> exp
+
+(i) := max 
+
+n
+
+0, J k→k+i 
+
+> rob ,I
+
+− J k→k+i
+
+> rob ,B
+
+o
+
+. (39) A candidate pair is budget-feasible if committing its informative policy segment does not cause the cumulative exploration cost to exceed the budget Bexp . Accordingly, we define the feasible index set 
+
+Fck =
+
+n
+
+i : ( πrob ,I k,i , π rob ,B k,i ) ∈ V ck, (40) 
+
+J k 
+
+> exec
+
++ ∆ J k
+
+> exp
+
+(i) ≤ Bexp 
+
+o
+
+. (41) The index of the committed candidate is defined as 
+
+i⋆ =
+
+
+
+arg max 
+
+> i∈F ck
+
+sc,k i , if Fck̸ = ∅,
+
+1, if Fck = ∅.
+
+(42) If Fck̸ = ∅, the robust informative policy segment πrob ,I k,i ⋆
+
+is committed over the horizon T c,k i⋆ . If Fck = ∅, no infor-mative candidate is both valid and budget-feasible, and the framework commits the conservative policy segment with the shortest horizon, πrob ,B k, 1 .
+
+Definition 12 (Committed policy segment) . At replanning time tk, the committed policy segment πcom  
+
+> k
+
+is defined as 
+
+πcom  
+
+> k
+
+=
+
+
+
+πrob ,I k,i ⋆ , Fck̸ = ∅,πrob ,B k, 1 , Fck = ∅,
+
+(43) where πrob ,B k, 1 denotes the restriction of the robust backup policy to the shortest conservative horizon. After committing the selected policy segment, the system executes it and the next replanning time is set to 
+
+tk+1 = tk + T c,k i⋆ . (44) At time tk+1 , the uncertainty set is updated using set mem-bership identification (SMID) [38], [46], the robust backup policy is recomputed, and the procedure repeats. 
+
+E. Safety and Budget Guarantees 
+
+This subsection establishes that the proposed framework guarantees (i) safety with respect to state and input con-straints and (ii) feasibility with respect to the prescribed exploration budget. The guarantees are stated for the closed-loop execution induced by the sequence of committed policy segments generated by the framework. 
+
+Theorem 1. Let 
+
+πsol = {πcom 0 , π com 1 , . . . } (45) 
+
+denote the sequence of policy segments committed by the framework, where each πcom  
+
+> k
+
+is executed over the interval 
+
+[tk, t k+1 ] with tk+1 = tk + T c,k i⋆ .If at each replanning time tk the committed policy segment is selected according to Def. 12, then the resulting closed-loop trajectory satisfies 
+
+x(t) ∈ S (t), u(t) ∈ U , ∀t ≥ t0, (46) 
+
+and the cumulative exploration cost satisfies 
+
+> ∞
+
+X
+
+> k=0
+
+∆J k 
+
+> exp
+
+≤ Bexp . (47) 
+
+Proof. We prove safety and budget feasibility by induction over the replanning times. At t0, safety holds by construction 
+
+Algorithm 1: Uncertainty Shrinkage Prediction via Parallel Rollouts                                                                      
+
+> Input: Candidate policy segment πk,i over horizon
+> Tc,k i= [ tk, t k+iT c]; state xk; uncertainty set Θk;disturbance bound W; SMID update rule; direction set D;number of rollouts N.
+> Output: Predicted uncertainty reduction ∆ξi
+> 1Initialize rollout buffer {∆ξ(ℓ)
+> i}Nℓ=1 ←0;
+> 2for ℓ= 1 , . . . , N in parallel do
+> 3Sample θ(ℓ)∼ U (Θ k);
+> 4Sample disturbances w(ℓ)
+> j∼ U (W)for j= 1 , . . . , N i;
+> 5Forward simulate (1) from xkunder πk,i using
+> (θ(ℓ),{w(ℓ)
+> j});
+> 6Form SMID data {(Φ (ℓ)
+> j, z (ℓ)
+> j)}Ni
+> j=1 ;
+> 7Θk+1 ,i, (ℓ)←SMID
+> 
+> Θk,{(Φ (ℓ)
+> j, z (ℓ)
+> j)}Ni
+> j=1
+> 
+> ;
+> 8∆ξ(ℓ)
+> i←1
+> |D|
+> P
+> d∈D (wd(Θ k)−wd(Θ k+1 ,i, (ℓ))) ;
+> 9end
+> 10 ∆ξi←1
+> N
+> PNℓ=1 ∆ξ(ℓ)
+> i;
+
+of the initial robust backup policy. The accumulated explo-ration cost is zero, hence budget feasibility holds. Assume that at replanning time tk the state xk is admissible and the accumulated exploration cost satisfies J k 
+
+> exec
+
+≤ Bexp . By 
+
+Def. 12, the committed policy segment πcom  
+
+> k
+
+is either: (i) aconservative backup segment, or (ii) a robustified informative segment from a budget-feasible candidate pair. In case (i), safety follows directly from the definition of the robust backup policy, and no exploration cost is incurred. In case (ii), validity of the candidate pair guarantees that 
+
+πrob ,I k,i ⋆ satisfies all state and input constraints over [tk, t k+1 ].Budget feasibility follows from the feasibility check at tk,which enforces 
+
+J k 
+
+> exec
+
++ ∆ J k
+
+> exp
+
+(i⋆) ≤ Bexp . (48) After executing the committed policy segment, the uncer-tainty set is updated and the accumulated exploration cost is incremented accordingly. Thus, J k+1 exec ≤ Bexp , and the induction hypothesis holds at tk+1 . By induction, safety and budget feasibility are preserved at every replanning time. V. P REDICTION OF UNCERTAINTY SHRINKAGE 
+
+To evaluate informative candidate policy segments, the framework must predict the reduction in parametric uncer-tainty induced by executing a candidate trajectory. We con-sider two approaches for this prediction. The first approach is a simulation-based method that estimates uncertainty shrinkage through forward rollouts under sampled parameter and disturbance realizations. The second approach predicts uncertainty shrinkage directly from the planned trajectory by analyzing the set of parameters that remain consistent with the resulting regression measurements under bounded noise. We describe these two approaches below. 
+
+A. Simulation-Based Uncertainty Shrinkage Prediction 
+
+To evaluate informative candidate policy segments, the framework predicts the expected reduction in parametric uncertainty induced by executing a candidate policy segment πrob ,I k,i over the horizon T c,k i = [ tk, t k +iT c]. This prediction is obtained via forward simulation of the closed-loop system for a finite number of admissible parameter and disturbance realizations. Given the current state xk and uncertainty set Θk, N inde-pendent rollouts are generated by sampling θ(ℓ) i.i.d.
+
+∼ U(Θ k)
+
+and a sequence of additive disturbances {w(ℓ) 
+
+> j
+
+}Ni
+
+> j=1 i.i.d.
+
+∼U(W), where Ni denotes the number of discrete simulation steps over the horizon T c,k i . For each ℓ ∈ { 1, . . . , N }, the system dynamics (1) are forward simulated from xk under the informative policy segment πIk,i (Algorithm 1, Lines 2– 5). From each rollout, a sequence of regressor–measurement pairs {(Φ (ℓ) 
+
+> j
+
+, z (ℓ) 
+
+> j
+
+)}Ni 
+
+> j=1
+
+is constructed and used to compute a predicted post-execution uncertainty set Θk+1 ,i, (ℓ) via set-membership identification (Algorithm 1, Lines 6–7). The effect of candidate i on the uncertainty set is quan-tified by the reduction in the average directional width . For each rollout ℓ, the reduction is computed as 
+
+∆ξ(ℓ) 
+
+> i
+
+= 1
+
+|D| 
+
+X
+
+> d∈D
+
+
+
+wd(Θ k) − wd(Θ k+1 ,i, (ℓ))
+
+
+
+, (49) where wd(·) denotes the directional width defined in Def. 3; see Algorithm 1, Line 8. Finally, the predicted uncertainty reduction associated with candidate i is defined as the empirical average over the N
+
+independent rollouts, 
+
+∆ξi = 1
+
+N
+
+> N
+
+X
+
+> ℓ=1
+
+∆ξ(ℓ) 
+
+> i
+
+, (50) which is used directly in the candidate scoring rule (36). 
+
+B. Data-Consistency–Based Uncertainty Shrinkage Predic-tion 
+
+In this section, we quantify the pre-execution impact of a planned trajectory on parameter uncertainty via the width 
+
+in Def . 3. We present the method for a general trajectory 
+
+p = (px, p u) on [ti, t f ]. Let tj , j = 1, . . . , N j denote the sampling times, and define Φj = Φ( px(tj ), p u(tj )) ∈
+
+Rc×p, zj = z(tj ) ∈ Rc, wj = w(tj ) ∈ Rc, ∥wj ∥∞≤
+
+w. Stacking the regressors gives 
+
+A =
+
+h
+
+Φ1 Φ2 · · · ΦNj
+
+i⊤
+
+∈ RM ×p, M = Nj c. (51) Now let θ⋆ denote the true (unknown) parameter. Two parameters θ and θ⋆ can produce the same stacked data under bounded noises w1, w 2 if and only if 
+
+Aθ + w1 = Aθ ⋆ + w2, ∥w1∥∞, ∥w2∥∞≤ w. (52) The key question is: under what conditions can two distinct parameters θ and θ⋆ produce the same measurements within the noise bound? If many such parameters remain feasible, the uncertainty set stays large; if few remain, it shrinks. Hence, the fewer alternative parameters that fit the data within the noise bound, the greater the uncertainty reduction achieved by the planned trajectory. 
+
+Remark 3. The uncertainty shrinkage prediction in this section characterizes uncertainty reduction along a planned trajectory under bounded additive disturbances and bounded parametric uncertainty, but does not account for deviation between the planned trajectory and the executed closed-loop state-input trajectory, which is left for future work. 
+
+Lemma 2. Let θ⋆ ∈ Θ be the (unknown) true parameter, and define eθ = θ − θ⋆ ∈ Rp. There exists some wj with 
+
+∥wj ∥∞≤ w such that 
+
+∥Φj (θ⋆ − θ) + wj ∥∞≤ w ⇐⇒ ∥ Φj eθ ∥∞≤ 2w, (53) 
+
+and combining across all j yields ∥Ae θ ∥∞≤ 2w.Proof. We first show that (53) holds. ( ⇒) Since eθ = θ −θ⋆,we have Φj (θ⋆ − θ) = −Φj eθ . Thus 
+
+∥Φj (θ⋆ − θ) + wj ∥∞ = ∥− Φj eθ + wj ∥∞ (54a) 
+
+= ∥Φj eθ − wj ∥∞≤ w (54b) Now, by the triangle inequality: 
+
+∥Φj eθ ∥∞ = ∥(Φ j eθ − wj ) + wj ∥∞ (55a) 
+
+≤ ∥ Φj eθ − wj ∥∞+∥wj ∥∞ (55b) 
+
+≤ w + w = 2 w. (55c) (⇐) Let ∥Φj eθ ∥∞≤ 2w, choose wj = clip(Φ j eθ , w ),where clip(Φ j eθ , w ) = sign(Φ j eθ )⊙min {| Φj eθ |, w }. Thus, 
+
+∥wj ∥∞ ≤ w (56a) 
+
+∥Φj eθ − wj ∥∞ = max {∥ Φj eθ ∥∞−w, 0} ≤ w (56b) Since Φj (θ⋆ − θ) = −Φj eθ and using (54), we have 
+
+∥Φj (θ⋆ − θ) + wj ∥∞= ∥Φj eθ − wj ∥∞≤ w (57) Thus, combining (53) for all j yields ∥Ae θ ∥∞≤ 2w.Lemma 2 states that two parameters are indistinguishable 
+
+when their offset eθ satisfies ∥Ae θ ∥∞≤ 2w, meaning that the observed data could equally well be explained by either parameter, given bounded noise. Offsets exceeding 2w are ruled out, motivating the definition of the feasible error set. 
+
+Definition 13 (Error set) . Given the planned trajectory (through A), w, and eθ = θ − θ⋆, define 
+
+Eθ := { eθ ∈ Rp : ∥Ae θ ∥∞≤ 2w }. (58) The error set Eθ := {eθ ∈ Rp : ∥Ae θ ∥∞≤ 2w} collects all feasible offsets eθ = θ − θ⋆ under the trajectory and noise bound. Equivalently, θ is feasible iff θ − θ⋆ ∈ E θ , i.e., 
+
+θ ∈ θ⋆ + Eθ . Since θ ∈ Θ, the feasible parameter set is 
+
+ΘNj (θ⋆) = Θ ∩ (θ⋆ + Eθ ). (59) where ΘNj (θ⋆) is the predicted parameter set after Nj
+
+planned samples. We measure the width of the predicted set 
+
+ΘNj (θ⋆) along a direction d ∈ Rp. Choosing d = eθ,i yields the width of the i-th parameter. By definition, 
+
+wd(Θ Nj (θ⋆)) = wd(Θ ∩ (θ⋆ + Eθ )) . (60) [a] Backup trajectory [b] Multiple candidate pairs [c] Reject unsafe candidates [d] Select most valuable candidate [e] Update backup upon return 
+
+> Five informative candidates Start
+> Goal
+> obstacles Five conservative candidate
+
+Proposed Framework Pipeline Fig. 3: The proposed framework at a glance. Starting from a conservative backup trajectory, multiple candidate trajectories are generated, including both conservative and informative options. Unsafe candidates are rejected, and the most valuable safe candidate is selected for execution. Upon returning to the backup trajectory, the backup plan is updated. The candidate trajectories represent variations in the trajectory state space; their depiction in the physical environment is purely illustrative. 
+
+Because the width of an intersection cannot exceed that of either set, and width is translation-invariant ( wd(θ⋆ + Eθ ) = 
+
+wd(Eθ )), we obtain 
+
+wd(Θ Nj (θ⋆)) ≤ min( wd(Θ) , w d(Eθ )) . (61) We next show how wd(Eθ ) can be computed from the planned trajectory. 
+
+Lemma 3. For any d ∈ Rp \{ 0},
+
+wd(Eθ ) = 2 hEθ (d), hEθ (d) = sup  
+
+> eθ∈E θ
+
+d⊤eθ (62) 
+
+Proof. For any eθ ∈ E θ ,
+
+∥Ae θ ∥∞= ∥− Ae θ ∥∞= ∥A(−eθ )∥∞≤ 2w. (63) Since −eθ ∈ Eθ and 0 ∈ Eθ , this implies wd(Eθ ) =sup eθ ∈E Θ d⊤eθ − inf eθ ∈E Θ d⊤eθ = 2 sup eθ ∈E Θ d⊤eθ .
+
+Since ∥Ae θ ∥∞≤ 2w ⇐⇒ − 2w1M ≤ Ae θ ≤ 2w1M , by (62) it suffices to compute 
+
+max   
+
+> eθ∈Rp
+
+d⊤eθ
+
+s.t. − 2w1M ≤ Ae θ ≤ 2w1M .
+
+(64) Now, we introduce multipliers λ1, λ 2 ∈ RM 
+
+> ≥0
+
+and write the Lagrangian of the (64) as L(eθ , λ 1, λ 2) = d⊤eθ +
+
+λ⊤ 
+
+> 1
+
+(2 w1M − Ae θ ) + λ⊤ 
+
+> 2
+
+(2 w1M + Ae θ ). The dual is finite iff A⊤(λ2 − λ1) = d, giving 
+
+hEθ (d) = min  
+
+> λ1,λ 2≥0
+
+2w(1⊤ 
+
+> M
+
+λ1 + 1⊤ 
+
+> M
+
+λ2)
+
+s.t. A⊤(λ2 − λ1) = d. 
+
+(65) Let λd = λ2 − λ1. Choosing λ2 = ( λd)+ and λ1 = ( λd)−
+
+yields 
+
+hEθ (d) = 2 w min  
+
+> λd:A⊤λd=d
+
+∥λd∥1. (66) Therefore, 
+
+wd(Θ Nj (θ⋆)) ≤ min ( wd(Θ) , 2hEθ (d)) . (67) If the executed closed-loop state-input trajectory coincides with the planned trajectory, then the predicted width upper bounds the width computed from the realized measurements, since the prediction is computed under worst-case bounded additive disturbances. 
+
+C. Choice of Prediction Approach 
+
+Both approaches can be used to predict uncertainty shrink-age induced by a candidate policy segment. Approach 1 relies on closed-loop rollouts and therefore captures the effects of tracking error and disturbances on the resulting regression data. The rollouts are independent and can be parallelized across samples. Approach 2 predicts uncertainty shrinkage directly from the planned regression data and avoids forward simulation, making it computationally cheaper. However, this prediction assumes that the executed trajectory matches the planned trajectory and therefore does not account for tracking error. In practice, Approach 1 is preferred when the effect of execution errors on uncertainty reduction is important, while Approach 2 provides a faster approximation when computational resources are limited. VI. T UBE MPC I NSTANTIATION OF THE PROPOSED 
+
+FRAMEWORK 
+
+We now describe a tube MPC instantiation of the proposed framework for finite-horizon, goal-directed navigation. In this instantiation, the backup horizon TB is chosen adaptively and defined at each replanning time tk as TB := tf − tk,corresponding to the remaining mission duration to reach the terminal goal set G. While the framework is formulated in terms of feedback policies, for this instantiation we reason directly in terms of trajectories to simplify exposition. The resulting construction induce feedback policies and is fully consistent with Section IV. 
+
+A. Robust Backup Policy via Tube MPC 
+
+At planning time tk, the robust backup policy πrob ,B k is generated using tube MPC. In this instantiation, tube MPC is used to compute a nominal state-input trajectory (prob 
+
+> k,x
+
+, p rob 
+
+> k,u
+
+)
+
+together with a tube cross-section Ek(t), defined as 
+
+Ek(t) = E(t; Θ k, w, p rob 
+
+> k,x
+
+(t), p rob 
+
+> k,u
+
+(t)) , (68) which bounds the deviation between the true state and the nominal trajectory for all θ ∈ Θk and all admissible disturbances. The resulting robust tube is 
+
+Ωrob  
+
+> k
+
+(t) = prob 
+
+> k,x
+
+(t) ⊕ E k(t) = { x ∈ X : x − prob 
+
+> k,x
+
+(t) ∈ E k(t) }.
+
+(69) To enforce robust constraint satisfaction, the nominal trajectory is required to satisfy tightened state, input, and terminal constraints defined as 
+
+Sk(t) = S ⊖ E k(t), Uk(t) = U ⊖ ∆Uk(t), (70a) 
+
+Gk = G ⊖ E k(tf ), (70b) where ∆Uk(t) bounds the input deviation induced by the ancillary controller. Satisfaction of the tightened constraints by the nominal trajectory implies satisfaction of the original constraints by the closed-loop system. The nominal trajectory is obtained by solving a finite-horizon optimal control problem over the backup horizon 
+
+TB = tf − tk,
+
+min 
+
+> px(·), p u(·)
+
+Z tk +TB
+
+> tk
+
+ℓ(px(t), p u(t)) dt + ℓT (px(tk + TB )) 
+
+(71a) s.t. ˙px(t) = f
+
+
+
+px(t), ˆθf
+
+
+
++ g
+
+
+
+px(t), ˆθg
+
+
+
+pu(t),
+
+(71b) 
+
+px(t) ∈ S k(t), ∀t ∈ [tk, t k + TB ] (71c) 
+
+pu(t) ∈ U k(t), ∀t ∈ [tk, t k + TB ], (71d) 
+
+px(tk + TB ) ∈ G k. (71e) Given the nominal solution, an ancillary feedback law 
+
+πarc  
+
+> k
+
+: R × X → U is designed such that the control input 
+
+u(t) = prob 
+
+> k,u
+
+(t) + πarc  
+
+> k
+
+(t, x (t)) (72) renders Ωrob  
+
+> k
+
+(t) forward invariant. The resulting feedback law defines the robust backup policy 
+
+πrob ,B k (t, x ) = prob 
+
+> k,u
+
+(t) + πarc  
+
+> k
+
+(t, x (t)) , (73) which guarantees x(t) ∈ S , u(t) ∈ U , and x(tf ) ∈ G for all admissible uncertainties when applied over [tk, t k + TB ].
+
+B. Predicted Mission Cost under Tube MPC 
+
+Recall from Definition 6 that the predicted mission cost of executing a policy πk from state xk over the horizon Tk =[tk, t f ] is denoted by J k→f (πk, x k, Tk).In the tube MPC instantiation, the predicted mission cost associated with the robust backup policy πrob ,B k is defined as 
+
+J k→f 
+
+> rob
+
+= J k→f 
+
+πrob ,B k , x k, Tk
+
+
+
+, (74) and is evaluated using the nominal centerline trajectory returned by the tube MPC optimization, 
+
+J k→f 
+
+> rob
+
+=
+
+Z tf
+
+> tk
+
+ℓ(prob 
+
+> k,x
+
+(t), p rob 
+
+> k,u
+
+(t)) dt + ℓT (prob 
+
+> k,x
+
+(tf )) .
+
+The mission cost is evaluated using the nominal centerline 
+
+Algorithm 2: Instantiation I of Proposed Framework                                                                           
+
+> Input: Current state xk, uncertainty set Θk, exploration budget
+> Bexp
+> Output: Committed policy segment πcom
+> k
+> 1Compute robust backup trajectory (prob
+> k,x , p rob
+> k,u )via tube MPC;
+> 2Construct robust tube Ωrob
+> k(t)and backup policy πrob ,B k;
+> 3Generate candidate horizons Tc,k i= [ tk, t k+iT c];
+> 4for i= 1 , . . . , N kdo
+> 5Define conservative candidate πrob ,B k,i as the restriction of
+> πrob ,B k;
+> 6Solve informative trajectory optimization to obtain pinfo ,i k;
+> 7Attempt to construct tube Ωinfo ,i karound pinfo ,i k;
+> 8if a robust tube Ωinfo ,i kexists then
+> 9mark candidate pair as valid;
+> 10 else
+> 11 reject candidate;
+> 12 end
+> 13 end
+> 14 Predict uncertainty reduction ∆ξiusing Algorithm 1;
+> 15 Evaluate exploration cost ∆Jk
+> exp (i);
+> 16 Form the feasible candidate set satisfying the exploration budget constraint;
+> 17 if feasible candidates exist then
+> 18 select i⋆= arg max sc,k i;
+> 19 commit informative candidate πrob ,I k,i ⋆;
+> 20 else
+> 21 commit conservative segment πrob ,B k, 1;
+> 22 end
+> 23 return πcom
+> k;
+
+trajectory rather than the executed closed-loop trajectory. While the ancillary feedback controller may introduce track-ing deviations to ensure tube invariance, these deviations do not affect the feasibility or safety guarantees and are not explicitly accounted for in the mission-level planning objective. The predicted mission cost therefore serves as a consistent planning-time metric for enforcing the mission-level budget constraint. 
+
+C. Conservative Candidate Policy Segment 
+
+For each candidate horizon 
+
+T c,k i = [ tk, t k + iT c], (75) the conservative candidate policy segment is defined exactly as in Definition 8 as the restriction of the robust backup policy: 
+
+πrob ,B k,i = πrob ,B k |T c,k i
+
+. (76) Equivalently, the associated conservative candidate trajectory 
+
+prob ,i k is obtained by restricting the robust tube trajectory to the same horizon. No additional optimization is performed at this step. [a] Fallback Policy [b] Nominal (Mission) Policy [c.i] Safe Conservative Policy [c.ii] Unsafe Conservative Policy SAFE UNSAFE 
+
+               
+
+> [d.i] Safe Informative Policy [d.ii] Unsafe Informative Policy
+
+  
+
+> [e.ii] Committed Informative Policy [e.i] Committed Conservative Policy SAFE UNSAFE
+
+Fig. 4: Illustration of the gatekeeper instantiation. Starting from prerequisite policies—a backup policy and a nominal mission policy—the framework generates conservative and informative candidate policies. Candidates that cannot be certified as safe are rejected. Among the remaining candidates, a safe conservative or safe informative policy may be committed for execution based on the score. 
+
+D. Informative Candidate Trajectory Generation 
+
+For each horizon T c,k i , we compute an informative candi-date trajectory pinfo ,i k = ( pinfo ,i k,x , p info ,i k,u ) by solving 
+
+min 
+
+> x(·),u (·)
+
+Z tk +iT c
+
+> tk
+
+ℓ(x(τ ), u (τ )) dτ − γ log det( Ik,i + ϵI )
+
+(77a) s.t. ˙x(t) = f (x(t), ˆθf ) + g(x(t), ˆθg )u(t), (77b) 
+
+x(tk) = xk, (77c) 
+
+x(tk + iT c) = prob ,i k,x (tk + iT c). (77d) The information matrix associated with candidate i is defined as 
+
+Ik,i := 
+
+Z tk +iT c
+
+> tk
+
+Φ( x(τ ), u (τ )) ⊤Wθ Φ( x(τ ), u (τ )) dτ, (78) where Wθ ∈ S++ is a user-selected weighting matrix, γ ∈
+
+R>0 is the weight on the information reward, and ϵ ∈ R>0
+
+is a small regularization constant. The terminal constraint enforces the terminal recoverability condition of Definition 9 by requiring that the informative trajectory rejoins the con-servative candidate induced by the robust backup policy. 
+
+Remark 4. Robustness to bounded uncertainties and sat-isfaction of safety constraints are not explicitly enforced during informative candidate generation. After computing 
+
+pinfo ,i k , safety is assessed by attempting to construct a tube 
+
+Ωinfo ,i k around the informative trajectory. If such a tube exists, the informative candidate admits a robust realization and is referred to as a safe informative candidate ; otherwise, it is rejected. 
+
+E. Candidate Policy Segment Pair and Validity 
+
+The informative policy segment πIk,i , and the conservative candidate policy segment πrob ,B k,i together form the candidate policy segment pair (πIk,i , πrob ,B k,i ), as defined in Defini-tion 10. A candidate pair is said to be valid if there exists a corresponding robust informative policy segment πrob ,I k,i 
+
+(Definition 11) whose closed-loop execution satisfies state and input constraints for all admissible uncertainties over 
+
+T c,k i . Among all valid candidate pairs, the framework selects a candidate that satisfies the budget constraint based on the predicted mission cost. If no informative candidate is valid and budget-feasible, the system commits to the robust backup policy. VII. G A T E K E E P E R (S AFETY FILTER ) I NSTANTIATION OF THE PROPOSED FRAMEWORK 
+
+We now present an alternative instantiation of the proposed framework based on the gatekeeper architecture. In con-trast to the tube MPC instantiation in Section VI, which enforces safety through robust trajectory planning and tube invariance, this instantiation separates nominal trajectory generation from safety certification. Safety is enforced by a gatekeeper module that evaluates candidate policies through forward simulation under admissible uncertainty realizations and executes a policy only if it satisfies the required safety conditions with high confidence. This in-stantiation is particularly suitable for systems where high-performance planners are available but do not explicitly account for model uncertainty. Fig. 4 illustrates the policies considered in the 
+
+gatekeeper instantiation for the autonomous car racing example. The process begins with a fallback policy that provides a conservative safe behavior robust to the initial uncertainty set. Since the uncertainty set is refined online through set-membership updates and only shrinks over time, this fallback policy remains safe throughout execution. In the racing scenario, it may correspond to a slow trajectory that follows the track centerline with large safety mar-gins. A nominal mission trajectory is then generated by a high-performance planner, and an informative trajectory is generated to reduce parametric uncertainty. Unlike in the tube-based instantiation, these trajectories are not robust by construction. Because they are computed using the cur-rent parameter estimate, they may violate safety constraints when the true parameter differs from the estimate. Their safety must therefore be verified before execution using 
+
+gatekeeper .For each candidate horizon, the framework constructs two candidate policies by restricting the nominal mission and informative trajectories to that horizon. Each policy applies its corresponding candidate segment over the can-didate horizon and then switches to the fallback policy thereafter. The gatekeeper evaluates each policy under the current uncertainty set to determine whether it can be safely executed. Among the candidate policies that satisfy the safety and budget constraints, the framework selects the one with the highest score for execution. Thus, safety is enforced at the policy-verification stage rather than during nominal trajectory generation. 
+
+A. Nominal Mission Policy via MPC 
+
+At planning time tk, a nominal trajectory is generated using a standard model predictive controller that does not explicitly account for parametric uncertainty. In particular, the MPC planner computes a nominal state–input trajectory 
+
+(pnom  
+
+> k,x
+
+, p nom  
+
+> k,u
+
+)
+
+over the horizon TB by solving the finite-horizon optimal control problem 
+
+min 
+
+> px(·), p u(·)
+
+Z tk +TB
+
+> tk
+
+ℓ(px(t), p u(t)) dt + ℓT (px(tk + TB )) 
+
+(79a) s.t. ˙px(t) = f
+
+
+
+px(t), ˆθf
+
+
+
++ g
+
+
+
+px(t), ˆθg
+
+
+
+pu(t),
+
+(79b) 
+
+px(tk) = xk, (79c) 
+
+px(t) ∈ S , ∀t ∈ [tk, t k + TB ], (79d) 
+
+pu(t) ∈ U , ∀t ∈ [tk, t k + TB ]. (79e) Because the nominal trajectory is computed using the parameter estimate ˆθ, it may violate safety constraints when the true parameter θ differs from the estimate. Safety is there-fore enforced by the gatekeeper verification mechanism described next. 
+
+B. Informative Trajectory Generation 
+
+At planning time tk, the informative trajectory is generated by solving an information-seeking control problem using the current parameter estimate ˆθ. Specifically, the informative trajectory 
+
+(pinfo  
+
+> k,x
+
+, p info  
+
+> k,u
+
+)
+
+Algorithm 3: Instantiation II of Proposed Framework                                                                                
+
+> Input: Current state xk, uncertainty set Θk, disturbance set W,exploration budget Bexp
+> Output: Committed policy πcom
+> k
+> 1Compute nominal MPC trajectory (pnom
+> k,x , p nom
+> k,u );
+> 2Generate informative trajectory (pinfo
+> k,x , p info
+> k,u );
+> 3Generate candidate horizons Tc,k i= [ tk, t k+iT c];
+> 4for i= 1 , . . . , N kdo
+> 5Define nominal candidate segment pnom ,i kas the restriction of the nominal trajectory to Tc,k i;
+> 6Define informative candidate segment pinfo ,i kas the restriction of the informative trajectory to Tc,k i;
+> 7Construct candidate policies πnom
+> k,i and πinfo
+> k,i by following the corresponding candidate segment and then the fallback policy;
+> 8Evaluate safety of πnom
+> k,i and πinfo
+> k,i using Nrollouts under sampled (θ, w );
+> 9Compute empirical safety probabilities Psafe (πnom
+> k,i )and
+> Psafe (πinfo
+> k,i );
+> 10 Estimate predicted mission cost from the rollout simulations;
+> 11 Predict uncertainty reduction ∆ξiusing Algorithm 1;
+> 12 Compute the score of each safe candidate satisfying the exploration budget constraint;
+> 13 end
+> 14 Form the feasible candidate set satisfying the exploration budget and safety constraint;
+> 15 if feasible candidates exist then
+> 16 select the candidate with the highest score and commit it as
+> πcom
+> k;
+> 17 else
+> 18 set πcom
+> k=πcom
+> k−1;
+> 19 end
+> 20 return πcom
+> k;
+
+is obtained by solving 
+
+min 
+
+> x(·),u (·)
+
+Z tk +TB
+
+> tk
+
+ℓ(x(τ ), u (τ )) dτ − γ log det( Ik + ϵI )
+
+(80a) s.t. ˙x(t) = f (x(t), ˆθf ) + g(x(t), ˆθg )u(t), (80b) 
+
+x(tk) = xk. (80c) The associated information matrix is defined as 
+
+Ik := 
+
+Z tk +TB
+
+> tk
+
+Φ( x(τ ), u (τ )) ⊤Wθ Φ( x(τ ), u (τ )) dτ, (81) where Φ( x, u ) is the regressor defined in (5), Wθ ∈ S++ 
+
+is a user-selected weighting matrix, γ ∈ R>0 weights the information-seeking objective, and ϵ ∈ R>0 is a small regularization constant. 
+
+C. Candidate Policy Segments 
+
+For each candidate horizon 
+
+T c,k i = [ tk, t k + iT c], (82) the framework constructs two candidate policies by applying a candidate segment over T c,k i and then following the fallback policy for all future time. The first candidate segment is obtained by restricting the nominal mission trajectory to the horizon T c,k i :
+
+pnom ,i k = pnom  
+
+> k
+
+|T c,k i
+
+. (83) The second candidate segment is obtained by restricting the informative trajectory to the same horizon: 
+
+pinfo ,i k = pinfo  
+
+> k
+
+|T c,k i
+
+. (84) The corresponding candidate policies are then defined as follows: πnom  
+
+> k,i
+
+applies the nominal candidate segment pnom ,i k
+
+over T c,k i and then follows the fallback policy for all future time, while πinfo  
+
+> k,i
+
+applies the informative candidate segment 
+
+pinfo ,i k over T c,k i and then follows the same fallback policy for all future time. The overall construction is illustrated in Figure 4. In particular, panels [c.i] and [c.ii] show safe and unsafe con-servative (nominal) candidate policies, respectively, while panels [d.i] and [d.ii] show safe and unsafe informative candidate policies, respectively. 
+
+D. Robust gatekeeper Safety Verification 
+
+Given a candidate policy 
+
+πk,i ∈ { πnom  
+
+> k,i
+
+, π info  
+
+> k,i
+
+},
+
+the gatekeeper determines whether it can be safely executed under the current uncertainty set Θk. Although each candidate policy is defined over an infinite horizon, its safety is assessed over a finite verification horizon. For a candidate horizon 
+
+T c,k i = [ tk, t k + iT c], (85) we define a fallback horizon of duration Tfb > 0 and evaluate the resulting trajectory over 
+
+T v,k i = [ tk, t k + iT c + Tfb ]. (86) Over this interval, the system first follows the candidate segment induced by πk,i over T c,k i and then follows the fallback policy over the remaining interval 
+
+[tk + iT c, t k + iT c + Tfb ]. (87) To assess safety, the gatekeeper performs N forward simulations of the closed-loop system under sampled real-izations of the uncertain parameters and disturbances: 
+
+˙x(t) = f (x(t), θ f ) + g(x(t), θ g )u(t) + w(t), (88) where θ ∼ U(Θ k) and w(t) ∼ U(W). Each rollout is initialized at the current state xk and applies the control induced by the candidate policy over the verification horizon 
+
+T v,k i .Let Xfb ⊆ S denote the fallback set. A rollout is declared safe if all state and input constraints are satisfied over T v,k i
+
+and the terminal state at the end of the fallback horizon satisfies 
+
+x(tk + iT c + Tfb ) ∈ X fb . (89) This terminal fallback-set Xfb plays the role of the backup-set condition in the standard gatekeeper formulation [9]. Let S(ℓ)(πk,i ) ∈ { 0, 1} denote the safety indicator for rollout ℓ, where S(ℓ)(πk,i ) = 1 if the above conditions are satisfied, and S(ℓ)(πk,i ) = 0 otherwise. The empirical safety probability of the candidate policy is then defined as 
+
+Psafe (πk,i ) = 1
+
+N
+
+> N
+
+X
+
+> ℓ=1
+
+S(ℓ)(πk,i ). (90) The candidate policy is declared safe if 
+
+Psafe (πk,i ) ≥ 1 − δ, (91) where δ ∈ (0 , 1) is a user-specified risk tolerance. If this condition is satisfied, the candidate may be committed for execution; otherwise, it is rejected by the gatekeeper .In the racing instantiation, the fallback set is chosen as a neighborhood of the track centerline. Here, we use empirical safety probability as the acceptance criterion, but other risk measures [47], such as conditional value-at-risk (CVaR), could also be used to quantify rollout risk. 
+
+E. Valid Candidate Policy Segment Pairs 
+
+Having defined the gatekeeper safety verification pro-cedure, we now specify validity in this instantiation. For each candidate horizon T c,k i , the framework constructs a nominal candidate policy πnom  
+
+> k,i
+
+and an informative candidate policy 
+
+πinfo  
+
+> k,i
+
+. The pair is declared valid if both policies are certified safe by gatekeeper under the current uncertainty set Θk.In the notation of Def . 11, πnom  
+
+> k,i
+
+corresponds to the conservative policy segment πrob ,B k,i , while a certified-safe informative policy πinfo  
+
+> k,i
+
+corresponds to the robustified infor-mative policy segment πrob ,I k,i . Accordingly, a valid candidate policy segment pair in this instantiation is written as 
+
+(πrob ,I k,i , π rob ,B k,i ) = ( πinfo  
+
+> k,i
+
+, π nom  
+
+> k,i
+
+),
+
+only when both πinfo  
+
+> k,i
+
+and πnom  
+
+> k,i
+
+are certified safe by 
+
+gatekeeper . Once validity is established, budget feasi-bility is then evaluated. VIII. R ESULTS & D ISCUSSION 
+
+We validate the proposed framework through two case studies that illustrate two different safety instantiations: (a) quadrotor navigation and (b) autonomous car racing. The quadrotor navigation example demonstrates the tube MPC instantiation described in Section VI, while the autonomous car racing example illustrates the gatekeeper-based safety filtering instantiation. In both cases, the framework evaluates conservative and informative candidate trajectories and com-mits a trajectory only when it satisfies the safety and budget constraints while providing the highest predicted uncertainty reduction. 
+
+A. Safe Quadrotor Navigation 
+
+We validate the framework on a quadrotor navigation task. Backup trajectories are generated with tube MPC [2] and tracked using a sliding mode controller. The cost functional, 
+
+J(px, p u) = 
+
+Z tf
+
+> t0
+
+(α∥u(t)∥2+β∥px(t) − rgoal ∥2) dt, (92) Fig. 5: Backup, candidate, and final solution trajectories for Case Study 1 (top) and Case Study 2 (bottom). Time [s] Parameter bounds      
+
+> 0510 15 20 0.0 0.1 0.2 0.3 0.4 0.5
+> 0.0 0.1 0.2 0.3 0.4 0.5 0.0 0.2 0.4 0.6 0.8 Time [s] Time [s]
+
+Case Study 1 parameter ( ) bounds Case Study 2 parameter ( ) bounds Case Study 2 parameter ( ) bounds          
+
+> True Minimum Maximum True Minimum Maximum True Minimum Maximum 0510 15 20 0510 15 20
+
+Fig. 6: Parameter bound evolution are shown for two studies: Case Study 1 ( Cd, left) and Case Study 2 ( Cd1 , middle; Cd2 , right).                      
+
+> System Method Budget (%) Total Cost (%) Uncertainty Reduction (%) Param 1 Param 2
+> 1Baseline [2] –100.0 0–Proposed 110.0 82.5 88.0 –2Baseline [2] –100.0 00Proposed 110.0 81.3 34.0 88.8
+
+TABLE I: Budget and cost are shown as percentages relative to the baseline solution (100%). For System 2, reductions are reported per parameter dimension. 
+
+penalizes control effort and deviation from the goal, where 
+
+α, β > 0 are weights, px(t) the nominal state, u(t) the input, and rgoal the goal. In both cases we set TC = 2 .0s. 
+
+1) Case Study 1: Quadrotor with Drag : The first case study, illustrated in Fig. 5, considers a quadrotor modeled as a double integrator with nonlinear aerodynamic drag, 
+
+¨r = −Cd∥ ˙r∥ ˙r + g + u + d, (93) where r ∈ R3 is the inertial position, g ∈ R3 the gravitational acceleration, u ∈ R3 the control input, d ∈ R3 an additive disturbance, and Cd ∈ R the unknown drag coefficient. The measurement y ∈ R3 corresponds to r.As shown in Fig. 6, committing a 6-second informative trajectory reduced the admissible interval for Cd, tightening the bounds around the true parameter and demonstrating the framework’s ability to shrink parametric uncertainty online. Table I reports the corresponding mission cost. Relative to the conservative baseline (set to 100% ), the proposed method achieved only 82 .5% of the cost, while remaining within the budget of 110% . Thus, the approach not only reduced parameter uncertainty but also improved overall efficiency compared to the baseline backup solution. 
+
+2) Case Study 2: Quadrotor with Vector Drag : We extend the setup of Case Study 1 by considering a quadrotor with vector drag dynamics: 
+
+¨r = −Cd1 ˙r − Cd2 ∥ ˙r∥ ˙r + g + u + d, (94) where Cd1, C d2 ∈ R are the unknown drag coefficients. In this case, the robot executed informative trajectories that reduced the parameter set in both directions, tightening the bounds from [0 .0, 0.50] × [0 .0, 0.80] to [0 .0, 0.33] ×
+
+[0 .25 , 0.34] . The asymmetric shrinkage reflects the relative excitation of the regressors: more data were collected along 
+
+Cd2, yielding a stronger contraction of its bounds. Since candidate generation did not enforce safety, and the robot operated in a narrow corridor, many informative candidates were invalidated. Consequently, fewer safe informative tra-jectories were committed, producing only modest reduction in Cd1 compared to Cd2. The total cost was 81 .3% , well below the 110% budget, normalized to the 100% baseline.                 
+
+> Long. Velocity (m/s) 1.0 1.5 2.0 2.5 3.0 3.5 Y(m) X(m) X(m) X(m) X(m) Y(m) Y(m) Y(m)
+
+Fig. 7: Trajectories over the last 5 laps for each method. For (a), the successful Trial 5 run is shown. Additional details on the trials can be found in Table III. 
+
+Method Safe Runs (%) Average Lap Time (s) Best Final Lap Time (s) 
+
+μ Uncertainty Reduction (%) Budget Consumed (%) 
+
+[1] Nominal [6] (No Safety) 30 5.01 4.92 – –
+
+[2] Weighted Nominal–Informative (No Safety) 20 7.87 7.52 – –
+
+[3] Fallback Only 100 17.0 16.8 – –
+
+[4] Nominal + gatekeeper 100 15.7 12.5 – –
+
+[5] [2] + gatekeeper 80 21.6 17.5 96.2 –Proposed: Dual-gatekeeper 100 8.07 6.48 95.5 23.8 TABLE II: Performance comparison for the autonomous racing task over 10 independent trials per method. Each trial is executed for at most 10 laps. A trial is counted as a Safe Run only if all 10 laps are completed without any safety violation. Safe Runs reports the percentage of such trials. Average Lap Time is computed over all completed laps, and Final Lap Time denotes the lap time achieved at the end of each trial. 
+
+3) Implementation details: In practice, generating a robust tube trajectory based on the method described in [2] re-quires solving a nonlinear optimization problem and can take anywhere from 100 milliseconds to one second, depending on the problem size and solver warm-start conditions. The generation of an informative candidate trajectory is typically faster, on the order of a few hundred milliseconds, though this is also highly dependent on the system dynamics and horizon length. Both the backup and candidate trajectory optimization problems are implemented using InfiniteOpt.jl, which provides a flexible framework for modeling dynamic optimization problems in Julia. 
+
+B. Safe Autonomous Car Racing 
+
+We next evaluate the gatekeeper -based instantiation of the framework on an autonomous car racing task. In this case study, the objective is to complete a lap safely while actively reducing parametric uncertainty in the tire–road interaction model. The racing dynamics are given in Appendix C.1, with the tire friction coefficient μ modeled as an unknown but bounded parameter. A linear-in-parameter representation of the dynamics is provided in Appendix C.2. The nominal mission trajectory is computed using a linearized MPC solved via sequential quadratic programming (SQP), with an average solve time of approximately 10ms . Our implementa-tion builds on the open-source racing MPC framework of [6]. Informative trajectories are generated using model predictive path integral control (MPPI) implemented in JAX, with an average solve time of approximately 15ms .The uncertainty in μ directly affects the vehicle’s lateral force generation and therefore has a significant impact on both safety and performance during aggressive racing ma-neuvers. Reducing this uncertainty enables less conservative behavior and improved lap performance. Additional details on the racing model, controller design, and simulation setup are deferred to Appendix C. The gatekeeper instantiation uses three policy components: a fallback policy, a nominal mission policy, and an informa-tive policy. The fallback policy provides conservative safe behavior under uncertainty, the nominal policy generates high-performance racing behavior aimed at minimizing lap time, and the informative policy excites the dynamics to reduce uncertainty in the tire friction coefficient μ. We test the following baselines in this paper.  
+
+> •
+
+Baseline 1: Executes only the nominal controller.  
+
+> •
+
+Baseline 2: Optimizes a weighted objective of lap time and uncertainty reduction without safety guarantees.  
+
+> •
+
+Baseline 3: Executes only the fallback policy.  
+
+> •
+
+Baseline 4: gatekeeper evaluating only nominal segments with fallback; no informative candidates.  
+
+> •
+
+Baseline 5: gatekeeper evaluating candidates from a weighted objective; no pure nominal candidates.  
+
+> •
+
+Proposed framework. Generates both nominal and informative candidates and commits the best feasible one. The results are summarized in Table II, with detailed trial-wise outcomes provided in Table III. First, Baselines 1 and 2 exhibit poor safety performance, Trial μplanned μtrue Success (First, Last Lap Time over 10 Laps) Baseline 1 Baseline 2 Baseline 4 Baseline 5 Proposed                                                                                                                
+
+> 10.28 0.90 ××✓(12.7, 12.9) ✓(20.6, 18.6) ✓(17.4, 7.60) 20.47 0.90 ××✓(13.9, 13.4) ×✓(17.2, 7.32) 30.64 0.90 ××✓(13.4, 15.4) ✓(21.6, 19.1) ✓(17.7, 6.89) 40.81 0.90 ✓(5.58, 4.92) ×✓(15.7, 16.0) ✓(21.6, 18.3) ✓(16.9, 7.20) 50.90 0.90 ✓(5.54, 5.01) ✓(8.44, 7.52) ✓(15.4, 14.7) ✓(23.8, 17.7) ✓(17.1, 6.52) 61.12 0.90 ✓(5.58, 5.10) ✓(8.06, 7.90) ✓(17.6, 15.8) ✓(20.6, 18.6) ✓(17.3, 6.57) 71.36 0.90 ××✓(16.9, 17.1) ✓(21.4, 18.4) ✓(17.7, 7.22) 81.58 0.90 ××✓(17.2, 17.3) ×✓(17.5, 7.21) 91.73 0.90 ××✓(17.0, 17.1) ✓(21.2, 18.4) ✓(18.2, 7.72) 10 1.95 0.90 ××✓(17.2, 17.0) ✓(23.7, 18.9) ✓(17.9, 7.32) TABLE III: Trial-wise outcomes with μplanned ∼ U (0 .2,2.0) and fixed true friction μtrue = 0 .90 . A checkmark denotes completion of 10 laps without collision (with first and last lap times in seconds), while ×denotes failure.
+
+completing only 30% and 20% of trials successfully, respec-tively. As shown in Table III, failures occur across a wide range of μplanned , indicating that both purely nominal and weighted exploration strategies are unable to maintain safety under model mismatch. In contrast, the gatekeeper -based methods substan-tially improve safety, but the rollout-based gatekeeper 
+
+test remains probabilistic and therefore can still admit trajec-tories that violate constraints under realizations not captured during verification. This is evident in the results: Baseline 5 achieves only 80% safe runs despite using the gatekeeper. Baseline 3 (fallback only) is highly conservative, resulting in significantly larger lap times. While Baseline 4 permits nominal candidate trajectories that pass the gatekeeper 
+
+test under the current uncertainty set, it does not reduce un-certainty and therefore remains limited by conservativeness. Baseline 5 reduces uncertainty ( 96 .2% ), but its reliance on a weighted objective leads to overly aggressive informative behavior. In particular, a high weight on the information term causes the trajectory to deviate significantly from the racing line, after which the system repeatedly returns to the fallback policy. This results in degraded performance despite successful uncertainty reduction. The proposed Dual-gatekeeper achieves both safety and strong performance, reducing the average lap time to 
+
+8.07 s and achieving 95 .5% uncertainty reduction (Table II). From Table III, we observe that after initial laps with higher times, the final lap times consistently decrease to approximately 6.5–7.7 s, indicating that uncertainty reduction enables progressively less conservative behavior. Notably, only 23 .8% of the exploration budget is utilized, suggesting that a small number of informative trajectories are sufficient to significantly reduce uncertainty. Once the uncertainty is reduced, the framework predominantly com-mits high-performance trajectories, leading to improved lap times. Finally, performance remains influenced by the fallback policy, which constrains transitions between trajectories. In particular, even when nominal trajectories are safe, transi-tioning to the fallback policy may require conservative be-havior. Improving the fallback design could further enhance performance. IX. L IMITATIONS AND FUTURE WORK 
+
+First, the framework assumes that the unknown parameters are time-invariant. The corresponding feasible parameter set is updated over time via SMID and shrinks as informative data are incorporated. While standard in set-membership identification, this assumption is restrictive in scenarios with time-varying or drifting parameters (e.g., changing friction or wind). In such cases, the feasible set may not contract monotonically and previously collected data may become inconsistent. Future work will focus on extending the frame-work to handle time-varying parameters, for example through adaptive or forgetting-based set updates. Second, the current framework relies on a prescribed exploration budget to determine whether informative trajec-tories can be executed. In the limiting case where the budget is zero, only the conservative robust policy is executed. How-ever, this limitation arises from the absence of a principled way to quantify the impact of parametric uncertainty on the future mission cost. While reducing uncertainty intuitively leads to less conservative behavior and improved perfor-mance, the current framework does not provide a provable relationship between the size of the uncertainty set and the resulting robust cost. Future work will focus on developing methods that explicitly characterize how uncertainty affects future mission cost, enabling certificates that guarantee when uncertainty reduction leads to a net performance improve-ment, even under zero exploration budget. Third, budget feasibility is enforced using predicted cost, which preserves the validity of the framework. The prediction of uncertainty reduction is based on planned trajectories and does not account for discrepancies between planned and executed trajectories due to tracking error, disturbances, or model mismatch. As a result, the realized uncertainty reduc-tion may differ from the predicted value used in candidate selection. Future work will focus on execution-aware uncer-tainty prediction and improved alignment between predicted and realized outcomes. X. C ONCLUSION 
+
+We presented a dual control framework that integrates safety, budget feasibility, and active uncertainty reduction within a unified decision-making architecture. By treating informative trajectories as certifiable decisions and commit-ting only those that satisfy safety and cost constraints, the framework enables reliable execution while systematically reducing parametric uncertainty. Case studies demonstrate improved performance over conservative baselines, achieving lower mission cost and tighter uncertainty bounds. Future work will focus on incorporating safety directly into candi-date generation and developing principled methods to quan-tify the impact of uncertainty reduction on future mission cost. REFERENCES [1] K. B. Naveed, D. R. Agrawal, D. M. Cherenson, H. Lee, A. Gilbert, H. Parwana, V. S. Chipade, W. Bentz, and D. Panagou, “Enabling safety for aerial robots: Planning and control architectures,” arXiv preprint arXiv:2504.08601 , 2025. [2] B. T. Lopez, J.-J. E. Slotine, and J. P. How, “Dynamic tube mpc for nonlinear systems,” in 2019 American Control Conference (ACC) .IEEE, 2019, pp. 1655–1662. [3] T. Lew, R. Bonalli, and M. Pavone, “Risk-averse trajectory opti-mization via sample average approximation,” IEEE Robotics and Automation Letters , vol. 9, no. 2, pp. 1500–1507, 2023. [4] A. Sasfi, M. N. Zeilinger, and J. K¨ ohler, “Robust adaptive mpc using control contraction metrics,” Automatica , vol. 155, p. 111169, 2023. [5] D. Hanover, A. Loquercio, L. Bauersfeld, A. Romero, R. Penicka, Y. Song, G. Cioffi, E. Kaufmann, and D. Scaramuzza, “Autonomous drone racing: A survey,” IEEE Transactions on Robotics , vol. 40, pp. 3044–3067, 2024. [6] H. Xue, E. L. Zhu, J. M. Dolan, and F. Borrelli, “Learning model predictive control with error dynamics regression for autonomous racing,” in 2024 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2024, pp. 13 250–13 256. [7] M. F. AL-Sunni, H. Almubarak, K. Horng, and J. M. Dolan, “Lla-mpc: Fast adaptive control for autonomous racing,” in 2025 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) .IEEE, 2025, pp. 1969–1976. [8] M. Krinner, A. Romero, L. Bauersfeld, M. Zeilinger, A. Carron, and D. Scaramuzza, “MPCC++: Model Predictive Contouring Control for Time-Optimal Flight with Safety Constraints,” in Proceedings of Robotics: Science and Systems , Delft, Netherlands, July 2024. [9] D. R. Agrawal, R. Chen, and D. Panagou, “gatekeeper: Online safety verification and control for nonlinear systems in dynamic environ-ments,” IEEE Transactions on Robotics , 2024. [10] L. Blackmore, M. Ono, A. Bektassov, and B. C. Williams, “A proba-bilistic particle-control approximation of chance-constrained stochastic predictive control,” IEEE transactions on Robotics , vol. 26, no. 3, pp. 502–517, 2010. [11] K. Garg and D. Panagou, “Robust control barrier and control lyapunov functions with fixed-time convergence guarantees,” in 2021 American Control Conference (ACC) , 2021, pp. 2292–2297. [12] J. J. Choi, D. Lee, K. Sreenath, C. J. Tomlin, and S. L. Herbert, “Robust control barrier–value functions for safety-critical control,” in 
+
+2021 60th IEEE Conference on Decision and Control (CDC) , 2021, pp. 6814–6821. [13] S. Singh, A. Majumdar, J.-J. Slotine, and M. Pavone, “Robust online motion planning via contraction theory and convex optimization,” in 
+
+2017 IEEE International Conference on Robotics and Automation (ICRA) , 2017, pp. 5883–5890. [14] A. Feldbaum, “Theory of dual control,” Autom. Remote Control ,vol. 22, no. 1, pp. 3–19, 1961. [15] A. Parsi, D. Liu, A. Iannelli, and R. S. Smith, “Dual adaptive mpc using an exact set-membership reformulation,” IFAC-PapersOnLine ,vol. 56, no. 2, pp. 8457–8463, 2023. [16] L. Barcelos, A. Lambert, R. Oliveira, P. Borges, B. Boots, and F. Ramos, “Dual Online Stein Variational Inference for Control and Dynamics,” in Proceedings of Robotics: Science and Systems , 2021. [17] B. Luo, Y. Zhang, A. Dubey, and A. Mukhopadhyay, “Act as you learn: Adaptive decision-making in non-stationary markov decision processes,” in Proceedings of the 23rd International Conference on Autonomous Agents and Multiagent Systems , 2024, pp. 1301–1309. [18] A. Sasfi, M. N. Zeilinger, and J. K¨ ohler, “Robust adaptive mpc using control contraction metrics,” Automatica , vol. 155, p. 111169, 2023. [19] H. Hu, D. Isele, S. Bae, and J. F. Fisac, “Active uncertainty reduction for safe and efficient interaction planning: A shielding-aware dual control approach,” The International Journal of Robotics Research ,vol. 43, no. 9, pp. 1382–1408, 2024. [20] J. Sieber, A. Didier, and M. N. Zeilinger, “Computationally efficient system level tube-mpc for uncertain systems,” Automatica , vol. 180, p. 112466, 2025. [21] W. D. Compton, N. Csomay-Shanklin, C. Johnson, and A. D. Ames, “Dynamic tube mpc: Learning tube dynamics with massively parallel simulation for robust safety in practice,” in 2025 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2025, pp. 2613–2619. [22] T. Lew, R. Bonalli, and M. Pavone, “Sample average approximation for stochastic programming with equality constraints,” SIAM Journal on Optimization , vol. 34, no. 4, pp. 3506–3533, 2024. [23] J. J. Choi, D. Lee, K. Sreenath, C. J. Tomlin, and S. L. Herbert, “Robust control barrier–value functions for safety-critical control,” in 
+
+2021 60th IEEE Conference on Decision and Control (CDC) . IEEE, 2021, pp. 6814–6821. [24] L. Knoedler, O. So, J. Yin, M. Black, Z. Serlin, P. Tsiotras, J. Alonso-Mora, and C. Fan, “Safety on the fly: Constructing robust safety filters via policy control barrier functions at runtime,” IEEE Robotics and Automation Letters , 2025. [25] T. Lew, A. Sharma, J. Harrison, A. Bylard, and M. Pavone, “Safe active dynamics learning and control: A sequential exploration–exploitation framework,” IEEE Transactions on Robotics , vol. 38, no. 5, pp. 2888– 2907, 2022. [26] A. Parsi, A. Iannelli, and R. S. Smith, “Active exploration in adaptive model predictive control,” in 2020 59th IEEE Conference on Decision and Control (CDC) . IEEE, 2020, pp. 6186–6191. [27] T. Kim, J. Mun, J. Seo, B. Kim, and S. Hong, “Bridging Active Exploration and Uncertainty-Aware Deployment Using Probabilistic Ensemble Neural Network Dynamics,” in Proceedings of Robotics: Science and Systems , Daegu, Republic of Korea, July 2023. [28] A. Davydov, F. Djeumou, M. Greiff, M. Suminaka, M. Thompson, J. Subosits, and T. Lew, “First, learn what you don’t know: Active information gathering for driving at the limits of handling,” IEEE Robotics and Automation Letters , 2025. [29] M. Hibbard, A. P. Vinod, J. Quattrociocchi, and U. Topcu, “Safely: safe stochastic motion planning under constrained sensing via duality,” 
+
+IEEE Transactions on Robotics , vol. 39, no. 5, pp. 3464–3478, 2023. [30] M. Prajapat, J. K¨ ohler, M. Turchetta, A. Krause, and M. N. Zeilinger, “Safe guaranteed exploration for non-linear systems,” IEEE Transac-tions on Automatic Control , 2025. [31] A. Mesbah, “Stochastic model predictive control with active uncer-tainty learning: A survey on dual control,” Annual Reviews in Control ,vol. 45, pp. 107–117, 2018. [32] Z. Li, W.-H. Chen, and J. Yang, “A dual control perspective for exploration and exploitation in autonomous search,” in 2022 European Control Conference (ECC) . IEEE, 2022, pp. 1876–1881. [33] E. Arcari, L. Hewing, M. Schlichting, and M. Zeilinger, “Dual stochastic mpc for systems with parametric and structural uncertainty,” in Learning for Dynamics and Control . PMLR, 2020, pp. 894–903. [34] J. W. Knaup and P. Tsiotras, “Adaptive dual covariance steering with active parameter estimation,” in 2024 IEEE 63rd Conference on Decision and Control (CDC) . IEEE, 2024, pp. 659–664. [35] B. Johnson, Q. Zhu, R. Prucka, M. Barron, M. Figueroa-Santos, and M. Castanier, “Implicit dual-control for visibility-aware navigation in unstructured environments,” arXiv preprint arXiv:2507.04371 , 2025. [36] R. Soloperto, J. K¨ ohler, and F. Allg¨ ower, “Augmenting mpc schemes with active learning: Intuitive tuning and guaranteed performance,” 
+
+IEEE Control Systems Letters , vol. 4, no. 3, pp. 713–718, 2020. [37] B. Zhang, Z. Zhou, and R. Vasudevan, “Provably-Safe, Online System Identification ,” in Proceedings of Robotics: Science and Systems , Los Angeles, CA, USA, July 2025. [38] B. T. Lopez, “Adaptive robust model predictive control for nonlinear systems,” Ph.D. dissertation, MIT, 2019. [39] F. Li, M. Fu, W. Chen, F. Zhang, H. Zhang, H. Qu, and Z. Yi, “Improving exploration in actor–critic with weakly pessimistic value estimation and optimistic policy optimization,” IEEE Transactions on Neural Networks and Learning Systems , vol. 35, no. 7, pp. 8783–8796, 2024. [40] B. Tasdighi, N. Werge, Y.-S. Wu, and M. Kandemir, “Exploring pessimism and optimism dynamics in deep reinforcement learning,” in Seventeenth European Workshop on Reinforcement Learning , 2024. [41] T. Moskovitz, J. Parker-Holder, A. Pacchiano, M. Arbel, and M. Jor-dan, “Tactical optimism and pessimism for deep reinforcement learn-ing,” Advances in Neural Information Processing Systems , vol. 34, pp. 12 849–12 863, 2021. [42] K. B. Naveed, D. R. Agrawal, and D. Panagou, “A formal gate-keeper framework for safe dual control with active exploration,” arXiv preprint arXiv:2510.06351 , 2025. [43] M. Cohen and C. Belta, Adaptive Control Lyapunov Functions .Cham: Springer International Publishing, 2023, pp. 57–76. [Online]. Available: https://doi.org/10.1007/978-3-031-29310-8 4 [44] K. S. Narendra and A. M. Annaswamy, “Persistent excitation in adaptive systems,” International Journal of Control , vol. 45, no. 1, pp. 127–160, 1987. [45] M. Cohen and C. Belta, “Robust safety-critical control for systems with actuation uncertainty,” in Adaptive and Learning-Based Control of Safety-Critical Systems . Springer, 2023, pp. 117–131. [46] M. Milanese and C. Novara, “Set membership identification of non-linear systems,” Automatica , vol. 40, no. 6, pp. 957–975, 2004. [47] A. Majumdar and M. Pavone, “How should a robot assess risk? towards an axiomatic theory of risk in robotics,” in Robotics Research: The 18th International Symposium ISRR . Springer, 2019, pp. 75–84. 
+
+APPENDIX 
+
+A. Interpretation of the Predicted Width 
+
+This subsection interprets the predicted uncertainty width by relating it to the width obtained from realized measure-ments under idealized execution (no tracking error), and is not used by the algorithm or the main theoretical guarantees. 
+
+Assumption 3. On [ti, t f ], the executed (closed-loop) state– input trajectory coincides with the planned candidate p =(px, p u). The stacked regressor induced by the executed samples is Aact = [ Φ( x(tj ), u (tj )) ] Nj 
+
+> j=1
+
+∈ RM ×p, with 
+
+M = Nj c. Because execution matches the plan, Aact = A
+
+by (51). Measurements satisfy zj = Φ j θ⋆+wj with ∥wj ∥∞≤
+
+w for all j = 1 , . . . , N j .Given Assumption 3, consider the parameter set consistent with the realized measurements, 
+
+Θact := 
+
+n
+
+θ ∈ Θ : ∥z − Aact θ∥∞≤ w
+
+o
+
+, z = Aact θ⋆ + w, 
+
+(95) where Aact stacks the regressors induced by the executed samples. 
+
+Proposition 1. Under Assumption 3, for all d ∈ D ,
+
+wd(Θ act ) ≤ wd(Θ Nj (θ⋆)) ≤ min 
+
+
+
+wd(Θ) , 2 hEθ (d)
+
+
+
+,
+
+(96) where hEθ (d) admits the exact dual form (66). 
+
+Proof. Let eθ = θ − θ⋆. From the construction of Θact and 
+
+z = Aact θ⋆ + w, we have 
+
+θ ∈ Θact ⇐⇒ ∥ z − Aact θ∥∞≤ w, (97a) 
+
+⇐⇒ ∥ Aact (θ⋆ − θ) + w∥∞≤ w. (97b) Under Assumption 3, Aact = A. Hence, for each row a⊤ 
+
+> j
+
+of 
+
+A,
+
+|a⊤ 
+
+> j
+
+eθ − wj |≤ w ⇒ | a⊤ 
+
+> j
+
+eθ |≤ w + |wj |≤ 2w, ∀j. 
+
+Therefore ∥Ae θ ∥∞≤ 2w ( Lemma 2), which implies eθ ∈ E θ
+
+and 
+
+Θact ⊆ Θ ∩ (θ⋆ + Eθ ) = Θ Nj (θ⋆). (98) Since the width is monotone under set inclusion, 
+
+wd(Θ act ) ≤ wd(Θ Nj (θ⋆)) .
+
+Finally, translation invariance of the width and Lemma 3 yield 
+
+wd(Θ Nj (θ⋆)) ≤ min ( wd(Θ) , w d(Eθ )) ,
+
+with wd(Eθ ) = 2 hEθ (d). The dual representation (66) follows from strong LP duality. 
+
+B. Useful Properties 
+
+Corollary 1. This directional width is translation invariant: 
+
+wd(θ0 + C) = wd(C).
+
+wd(C + a) = sup 
+
+> x∈C
+
+d⊤(x + a) − inf  
+
+> x∈C
+
+d⊤(x + a)= ( sup 
+
+> x∈C
+
+d⊤x + d⊤a) − ( inf  
+
+> x∈C
+
+d⊤x + d⊤a)= sup 
+
+> x∈C
+
+d⊤x − inf  
+
+> x∈C
+
+d⊤x
+
+= wd(C).
+
+C. Autonomous Car Racing Dynamics & LIP 1) Dynamic Bicycle Model: The vehicle is modeled using a planar dynamic bicycle model with uncertain tire-road friction. The state is 
+
+x =
+
+h
+
+px py ψ vx vy ω δ
+
+i⊤
+
+∈ R7, (99) where (px, p y ) is the global position, ψ the yaw angle, vx
+
+and vy the body-frame longitudinal and lateral velocities, ω
+
+the yaw rate, and δ the steering angle. The control input is 
+
+u =
+
+h
+
+Fd Fb ˙δcmd 
+
+i⊤
+
+∈ R3, (100) where Fd and Fb denote drive and braking forces and ˙δcmd 
+
+is the commanded steering rate. The global kinematics are 
+
+˙px = vx cos ψ − vy sin ψ, (101a) 
+
+˙py = vx sin ψ + vy cos ψ, (101b) 
+
+˙ψ = ω. (101c) The tire slip angles are 
+
+αf = δ − tan −1
+
+ lf ω + vy
+
+vx + ϵ
+
+
+
+, αr = tan −1
+
+ lr ω − vy
+
+vx + ϵ
+
+
+
+,
+
+(102) where lf and lr denote the distances from the center of mass to the front and rear axles. The normal loads are 
+
+Fz,f = mgl r
+
+2l , Fz,r = mgl f
+
+2l , (103) where l = lf + lr . Lateral tire forces are modeled using a simplified Pacejka formulation 
+
+Fy,f = μF z,f sin 
+
+
+
+Cf tan −1(Bf αf )
+
+
+
+, (104a) 
+
+Fy,r = μF z,r sin 
+
+
+
+Cr tan −1(Br αr )
+
+
+
+, (104b) where μ is the tire friction coefficient. In this study, μ is treated as an unknown but bounded parameter to be learned online. The longitudinal tire forces are 
+
+Fx,f = 12 kdFd + 12 kbFb − 12 fr mg lr
+
+l , (105a) 
+
+Fx,r = 12 (1 − kd)Fd + 12 (1 − kb)Fb − 12 fr mg lf
+
+l , (105b) where kd and kb denote the front-axle drive and braking distributions, respectively, and fr is the rolling resistance coefficient. The body-frame dynamics are 
+
+˙vx = 1
+
+m
+
+
+
+2Fx,r + 2 Fx,f cos δ − 2Fy,f sin δ
+
+
+
+− 12 ρAC dv2 
+
+> x
+
++ ωv y ,
+
+(106a) 
+
+˙vy = 1
+
+m
+
+
+
+2Fy,r + 2 Fy,f cos δ + 2 Fx,f sin δ
+
+
+
+− ωv x,
+
+(106b) 
+
+˙ω = 1
+
+Jz
+
+
+
+− 2Fy,r lr + (2 Fy,f cos δ + 2 Fx,f sin δ)lf
+
+
+
+,
+
+(106c) 
+
+˙δ = ˙δcmd . (106d) 
+
+2) Linear in Parameter Form: For the uncertainty reduc-tion module, the model is written in linear-in-parameter form as 
+
+˙x = f0(x) + g0(x)u + Φ( x)μ + w(t), (107) where Φ( x) is the regressor associated with the friction parameter and w(t) is a bounded disturbance. Defining the lateral tire forces without the friction coefficient as 
+
+¯Fy,f (x) = Fz,f sin 
+
+
+
+Cf tan −1(Bf αf (x)) 
+
+
+
+, (108a) 
+
+¯Fy,r (x) = Fz,r sin 
+
+
+
+Cr tan −1(Br αr (x)) 
+
+
+
+, (108b) the regressor takes the form 
+
+Φ( x) = 
+
+
+
+000
+
+− 2 
+
+> m
+
+sin δ ¯Fy,f (x) 
+
+> 2
+> m
+
+( ¯Fy,r (x) + cos δ ¯Fy,f (x))  
+
+> 1
+> Jz
+
+( − 2lr ¯Fy,r (x) + 2 lf cos δ ¯Fy,f (x)) 0
+
+
+
+. (109) where μ is the tire friction coefficient. In this study μ is treated as an unknown but bounded parameter to be learned online. The resulting dynamics can be written in linear-in-parameter form 
+
+˙x = f0(x) + g0(x)u + Φ( x)μ + w(t), (110) where Φ( x) is the regressor associated with the friction parameter and w(t) is a bounded disturbance. 
+
+3) Nominal MPC Planner: The fallback policy corre-sponds to a conservative controller that follows the track centerline using a pure pursuit strategy with reduced speed, providing a safe fallback behavior that maintains large safety margins with respect to track boundaries. The nominal MPC solves 
+
+min    
+
+> x0: N,u 0: N−1
+> N−1
+
+X
+
+> k=0
+
+ℓ(xk, u k, ∆uk) + ℓN (xN ), (111) with stage cost 
+
+ℓ(xk, u k, ∆uk) = qtt2 
+
+> k
+
++ qeψ e2
+
+> ψ,k
+
++ qv (vx,k − vref ,k )2
+
++ qvy v2 
+
+> y,k
+
++ qω ω2
+
+> k
+
++ u⊤ 
+
+> k
+
+Ru k + ∆ u⊤ 
+
+> k
+
+R∆∆uk,
+
+(112) where ℓN (xN ) is the terminal cost. Informative candidate trajectories are generated using a nonlinear MPPI planner. The MPPI objective augments the racing cost with an information-seeking term (81). The resulting candidate trajectories are passed to the gatekeeper safety verification module, which evaluates safety through forward simulation under sampled uncertainty realizations and commits the trajectory that satisfies safety and budget constraints while achieving the highest predicted uncertainty reduction. 
+
+4) Fallback Policy : A conservative safety policy designed offline. It is implemented as a low-speed pure pursuit controller tracking the centerline with large safety margins across the admissible range of μ. Candidate trajectories are formed by concatenating a policy segment with the fallback policy. Conservative candidates use nominal segments, while informative candidates use informative segments (Figure 4). 
+
+5) Nominal Mission Policy : A performance-oriented con-troller that tracks a racing line to minimize lap time. It is gen-erated using a linearized MPC formulation (Appendix C.3) and does not account for uncertainty. 
+
+6) Informative Policy : A controller that excites the dy-namics to reduce uncertainty in μ. It may deviate from nom-inal behavior to improve parameter estimation. Trajectories are obtained from an excitation-driven optimization problem (Appendix C).
