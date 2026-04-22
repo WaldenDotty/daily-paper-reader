@@ -1,0 +1,987 @@
+Title: Differentiable Satellite Constellation Configuration via Relaxed Coverage and Revisit Objectives
+
+URL Source: https://arxiv.org/pdf/2604.19062v1
+
+Published Time: Wed, 22 Apr 2026 00:46:31 GMT
+
+Number of Pages: 19
+
+Markdown Content:
+# DIFFERENTIABLE SATELLITE CONSTELLATION CONFIGURATION VIA RELAXED COVERAGE AND REVISIT OBJECTIVES 
+
+Shreeyam Kacker 
+
+Department of Aeronautics and Astronautics MIT 
+
+shreeyam@mit.edu 
+
+Kerri Cahoy 
+
+Department of Aeronautics and Astronautics MIT 
+
+kcahoy@mit.edu 
+
+April 22, 2026 
+
+## ABSTRACT 
+
+Satellite constellation design requires optimizing orbital parameters across multiple satellites to maximize mission specific metrics. For many types of mission, it is desirable to maximize coverage and minimize revisit gaps over ground targets. Existing approaches to constellation design either restrict the design space to symmetric parametric families such as Walker constellations, or rely on metaheuristic methods that require significant compute and many iterations. Gradient-based optimization has been considered intractable due to the non-differentiability of coverage and revisit metrics, which involve binary visibility indicators and discrete max operations. We introduce four continuous relaxations: soft sigmoid visibility, noisy-OR multi-satellite aggregation, leaky integrator revisit gap tracking, and LogSumExp soft-maximum, which when composed with the 
+
+∂SGP4 differentiable orbit propagator, yield a fully differentiable pipeline from orbital elements to mission-level objectives. We show that this scheme can recover Walker-Delta geometry from irregular initializations, and discovers elliptical Molniya-like orbits with apogee dwell over extreme latitudes from only gradients. Compared to simulated annealing (SA), genetic algorithm (GA), and differential evolution (DE) baselines, our gradient-based method recovers Walker-equivalent geometry within 
+
+∼750 evaluations, whereas the three black-box baselines plateau at with significantly worse revisit even with roughly four times the evaluation budget. 
+
+Keywords: satellite constellation design, differentiable programming, orbit propagation 
+
+§ https://github.com/shreeyam/differentiable_eo 
+
+## 1 Introduction 
+
+Designing satellite constellations is a fundamental problem in space mission design, across applications such as Earth Observation (EO), telecommunications, and navigation. The design space is high dimensional, with each spacecraft bringing up to six degrees of freedom corresponding to their orbital elements, and a wide range of often competing objectives to optimize over—for example, coverage and revisit over targets of interest, daytime illumination for optical payloads, and downlink contact time with ground stations. Traditional approaches address this complexity in one of two ways. Parametric families such as Walker Delta, Walker Star [ 1 ], and Flower constellations [ 2 ] reduce the design space to a fixed set of parameters but are inherently symmetric, making them unable to capture non-uniform objectives. Metaheuristic methods such as genetic algorithms can handle arbitrary objectives but require thousands to millions of simulator rollouts [3]. For EO missions, the design problem has additional complexity—coverage and daytime revisit requirements may be non-uniform across ground targets, with additional constraints on data downlink. The combinatorial nature of the problem makes metaheuristic methods computationally expensive [ 3 ], with computational cost growing rapidly with the number of satellites and the number of free parameters. 
+
+> arXiv:2604.19062v1 [cs.RO] 21 Apr 2026
+
+Differentiable Constellation Design Gradient-based optimization has been previously attempted for constellation design, but with limited success. Paek et al. [3] found the problem poorly conditioned for gradient-based methods, with difficulty even achieving convergence. Previous work has been limited by the non-differentiability of the computational graph, requiring finite difference approximations of gradients [ 3 ]. Recent work by Acciarini et al. [4] addresses this gap by developing ∂SGP4, an end-to-end differentiable SGP4 orbit propagator. However, the coverage and revisit metrics themselves remain non-differentiable, due to requiring binary visibility indicators, Boolean OR operations, and max functions. In this work we focus on constellation configuration: given a fixed fleet of N satellites, we assign orbital elements to best meet mission-level coverage and revisit objectives. We make the following contributions: 1. Four continuous relaxations that make coverage and revisit objectives differentiable: a soft sigmoid for visi-bility, a noisy-OR for multi-satellite aggregation, a leaky integrator for revisit gap tracking, and a LogSumExp soft-maximum for worst-case revisit (Figure 2). 2. An end-to-end differentiable pipeline from orbital elements to mission-level coverage metrics, composed with ∂SGP4 [4] and optimized with the AdamW optimizer (Figure 1). 3. Demonstration on weighted target optimization , recovering Molniya-like orbits for coverage over extreme latitudes (§4). 
+
+Paper organization. We review prior work on constellation design and differentiable physics simulation (§2) before formulating the exact problem and introducing the relaxations required to make constellation configuration differentiable (§3). We then conduct experiments on a toy problem, Walker-delta recovery from an irregular initialization, and weighted regional target optimization (§4), benchmarking against tuned SA/GA/DE baselines with ablations isolating each design choice. We close (§5) with the scope of the configuration problem and the mission-driven constraints that fit naturally into the same method. gradient optimization   
+
+> Constellation Parameters
+> Ground Targets
+> Differentiable
+> Orbit Propagator
+> Relaxed Metrics Loss
+> initial : poorly spaced constellation optimized : well-spaced constellation, optimized for coverage and revisit over a set of ground targets
+
+Figure 1: Overview of end-to-end differentiable constellation optimization. Top: Starting from a constellation with irregularly spaced orbital planes and satellites, gradient optimization through the differentiable pipeline recovers a well-spaced constellation optimized for both coverage and revisit for a set of ground points. Bottom: Orbital parameters 
+
+θi are propagated through a differentiable orbit propagator [ 4] and evaluated against a set of ground targets gj to produce relaxed coverage and revisit metrics ( ˜C, ˜∆max ), which form a differentiable loss L. Gradients ∇θ L flow back to the orbital parameters via reverse-mode automatic differentiation and are consumed by the optimizer to produce the next iterate. 2Differentiable Constellation Design 
+
+## 2 Related Work 
+
+2.1 Constellation Design and Optimization 
+
+Parametric constellations significantly reduce the number of design parameters, with the Walker Delta pattern [ 1]requiring only the number of planes, satellites per plane, and inclination. Flower constellations extend these ideas by using elliptical orbits to form specific “harmonics” in revisit rates to produce repeating ground tracks [ 2], allowing for directed coverage over a specific area. These parametric families are efficient but inherently symmetric, and cannot be tailored to non-uniform or mission-specific coverage requirements without breaking the symmetry assumptions that make them tractable. For non-parametric design, previous work has relied primarily on metaheuristic methods. Paek et al. [3] uses genetic algorithms and simulated annealing to reconfigure constellations, optimizing for global coverage and regional revisit over five design variables, requiring approximately 2500 total evaluations through computationally expensive STK orbit simulations. They also attempted gradient-based optimization via finite differences and found it “extremely poorly conditioned,” with convergence rarely achieved. In a survey of 144 papers on constellation design, Choo et al. [5] finds that gradient methods appear as a design approach in only two of the surveyed articles, making it among the least common methods—ranking far behind genetic algorithms, simulated annealing, and analytical approaches. Neither of the two entries actually uses analytic gradients. The first, Fraire et al. [6] , is labeled a gradient method but in fact uses a greedy neighbor search over discrete parameters (number of satellites, planes, inclination) with no gradients computed. The second, Abdelkhalik and Gad [7] , pairs a genetic algorithm with a “second-order gradient” refinement step to cover ground sites under J2 perturbations and explicitly notes that the fitness landscape contains numerous local minima that cause classical optimization methods to fail—but the gradient refinement is applied to a single-orbit subproblem rather than the multi-satellite design variables, so the overall design loop remains heuristic. Separately, Williams Rogers et al. [8] formulate constellation configuration as a collection of mixed-integer linear programs that select which satellites to activate from a pre-enumerated set of orbital slots, yielding provably optimal solutions for coverage and revisit objectives; however, the orbital slots and their underlying geometry (altitude, inclination, eccentricity) must be fixed a priori, so the method cannot discover improved orbit parameters. We benchmark against SA/GA/DE baselines quantitatively in §4.5. Hwang et al. [9] demonstrates true gradient-based optimization of a satellite system through OpenMDAO (Open-Source Framework for Multidisciplinary Design, Analysis, and Optimization), optimizing a single satellite’s subsystem design across seven coupled disciplines with over 25,000 design variables, with gradient computation made tractable with adjoint state methods. Their work utilizes gradient-based objectives combined with orbit-dependent parameters, such as solar panel angles, battery sizing, and communication scheduling, to optimize a single spacecraft’s operation. 
+
+2.2 Differentiable Physics and Simulation 
+
+Differentiable programming [ 10 ] allows for gradients to be obtained across domains even where forward models are complex but smooth. The benefits of differentiable programming have been made significantly more accessible through frameworks that perform automatic differentiation, such as PyTorch and JAX. Hu et al. [11] demonstrated differentiable physical simulators targeting robotics and fluid dynamics, and Degrave et al. [12] develops differentiable physics engines for contact-rich robotics. For continuous relaxations applied to parameterized categorical distributions, Gumbel-Softmax reparameterization [ 13 ] is frequently used to compute analytic gradients. Kamra and Liu [14] proves a coverage gradient theorem for spatial multi-resource coverage objectives, providing an estimator for the gradient that can be used for optimization of sensor placement, via spatial discretization and implicit boundary differentiation applied to 2D planar sensor networks. In astrodynamics, Acciarini et al. [4] introduces ∂SGP4, a PyTorch reimplementation of the SGP4/SDP4 orbit propagation algorithm, which is forward mode differentiable. Naylor et al. [15] extends this direction by combining a JAX-based differentiable SGP4 propagator with Mitsuba [ 16 ], a differentiable renderer, to optimize trajectories for spacecraft-to-spacecraft inspection operations, demonstrating end-to-end forward-mode differentiation through orbit propagation chained with a rendering pipeline. This work builds on ∂SGP4 by introducing differentiable coverage and revisit objectives that enable direct optimization of mission performance metrics. 3Differentiable Constellation Design 
+
+## 3 Method 
+
+3.1 Problem Formulation 
+
+We consider a constellation of N satellites, each parameterized by a two-line element (TLE) set. Each satellite brings up to six degrees of freedom corresponding to their orbital elements, [a, e, i, Ω, ω, M]⊤, corresponding to semi-major axis, eccentricity, inclination, right ascension of the ascending node (RAAN), argument of periapsis, and mean anomaly, respectively. We fix the remaining TLE parameters corresponding to mean motion n, drag term B∗, and secular rates ˙n,
+
+¨n to keep the constellation configuration static over the optimization horizon ( 24 h in this work). Given a grid of J ground target points G = {g1, . . . , gJ } on the Earth’s surface and a time horizon [0 , T ] discretized into K steps with spacing δt = T / (K − 1) , we seek to maximize coverage over the Earth and minimize the mean worst-case revisit gap. 
+
+Propagation. Each satellite’s TLE elements are propagated through ∂SGP4 [ 4] to produce position vectors ri(tk) in the True Equator Mean Equinox (TEME) reference frame. These are rotated to the Earth-Centered Earth-Fixed (ECEF) frame via the Greenwich Mean Sidereal Time angle θGMST (tk):
+
+rECEF  
+
+> i
+
+(tk) = Rz (θGMST (tk)) rTEME  
+
+> i
+
+(tk), (1) where Rz (θ) is the standard rotation matrix about the z-axis. This single-axis rotation is an approximation and neglects polar motion; the complete TEME-to-ECEF transformation requires an additional rotation between the Earth’s instantaneous rotation axis and the ECEF pole [ 17 ]. For the 24 h propagation horizons considered in this work, polar-motion offsets are on the order of tenths of arcseconds, corresponding to sub-kilometer position errors. These errors are small relative to the ∼2200 km ground footprint of a satellite at 550 km altitude with 10 ◦ minimum elevation. Longer horizons require the full IAU 2006/2000A chain; we return to this in §5. 
+
+Elevation angle. The elevation angle from ground point gj to satellite i at time tk is 
+
+αij (tk) = arcsin 
+
+ (rECEF  
+
+> i
+
+(tk) − gj ) · ˆgj
+
+∥rECEF  
+
+> i
+
+(tk) − gj ∥
+
+
+
+, (2) where ˆgj = gj /∥gj ∥ is the local vertical unit vector at the ground point. A satellite is visible when αij ≥ αmin , where we consider the minimum elevation angle αmin = 10 ◦; the specific threshold depends on the mission type (payload beamwidth, link budget, atmospheric-loss tolerance) and is a user-supplied constant. 
+
+Coverage and revisit. Instantaneous coverage at ground point gj at time tk is the indicator function for when at least one satellite is visible: 
+
+Cj (tk) = 1
+
+" N_
+
+> i=1
+
+αij (tk) ≥ αmin 
+
+#
+
+. (3) The instantaneous coverage fraction over the full set of ground points G is then 
+
+C = 1
+
+KJ 
+
+> K
+
+X
+
+> k=1
+> J
+
+X
+
+> j=1
+
+Cj (tk). (4) The revisit gap at ground point gj is the elapsed time since the most recent coverage event: 
+
+∆j (tk) = tk − tk′ , k′ = max {k′′ ≤ k : Cj (tk′′ ) = 1 } (5) and the mean worst-case revisit across all ground points is then 
+
+∆max = 1
+
+J
+
+> J
+
+X
+
+> j=1
+
+max  
+
+> k
+
+∆j (tk). (6) We now introduce the relaxations required to make these metrics differentiable. 4Differentiable Constellation Design 
+
+3.2 Relaxation 1: Soft Visibility 
+
+We replace the hard step function with a sigmoid (Figure 2a): 
+
+˜cij (tk) = σ
+
+ αij (tk) − αmin 
+
+τ
+
+
+
+, σ(x) = 11 + e−x , (7) where τ > 0 controls the sharpness. As τ → 0 this recovers the hard indicator. This relaxation is analogous to the temperature-scaled softmax in Gumbel-Softmax [ 13 ], with unbounded support and non-zero gradient throughout. This pairs with the noisy-OR of §3.3: the product Q
+
+> i
+
+(1 − ˜cij ) never zero-clips, and gradients flow through every factor. In contrast, a clamped ramp function saturates to 0 below a cutoff and loses the gradient for distant satellites. tanh and erf 
+
+also share these properties, but are equivalent to sigmoid up to reparameterization (Appendix C). 
+
+3.3 Relaxation 2: Noisy-OR Coverage Aggregation 
+
+Starting with the Boolean OR operator in Equation 3, treating each ˜cij (tk) as an independent detection probability, the noisy-OR [18] relaxation gives (Figure 2b): 
+
+˜Cj (tk) = 1 −
+
+> N
+
+Y
+
+> i=1
+
+(1 − ˜cij (tk)) . (8) This function monotonically increases in each ˜cij , and recovers the hard OR when all inputs are in {0, 1}. This relaxation also intrinsically handles overlapping coverage: additional coverage of a point produces diminishing marginal gain, preventing the optimizer from clustering satellites. Noisy-OR is the unique member of the probabilistic t-conorm family [ 19 ] that is smooth, bounded in [0 , 1] , and strictly increasing in each argument; the other smooth alternative, the bounded-sum t-conorm min(1 , P 
+
+> i
+
+˜cij ), clips at 1 and has zero-gradient regions once multiple satellites cover a single point (Appendix C). The soft coverage fraction over the full set of ground points G with soft visibility and noisy-OR aggregation then becomes 
+
+˜C = 1
+
+KJ 
+
+> K
+
+X
+
+> k=1
+> J
+
+X
+
+> j=1
+
+˜Cj (tk). (9) 
+
+3.4 Relaxation 3: Leaky Integrator for Revisit Gaps 
+
+The revisit gap at a ground point is the time elapsed since the most recent coverage event. Computing this gap requires identifying discrete transitions which we instead approximate with a leaky integrator recurrence [20] (Figure 2c): 
+
+˜∆j (tk) = 
+
+ ˜∆j (tk−1) + δt 
+
+
+
+·
+
+
+
+1 − ˜Cj (tk)
+
+
+
+, ˜∆j (t0) = 0 . (10) When the ground point gj is covered ( ˜Cj ≈ 1), the accumulated gap is multiplied by approximately zero, resetting it. When the point is not covered ( ˜Cj ≈ 0), the gap grows by δt . This recurrence is fully differentiable and its maximum over time approximates the true worst-case revisit gap at each ground point. We use this form because the multiplicative reset is exact on binary inputs and keeps the gap in minutes. Alternatives (exponential decay, piecewise-soft reset gates, mean-square-gap aggregates) lose one or the other (Appendix C). 
+
+3.5 Relaxation 4: LogSumExp Soft-Maximum 
+
+The soft worst-case revisit gap at ground point gj is max k ˜∆j (tk), which has zero gradients almost everywhere. We replace it with the LogSumExp smooth maximum [21] (Figure 2d): 
+
+e∆max  
+
+> j
+
+= β · log 
+
+> K
+
+X
+
+> k=1
+
+exp ˜∆j (tk)
+
+β
+
+!! 
+
+, (11) where β is a sharpness parameter, for which we assign β = 10 min . This relaxation satisfies the inequality 
+
+max k ˜∆j (tk) ≤ e∆max  
+
+> j
+
+≤ max k ˜∆j (tk) + β log K, providing an upper bound. We use LogSumExp because it is smooth, bounded within β log K of the true maximum, and has a single sharpness parameter β in the same units as the gap. Mellowmax differs from LogSumExp by an additive constant and hence admits identical optimizer dynamics. 5Differentiable Constellation Design Other soft-max operators ( p-norm [ 21 ], Boltzmann softmax [ 22 ]) are equally permissible here but are not utilized in this work (Appendix C). The mean worst-case revisit across all ground points is then 
+
+˜∆max = 1
+
+J
+
+> J
+
+X
+
+> j=1
+
+e∆max  
+
+> j
+
+. (12) Coverage and revisit objectives have different sensitivity to the sigmoid temperature τ in Equation 7: there exists an additive bias for coverage but a multiplicative bias for the leaky integrator. Hence, it is desirable to separate these parameters. We split τ into τcov for the coverage objective and τrev for the revisit computation, calibrated in §3.7. −10 0 10              
+
+> α−αmin [deg] 0.00.51.0
+> cij
+> Step
+> τ= 2 0.00.51.0
+> c1
+> 0.00.51.0
+> 1 − ∏2
+> i=1 (1  − ci)
+> c2= 0 .7
+> c2= 0 .3
+> c2= 0 010 20 Time step 050 Gap ∆ j [min]  Coverage event 20 40 Temperature τr
+> 50 75 100
+> ˜∆max
+> LSE True max
+
+(a) Soft sigmoid (b) Noisy-OR (c) Leaky integrator (d) LogSumExp Figure 2: The four continuous relaxations used in this work to produce a differentiable loss function. 
+
+3.6 Combined Objective 
+
+The total loss combines coverage maximization with revisit minimization: 
+
+L(x) = − ˜C + λ ˜∆max , (13) where x collects all free and reparameterized (§3.8) orbital parameters and λ is a weighting coefficient. The coverage term is instantaneous: it penalizes overlapping fields of view and saturates once satellites are well-separated. The revisit term, aggregated over the full simulation, continues providing gradients after coverage plateaus. Although both terms push toward spacing satellites apart, they operate at different scales—coverage quickly separates clusters, while revisit works globally. For objectives that are not geodesically uniform, the sums over ground points can be replaced with weighted sums over a discrete target set (§4.4). 
+
+3.7 Tightness of the Composed Relaxation 
+
+Each of the four relaxations is individually tight: the soft sigmoid recovers the hard step as τ → 0; the noisy-OR is exact when its inputs are binary; the leaky integrator is exact when coverage is in {0, 1}; and the LogSumExp satisfies max k xk ≤ LSE ≤ max k xk + β log K. However, the composition of these relaxations does not inherit these guarantees, because each relaxation receives the soft output of the previous one rather than the binary values for which it was designed. The interaction introduces two competing biases: 
+
+Phantom coverage (gap shortening). The soft sigmoid coverage indicator assigns nonzero coverage ˜cij > 0 to satellites slightly below the visibility threshold ( αij < α min ). This phantom coverage propagates through the noisy-OR and partially resets the leaky integrator, producing gaps that are shorter than the true discrete gaps. 
+
+Incomplete reset (gap lengthening). Conversely, a satellite well above the threshold produces ˜cij ≈ 0.99 , not exactly 1. The leaky integrator retains a fraction (1 − ˜Cj ) ≈ 0.01 of the accumulated gap at each coverage event. Over time, this residual prevents the gap from fully resetting, producing relaxed gaps that are longer than the true gaps during sustained coverage. The LogSumExp adds a further upward bias of at most β log K.These effects compete: phantom coverage shortens gaps near the visibility boundary, while incomplete resets and the LogSumExp lengthen them. The net bias depends on the specific geometry and is neither a guaranteed upper nor lower bound on the true objective. 6Differentiable Constellation Design The split sigmoid temperatures introduced in §3.5 provide a parameter for tuning this effect. Under a shared τ , phantom coverage from clustered below-threshold satellites compounds through the noisy-OR and partially resets the leaky integrator, so the relaxed loss can rank clustered solutions above well-spread ones at the same hard metric. A grid search (Appendix B) shows that τcov ≫ τrev restores the correct ordering of converged solutions while keeping smooth coverage gradients. However, this competes with optimization performance: ablation (b) in §4.6 finds that from a reasonable initialization, shared τ converges better than either split variant we tried. We therefore use shared τ in all experiments noting that certain problems may benefit from separated temperatures. 
+
+3.8 Optimization orbital parameters ECI vectors across K steps soft coverage across targets, sats all-sat coverage    
+
+> total soft coverage
+> all-sat revisit gap
+> soft mean max revisit
+> +
+> loss
+> -
+> R1 R2 R3 R4
+
+Figure 3: Computational graph for differentiable constellation optimization. Orbital parameters θi are propagated to ECI position vectors {ri(tk)} across K timesteps. Four continuous relaxations (orange, R1 –R4 ) transform the discrete coverage and revisit objectives into relaxed, differentiable objectives: R1 soft sigmoid visibility over targets and satellites, R2 noisy-OR aggregation to all-satellite coverage, R3 leaky integrator revisit gap accumulation, and 
+
+R4 LogSumExp soft-maximum over time. The coverage branch produces total soft coverage ˜C; the revisit branch produces the soft mean worst-case revisit ˜∆max . Both feed into the loss L, and gradients ∇θ L flow back via reverse-mode automatic differentiation (dashed, pink). 
+
+Computational graph. The full forward pass composes the ∂SGP4 propagator with the four relaxations into a single differentiable graph (Figure 3). Every operation is implemented in PyTorch [ 23 ], so ∇θi L is computed via reverse-mode automatic differentiation through the entire graph. The Jacobian ∂rTEME  
+
+> i
+
+/∂ xi is handled inside ∂SGP4: it is dense and time-varying—a small change in RAAN rotates the entire orbital plane, affecting position at all future time steps. 
+
+Interval constraints and reparameterization. Without constraints, the optimizer trivially raises altitude until the satellite footprint covers the full ground grid. We enforce interval constraints (e.g. LEO altitude bounds) via sigmoid reparameterization, mapping unconstrained variables θi to valid elements xi:
+
+xd = ℓd + ( ud − ℓd) σ(θd) ⇒ ∂x d
+
+∂θ d
+
+= ( ud − ℓd) σ(θd)(1 − σ(θd)) , (14) for bounded parameters (e.g. inclination) with bounds [ℓd, u d], and xd = θd (identity) for periodic parameters (RAAN, mean anomaly) where wrapping is natural. This reparameterization eliminates the need for projected gradient or constrained optimization methods. For coupled constraints, such as requiring a minimum perigee altitude regardless of eccentricity, the per-element sigmoid is insufficient since perigee rp = a(1 − e) couples semi-major axis and eccentricity. For this case, we reparameterize in (perigee altitude, excess altitude) space: 
+
+rp = rmin  
+
+> p
+
++ ( rmax  
+
+> p
+
+− rmin  
+
+> p
+
+) σ(θrp ), (15) 
+
+δr = δr max σ(θδr ), (16) 
+
+a = R⊕ + rp + 12 δr, e = δr 
+
+2a , (17) where rp is the perigee altitude, δr = ra − rp ≥ 0 is the excess altitude (apogee minus perigee), and both are independently sigmoid-bounded. This construction guarantees rp ≥ rmin  
+
+> p
+
+and e ≥ 0 by construction, while allowing the optimizer to freely explore eccentric orbits. 
+
+Plane constraints via gradient accumulation. Conventionally, satellite constellations are designed with multiple satellites sharing a single plane, to allow for launching multiple satellites per launch vehicle. Rather than enforcing these 7Differentiable Constellation Design per-plane constraints as hard constraints, we average the gradients per-plane: if satellites in a plane share a single RAAN parameter, the gradient is the average of per-satellite contributions. The averaged gradient is applied to the shared parameter, and the updated value is synchronized across all satellites in the plane after each optimizer step. This reduces the effective dimensionality without modifying the forward pass, and generalizes to any shared parameters: per-plane inclination sharing, altitude coupling across the constellation, or any grouping governed by mission constraints. 
+
+## 4 Experiments 
+
+We evaluate the framework on three experiments: a toy problem validating gradient correctness, a uniform-coverage baseline that recovers known-optimal geometries, and a weighted target optimization on a problem class where parametric families fail. 
+
+4.1 Common Setup 
+
+All experiments use ∂SGP4 [ 4 ] for orbit propagation with PyTorch autograd for gradient computation, and AdamW with learning rate η = 10 −2 for optimization. Circular orbits are assumed and held stationary by zeroing the mean-motion gradient. The minimum elevation angle for all ground points is αmin = 10 ◦. Coverage and revisit metrics are evaluated over a 24 h propagation horizon discretized into K = 240 time steps on a ground grid of 36 × 72 = 2592 points spanning ±70 ◦ latitude, with cos( lat ) weighting on each cell to correct for area distortion. In each experiment the satellite count N and plane structure are fixed ahead of time and chosen to match the intended comparison geometry (e.g. Walker 24/6/1 in §4.3) as we are primarily looking at configuration and not sizing. Specific relaxation parameters, optimizer settings, and revisit weight λ vary per experiment and are stated in each subsection; Table 6 in Appendix A collects all per-experiment values in one place. 
+
+4.2 Experiment 1: Toy Problem 
+
+To validate that the relaxed objectives produce correct gradients and results, we consider the simplest non-trivial constellation design problem: two satellites in a single orbital plane at 550 km altitude with inclination fixed at 60 ◦ and RAAN fixed at 0◦, optimizing only their mean anomalies M1 and M2. We use relaxation parameters τ = 2 ◦ (shared), 
+
+β = 10 min , and λ = 2 .0.The optimal solution is known analytically: the two satellites should be separated by 180 ◦ in mean anomaly to maximize coverage and revisit rate within the shared orbital plane. This reduces the problem to two free parameters, allowing the full loss landscape to be visualized. 
+
+Loss landscape. We evaluate both the relaxed loss and hard (discrete) metrics on a dense grid over (M1, M2) ∈
+
+[0 , 360) 2◦. Figure 4 shows the resulting landscapes. Both landscapes exhibit a clear global minimum along the anti-diagonal |M 1 − M 2| = 180 ◦, with no local minima. The relaxed landscape is visibly smoother than the hard landscape while preserving the same basin structure, confirming that the relaxations provide a smooth surface amenable to gradient descent without significantly distorting the underlying objective. 
+
+Gradient descent trajectory. Starting from a clustered initial configuration where M1 = 179 ◦, M2 = 181 ◦ the optimizer converges to |M 1 − M 2| ≈ 180 ◦ within 800 iterations. The trajectory (overlaid in white on Figure 4) follows the gradient field smoothly toward the minimum without oscillation, validating that the composed relaxations produce well-conditioned gradients. 
+
+4.3 Experiment 2: Uniform Coverage Baseline 
+
+We now apply our gradient-based scheme to a well-understood uniform coverage problem. We optimize N = 24 
+
+satellites in 6 orbital planes (4 per plane) with inclination fixed at 60 ◦, a canonical small-scale Walker configuration with a well-defined optimum (Walker 24/6/1: six RAAN-equispaced planes, 4 satellites per plane, inter-plane phasing 
+
+f = 1 ). 24 satellites is large enough to exhibit the multi-modal basin structure we are interested in while remaining small enough to visualize full RAAN/MA trajectories (Figure 5b) and to serve as a tractable comparison target for the black-box baselines in §4.5. RAAN and mean anomaly are free, with RAAN shared within each plane, yielding 
+
+6 + 24 = 30 effective degrees of freedom. 
+
+Initial configuration. We deliberately initialize the constellation with irregular RAAN offsets 
+
+[0 , 30 , 120 , 200 , 210 , 300] ◦ far from uniform spacing, and random mean anomalies. The classical Walker-delta 24 /6/1
+
+pattern uses 60 ◦ RAAN spacing. 8Differentiable Constellation Design 0 100 200 300  
+
+> M1[deg] 0100 200 300
+> M2 [deg]
+
+Relaxed loss     
+
+> 0100 200 300
+> M1[deg] 0100 200 300
+> M2 [deg]
+
+Relaxed coverage [%]     
+
+> 0100 200 300
+> M1[deg] 0100 200 300
+> M2 [deg]
+
+Relaxed revisit [min]     
+
+> 0100 200 300
+> M1[deg] 0100 200 300
+> M2 [deg]
+
+Hard loss     
+
+> 0100 200 300
+> M1[deg] 0100 200 300
+> M2 [deg]
+
+Hard coverage [%]     
+
+> 0100 200 300
+> M1[deg] 0100 200 300
+> M2 [deg]
+
+Hard revisit [min] 
+
+> 1340 1360 1380
+> 2.53.03.5
+> 670 680 690
+> 1380 1400 1420 1440
+> 2.02.53.03.5
+> 690 700 710 720
+
+Figure 4: Two-satellite mean anomaly optimization over (M1, M2) ∈ [0 , 360) 2 ◦. Top row: relaxed metrics (coverage, revisit, combined loss). Bottom row: hard metrics on the same grid. AdamW optimizer path shown in white, starting from (179 ◦, 181 ◦) with a gold star marking the converged point near the anti-diagonal |M 1 − M 2| = 180 ◦. The relaxed landscape preserves the basin structure of the hard landscape while providing smooth gradients. 
+
+Results. Over 1000 iterations, the optimizer recovers near-uniform RAAN spacing from the irregular initialization, approaching the Walker-delta geometry without domain-specific inductive biases. The two well-spread initial planes at 
+
+0◦ and 300 ◦ relax outwards only slightly, while the two clustered pairs at (30 , 120) ◦ and (200 , 210) ◦ fan apart to fill the gaps left by the other planes, optimizing to a Walker-Delta 60 ◦ spacing up to rotational symmetry about the z-axis. Metrics are summarized in Table 1, and Figure 5 shows convergence, spatial coverage redistribution, and trajectory of each satellite in RAAN/MA configuration space. Table 1: Recovery of Walker Delta constellation through gradient optimization. 
+
+Metric Initial Optimized Walker 24/6/1 
+
+Hard coverage [%] 32.41 40.34 40.33 Hard mean worst-case revisit [min] 136.2 48.0 48.0 Soft coverage [%] 41.86 50.32 50.32 Soft mean worst-case revisit [min] 127.5 73.5 73.5 
+
+Loss landscape. To investigate the structure of the loss landscape, we visualize it using per-trajectory PCA [ 24 ]: projecting the optimization trajectory for each of the four initializations from the hyperparameter calibration (Ap-pendix B) onto its two principal components and evaluating the loss on that 2D slice. Within each slice, the relaxed and hard landscapes agree up to smoothing in every case, confirming the relaxations preserve local basin structure. The optimizer descends cleanly: the near-uniform and moderate initializations land in the same low-loss region, while the two clustered starts settle into separate local minima. The global slice reveals the multi-modal structure of the loss landscape, on a more zoomed out scale than any single PCA slice exposes, with many local minima, and significantly distorted from the hard metric structure. The smooth local structure means gradient descent is well-conditioned from any start, but initialization determines which local minima the optimizer will descend to, motivating the multi-start ensemble in Ablation (e) (§4.6) and framing the Walker recovery of Table 1 as representative of the well-spread-init basin rather than a unilateral guarantee. 9Differentiable Constellation Design 0 200 400 600 800 1000 
+
+Iteration 
+
+34 
+
+36 
+
+38 
+
+40 
+
+42 
+
+> Coverage [%]
+> Soft coverage
+> Hard coverage
+> Walker (40.3%)
+> Soft revisit
+> Hard revisit
+> Walker (48 min)
+
+60 
+
+80 
+
+100 
+
+120 
+
+> Mean max revisit [min]
+
+(a) Convergence 0 100 200 300 
+
+RAAN [deg] 
+
+0
+
+50 
+
+100 
+
+150 
+
+200 
+
+250 
+
+300 
+
+350    
+
+> Mean anomaly [deg]
+> Initial Optimized Walker 24/6/1
+
+(b) RAAN vs mean anomaly 
+
+Figure 5: Walker recovery experiment. (a) Convergence of hard coverage (left axis) and hard mean worst-case revisit (right axis) over 1000 optimizer iterations, with the Walker 24/6/1 reference values drawn as dashed horizontal lines in the corresponding colors. (b) RAAN vs. mean anomaly configuration space: hollow markers are the initial placement of each satellite (irregular RAAN + random MA), filled markers are the optimized placement after 1000 iterations, and stars mark the canonical Walker 24 /6/1 slots. Planes are additionally grouped by color. The optimizer recovers Walker-equivalent geometry up to the rotational symmetry about the z-axis. −2.5 0.0 2.5PC1 
+
+> −202PC2
+
+Global view (Relaxed loss)  
+
+> −50PC1
+
+Near-uniform (Relaxed loss)  
+
+> −50PC1
+
+Exp2 default (Relaxed loss)  
+
+> −50PC1
+
+Clustered (Relaxed loss)  
+
+> −50PC1
+
+Two-cluster (Relaxed loss)   
+
+> −2.50.02.5PC1
+> −202PC2
+
+(Hard loss)  
+
+> −50PC1
+
+(Hard loss)  
+
+> −50PC1
+
+(Hard loss)  
+
+> −50PC1
+
+(Hard loss)  
+
+> −50PC1
+
+(Hard loss) 
+
+> 69 78 87 96 105 114 123 132 141 150
+> 60 76 92 108 124 140 156 172
+
+Figure 6: Loss landscape visualization [ 24 ]. Left column: global view along two random directions from a Walker-optimal reference point. Columns 2–5: per-trajectory PCA slices for the four calibration initializations (near-uniform, moderate, clustered, two-cluster); each slice projects along that trajectory’s two dominant curvature directions, so scales are not comparable across columns. Top row: relaxed loss. Bottom row: hard loss. The color bar beside each panel reports loss value on that 2D projection. The white line is the AdamW optimizer path. Per-trajectory views show smooth basins; the global view reveals multi-modal structure and distinct attractors that account for the init-dependence in Ablation (e). 10 Differentiable Constellation Design 
+
+4.4 Experiment 3: Regional Target Optimization 
+
+An advantage of gradient-based constellation optimization over parametric families is the ability to handle non-uniform, mission-specific objectives. We demonstrate this by optimizing a small constellation for coverage and revisit over Europe. 
+
+Setup. We sample 500 ground targets from European continent boundaries, weighted by cos( lat ) to correct for area distortion. The constellation consists of 4 satellites in 2 orbital planes (2 per plane). Unlike Experiment 2, we free all orbital geometry parameters: inclination ( ι ∈ [30 , 90] ◦), RAAN, mean anomaly, argument of perigee, and orbital shape via the (perigee, excess altitude) reparameterization of Equation 15–Equation 17, with perigee ∈ [400 , 600] km and excess altitude ∈ [0 , 1500] km . Inclination, RAAN, eccentricity, argument of perigee, and altitude are shared within each plane; mean anomaly is free per satellite, giving 12 effective degrees of freedom. We use λ = 1 .0, and run for 3000 iterations. 
+
+Results. Starting from a Walker-like circular initialization at 550 km , the optimizer discovers a qualitatively different geometry (Table 2). Both planes converge to highly elliptical orbits ( e ≈ 0.40 ) with argument of perigee ω ≈ 270 ◦,placing apogee over the northern hemisphere where the satellite dwells longest. The resulting orbits have perigee 
+
+≈ 685 km and apogee ≈ 10 000 km —a Molniya-like highly elliptical orbit discovered entirely from gradients, with no domain-specific inductive biases. We note that perigee and apogee traverse dramatically different radiation environments—LEO at perigee versus the inner Van Allen belt near apogee—which the current geometry-only loss does not penalize; the sigmoid reparameterization of §3.8 admits an apogee cap as an additional constraint (§5) if desired. The optimized constellation achieves 99.3% coverage and 3.7 min mean revisit over Europe, compared to 10.0% coverage and 247.5 min for a Walker 4/2/1 baseline (Table 2). The comparison is not between equal orbit regimes: the Walker baseline is constrained to circular LEO while the optimizer is free to explore eccentric orbits. The result demonstrates that, given this freedom, the optimizer discovers a qualitatively different and more effective geometry for regional coverage. Figure 8 shows the visibility density (number of timesteps each ground bin is visible to any satellite). The optimized constellation concentrates nearly all coverage in the northern hemisphere over Europe, while the Walker baseline distributes coverage uniformly but achieves far less density. The orbital period of ∼210 min produces approximately 7 revolutions per sidereal day, creating a near-resonant repeating ground track. Table 2: Regional target optimization: 4 satellites (2 planes × 2), 3000 iterations, all orbital geometry parameters (aside from fixed planes) free with coupled perigee/apogee constraints. 
+
+Metric Walker 4/2/1 Optimized 
+
+Hard coverage [%] 9.97 99.25 Hard mean worst-case revisit [min] 247.5 3.7 Soft coverage [%] 12.37 97.99 Soft mean worst-case revisit [min] 208.9 54.9 Table 3: Per-plane orbital geometry discovered by the optimizer for the Europe target set. Both planes converge to eccentric, Molniya-like orbits with apogee over the northern hemisphere ( ω ≈ 270 ◦). The Walker baseline uses circular orbits at 550 km .
+
+ι [deg] Ω [deg] e ω [deg] Perigee / Apogee [km] 
+
+Plane 0 62.6 336.6 0.398 276.2 685 / 10011 Plane 1 65.3 155.6 0.402 266.5 687 / 10193 Walker (all) 60.0 uniform 0.001 — 550 / 550 
+
+4.5 Comparison to Baseline Methods 
+
+Constellation configuration in prior work is typically posed as a black-box optimization over design variables, handled either by population heuristics (simulated annealing, genetic algorithms) or gradient-free optimization. We benchmark our differentiable pipeline against three such baselines on the Walker recovery experiment of §4.3 as it admits a known optimal solution. 11 Differentiable Constellation Design 0 500 1000 1500 2000 2500 3000 
+
+> Iteration
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> 120
+> Coverage [%]
+> Soft coverage
+> Hard coverage
+> Walker (10.0%)
+> Soft revisit
+> Hard revisit
+> Walker (248 min)
+> 0
+> 50
+> 100
+> 150
+> 200
+> 250
+> 300
+> Mean max revisit [min]
+
+Figure 7: Convergence of the Europe target optimization over 3000 iterations. The optimizer rapidly improves both coverage and revisit over the Walker baseline (dashed). 
+
+Baselines. We compare against simulated annealing (SA), a genetic algorithm (GA), and differential evolution (DE), all applied to the hard fitness L = −C + λ∆max computed from Equation 4 and Equation 6; the baselines do not use the relaxed objective at all. SA and GA follow the constellation-design formulations used in prior heuristic work [ 3] with standard tuning: SA uses a probe-calibrated temperature schedule ( 80 % initial / 1 % final acceptance, geometric cooling [ 25 ]) and an adaptive step size targeting the Vanderbilt–Louie rate of 0.44 [ 26 ]; GA uses tournament selection [ 27 ] (size 3), uniform crossover [ 28 ], and Gaussian mutation with σ annealed from 30 ◦ to 5◦ [29 ]. DE uses the TwoPointsDE implementation from the nevergrad library [ 30 ]. All three warm-start from the same initialization as the gradient run and each is run for 5 seeds with a budget of 4050 evaluations (4000 main + the 50-evaluation SA probe, matched across methods), picking the best out of each run. Table 4: Final hard metrics on the Walker recovery testbed. The gradient pipeline recovers the Walker reference exactly within 1000 iterations; the three black-box baselines plateau well short of it even with roughly four times the evaluation budget and best-of-5 seed selection. 
+
+Method Hard coverage [%] Hard mean worst-case revisit [min] 
+
+Walker 24/6/1 reference 40.33 48.0 Gradient (ours, 1000 iters) 40.34 48.0 
+
+Simulated annealing 34.33– 36.54 73.9 –80.5 Genetic algorithm 37.83– 38.69 60.3 –62.2 TwoPointsDE [30] 35.77– 37.44 68.5 –76.1 Figure 9 plots convergence for the best-fitness seed of each method against function evaluations. The gradient-based method reaches Walker-Delta metrics within ∼750 evaluations; GA plateaus at 60 .3 min revisit, DE at 68 .5 min , and SA at 73 .9 min , none getting close to Walker-Delta even at four times the computational budget. GA’s edge over DE on this problem is attributable to its uniform crossover and mod 360 ◦ wrap, which respect the cyclic nature of RAAN and mean anomaly; DE’s Euclidean-space perturbations do not. 12 Differentiable Constellation Design 180 ◦ W 120 ◦ W 60 ◦ W 0 ◦ 60 ◦ E 120 ◦ E 180 ◦ E             
+
+> 90 ◦S
+> 60 ◦S
+> 30 ◦S
+> 0◦
+> 30 ◦N
+> 60 ◦N
+> 90 ◦N
+> 0
+> 50
+> 100
+> 150
+> 200
+> 250
+> 300
+> 350
+> Visibility count
+
+(a) Optimized for Europe 180 ◦ W 120 ◦ W 60 ◦ W 0 ◦ 60 ◦ E 120 ◦ E 180 ◦ E             
+
+> 90 ◦S
+> 60 ◦S
+> 30 ◦S
+> 0◦
+> 30 ◦N
+> 60 ◦N
+> 90 ◦N
+> 0
+> 50
+> 100
+> 150
+> 200
+> 250
+> 300
+> 350
+> Visibility count
+
+(b) Walker 4/2/1 baseline 
+
+Figure 8: Visibility density over 24 h . (a) The optimized constellation concentrates coverage over Europe via eccentric orbits with apogee dwell over northern latitudes. (b) The Walker baseline distributes coverage uniformly but achieves far less density over the target region. 
+
+4.6 Ablations 
+
+To isolate the design choices behind the relaxed pipeline, we re-run the Walker recovery testbed of §4.3 under five controlled perturbations. Each row of Table 5 reports the final hard coverage and mean worst-case revisit; the Walker 24/6/1 reference and results from §4.3 are included for calibration. 
+
+(a) Loss composition. Coverage-only surpasses Walker-level coverage ( 40 .76 % vs 40 .34 % ) but leaves revisit at 
+
+126 .7 min —over 2.6 times the Walker baseline—since the loss never penalizes long gaps. In contrast, revisit-only and the full combined loss both converge to the Walker-equivalent solution ( 40 .34 % coverage, 48 .0 min revisit): once satellites are spaced to minimize revisit, the coverage term contributes only a small residual gradient, so the two are effectively equivalent on this testbed. 
+
+(b) Sigmoid temperature. We compare the default τ = 2 ◦ (shared between coverage and revisit branches) against two variants with decoupled coverage and revisit temperatures: ( τcov = 3 ◦, τrev = 1 ◦) and the inverse ( τcov = 1 ◦,13 Differentiable Constellation Design 0 1000 2000 3000 4000 
+
+> Function evaluations
+> 32
+> 33
+> 34
+> 35
+> 36
+> 37
+> 38
+> 39
+> 40
+> Hard coverage [%]
+> Gradient (ours)
+> Simulated annealing
+> Genetic algorithm
+> TwoPointsDE (nevergrad)
+> Walker (40.3%)
+
+(a) Hard coverage 0 1000 2000 3000 4000  
+
+> Function evaluations
+> 60
+> 80
+> 100
+> 120
+> 140
+> Hard mean max revisit [min]
+> Gradient (ours)
+> Simulated annealing
+> Genetic algorithm
+> TwoPointsDE (nevergrad)
+> Walker (48 min)
+
+(b) Hard mean worst-case revisit 
+
+Figure 9: Convergence of the differentiable optimizer (teal, Exp 2 baseline) against three black-box baselines on the Walker recovery testbed. Best-of-5 seeds shown per method; evaluation 0 shares the common irregular-RAAN initialization by zero-order hold, and the Walker reference is dotted grey. The gradient pipeline matches Walker at 
+
+∼750 evaluations; the heuristics plateau above Walker revisit even with roughly four times the budget. Table 5: Design-choice ablations on the Walker recovery testbed (§4.3, 24 satellites, 1000 iterations, hard metrics evaluated at the final step). Default settings (used elsewhere unless ablated) are λ = 0 .1, τcov = τrev = 2 ◦, β = 10 min .
+
+Setting Hard coverage [%] Hard mean worst-case revisit [min] 
+
+Walker 24/6/1 reference / Exp 2 defaults 40.34 48.0 (a) Coverage only ( λ = 0 ) 40.76 126.7 (a) Revisit only ( − ˜C dropped) 40.34 48.0 (b) Split τ (τcov = 3 ◦, τrev = 1 ◦) 39.04 54.9 (b) Split τ inverted ( τcov = 1 ◦, τrev = 3 ◦) 40.11 58.3 (c) λ = 0 .01 40.06 59.8 (c) λ = 1 .0 40.34 47.9 (d) β = 1 min 38.58 55.3 (d) β = 100 min 40.08 68.9 (e) Random RAAN+MA init, n = 10 39.73 ± 0.46 (38.82–40.34) 61.7 ± 4.7 (47.8–64.1) 
+
+τrev = 3 ◦). The shared setting recovers Walker ( 40 .3 % , 48 .0 min ); the two decoupled variants underperform ( 39 .0 % /
+
+54 .9 min and 40 .1 % / 58 .3 min ). Shared τ is the default for all other experiments. 
+
+(c) Revisit weight λ. Sweeping λ ∈ { 0.01 , 0.1, 1.0} shows that results are insensitive to λ over two orders of magnitude: both λ = 0 .1 and λ = 1 .0 recover Walker ( 40 .3 % , 48 .0 min ). Under-weighting revisit at λ = 0 .01 lets coverage saturate before the revisit gradient does useful work ( 40 .1 % , 59 .8 min ). The ablation suggests a region of applicability rather than a sharp optimum, as similarly evidenced by ablation (a). 
+
+(d) LogSumExp temperature β. Sweeping β ∈ { 1, 10 , 100 } minutes reveals both ends of the smoothness/correctness trade-off. The tight β = 1 min approaches a hard max and starves near-worst timesteps of gradient, degrading coverage to 38 .6 % . The loose β = 100 min over-smooths the worst-case signal so the optimizer underweights long gaps, raising revisit to 68 .9 min . β = 10 min sits between these failure modes and recovers Walker exactly. From this ablation, it can be observed β is likely the most sensitive hyperparameter. 
+
+(e) Initialization sensitivity. Re-running the same configuration under n = 10 seeds with both RAAN and mean anomaly drawn uniformly at random yields hard coverage in [38 .8, 40 .3] % and revisit in [47 .8, 64 .1] min, with mean 
+
+39 .7 ± 0.5 % and 61 .7 ± 4.7 min. Only one of the ten seeds recovers Walker exactly; the other nine converge to a worse local minimum near 63 min revisit while still reaching roughly Walker-level coverage. This finding is consistent 14 Differentiable Constellation Design with the multi-modal structure visible in Figure 6: coverage drives satellites apart to near-uniform angular spacing reliably, but the finer-grained plane-phasing that distinguishes the global Walker minimum from nearby local minima is not always found from arbitrary RAAN+MA initializations. The result of §4.3 is therefore not guaranteed from every initialization, but remains robustly reachable with correct choice of initialization, and can be mitigated with parallel runs. 0 250 500 750 
+
+Iteration 
+
+60 
+
+80 
+
+100 
+
+120 
+
+140 
+
+160 
+
+> Hard mean max revisit [min]
+> Coverage only
+> Revisit only
+> Combined (Exp 2)
+> Walker (48.0)
+
+(a) Loss composition: revisit 0 250 500 750 
+
+Iteration 
+
+60 
+
+80 
+
+100 
+
+120     
+
+> Hard mean max revisit [min]
+> λ= 0 .01
+> λ= 0 .1 (Exp 2)
+> λ= 1 .0
+> Walker (48.0)
+
+(b) Revisit weight λ: revisit 0 250 500 750 
+
+Iteration 
+
+60 
+
+80 
+
+100 
+
+120     
+
+> Hard mean max revisit [min]
+> β= 1 min
+> β= 10 min (Exp 2)
+> β= 100 min
+> Walker (48.0)
+
+(c) LSE temperature β: revisit 0 250 500 750 
+
+Iteration 
+
+34 
+
+36 
+
+38 
+
+40 
+
+> Hard coverage [%]
+> Coverage only
+> Revisit only
+> Combined (Exp 2)
+> Walker (40.3)
+
+(d) Loss composition: coverage 0 250 500 750 
+
+Iteration 
+
+34 
+
+36 
+
+38 
+
+40     
+
+> Hard coverage [%]
+> λ= 0 .01
+> λ= 0 .1 (Exp 2)
+> λ= 1 .0
+> Walker (40.3)
+
+(e) Revisit weight λ: coverage 0 250 500 750 
+
+Iteration 
+
+34 
+
+36 
+
+38 
+
+40     
+
+> Hard coverage [%]
+> β= 1 min
+> β= 10 min (Exp 2)
+> β= 100 min
+> Walker (40.3)
+
+(f) LSE temperature β: coverage 
+
+Figure 10: Hard metrics over training for the three multi-variant ablations; Walker 24/6/1 reference dashed. Top row: 
+
+mean worst-case revisit. Bottom row: coverage. (a, d) Coverage-only flattens coverage and surpasses Walker, but never reduces revisit; revisit-only and combined both converge to the Walker solution. (b, e) λ = 0 .1 and λ = 1 .0 are indistinguishable on this testbed; λ = 0 .01 plateaus early on revisit. (c, f) β = 10 min converges to Walker solution; 
+
+β = 1 min is gradient-starved on revisit and leaves coverage short; β = 100 min over-smooths and gets stuck at a worse revisit minimum. 
+
+4.7 Computational Cost and Scalability 
+
+We report computational cost in terms of evaluations (forward passes) and iterations (forward + backward passes). The per-step cost of the differentiable pipeline scales as O(N KJ )—linear in satellite count N , time steps K, and ground targets J—with the backward pass a small constant multiple of the forward pass. A single forward pass of our pipeline is a constant factor cheaper than one STK orbit simulation used in prior work [ 3], since ∂SGP4 is a pure-PyTorch reimplementation of SGP4 rather than a full high-fidelity simulator. 
+
+Information per step. Each gradient step returns an Ndof -dimensional descent direction via autodiff (30-dimensional on Exp 2, 12-dimensional on Exp 3), whereas each black-box evaluation returns a single scalar. At a per-step cost roughly an order of magnitude larger than a forward-only evaluation, the gradient pipeline delivers Ndof signals per evaluation-equivalent. This is the regime in which gradient methods beat dimension-agnostic heuristics: empirically, the pipeline reaches the Walker reference within ∼750 iterations (Figure 9), while SA/GA/DE plateau 12 min –26 min 
+
+worse on revisit even at ∼4× the evaluation budget (Table 4). 
+
+Scaling to larger problems. The problem sizes in this paper fit comfortably on a single GPU. Much larger con-stellations (hundreds to thousands of satellites) would admit satellite-wise sharding across devices with data-parallel strategies, and multi-start ensembles across initializations parallelize trivially across the independent-seed dimension. 15 Differentiable Constellation Design 
+
+## 5 Conclusions and Future Work 
+
+We show that gradient-based optimization is viable for satellite constellation configuration when coverage and revisit metrics are made differentiable through continuous relaxations and composed with a differentiable orbit propagator. The relaxed objectives are locally tight with their hard counterparts (§3.7) and produce well-conditioned gradients where finite-difference approaches do not [3]. On the Walker recovery testbed (§4.3), the method recovers the Walker 24/6/1 constellation geometry (within rotational symmetry) within ∼750 iterations, whereas tuned simulated annealing, genetic algorithm, and differential evolution baselines plateau at 60 min –74 min revisit despite ∼4× the evaluation budget (§4.5, Table 4). On the regional coverage problem (§4.4), the same pipeline discovers Molniya-like highly elliptical orbits for coverage at extreme latitudes, without any domain-specific inductive biases. 
+
+Limitations. This work addresses configuration only—satellite count N and plane structure are fixed inputs, with sizing handled outside the gradient loop by search or similar methods. The loss is geometry-only: visibility gates on satellite elevation alone and treats coverage as single-pass, so Sun-illumination for optical payloads and K-fold multi-view requirements are not captured. The 24 h propagation horizon misses long-term perturbations ( J2 RAAN drift, atmospheric drag, seasonal repeat tracks), and the single-axis TEME-to-ECEF rotation of Equation 1 accumulates kilometer-level ground error beyond ∼7 days as polar motion grows. Exp 3 also shows that the unconstrained optimum can leave the operational regime: the Molniya-like orbits it discovers cross the inner Van Allen belt near 10 000 km 
+
+apogee, which the geometry-only loss does not penalize, but other mission-level requirements such as radiation tolerance may force the excess altitude lower. Of these, Sun-illumination, multi-pass coverage, and operational-regime bounds are simple extensions to the current method (detailed below); sizing, the full IAU 2006/2000A rotation chain, and 
+
+J2-aware long-horizon propagation require additional investigation. 
+
+Future work. Several natural directions extend the pipeline without architectural change. The sigmoid reparam-eterization of §3.8 admits any box constraint on the orbital elements, so adding an apogee cap below the inner-belt threshold (an interval constraint on ra = a(1 + e), composable with Equation 17) or restricting inclination to a launch-available band (an interval constraint on i) is immediate; a softer launch-feasibility signal would be a differentiable 
+
+∆v penalty from a nominal dropoff orbit (e.g. 500 km circular at the launch inclination) to the optimized elements. For mission-level visibility, Sun-elevation above the target [ 31 ] would enter as another soft sigmoid composed into the noisy-OR, making daylight-only coverage a product of two soft visibilities, and K-fold multi-pass requirements would aggregate soft visibilities with a second LogSumExp (or a p-norm soft-max when conditioning gets tight). For longer horizons, parallel multi-epoch aggregation or incorporating J2 secular rates into the propagator would let the optimizer exploit RAAN drift and Sun-synchronous repeats directly; beyond the weeks-or-longer scale, the full IAU 2006/2000A precession–nutation chain would replace the single-axis rotation of Equation 1. Finally, the pipeline is objective-agnostic: heterogeneous sensor placement, constellation reconfiguration, and multi-objective coverage with mission-specific elevation constraints are all expressible as weighted sums over the same graph, but are outside the scope of this work and require further investigation. 
+
+## References 
+
+[1] J. G. Walker. Satellite Constellations. Journal of the British Interplanetary Society , 37:559, December 1984. ISSN 0007-084X. URL https://ui.adsabs.harvard.edu/abs/1984JBIS...37..559W . ADS Bibcode: 1984JBIS...37..559W. [2] Daniele Mortari, Matthew P. Wilkins, and Christian Bruccoleri. The Flower Constellations. The Journal of the Astronautical Sciences , 52(1-2):107–127, March 2004. ISSN 0021-9142, 2195-0571. doi:10.1007/BF03546424. URL https://link.springer.com/10.1007/BF03546424 .[3] Sung Wook Paek, Sangtae Kim, and Olivier de Weck. Optimization of Reconfigurable Satellite Constellations Using Simulated Annealing and Genetic Algorithm. Sensors , 19(4):765, January 2019. ISSN 1424-8220. doi:10.3390/s19040765. URL https://www.mdpi.com/1424-8220/19/4/765 . Number: 4. [4] Giacomo Acciarini, Atılım Güne¸ s Baydin, and Dario Izzo. Closing the gap between SGP4 and high-precision propagation via differentiable programming. Acta Astronautica , 226:694–701, January 2025. ISSN 00945765. doi:10.1016/j.actaastro.2024.10.063. URL https://linkinghub.elsevier.com/retrieve/pii/ S0094576524006374 .[5] Nathaniel Choo, Darryl Ahner, and Bryan Little. A Survey of Orbit Design and Selection Methodologies. The Journal of the Astronautical Sciences , 71(1):4, January 2024. ISSN 2195-0571. doi:10.1007/s40295-023-00420-9. URL https://link.springer.com/10.1007/s40295-023-00420-9 .16 Differentiable Constellation Design [6] Juan Fraire, Santiago Henn, Fabio Dovis, Roberto Garello, and Giorgio Taricco. Sparse Satel-lite Constellation Design for LoRa-based Direct-to-Satellite Internet of Things . December 2020. doi:10.1109/GLOBECOM42002.2020.9348042. Pages: 6. [7] Ossama Abdelkhalik and Ahmed Gad. Optimization of space orbits design for Earth orbiting missions. Acta Astronautica , 68(7-8):1307–1317, April 2011. ISSN 00945765. doi:10.1016/j.actaastro.2010.09.029. URL 
+
+https://linkinghub.elsevier.com/retrieve/pii/S0094576510003796 .[8] David O. Williams Rogers, Dongshik Won, Dongwook Koh, Kyungwoo Hong, and Hang Woon Lee. Optimal Satellite Constellation Configuration Design: A Collection of Mixed Integer Linear Programs. Journal of Spacecraft and Rockets , pages 1–18, March 2026. ISSN 0022-4650. doi:10.2514/1.A36518. URL https: //arc.aiaa.org/doi/10.2514/1.A36518 .[9] John T. Hwang, Dae Young Lee, James W. Cutler, and Joaquim R. R. A. Martins. Large-Scale Multidisciplinary Optimization of a Small Satellite’s Design and Operation. Journal of Spacecraft and Rockets , 51(5):1648–1663, September 2014. ISSN 0022-4650, 1533-6794. doi:10.2514/1.A32751. URL https://arc.aiaa.org/doi/ 10.2514/1.A32751 .[10] Atılım Gunes Baydin, Barak A Pearlmutter, Alexey Andreyevich Radul, and Jeffrey Mark Siskind. Automatic Differentiation in Machine Learning: a Survey. 2018. [11] Yuanming Hu, Luke Anderson, Tzu-Mao Li, Qi Sun, Nathan Carr, Jonathan Ragan-Kelley, and Frédo Durand. DiffTaichi: Differentiable Programming for Physical Simulation, February 2020. URL http://arxiv.org/ abs/1910.00935 . arXiv:1910.00935 [cs]. [12] Jonas Degrave, Michiel Hermans, Joni Dambre, and Francis Wyffels. A Differentiable Physics En-gine for Deep Learning in Robotics. Frontiers in Neurorobotics , 13:6, March 2019. ISSN 1662-5218. doi:10.3389/fnbot.2019.00006. URL https://www.frontiersin.org/article/10.3389/fnbot.2019. 00006/full .[13] Eric Jang, Shixiang Gu, and Ben Poole. Categorical Reparameterization with Gumbel-Softmax, August 2017. URL http://arxiv.org/abs/1611.01144 . arXiv:1611.01144 [cs, stat]. [14] Nitin Kamra and Yan Liu. Gradient-based optimization for multi-resource spatial coverage problems. In 
+
+Proceedings of the Thirty-Seventh Conference on Uncertainty in Artificial Intelligence , pages 1885–1894. PMLR, December 2021. URL https://proceedings.mlr.press/v161/kamra21a.html .[15] Jack Naylor, Raghav Mishra, Nicholas H. Barbara, and Donald G. Dansereau. dLITE: Differentiable Lighting-Informed Trajectory Evaluation for On-Orbit Inspection, 2025. URL https://arxiv.org/abs/2512.16011 .Version Number: 1. [16] Mitsuba 3 - A Retargetable Forward and Inverse Renderer. URL https://www.mitsuba-renderer.org/ .[17] David Vallado, Paul Crawford, Ricahrd Hujsak, and T. S. Kelso. Revisiting Spacetrack Report #3. In 
+
+AIAA/AAS Astrodynamics Specialist Conference and Exhibit . American Institute of Aeronautics and Astro-nautics. doi:10.2514/6.2006-6753. URL https://arc.aiaa.org/doi/abs/10.2514/6.2006-6753 . _eprint: https://arc.aiaa.org/doi/pdf/10.2514/6.2006-6753. [18] Judea Pearl. Probabilistic Reasoning in Intelligent Systems: Networks of Plausible Inference . Elsevier, June 2014. ISBN 978-0-08-051489-5. Google-Books-ID: mn2jBQAAQBAJ. [19] Erich Peter Klement, Radko Mesiar, and Endre Pap. Triangular Norms , volume 8 of Trends in Logic . Springer Netherlands, Dordrecht, 2000. ISBN 978-90-481-5507-1 978-94-015-9540-7. doi:10.1007/978-94-015-9540-7. URL http://link.springer.com/10.1007/978-94-015-9540-7 .[20] Wulfram Gerstner and Werner M. Kistler. Spiking Neuron Models: Single Neurons, Populations, Plasticity .Cambridge University Press, August 2002. ISBN 978-0-521-89079-3. Google-Books-ID: Rs4oc7HfxIUC. [21] Stephen P. Boyd and Lieven Vandenberghe. Convex optimization . Cambridge University Press, Cambridge New York Melbourne New Delhi Singapore, version 29 edition, 2023. ISBN 978-0-521-83378-3. [22] Kavosh Asadi and Michael L. Littman. An Alternative Softmax Operator for Reinforcement Learning. In 
+
+Proceedings of the 34th International Conference on Machine Learning , pages 243–252. PMLR, July 2017. URL 
+
+https://proceedings.mlr.press/v70/asadi17a.html .[23] Adam Paszke, Sam Gross, Francisco Massa, Adam Lerer, James Bradbury, Gregory Chanan, Trevor Killeen, Zeming Lin, Natalia Gimelshein, Luca Antiga, Alban Desmaison, Andreas Kopf, Edward Yang, Zachary DeVito, Martin Raison, Alykhan Tejani, Sasank Chilamkurthy, Benoit Steiner, Lu Fang, Junjie Bai, and Soumith Chintala. PyTorch: An Imperative Style, High-Performance Deep Learning Library. In Advances in Neural Information Processing Systems , volume 32. Curran Associates, Inc., 2019. URL https://proceedings.neurips.cc/ paper_files/paper/2019/hash/bdbca288fee7f92f2bfa9f7012727740-Abstract.html .17 Differentiable Constellation Design [24] Hao Li, Zheng Xu, Gavin Taylor, Christoph Studer, and Tom Goldstein. Visualizing the Loss Land-scape of Neural Nets. In Advances in Neural Information Processing Systems , volume 31. Curran Associates, Inc., 2018. URL https://proceedings.neurips.cc/paper_files/paper/2018/hash/ a41b3bb3e6b050b6c9067c67f663b915-Abstract.html .[25] S. Kirkpatrick, C. D. Gelatt, and M. P. Vecchi. Optimization by Simulated Annealing. Science , 220(4598): 671–680, May 1983. doi:10.1126/science.220.4598.671. URL https://www.science.org/doi/abs/10. 1126/science.220.4598.671 .[26] David Vanderbilt and Steven G Louie. A Monte carlo simulated annealing approach to optimization over continuous variables. Journal of Computational Physics , 56(2):259–271, November 1984. ISSN 0021-9991. doi:10.1016/0021-9991(84)90095-0. URL https://www.sciencedirect.com/science/article/pii/0021999184900950 .[27] Brad L Miller. Genetic Algorithms, Tournament Selection, and the Effects of Noise. [28] Gilbert Syswerda. Uniform Crossover in Genetic Algorithms . January 1989. Journal Abbreviation: Proc. 3rd Intl Conference on Genetic Algorithms 1989 Publication Title: Proc. 3rd Intl Conference on Genetic Algorithms 1989. [29] Thomas Back. Evolutionary Algorithms in Theory and Practice: Evolution Strategies, Evolutionary Programming, Genetic Algorithms . Oxford University Press, January 1996. ISBN 978-0-19-535670-0. Google-Books-ID: htJHI1UrL7IC. [30] J Rapin and O Teytaud. Nevergrad - A gradient-free optimization platform, April 2019. URL https://github. com/facebookresearch/nevergrad . original-date: 2018-11-21T00:33:17Z. [31] David A. Vallado. Fundamentals of Astrodynamics and Applications . Microcosm Press, 2022. ISBN 978-1-881883-22-7. 
+
+## A Per-Experiment Parameters 
+
+Table 6 collects the per-experiment values for reproducibility. Values shared across experiments—propagation horizon 
+
+24 h , K = 240 time steps, minimum elevation αmin = 10 ◦, AdamW with learning rate η = 10 −2—are omitted. The ground grid is 36 × 72 except where a regional target set is specified. Table 6: Per-experiment parameters for the experiments in §4. 
+
+Experiment N DoF J τcov [◦] τrev [◦] β [min ] λ
+
+Exp 1 (toy) 2 2 2592 2.0 2.0 10 2.0 Exp 2 (Walker) 24 30 2592 2.0 2.0 10 0.1 Exp 3 (Europe) 4 12 500 2.0 2.0 10 1.0 Baselines (SA/GA/DE) 24 30 2592 — — — 0.1 Hyperparam tuning 24 30 2592 2.0 2.0 10 0.1 
+
+## B Hyperparameter Tuning 
+
+This appendix provides the complete experimental setup and raw results for hyperparameter tuning described in §3.7. 
+
+Setup. The tuning uses the same 24-satellite setup as §4.3 (see Table 6), run for 800 iterations per initial configuration with shared τ = 2 ◦ and GMST randomization enabled. These runs use the default relaxation parameters, not the calibrated ones—the goal is to obtain four diverse final solutions whose relative quality is known from the hard metrics. 
+
+Initial RAAN configurations. The four configurations are: near-uniform [0 , 60 , 120 , 180 , 240 , 300] ◦, moderate 
+
+[0 , 30 , 120 , 200 , 210 , 300] ◦, clustered [0 , 10 , 20 , 30 , 40 , 50] ◦, and two-cluster [0 , 5, 180 , 185 , 270 , 275] ◦. All use the same random mean anomaly initialization (NumPy RandomState(42) , uniform on [0 , 360) ◦). 
+
+Grid search parameters. The grid search evaluates the relaxed loss of all four final solutions under each combination of: coverage softness τcov ∈ {1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0}◦, revisit softness τrev ∈{0.1, 0.25 , 0.5, 0.75 , 1.0, 1.5, 2.0}◦, LogSumExp temperature β ∈ { 3.0, 5.0, 7.5, 10 .0, 15 .0, 20 .0}min , and revisit weight λ ∈ { 0.05 , 0.1, 0.2, 0.5, 1.0, 2.0}. This gives 7 × 7 × 6 × 6 = 1764 combinations, each requiring 4 gradient-free forward passes (one per solution), for 7056 evaluations total. 18 Differentiable Constellation Design 
+
+Validity criterion. Each of the four optimizations converges to a different local minimum. A hyperparameter combination is valid if the relaxed loss at these local minima preserves the same ordering as the hard loss—i.e., solutions that are better under the hard metrics should also be better under the relaxed loss. Since the hard metrics group the four solutions into two tiers (near-uniform and moderate are better; clustered and two-cluster are worse), validity requires: 
+
+max   ˜Lnear-uniform , ˜Lmoderate 
+
+ < min   ˜Lclustered , ˜Ltwo-cluster 
+
+. (18) The margin is the difference between the right- and left-hand sides. Among valid combinations, we utilize the one that maximizes τcov (smoothest coverage gradients), then τrev , with margin as tiebreaker. 
+
+Reproducibility. All experiments can be reproduced from the repository found at https://github.com/ shreeyam/differentiable_eo .
+
+## C Relaxation Equivalences 
+
+Several natural alternatives to R1, R2, and R4 reduce to the chosen relaxations up to reparameterization or additive constants. Hence, swapping in the alternatives would not produce different optimizer dynamics. 
+
+C.1 R1: tanh ⇔ sigmoid 
+
+For any x ∈ R,
+
+> 12
+
+ 1 + tanh( x/ 2)  = 12
+
+
+
+1 + ex/ 2 − e−x/ 2
+
+ex/ 2 + e−x/ 2
+
+
+
+= ex/ 2
+
+ex/ 2 + e−x/ 2 = 11 + e−x = σ(x), (19) so the rescaled tanh  1 + tanh(( αij − αmin )/(2 τ )) /2 is pointwise identical to the sigmoid in Equation 7. Gradients, level sets, and every downstream quantity are therefore identical. 
+
+C.2 R2: Noisy-OR ⇔ probabilistic t-conorm 
+
+The probabilistic t-conorm [ 19 ] of n values {xi} ⊂ [0 , 1] is defined as 1 − Q
+
+> i
+
+(1 − xi), which is exactly the noisy-OR of Equation 8. Equivalently, if ˜cij (tk) is interpreted as the independent detection probability of satellite i at target j,then 
+
+Pr 
+
+"[
+
+> i
+
+sat i covers j
+
+#
+
+= 1 − Y
+
+> i
+
+Pr[ sat i misses j] = 1 − Y
+
+> i
+
+(1 − ˜cij (tk)) . (20) No separate relaxation is needed: the noisy-OR operator is the unique member of the probabilistic t-conorm family that is smooth, bounded in [0 , 1] , and strictly increasing in each argument. 
+
+C.3 R4: Mellowmax ⇔ LogSumExp + constant 
+
+The mellowmax operator is introduced by Asadi and Littman [22] as an alternative to the Boltzmann softmax used for value aggregation in Q-learning, where it restores a non-expansion property Boltzmann softmax lacks. Mellowmax is equivalent to LogSumExp up to an additive constant: 
+
+mm ω (X) = 1
+
+ω log 1
+
+K
+
+> K
+
+X
+
+> k=1
+
+eωx k
+
+!
+
+. (21) Setting ω = 1 /β and expanding the 1/K factor gives 
+
+mm 1/β (X) = β log X
+
+> k
+
+exk /β 
+
+!
+
+− β log K = LogSumExp β (X) − β log K, (22) so the two differ by the constant β log K. Hence, the optimizer sees identical dynamics under mellowmax. 19

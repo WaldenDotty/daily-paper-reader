@@ -1,0 +1,286 @@
+Title: UNRIO: Uncertainty-Aware Velocity Learning for Radar-Inertial Odometry
+
+URL Source: https://arxiv.org/pdf/2604.13584v1
+
+Published Time: Thu, 16 Apr 2026 00:38:38 GMT
+
+Number of Pages: 7
+
+Markdown Content:
+# UNRIO: Uncertainty-Aware Velocity Learning for Radar-Inertial Odometry 
+
+Jui-Te Huang, Tinashu Huang, Anthony Rowe and Michael Kaess 
+
+Abstract — We present UNRIO, an uncertainty-aware radar-inertial odometry system that estimates ego-velocity directly from raw mmWave radar IQ signals rather than processed point clouds. Existing radar-inertial odometry methods rely on handcrafted signal processing pipelines that discard latent information in the raw spectrum and require careful parameter tuning. To address this, we propose a transformer-based neural network built on the GRT architecture that processes the full 4-D spectral cube to predict body-frame velocity in two modes: a direct linear velocity estimate and a per-angle-bin Doppler velocity map. The network is trained in three stages — geometric pretraining on LiDAR-projected depth, velocity or Doppler fine-tuning, and uncertainty calibration via negative log-likelihood loss — enabling it to produce uncertainty estimates alongside its predictions. These uncertainty estimates are propagated into a sliding-window pose graph that fuses radar velocity factors with IMU preintegration measurements. We train and evaluate UNRIO on the IQ1M dataset across diverse indoor environments with both forward and lateral motion patterns unseen during training. Our method achieves the lowest relative pose error on the majority of sequences, with particularly strong gains over classical DSP baselines on lateral-motion trajectories where sparse point clouds degrade conventional velocity estimators. 
+
+I. I NTRODUCTION 
+
+mmWave radar sensing technology has enabled simultane-ous localization and mapping (SLAM) in low-visibility, low-lighting, and adverse environmental conditions where LiDAR and RGB cameras fail to provide reliable sensing. Recent advances in radar state estimation [1]–[6] have demonstrated the potential of radar sensors for localization. However, all of the above works rely on signal-processed radar point clouds, while the use of raw complex radar signals for state estimation remains largely unexplored. Modern commercially available mmWave radars offer many design choices [7]. Manufacturers support a wide range of signal configurations, antenna designs, and layouts, paired with proprietary signal processing pipelines that typically produce point clouds with per-point Doppler velocity for downstream tasks. The most common approach employs frequency-modulated continuous wave (FMCW) waveforms with a multi-input multi-output (MIMO) antenna array. The signal processing algorithm usually starts with multi-dimensional Fast Fourier Transform (FFT), Constant False Alarm Rate (CFAR) detection, and angle-of-arrival estima-tion. However, this pipeline discards a significant amount of information latent in the raw signal, while also introducing numerous heuristic parameters that require careful tuning and         
+
+> J. Huang, T. Huang, A, Rowe and M. Kaess are, with the Carnegie Mellon University, Pittsburgh, PA 15213, USA {juiteh, tianshu2, agr, kaess }@andrew.cmu.edu Tokenizer Patch tokens on
+> Range-Doppler +
+> read out tokens
+> GRT Transformer
+> Pose Graph
+> Optimization Trajectory
+> Radar Spectrum
+> IMU Velocity &
+> Variance
+> OR
+> Doppler & Variance
+> Fig. 1. Our radar-inertial odometry system using raw mmWave radar spectrum as input. Our system predicts velocity and its uncertainty from the radar spectrum using a Transformer neural network trained on a large dataset with diverse motion patterns.
+
+whose performance varies with the material properties and reflectivity of the environment. Only recently has work [8] begun to explore the potential of training a foundation model on large-scale datasets to replace such handcrafted signal processing pipelines. The idea of leveraging machine learning with large datasets for front-end processing in SLAM has been explored extensively in visual odometry [9]–[11], where learned fea-tures and confidence weights are incorporated into the opti-mization stage to improve robustness and accuracy. A similar direction was explored by Lu et al. [12], who trained a model to directly regress odometry from radar and IMU inputs. However, their approach relied on the lossy processed point cloud representation and struggled to generalize across environments. In this work, we exploit the full information contained in the raw radar signal to build a more robust radar-inertial state estimation system that generalizes to novel environ-ments and improves on different motion patterns. Our main contributions are as follows:  
+
+> •
+
+We present a learning-based method that estimates ego-velocity directly from raw radar spectrum data, support-ing two output modes: a single linear velocity estimate and a per-angle-bin Doppler velocity map.  
+
+> •
+
+We extend the model to predict uncertainty alongside the velocity estimate, which is subsequently propagated 
+
+> arXiv:2604.13584v1 [cs.RO] 15 Apr 2026
+
+into our radar-inertial odometry framework.  
+
+> •
+
+We train the our model on a large-scale raw radar spectrum dataset and introduce UNRIO, a radar-inertial odometry algorithm. We evaluate its state estimation performance on held-out environments with diverse forward and lateral motion patterns. II. R ELATED WORK 
+
+A. Radar-Inertial Odometry 
+
+Since the early developments of the field, research on mmWave radar for state estimation has been using radar-generated point clouds with Doppler velocity. Works from Doer et al. [1], [13] build a baseline radar-inertial odometry system estimating body-frame velocity using RANSAC and fusing it with IMU via EKF filtering. Building on their work, Kim et al. [5] further extend the EKF with online temporal calibration. Huang et al. [4] use a fixed-lag window opti-mization strategy to fuse multiple radar-estimated velocities with IMU in an optimization window. With more antennas and higher angular resolution on recent commercial mmWave radars, other works incorporate scan-matching strategies from LiDAR state estimation sys-tems. Zhuang et al. integrated body velocity, IMU, and scan-to-map matching in their radar SLAM system: 4D iRIOM [3]. Herraez et al. [14] build a full SLAM system with radar and IMU where the main odometry sources come from radar point scan-to-map matching. Despite all these developments, no works have attempted to leverage full radar spectrum information for state estima-tion, with the closest being [15] which discusses the effect of signal processing on a radar odometry system while still relying on generated point clouds. 
+
+B. Machine Learning for Radar Spectrum 
+
+While most radar odometry systems — and radar percep-tion systems more broadly — rely on point clouds, point cloud extraction discards much of the information contained in a raw 4D radar cube. Competing approaches instead propose to directly interpret the cube by training neural networks with various architectures on large volumes of data, and are able to achieve superior resolution and accuracy on tasks ranging from object detection [16]–[18] and super-resolution [8], [19] to camera-like semantic segmentation [8], [20] and multi-view 3D reconstruction [21]–[23]. In particular, models trained using foundation model-style pretraining have been shown to be highly scalable with increased training data [8]. Increasingly capable edge compute systems have also made deploying ML-based radar perception to real time systems [24] much more practical. Together, this raises the possibility of using large-scale datasets to pretrain powerful, general-purpose models for radar perception, which are then distilled and deployed to autonomous robots and vehicles. 
+
+C. Uncertainty Prediction for State Estimation 
+
+While learning-based methods are being adopted by the SLAM research community, several works have explored learned uncertainty estimation. Teed et al. [11] propose DROID-SLAM, which utilizes a differentiable bundle ad-justment layer to implicitly tune the uncertainty model. Dexheimer et al. [25] proposed a learned depth covariance function applied in downstream tasks such as 3D recon-struction. To improve the reliability of the feature tracking process, some methods introduce learning-based uncertainty measurements or confidence scores, such as Wang et al. [10] and Murai et al. [26], which leverage learned 3D reconstruc-tion priors for dense SLAM. Similarly, Qiu et al. [9] propose MAC-VO, a learning-based stereo visual odometry frame-work that trains a metrics-aware covariance model to select keypoints and weight residuals in pose graph optimization. Similar ideas have been explored in LiDAR-based state es-timation, where Zhao et al. [27] propose SuperLoc, a robust LiDAR-inertial localization system that predicts alignment risks from raw sensor measurements before optimization. Inspired by these works, we apply the same idea of learned velocity and uncertainty estimation to radar spectrum data for state estimation. III. M ETHODOLOGY 
+
+In this section, we present our learning-based method for processing raw IQ mmWave radar signals to estimate body-frame velocity and its uncertainty. The predicted velocity and uncertainty are then fused with IMU measurements in a sliding-window pose graph optimization to recover the odometry trajectory. 
+
+A. Signal Processing 
+
+In this work, we use a typical commercially avail-able mmWave radar that transmit frequency-modulated continuous-wave (FMCW) which emits a sequence of chirps across an antenna array in an multi-input multi-output (MIMO) mode. The raw output of a single frame is a complex IQ tensor of shape (Nc, N tx , N rx , N r ), where Nc
+
+is the number of chirps (slow-time), Ntx and Nrx are the transmit and receive antenna counts, and Nr is the number of fast-time samples per chirp. To process this data, we apply a four-dimensional Fast Fourier Transform (FFT). A range FFT along the fast-time axis and a Doppler FFT along the slow-time axis produce a range-Doppler map. Subsequently, virtual aperture synthesis via elevation and azimuth FFTs yields a 4-D spectral cube 
+
+S ∈ CND ×NE ×NA×NR , where ND , NE , NA, and NR
+
+denote the Doppler, elevation, azimuth, and range bin counts, respectively. We pad the FFT size to a bigger number for both angular FFTs to contain more detailed angular information. After the FFTs, each complex bin re jθ is encoded as a three-channel feature (log 10 r, sinθ, cos θ), separating log-magnitude from the phase components, giving the network input X ∈ RND ×NE ×NA×NR×3. Instead of encoding the phase component as an angle in GRT [8] where values are discontinuous around −π and π. We use sin and cos of the phase angle to preserve continuity. B. Neural Network Architecture 
+
+We build our velocity and uncertainty prediction network based on the GRT [8] transformer architecture. We experi-ment with two types of velocity prediction: one that directly outputs the linear body-frame velocity, and another that outputs per-angle-bin Doppler values. To enable uncertainty estimation, we design the network to have separate decoder heads for prediction and uncertainty outputs. All network components are listed as follows: 
+
+Tokenizer. The spectral cube X is processed by a GRT-style spectrum tokenizer to patchify inputs into tokens. The elevation and azimuth axes are first collapsed into the channel dimension via a learned linear layer, after which spatial patches are applied over the Doppler and range axes, respectively. Each patch is projected to a d-dimensional embedding. Sinusoidal positional encodings are added, and a learned readout token is appended. The spectrum cube X
+
+are now transformed into tokens of T ∈ R(N +1) ×d.
+
+Encoder. A 4-layer multi-head self-attention transformer encoder processes tokens T into contextual features E.
+
+Depth and Doppler decoder. A 4-layer Transformer decoder with a learned query grid of the desired output image of size (OE , O A), which presents required output angle bins of elevation and azimuth. The queries are then cross-attended to encoded tokens E and produce an output image with 2 channels: a normalized depth map ˆρ ∈ ROE ×OA and a normalized Doppler image ˆd ∈ ROE ×OA . Which can later be transformed to metric scale Doppler image ˆdm using maximum Doppler velocity derived from chirp configuration. 
+
+uncertainty decoder. A separate lightweight 2-layer Transformer decoder with identical architecture produces per-pixel log-variance maps ˆℓd ∈ ROe×Oa for the Doppler. Outputs are clamped for numerical stability. 
+
+Velocity and uncertainty heads. Two 3-layer MLPs operate on the encoder output readout token. The velocity head outputs a positive velocity scale and a unit direction. 
+
+[s, n] ∈ R4, which then converted to body-frame velocity as ˆv = sn ∈ R3. The log-variance head outputs per-axis log-variance ˆℓv ∈ R3. log-variances are also clamped for numerical stability. 
+
+C. Training Strategy 
+
+In order to make the model generalize, our model training proceeds in three stages, each building on the trained model weights from the previous stage. 
+
+Stage 1 — Depth pretraining. The tokenizer, encoder, and prediction decoder are trained to regress LiDAR-projected depth using a masked L1 loss and a spatial gradient regularizer: 
+
+Ldepth = LL1 (ˆ ρ, ρ ⋆, V) + λg Lgrad (ˆ ρ, ρ ⋆, V), (1) where ρ⋆ is the normalized LiDAR depth by maximum radar distance, V is the valid-pixel mask within maximum radar range, and λg =0 .5 weights the gradient term. The covariance decoder and all velocity heads are frozen. In this stage, we train the network with all available data from the GRT dataset. Including three different chirp configurations, depth, and velocity patterns. This stage provides a strong geometric representation before Doppler or velocity supervision is applied. 
+
+Stage 2 — Velocity or Doppler prediction. In this stage, we only fine-tune on our target indoor environment subset of the GRT dataset. Depends on the experiment, we either trained on velocity or Doppler output heads. For training velocity ˆv, we simply use an L1 loss with ground truth body velocity v⋆ calculated from LiDAR odometry. For training the Doppler image ˆd, we project the ground truth body velocity to each angle bin and get the ground truth Doppler image d⋆.
+
+d⋆e,a = − v⋆ · ˆue,a (2) Where ˆue,a ∈ R3 be the unit direction of the angle bin [e, a ].And the uncertainty decoder is still frozen in this stage. 
+
+Stage 3 — Uncertainty calibration. To train our model output the prediction uncertainty. All parts are frozen, ex-cept the uncertainty decoder or uncertainty heads are being trained. We follow the previous works on metric scale uncertainty prediction for state estimation [9], which use the negative log likely hood loss: 
+
+LNLL = λnll 
+
+X
+
+> i
+
+(est i − gt i)2ˆ σ2
+
+> i
+
++ 12 log ˆ σ2 
+
+> i
+
+, (3) where (est, gt ) can be either velocity (ˆ v, v⋆) or metric scale Doppler image (ˆdm, d ⋆) and ˆσ2 
+
+> i
+
+is either the per-axis velocity variance exp( ˆℓv ) or the per-pixel Doppler variance exp( ˆℓd).Since the backbone weights are frozen and est is detached, gradients flow exclusively from the NLL loss through the uncertainty model, training it to predict uncertainty that is calibrated to actual velocity error. 
+
+D. Velocity and Uncertainty Propagate 
+
+While we can directly use the predicted velocity and its un-certainty (ˆ v, ˆℓv ), where Σv = diag(exp( ˆℓv )) , for the radar-inertial odometry task, we need to run one additional step to transform the Doppler image and its uncertainty (ˆdm, ˆℓd)
+
+into a velocity ˆvd ∈ R3 and its covariance matrix Σd ∈
+
+R3×3. Given the predicted Doppler image ˆdm(e, a ) and per-pixel inverse-variance weights w(e, a ) = exp( − ˆℓd(e, a )) ,we recover the body-frame velocity by solving the weighted least-squares (WLS) problem: 
+
+ˆvd = arg min 
+
+> v
+
+X
+
+> e,a
+
+w(e, a ) ˆdm(e, a ) − v · ˆu(e, a )2. (4) where ˆu(e, a ) ∈ R3 is the unit direction vectror at ele-vation and azimuth angle. Stacking all N = OE × OA
+
+direction vectors as rows of D ∈ RN ×3 and letting W =diag( w1, . . . , w N ), the normal equations give 
+
+ˆvd = ( D⊤WD )−1D⊤Wˆdm, (5) solved via Cholesky decomposition. The velocity covariance is then the inverse of information matrix. 
+
+Σd = ( D⊤WD )−1. (6) Trace Dist (m) APE RPE PC GRT [8] proposed Doppler proposed velocity PC GRT [8] proposed Doppler proposed velocity cfa.1.fwd 64 0.289 0.780 0.439 0.264 0.408 0.938 0.195 0.112 cfa.3.fwd 65 0.214 0.595 0.109 0.163 0.444 0.607 0.130 0.186 cfa.a.fwd (1) 112 0.281 0.641 0.301 0.245 0.589 0.460 0.180 0.188 cfa.a.fwd (2) 127 0.148 0.981 0.565 0.236 0.482 0.757 0.306 0.191 morrison.1.fwd (1) 199 3.193 1.325 3.333 1.894 0.449 0.446 0.170 0.196 morrison.1.fwd (2) 54 1.340 0.523 0.259 0.130 1.560 0.577 0.091 0.137 morrison.2.fwd (1) 90 0.959 0.985 0.895 0.787 0.337 0.579 0.237 0.277 morrison.2.fwd (2) 53 0.130 0.773 0.183 0.113 0.450 1.184 0.201 0.184 posner.1.fwd 335 1.938 2.436 0.316 2.704 1.913 0.720 0.195 0.262 posner.2.fwd 223 0.142 1.034 0.855 1.043 0.439 0.400 0.188 0.256 posner.3.fwd 160 1.587 1.348 2.130 1.216 1.678 0.409 0.180 0.258 posner.a.fwd 255 2.090 2.229 1.702 1.881 0.774 0.722 0.597 0.619      
+
+> TABLE I APE / RPE RMSE ( M) — SEQUENCES WITH FORWARD MOTION . C OLOR BACKGROUND INDICATE BEST ,2ND BEST PERFORMANCE .
+
+Trace Dist (m) APE RPE PC GRT [8] proposed Doppler proposed velocity PC GRT [8] proposed Doppler proposed velocity cfa.1.lat 82 1.452 1.673 0.495 0.325 0.780 2.080 0.223 0.332 cfa.3.lat 67 0.775 1.818 0.282 0.452 0.794 15.483 0.298 0.291 cfa.a.lat (1) 75 0.984 1.012 0.433 0.284 0.710 1.578 0.272 0.304 cfa.a.lat (2) 77 0.538 2.747 0.262 0.163 0.642 2.981 0.344 0.228 morrison.1.lat (1) 52 0.831 1.948 0.348 0.192 0.739 1.898 0.317 0.309 morrison.1.lat (2) 106 1.326 9.536 0.727 0.728 0.975 6.623 0.638 0.635 morrison.2.lat 75 1.054 4.271 0.927 0.713 0.860 4.310 0.459 0.462 posner.1.lat 337 6.807 3.754 1.442 1.918 0.764 2.151 0.394 0.275 posner.2.lat 207 1.899 1.241 1.137 0.897 0.616 1.391 0.433 0.333 posner.3.lat 205 1.541 1.436 1.498 0.784 0.642 1.194 0.370 0.288 posner.a.lat 248 4.714 3.788 5.313 4.197 0.948 0.783 0.695 0.685      
+
+> TABLE II APE / RPE RMSE ( M) — SEQUENCES WITH LATERAL MOTION . C OLOR BACKGROUND INDICATE BEST ,2ND BEST PERFORMANCE .
+
+E. Pose Graph Optimization 
+
+To fuse our predicted radar measurements with IMU for state estimation, we follow the method demonstrate in MRIO [4]. Trajectory estimation is performed by a sliding-window factor graph over a 3-second window. At each radar frame, the network produces a body-frame velocity measurement 
+
+ˆv|ˆvd and covariance Σv |Σd from (5)–(6). These are in-corporated as velocity factors replacing the radar Doppler point cloud estimated velocity and uncertainty used in RIO systems. 
+
+X ∗S = argmin 
+
+> XS
+
+" X
+
+> i,j ∈S
+
+
+
+|| r∆Iij || 2Σr + || rVbj || 2Σvb
+
+#
+
+(7) To optimize poses X ∈ R6 in a sliding window S between frame i and frame j, we minimize the IMU residuals 
+
+r∆Iij , where IMU measurements between consecutive radar frames are integrated via preintegration to form relative-motion factors [28], and the body-frame velocity residuals 
+
+rVbj following [4]. We use the estimated covariance from the neural network to minimize the Mahalanobis distance 
+
+|| . . . || 2Σvb . A Huber robust cost is applied to the velocity residuals to limit the influence of outlier measurements. States outside the optimization window are removed via marginalization with a fixed prior on all six pose degrees of freedom. The system runs online without any loop closure or global map. IV. E XPERIMENTS 
+
+A. Radar IQ Dataset and Training 
+
+We train and evaluate our proposed methods with the IQ1M dataset [8], which contains about 29 hours, 1 million frames at 20 frames per second of complex signal data collected from a Texas Instruments AWR1843Boost radar and a DCA-1000EVM capture card. The IMU measurements are provided by a XSens MTi-3 AHRS sensor running at 100 frames per second. The ground truth depth and velocity are provided by the dataset which were built using the LiDAR state estimation algorithm. The IQ1M dataset has three types of radar chirp configura-tions collected in three different scenes and motion patterns (indoor, outdoor, bike). We use the full training set for depth pretraining. For the second-stage velocity and third-stage uncertainty training, we only train on the indoor training subset, which has a chirp configuration enabling a maximum 0 10 20 30 40 
+
+> −50
+> −40
+> −30
+> −20
+> −10
+> 0
+> y (m)
+
+cfa.1.lat     
+
+> −60 −40 −20 020
+> −80
+> −60
+> −40
+> −20
+> 0
+
+posner.2.fwd    
+
+> 010 20 30
+> x (m)
+> −30
+> −20
+> −10
+> 0
+> 10
+> y (m)
+
+cfa.a.lat (2)     
+
+> −10 010 20 30
+> x (m)
+> −40
+> −30
+> −20
+> −10
+> 0
+
+morrison.2.lat     
+
+> 010 20 30 40
+> x (m)
+> −40
+> −30
+> −20
+> −10
+> 0
+
+cfa.3.lat     
+
+> 0510 15 20
+> −5
+> 0
+> 5
+> 10
+> 15
+> 20
+
+morrison.1.lat (1)        
+
+> GT PC GRT Doppler Velocity Fig. 2. Qualitative trajectory comparison on six representative sequences. Ground truth is shown as a dashed black line; estimated trajectories from PC, GRT, Doppler, and Velocity are shown as solid colored lines, aligned to the ground truth via SE(3) Umeyama alignment. Insets highlight regions of interest where method differences are most pronounced. Lateral-motion sequences (all except posner.2.fwd ) demonstrate the clear advantage of learning-based methods over the classical DSP point-cloud baseline.
+
+Doppler velocity of 1.2 m/s and a maximum range of 11.2 m. For the evaluation stage, we run and evaluate our odometry algorithm on the indoor testing set, which comprises three indoor environments not seen during training. Due to the limited antenna radiation pattern of the AWR1843Boost radar, which focuses primarily on the az-imuth plane and introduces noise along the elevation axis, we restrict pose estimation and evaluation to the 2D plane by fixing the marginalized pose to z = 0 .
+
+B. Baseline 
+
+We compare our proposed method With two baseline methods to process radar spectrum into velocity. We evaluate the generated velocity with same radar-inertial odometry system. 
+
+1) CFAR generate point cloud: We follow the classical radar digital signal processing pipeline from Texas Instru-ments mmWave Studio [7] to convert raw IQ samples into a 3-D point cloud through three sequential stages: spectral processing, detection, and angle-of-arrival estimation. We first perform a 4-D FFT as described in Section III-A. One small difference is that we apply a DC-removal step by subtracting the mean along the slow-time dimension before the FFT, which removes the zero-Doppler clutter. We then apply 2-D cell-averaging CFAR to detect candidate objects in the Range-Doppler map. For each detection, we select the peak-magnitude bin in its corresponding elevation-azimuth FFT image. Each bin ψn of the N -point angle FFT is zero-centered over [−π, π ] and maps to a physical angle via 
+
+θn = arcsin 
+
+ ψn
+
+2πd λ
+
+
+
+(8) where dλ is the antenna spacing in units of wavelength, typically 0.5 by design but may vary with the operating frequency. With the full information (range, Doppler, az-imuth, elevation) for each detection, we transform them into 4-D point clouds (x, y, z, Doppler ). To suppress noise and multipath detections, we discard points outside the −3 dB radiation-pattern lobe, which spans approximately 
+
+(±60 ◦ azimuth , ±30 ◦ elevation ) for the AWR1843Boost antenna array. All steps are implemented in PyTorch with GPU acceleration. The linear body-frame velocity and its covariance are then estimated from the generated point cloud as described in [4]. 
+
+2) GRT output velocity: We used the pretrained model from GRT [8] with velocity prediction task trained to generate the velocity. Where in GRT the velocity output scale is normalized according to Doppler resolution. We convert it back to metric scale by multiply it with Doppler resolution according to the indoor data chirp configura-tion. The covariance of the velocity are fixed as Σv =diag(0 .01 , 0.01 , 0.01) ∈ R3×3.
+
+C. Quantitative Evaluation 
+
+We evaluate our radar-inertial odometry using the EVO [29] library. Tables I and II report the Absolute Pose Error (APE) and Relative Pose Error (RPE) of the trans-lation component across all testing sequences, separated by dominant motion type: forward and lateral. APE is computed with Umeyama alignment, and RPE is evaluated at 10-meter intervals. Our method achieves the lowest RPE in the majority of sequences, demonstrating superior local accuracy compared to all baselines. The advantage is particularly evident in the lateral-motion sequences (Table II), where learning-based estimators consistently outperform the classical DSP baseline by a margin; with lateral motion, DSP produces fewer points along the direction of motion, whereas our approach leverages the full Doppler spectrum to maintain accuracy even when the point cloud is sparse or poorly conditioned. In forward-motion sequences (Table I), the gap narrows since radial velocity is better observed, yet our method still achieves competitive APE and the best RPE in most traces. 
+
+D. Qualitative Evaluation 
+
+Figure 2 shows representative trajectory comparisons across lateral and forward-motion sequences. In the lateral sequences, the DSP point-cloud baseline (PC) exhibits large drift, often deviating significantly from the ground truth. The GRT baseline shows inconsistent behavior, competitive on some traces yet failing on others. In contrast, the Doppler and Velocity estimators track the ground truth closely through-out, with the zoomed insets revealing that the Velocity method maintains tighter agreement in regions where the other methods diverge. For the forward-motion sequence (posner.2.fwd ), all methods improve, consistent with the quantitative results in Table I, as radial Doppler geometry is better conditioned in the direction of travel. Nevertheless, the most notable advantage of our learning-based estimators is in lateral-motion sequences, where they consistently maintain trajectory smoothness and accuracy while classical DSP-based methods exhibit significant drift. V. C ONCLUSION 
+
+We presented UNRIO, a radar-inertial odometry system that estimates ego-velocity and its uncertainty directly from raw mmWave radar IQ signals, bypassing the information loss inherent in classical signal processing pipelines. Our transformer-based network supports both direct velocity and per-angle-bin Doppler output modes, each with calibrated un-certainty estimates that are propagated into a sliding-window pose graph fusing radar and IMU measurements. Evaluations on held-out indoor environments from the IQ1M dataset show that UNRIO achieves state-of-the-art relative pose error across most sequences, with the largest gains on lateral-motion trajectories where classical DSP-based point cloud methods struggle due to sparse radial observations. These results demonstrate the value of operating on the full radar spectrum for robust, generalizable state estimation. Future work will focus on extending to different radar modulations and configurations, incorporating mapping capabilities, and improving cross-environment generalization. REFERENCES [1] C. Doer and G. F. Trommer, “An EKF based approach to radar inertial odometry,” in Proc. Intl. Conf. on Multisensor Fusion and Integration for Intelligent Systems (MFI) , Karlsruhe, DE, Sep. 2020, pp. 152–159. [2] J. Zhang, H. Zhuge, Z. Wu, G. Peng, M. Wen, Y. Liu, and D. Wang, “4dradarslam: A 4d imaging radar slam system for large-scale envi-ronments based on pose graph optimization,” in Proc. IEEE Intl. Conf. on Robotics and Automation (ICRA) , 2023, pp. 8333–8340. [3] Y. Zhuang, B. Wang, J. Huai, and M. Li, “4D iRIOM: 4D imaging radar inertial odometry and mapping,” IEEE Robotics and Automation Letters (RA-L) , vol. 8, no. 6, pp. 3246–3253, 2023. [4] J.-T. Huang, R. Xu, A. Hinduja, and M. Kaess, “Multi-radar inertial odometry for 3d state estimation using mmwave imaging radar,” in                                        
+
+> Proc. IEEE Intl. Conf. on Robotics and Automation (ICRA) , Yoko-hama, JP, 2024, pp. 12 006–12 012. [5] C. Kim, G. Bae, W. Shin, S. Wang, and H. Oh, “Ekf-based radar-inertial odometry with online temporal calibration,” IEEE Robotics and Automation Letters (RA-L) , 2025. [6] J. Michalczyk, R. Jung, and S. Weiss, “Tightly-coupled EKF-based radar-inertial odometry,” in Proc. IEEE/RSJ Intl. Conf. on Intelligent Robots and Systems (IROS) , Kyoto, JP, Oct. 2022, pp. 12 336–12 343. [7] C. Iovescu and S. Rao, “The fundamentals of millimeter wave sen-sors,” Texas Instruments , pp. 1–8, 2017. [8] T. Huang, A. Prabhakara, C. Chen, J. Karhade, D. Ramanan, M. O’toole, and A. Rowe, “Towards foundational models for single-chip radar,” in Proc. IEEE Conf. on Computer Vision and Pattern Recognition (CVPR) , Honolulu, HI, 2025, pp. 24 655–24 665. [9] Y. Qiu, Y. Chen, Z. Zhang, W. Wang, and S. Scherer, “Mac-vo: Metrics-aware covariance for learning-based stereo visual odometry mac-vo. github. io,” in Proc. IEEE Intl. Conf. on Robotics and Automation (ICRA) , Atlanta, GA, 2025, pp. 3803–3814. [10] S. Wang, V. Leroy, Y. Cabon, B. Chidlovskii, and J. Revaud, “Dust3r: Geometric 3d vision made easy,” in Proc. IEEE Conf. on Computer Vision and Pattern Recognition (CVPR) , 2024, pp. 20 697–20 709. [11] Z. Teed and J. Deng, “Droid-slam: Deep visual slam for monocular, stereo, and rgb-d cameras,” Advances in neural information processing systems , vol. 34, pp. 16 558–16 569, 2021. [12] C. X. Lu, M. R. U. Saputra, P. Zhao, Y. Almalioglu, P. P. De Gusmao, C. Chen, K. Sun, N. Trigoni, and A. Markham, “milliEgo: single-chip mmWave radar aided egomotion estimation via deep sensor fusion,” in Proc. ACM Conf. on Embedded Networked Sensor Systems ,Yokohama, JP, Nov. 2020, pp. 109–122. [13] C. Doer and G. F. Trommer, “x-RIO: Radar inertial odometry with multiple radar sensors and yaw aiding,” Gyroscopy and Navigation ,vol. 12, pp. 329–339, 02 2022. [14] D. C. Herraez, M. Zeller, D. Wang, J. Behley, M. Heidingsfeld, and C. Stachniss, “Rai-slam: Radar-inertial slam for autonomous vehicles,”
+> IEEE Robotics and Automation Letters (RA-L) , 2025. [15] J. Jiang, S. Xu, K. Zhang, J. Wei, J. Wang, and S. Wang, “Digital beamforming enhanced radar odometry,” in Proc. IEEE Intl. Conf. on Robotics and Automation (ICRA) , Atlenta, GA, 2025, pp. 4601–4607.
+
+[16] A. Zhang, F. E. Nowruzi, and R. Laganiere, “Raddet: Range-azimuth-doppler based radar object detection for dynamic road users,” in 2021 18th Conference on Robots and Vision (CRV) . IEEE, 2021, pp. 95– 102. [17] J. Giroux, M. Bouchard, and R. Laganiere, “T-fftradnet: Object de-tection with swin vision transformers from raw adc radar signals,” in 
+
+Proceedings of the IEEE/CVF International Conference on Computer Vision , 2023, pp. 4030–4039. [18] C. Decourt, R. VanRullen, D. Salle, and T. Oberlin, “Darod: A deep automotive radar object detector on range-doppler maps,” in 2022 IEEE Intelligent Vehicles Symposium (IV) . IEEE, 2022, pp. 112– 118. [19] A. Prabhakara, T. Jin, A. Das, G. Bhatt, L. Kumari, E. Soltanaghai, J. Bilmes, S. Kumar, and A. Rowe, “High resolution point clouds from mmwave radar,” in 2023 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2023, pp. 4135–4142. [20] H. Lai, G. Luo, Y. Liu, and M. Zhao, “Enabling visual recognition at radio frequency,” in Proceedings of the 30th Annual International Conference on Mobile Computing and Networking , 2024, pp. 388–403. [21] T. Huang, J. Miller, A. Prabhakara, T. Jin, T. Laroia, Z. Kolter, and A. Rowe, “Dart: Implicit doppler tomography for radar novel view synthesis,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2024, pp. 24 118–24 129. [22] D. Borts, E. Liang, T. Broedermann, A. Ramazzina, S. Walz, E. Pal-ladin, J. Sun, D. Brueggemann, C. Sakaridis, L. Van Gool et al. , “Radar fields: Frequency-space neural scene representations for fmcw radar,” in ACM SIGGRAPH 2024 Conference Papers , 2024, pp. 1–10. [23] Y.-J. Li, S. Hunt, J. Park, M. O’Toole, and K. Kitani, “Azimuth super-resolution for fmcw radar in autonomous driving,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recogni-tion , 2023, pp. 17 504–17 513. [24] L. Dowling, N. Shigihalli, S. Murray, and B. Fathi, “How centralized radar processing on NVIDIA DRIVE enables safer, smarter level 4 autonomy,” March 2026, nVIDIA Technical Blog. Accessed: April 14, 2026. [25] E. Dexheimer and A. J. Davison, “Learning a depth covariance function,” in Proc. IEEE Conf. on Computer Vision and Pattern Recognition (CVPR) , 2023, pp. 13 122–13 131. [26] R. Murai, E. Dexheimer, and A. J. Davison, “Mast3r-slam: Real-time dense slam with 3d reconstruction priors,” in Proc. IEEE Conf. on Computer Vision and Pattern Recognition (CVPR) , 2025, pp. 16 695– 16 705. [27] S. Zhao, H. Zhu, Y. Gao, B. Kim, Y. Qiu, A. M. Johnson, and S. Scherer, “Superloc: The key to robust lidar-inertial localization lies in predicting alignment risks superodometry. com/superloc,” in Proc. IEEE Intl. Conf. on Robotics and Automation (ICRA) , Atlanta, GA, 2025, pp. 14 080–14 086. [28] C. Forster, L. Carlone, F. Dellaert, and D. Scaramuzza, “On-manifold preintegration for real-time visual–inertial odometry,” IEEE Trans. on Robotics (TRO) , vol. 33, no. 1, pp. 1–21, 2016. [29] M. Grupp, “evo: Python package for the evaluation of odometry and SLAM.” https://github.com/MichaelGrupp/evo, 2017.

@@ -1,0 +1,368 @@
+Title: RadarSplat-RIO: Indoor Radar-Inertial Odometry with Gaussian Splatting-Based Radar Bundle Adjustment
+
+URL Source: https://arxiv.org/pdf/2604.13492v1
+
+Published Time: Thu, 16 Apr 2026 00:35:47 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# RadarSplat-RIO: Indoor Radar-Inertial Odometry with Gaussian Splatting-Based Radar Bundle Adjustment 
+
+Pou-Chun Kung 1,2,∗, Yuan Tian 1, Zhengqin Li 1, Yue Liu 1, Eric Whitmire 1, Wolf Kienzle 1, and Hrvoje Benko 1
+
+Abstract —Radar is more resilient to adverse weather and lighting conditions than visual and Lidar simultaneous local-ization and mapping (SLAM). However, most radar SLAM pipelines still rely heavily on frame-to-frame odometry, which leads to substantial drift. While loop closure can correct long-term errors, it requires revisiting places and relies on robust place recognition. In contrast, visual odometry methods typically leverage bundle adjustment (BA) to jointly optimize poses and map within a local window. However, an equivalent BA formulation for radar has remained largely unexplored. We present the first radar BA framework enabled by Gaussian Splatting (GS), a dense and differentiable scene representation. Our method jointly optimizes radar sensor poses and scene geometry using full range-azimuth-Doppler data, bringing the benefits of multi-frame BA to radar for the first time. When integrated with an existing radar-inertial odometry frontend, our approach significantly reduces pose drift and improves ro-bustness. Across multiple indoor scenes, our radar BA achieves substantial gains over the prior radar-inertial odometry, re-ducing average absolute translational and rotational errors by 
+
+∼90% and ∼80%, respectively. 
+
+I. I NTRODUCTION 
+
+Simultaneous Localization and Mapping (SLAM) is a fundamental capability for autonomous systems. While most SLAM systems rely on optical sensors such as cameras and LiDAR, these modalities suffer from performance degra-dation under adverse weather conditions (e.g., rain, fog, snow) or variable lighting environments (e.g., low light or overexposure). Millimeter-wave radar offers a compelling alternative due to its robustness to illumination changes [1], harsh weather [2, 3], and occlusions by non-metallic materi-als (e.g., plastic, fabric) [4]. Moreover, the radar is low-cost and has low power consumption. These properties make radar particularly suitable for challenging SLAM applications in autonomous robotics. A wide range of radar-based odometry methods have been proposed, including velocity-based [5], geometry-based [6, 7, 8], and learning-based approaches [9, 10]. However, most radar and radar-inertial odometry (RO/RIO) methods esti-mate poses by integrating estimated per-frame velocities or matching radar points or images between consecutive frames, effectively following a dead-reckoning paradigm [11]. Con-sequently, drift accumulates over time. Although some meth-
+
+*Work done during his internship at Meta. 
+
+> 1
+
+P.C. Kung, Y. Tian, Z. Li, Y. Liu, E Whitmire, W. Kienzle, H. Benko were with Meta Reality Labs, Redmond, WA 98052 at the time this work was completed 
+
+> 2
+
+P.C. Kung is with the Department of Robotics, University of Michigan, Ann Arbor, MI 48109 pckung@umich.edu 
+
+Fig. 1. Existing radar SLAM methods largely depend on frame-to-frame estimation, which inevitably accumulates drift over time. To address this limitation, we introduce a Gaussian Splatting–based radar bundle adjustment framework that jointly optimizes multi-frame poses and a dense scene representation. This joint optimization substantially reduces drift and improves overall trajectory consistency. 
+
+ods incorporate loop closure and place recognition [12, 13, 14, 15] to counteract this drift, such corrections require revisiting previously observed locations, limiting their ap-plicability in online or exploratory applications. Multi-frame bundle adjustment (BA) is a standard com-ponent of visual odometry (VO) systems for reducing drift. It jointly optimizes camera poses and scene structure within a sliding window [16, 17]. This optimization significantly improves VO accuracy without relying on loop closures or revisiting previously seen locations. Recent work has shown that LiDAR can also benefit from BA-style opti-mization [18, 19, 20, 21]. However, adapting BA to radar remains largely unexplored and challenging due to the ab-sence of dense scene representation and the complexity of radar’s sensing modality, which involves range, azimuth, and Doppler dimensions, as shown in Figure 2. To address this gap, we introduce RadarSplat-RIO , the  
+
+> arXiv:2604.13492v1 [cs.RO] 15 Apr 2026 Fig. 2. Illustration of 3D radar data from a Multiple-Input and Multiple-Output (MIMO) radar after FFT-based signal processing. The resulting data cube spans three dimensions corresponding to range, azimuth, and Doppler velocity measurements.
+
+first radar BA framework inspired by RadarSplat [22], a dense and differentiable Gaussian Splatting (GS) [23] representation for radar. Prior NeRF [24]- and GS-based visual and LiDAR SLAMs [25, 26, 19] have shown that BA with dense representation improves pose estimation. We aim to extend this paradigm to radar SLAM. How-ever, while RadarSplat supports radar rendering, it does not model Doppler velocity measurements. To fully ex-ploit radar sensing capability, we propose RadarSplat++ ,which augments RadarSplat with Doppler-aware rendering inspired by DART [27], a radar NeRF method that supports range-Doppler (RD) rendering. By leveraging GS-based BA and full radar range-azimuth-Doppler (RAD) measurement, RadarSplat-RIO achieves accurate and drift-resilient radar odometry without loop closures. Our key contributions are:  
+
+> •
+
+We present the first radar bundle adjustment frame-work that jointly optimizes radar sensor poses and scene geometry within a Gaussian Splatting representation.  
+
+> •
+
+We propose RadarSplat++ , the first radar rendering pipeline that supports full radar measurements, includ-ing range, azimuth, and Doppler dimensions.  
+
+> •
+
+We demonstrate significant improvements in RIO by integrating our BA backend with existing RIO fron-tends, achieving reduced drift and enhanced robustness over long-term trajectories. II. R ELATED WORK 
+
+A. Radar-based SLAM/Odometry 
+
+Radar odometry and SLAM can be approached in various ways depending on the radar sensor type and the provided data format. In general, existing radar SLAM methods can be categorized into velocity-based, geometry-based, learning-based, or their combinations. Velocity-based methods are the most classical and widely adopted radar odometry [5, 28, 29, 30]. These approaches estimate the ego-velocity directly from Doppler measure-ments by assuming that most observed targets are static. However, relying solely on velocity integration inevitably leads to drift when the velocity estimates contain even small errors. Geometry-based methods have leveraged geometric information in radar images or points for pose estimation. These approaches estimate poses by associating radar points across frames [6, 7, 31, 32, 33] or matching consecutive radar           
+
+> Fig. 3. Comparison between visual and radar SLAM. Visual SLAM has progressed from frame-to-frame VO to BA-enabled joint pose–scene optimization. In contrast, existing radar SLAM remains predominantly frame-to-frame. Our method introduces the first radar BA for drift-resilient odometry. ρ(·)can be any loss function.
+
+images [8, 34, 35]. Although geometric constraints improve stability, frame-to-frame estimation still accumulates error over long trajectories. Finally, learning-based approaches have been proposed for feedforward pose or velocity predic-tion from radar images [9, 10] or points [36]. These methods remain per-frame estimation and thus still suffer from error accumulation. Radar–inertial SLAM systems typically combine radar-estimated translational velocity with IMU angular velocity for accurate pose estimation. Early methods [28, 29] employ filtering-based fusion, whereas optimization-based formula-tions are adopted by [30, 32, 33]. Nevertheless, IMU fusion primarily imposes local angular constraints and does not guarantee global trajectory consistency. 
+
+B. Visual and LiDAR SLAM with Bundle Adjustment 1) Visual Odometry: Early VO systems relied on frame-to-frame feature matching and pose aggregation [37]. PTAM [38] first show that jointly optimizing multi-frame poses and scene structure via BA is essential for preventing drift. Landmark-based BA subsequently became a standard component of VO and visual SLAM [16, 17]. More recently, advances in dense scene representations such as NeRF [24] and GS [23] have enabled photometric BA formulations for NeRF/GS-based SLAM systems [39, 40, 41, 25] with dense scene reconstruction and more accurate pose estimation. The comparison between visual and radar SLAM progress is illustrated in Figure 3 
+
+2) LiDAR Odometry: Similarly, while frame-to-frame or frame-to-map approaches are used in early LiDAR odometry and mapping (LOAM) [42], the BA concept is also adapted to LiDAR in BALM [18] with multi-frame poses and map optimization. The idea is also extended to NeRF/GS-based LiDAR SLAM, like [19, 20, 21]. 
+
+3) Summary: Despite the success of BA in visual and Li-DAR SLAM, applying BA to radar data remains challenging due to the inherent complexity of the radar sensor, unstable feature points, and the lack of a multi-view reconstruction framework, such as NeRF or GS for radar. Inspired by recent advances in RadarSplat [22], we propose a radar bundle adjustment framework built on the same GS–based scene representation. By leveraging the differentiable and continu-ous nature of GS, our method jointly optimizes radar sensor poses and the underlying scene geometry. This formulation narrows the gap between radar-based SLAM and visual or LiDAR SLAM, leading to improved trajectory accuracy over existing radar odometry methods. III. M ETHOD 
+
+A. Radar Preliminary 1) Radar Sensor Data: FMCW MIMO radars generate a raw complex-valued 3D radar data cube. After applying Fast Fourier Transform (FFT) over fast-time samples, antenna channels, and slow-time chirps, the radar produces a cube 
+
+IRAD ∈ CNr ×Na×Nd spanning range, azimuth, and Doppler (Figure 2). To improve computational efficiency, the 3D radar data cube is typically reduced to 2D representations along the range–azimuth or range–Doppler dimensions, forming the RA image IRA ∈ RNr ×Na and the RD image IRD ∈
+
+RNr ×Nd . Conventional methods, such as CFAR [43], further extract feature points in RA image to obtain radar point clouds with position and velocity information for down-stream applications. 
+
+2) Radar Equation: A radar-azimuth image IRA is com-prised of multiple range-power signals captured from differ-ent azimuth angles. The received power Pr (n) at bin n with range Rn is determined by the radar equation: 
+
+Pr (n) = PtG2λ2σ
+
+(4 π)3R4
+
+> n
+
+L , (1) where Pt is the radar peak transmit power, G is the antenna gain depending on elevation angle, λ is the wavelength, L
+
+represents system and propagation loss, and σ is the total radar cross-section (RCS) of objects at range Rn.
+
+B. RadarSplat-RIO Pipeline 
+
+Figure 4 illustrates an overview of the proposed RadarSplat-RIO. An existing RIO [30] is used as the frontend to obtain the initial pose at a new timestamp. In the pro-posed backend optimization, we follow classical NeRF/GS SLAM [39, 19, 41] to perform pose refinement, mapping, and bundle adjustment processes as the backend. The loss is computed as the difference between the RadarSplat++ rendering and the radar image. 
+
+C. Frontend: Radar-Inertial Odometry 
+
+We follow MRIO [30] to deploy a graph-based RIO as our frontend. The radar ego-velocity is estimated from a single radar image following the formulation of [5]. Each radar image produces a set of feature points, extracted using CFAR [43], denoted as pi, along with their corresponding Doppler velocities vid, where i indexes the feature points. The unit direction vector describing line-of-sight from the radar to the target for each point is ri = pi 
+
+> ∥pi∥
+
+. Assuming a static environment, the measured Doppler velocity vid equals the projection of the radar ego-velocity v onto rir . Therefore 
+
+vid = ( ri)⊤v.
+
+
+
+v1
+
+> d
+
+v2
+
+> d
+
+...vNd
+
+| {z } 
+
+> yr
+
+=
+
+
+
+r1 
+
+> x
+
+r1 
+
+> y
+
+r1
+
+> z
+
+r2 
+
+> x
+
+r2 
+
+> y
+
+r2
+
+> z
+
+... ... ...rNx rNy rNz
+
+| {z }
+
+> H
+
+
+
+vx
+
+vy
+
+vz
+
+| {z } 
+
+> v
+
+, (2) The radar ego-velocity is estimated using a least-squares solution: 
+
+ˆvr = ( H⊤H)−1H⊤yr . (3) The IMU pre-integration factor is defined as [30] to fuse radar translation velocity and IMU rotation velocity using the GTSAM library [44]. 
+
+D. RadarSplat++: RadarSplat with Proposed Range-Doppler Rendering 1) RadarSplat Recap: RadarSplat [22] represents the scene as a set of 3D Gaussians following [23]. The model 
+
+G has N Gaussians, and each Gaussian is composed of the mean, μ, rotation quaternion, q, scaling vector, S, and radar power return ratio, σ, which is the RCS value when a Gaussian represents a real object rather than noise: 
+
+G = {Gi : ( μi, q i, S i, σ i) |i = 1 , ..., N }. (4) Each radar frame i has a pose Ti = [ Ri | ti] ∈ SE (3) that transforms world coordinates into the radar frame. Given G and radar pose Ti, the rendered radar range-azimuth image is obtained as: 
+
+ˆIRA = Π( G, Ti) ∈ RNr ×Na , (5) where Πradar is the differentiable radar renderer in [22] based on radar equation (Eq. 1). Compared to the original GS [23], RadarSplat changes the sensor model to orthogonal weighted averaging in polar space along the elevation axis and renders based on the RCS σ value. 
+
+2) Proposed Differentiable Range-Doppler Rendering: 
+
+MIMO Radar produces a data cube with spatial and velocity information. Unlike RadarSplat, which supports only RA ren-dering, we extend the framework to RD rendering, allowing Doppler velocity to contribute to both scene reconstruction and pose estimation, thereby fully exploiting the radar’s sensing capability. Fig. 4. Pipeline of RadarSplat-RIO. The frontend performs radar–inertial odometry to provide initial pose estimates. The backend refines these poses within a Gaussian Splat representation and maintains a local map using a sliding-window strategy. Finally, the proposed bundle adjustment jointly optimizes radar poses and the scene representation. Orange nodes indicate selected keyframes at different stages. More details is discussed in Sec. III-E.    
+
+> Fig. 5. Range–Doppler rendering examples. Range–Doppler images are rendered from the range–azimuth image and the Doppler map computed from ego-velocity. The first and second rows show side and forward motions, yielding distinct Doppler patterns. Fdenotes the rendering operation.
+
+To render radar range-Doppler image, we first compute the estimated Doppler velocity of each Gaussian based on ego-velocity v by assuming the measurement is static. Given G,radar pose Ti, and radar velocity v obtained from Tk and 
+
+Tk−1 and time difference ∆k, the Doppler velocity of a Gaussian is 
+
+vDoppler  
+
+> i
+
+= −ˆr⊤ 
+
+> i
+
+v (6) , where ˆri ≜ μi−t 
+
+> ∥μi−t∥
+
+, and ˆri is the line-of-sight direction vector of each Gaussian. The predicted radar range-Doppler image is obtained as: 
+
+ˆIDoppler RA [r, a ] = Π Doppler (vi) = vx cos θa + vy sin θa (7) , where ΠDoppler generate Doppler image based on ego-velocity v and θa is azimuth angle at bin a.
+
+ˆIRD = F (ˆIRA , ˆIDoppler RA , Φ) ∈ RNr ×Nd (8) , where F converts the power and Doppler images in range-azimuth space, IRA and IDoppler  
+
+> RA
+
+, into a range-Doppler image weighted by the antenna profile Φ( θ). The F conversion is: 
+
+ˆIRD [r, d ] = X
+
+> a
+
+
+
+Φ( θa) ˆIRA [r, a ]
+
+
+
+· exp −
+
+ ˆIDoppler  
+
+> RA
+
+[r, a ] − vd
+
+2
+
+2σ2
+
+!
+
+(9) , where Φ is radar antenna gain depend on θa, vd is Doppler velocity at bin d, and σ is the bandwidth of the soft binning Gaussian kernel. The design make sure ˆIRD is differentiable w.r.t. ˆIRA and vi. In practice, we set σ = 3 ∆ vd, where ∆vd
+
+denotes the Doppler-bin resolution, and use a small binning window b = 10 to reduce memory and runtime overhead. The rendering process is shown in Figure 5. 
+
+E. Backend: RadarSplat++ Bundle Adjustment Optimization 
+
+Unlike existing radar SLAM systems that lack joint multi-view and scene optimization, our backend performs radar BA through the RadarSplat++ (Sec III-D) scene representa-tion inspired by NeRF/GS-based SLAM [25, 26, 19]. The differentiable GS representation naturally supports BA joint optimization capability. Following LONER [19], we deploy pose refinement and mapping modules before BA to obtain a better initial pose and map for the new keyframe. 
+
+1) Pose Refinement: To refine a newly observed radar keyframe poses from frontend, we define the loss function to minimize rendering error from RA image IRA and RD image IRD :
+
+Lpose = min  
+
+> {Ti∈W}
+
+X
+
+> i∈W
+
+L
+
+ˆIRA (G, Ti), IRA 
+
+
+
++
+
+L
+
+ˆIRD (G, Ti, vi(Ti)) , IRD 
+
+
+
+, (10) where the vi is the ego-velocity estimation initialized by frontend RIO (Sec. III-C) and updated recurrently by esti-mate transformation Ti throughout the optimization process. In practice, we only optimized the last keyframe, so the local window W = {KF k} when we have k keyframes. Fig. 6. Overview of RadarSplat++ rendering and training pipeline. Given radar poses and ego-velocity, RadarSplat renders both range–azimuth and range–Doppler images, which are compared with measured radar images to compute losses for scene reconstruction and pose optimization.  
+
+> Fig. 7. Data collection sensor rig setup.
+
+2) Mapping: During mapping, only the geometry-matching loss from the RA image IRA is used. An additional regularization term Ls(S) constrains the Gaussian size to prevent the formation of excessively large Gaussians. 
+
+Lmap = min 
+
+> G
+
+X
+
+> i∈W
+
+L
+
+ˆIRA (G, Ti), IRA 
+
+
+
++λΣ Ls(S), (11) we use sliding window size with N = 10 for the local mapping window W = {KF i}ki=k−N .
+
+3) Bundle Adjustment: To jointly optimize radar poses and Gaussian parameters, we combine both pose and map-ping optimizations. The BA loss term is defined as: 
+
+LBA = min   
+
+> G,{Ti∈W}
+
+X
+
+> i∈W
+
+L
+
+ˆIRA (G, Ti), IRA 
+
+
+
++
+
+L
+
+ˆIRD (G, Ti, vi(Ti)) , IRD 
+
+
+
++ λΣ Ls(S), (12) where L is a combination of L1 and SSIM-based reconstruc-tion loss following [22]. The radar BA pipeline is shown in Figure 6. We use radius window size with rBA = 10 m for the BA window W .IV. E XPERIMENTS 
+
+A. Dataset 
+
+Existing radar SLAM datasets typically provide only par-tial radar representations, such as RA images [45], RD images [27], or radar point clouds [46, 47, 29]. Among publicly available datasets, ColoRadar [48] is the only one                    
+
+> Fig. 8. Visualization of camera and radar data from our indoor dataset. The radar range–azimuth images in Cartesian space are shown to provide a clearer sense of the radar observations. Name Description Travel Distance (m) Length (s) Sequence 1 Meeting Room 42.46 141.07 Sequence 2 Small Loop 91.89 157.98 Sequence 3 Large Loop 144.59 232.74 Sequence 4 Small + Large Loop 206.12 263.19 Sequence 5 Medium + Large Loop 233.54 320.06 TABLE I Experiment sequences details.
+
+that provides raw RAD data. However, we found that the re-leased Doppler data are not compatible with the existing RIO method [30] designed for multi-chip radar. Therefore, we evaluate the proposed method on a custom dataset collected using a TI MMWCAS-RF-EVM millimeter-wave radar and an Intel RealSense D435i RGB-D camera (Figure 7) follow-ing data collection pipeline in [30]. Following MRIO [30] and X-RIO [29], we adopt stereo VIO as pseudo-ground truth, as LiDAR SLAM may fail in indoor monotone cor-ridors, as discussed in [30]. The RealSense D435i provides synchronized IMU measurements and supports off-the-shelf visual-inertial SLAM via RTAB-Map [49]. We use RTAB-Map to obtain reference trajectories, which serve as pseudo ground truth for evaluation. The dataset consists of five indoor sequences captured under varying motion patterns. Figure 8 shows camera-radar pairs of the collected data. Each sequence contains at least one, and some contain two, loop closures of different sizes, allowing clear observation of trajectory drift and its correction through the proposed BA. Scenes Sequence 1 Sequence 2 Sequence 3 Sequence 4 Sequence 5                                
+
+> MRIO Ours MRIO Ours MRIO Ours MRIO Ours MRIO Ours
+> Trans. (m) 0.94 0.19 7.57 0.42 22.48 2.04 11.04 1.05 12.9 0.97 Rot. ( ◦)5.03 1.91 15.51 2.06 32.38 5.25 17.62 2.66 21.55 3.28
+> TABLE II Absolute Pose Error comparison between MRIO [30] and our method on various scenes.
+> Fig. 9. Comparison of estimated trajectory between MRIO [30] and proposed method.
+> Fig. 10. Scene reconstruction comparison between MRIO and the proposed RadarSplat-RIO. The proposed method not only greatly reduces odometry drift but also produces a dense and consistent scene reconstruction.
+
+The sequences are summarized in Table I. The dataset will be publicly released upon paper acceptance. 
+
+B. Baseline 
+
+While numerous radar SLAM methods exist, they are often tailored to specific radar types and require significant tuning to generalize. To the best of our knowledge, X-RIO [29] and Radarize [10] are the only open-source methods using a similar TI radar setup. However, MRIO [30] reports that X-RIO is designed for single-chip radar and does not transfer to multi-chip radar, which we also observe. Radarize shows similarly unstable performance in our experiments. There-fore, we compare our method with MRIO [30], designed for the same multi-chip TI radar used in this study. We also adopt MRIO as the frontend to isolate the contribution of the proposed RadarSplat++ backend BA. 
+
+C. Odometry Evaluation 
+
+In Table II, we demonstrate that the proposed RadarSplat-RIO with BA backend significantly reduces the drifting issue. Figure 9 presents the qualitative comparison between MRIO and RadarSplat-RIO. The proposed method significantly improves the robustness of pose estimation and effectively mitigates long-term drift. The average absolute translational and rotational errors are reduced by more than 90% and 80%, respectively. Figure 10 further shows that our method achieves superior scene reconstruction, enabled by more accurate radar pose estimation and dense scene mapping through the Gaussian scene representation. We note that the MRIO accuracy may be affected by imperfect time synchro-nization between the radar and the IMU embedded in the RealSense camera in our dataset due to hardware restrictions. However, this effect further highlights the robustness of the proposed backend optimization. 
+
+D. Ablation Studies 1) Method Components: In Table III, we evaluate the impact of the main components of our pipeline by disabling                                                   
+
+> Method Components Ablations Frontend Backend ATE RIO Loc. & Map. BA Trans. (m) Rot ( ◦)
+> ✓✓✓0.934 3.03
+> ✓10.99 18.42
+> ✓✓2.83 8.23
+> ✓✓18.27 25.91
+> TABLE III Ablation study comparing the proposed full method, without the proposed backend, without the proposed BA, and without RIO frontend across all sequences. Metrics are Absolute Pose Error (APE) in translation (m) and rotation (deg). Lower is better. Ablations BA Frames Selection Strategy RadarSplat++ Radius Spatial Window Sliding Window RD-image Loss
+> rBA = 1 rBA = 5 rBA = 10 ( Selected )N=2 N=5 N=10 N= ∞w/ w/o
+> Trans. (m) 3.12 1.07 0.93 2.83 1.42 1.17 1.36 0.93 3.41
+> Rot. ( ◦)7.98 3.24 3.03 8.23 3.95 3.61 4.03 3.03 3.57 TABLE IV Ablation study comparing different BA window selection strategies and the RadarSplat++ Range-Doppler image loss. Metrics are Absolute Pose Error in translation (m) and rotation (deg). Lower is better.
+
+each one individually. Removing the entire RadarSplat-RIO backend causes the trajectory to drift rapidly, as the system relies solely on RIO and therefore accumulates substantial drift. Disabling the BA module in the backend also degrades accuracy, consistent with prior observations [18, 19] that BA is essential for precise pose estimation. Finally, omitting RIO as the initial pose estimator results in the poorest performance due to the lack of a reliable pose initialization for the optimizer. 
+
+2) BA Keyframe Selection Strategy: In Table IV, we show that the selected radius-based optimization window with 
+
+rBA = 10 , m outperforms configurations using different values of rBA as well as temporal sliding-window bundle adjustment (BA). The radius-based strategy selects spatially relevant keyframes when the trajectory revisits previously mapped regions, improving geometric consistency without requiring explicit loop-closure detection. 
+
+3) RadarSplat++ Range-Doppler Rendering: In Ta-ble IV, we further compare performance with and without the RadarSplat++ RD rendering loss. The RD image loss primar-ily improves translation accuracy, as Doppler measurements directly constrain linear motion. We observe that the benefit is most pronounced in featureless corridors, where RA-only image alignment becomes ill-conditioned. V. C ONCLUSION 
+
+We have introduced RadarSplat-RIO, the first radar odom-etry framework that incorporates bundle adjustment using a GS scene representation, enabling accurate and drift-resilient odometry. Unlike prior works, which only use RA [22] or RD [27] images for radar NeRF/GS reconstruction. The pro-posed RadarSplat++ extends the RadarSplat [22] formulation to RD image rendering, which enables the full power of radar RAD data for pose estimation and scene reconstruction. Our method improves upon prior RIO method by mitigating drift without relying on explicit loop closure. The experiments demonstrate that our approach substan-tially improves trajectory accuracy and robustness, reducing average absolute translational and rotational errors by more than 90% and 80%, respectively. This highlights the effec-tiveness of our radar BA. Although we evaluate the system using a single RIO frontend, the proposed RadarSplat-RIO backend can be integrated with various radar or RIO fron-tends. We believe this work lays the foundation for accurate and reliable radar SLAM, paving the way for its deployment in robotics and autonomous navigation under challenging conditions. The current method is limited to single-radar 3-DoF pose estimation as a proof of concept. In future work, we aim to generalize the framework to multi-radar 6-DoF pose estimation following [29, 30]. REFERENCES 
+
+[1] C. Cui, Y. Ma, J. Lu, and Z. Wang, “Radar enlightens the dark: Enhancing low-visibility perception for automated vehicles with camera-radar fusion,” in 2023 IEEE 26th International Conference on Intelligent Transportation Systems (ITSC) . IEEE, 2023, pp. 2726–2733. [2] M. Sheeny, E. De Pellegrin, S. Mukherjee, A. Ahrabian, S. Wang, and A. Wallace, “Radiate: A radar dataset for automotive percep-tion in bad weather,” in 2021 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2021, pp. 1–7. [3] Z. Hong, Y. Petillot, and S. Wang, “Radarslam: Radar based large-scale slam in all weathers,” in 2020 IEEE/RSJ International Con-ference on Intelligent Robots and Systems (IROS) . IEEE, 2020, pp. 5164–5170. [4] P. Nkwari, S. Sinha, and H. Ferreira, “Through-the-wall radar imaging: A review,” IETE technical review , vol. 35, no. 6, pp. 631– 639, 2018. [5] D. Kellner, M. Barjenbruch, J. Klappstein, J. Dickmann, and K. Dietmayer, “Instantaneous ego-motion estimation using mul-tiple doppler radars,” in 2014 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2014, pp. 1592–1597. [6] P.-C. Kung, C.-C. Wang, and W.-C. Lin, “A normal distribution transform-based radar odometry designed for scanning and auto-motive radars,” in 2021 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2021, pp. 14 417–14 423. [7] S. H. Cen and P. Newman, “Precise ego-motion estimation with millimeter-wave radar under diverse and challenging conditions,” in 2018 IEEE International Conference on Robotics and Automa-tion (ICRA) . IEEE, 2018, pp. 6045–6052. [8] Y. S. Park, Y. Shin, and A. Kim, “PhaRaO: Direct radar odometry using phase correlation,” in Proceedings of the 2020 IEEE Interna-tional Conference on Robotics and Automation (ICRA) , 2020, pp. 2617–2623. [9] D. Barnes, R. Weston, and I. Posner, “Masking by moving: Learn-ing distraction-free radar odometry from pose information,” in 
+
+Proceedings of the Conference on Robot Learning (CoRL) , ser. Proceedings of Machine Learning Research, vol. 100. PMLR, 2019, pp. 303–316. [10] E. Sie, X. Wu, H. Guo, and D. Vasisht, “Radarize: Enhancing radar SLAM with generalizable doppler-based odometry,” in Proceed-ings of the 22nd ACM International Conference on Mobile Systems, Applications, and Services (MobiSys ’24) . ACM, 2024, pp. 331– 344. [11] J. Borenstein, H. R. Everett, L. Feng, and D. Wehe, “Mobile robot positioning: Sensors and techniques,” Journal of robotic systems ,vol. 14, no. 4, pp. 231–249, 1997. [12] D. C. Herraez, L. Chang, M. Zeller, L. Wiesmann, J. Behley, M. Heidingsfeld, and C. Stachniss, “Spr: Single-scan radar place recognition,” IEEE Robotics and Automation Letters , 2024. [13] D. C. Herraez, M. Zeller, D. Wang, J. Behley, M. Heidingsfeld, and C. Stachniss, “Rai-slam: Radar-inertial slam for autonomous vehicles,” IEEE Robotics and Automation Letters , 2025. [14] H. Wang, C. Wang, and L. Xie, “Intensity scan context: Coding intensity and geometry relations for loop closure detection,” in 
+
+2020 IEEE international conference on robotics and automation (ICRA) . IEEE, 2020, pp. 2095–2101. [15] D. Wang, S. May, and A. Nuechter, “Riv-slam: Radar-inertial-velocity optimization based graph slam,” in 2024 IEEE 20th In-ternational Conference on Automation Science and Engineering (CASE) . IEEE, 2024, pp. 774–781. [16] R. Mur-Artal and J. D. Tard´ os, “Orb-slam2: An open-source slam system for monocular, stereo, and rgb-d cameras,” IEEE transac-tions on robotics , vol. 33, no. 5, pp. 1255–1262, 2017. [17] T. Qin, P. Li, and S. Shen, “Vins-mono: A robust and versatile monocular visual-inertial state estimator,” IEEE transactions on robotics , vol. 34, no. 4, pp. 1004–1020, 2018. [18] Z. Liu and F. Zhang, “Balm: Bundle adjustment for lidar mapping,” 
+
+IEEE Robotics and Automation Letters , vol. 6, no. 2, pp. 3184– 3191, 2021. [19] S. Isaacson, P.-C. Kung, M. Ramanagopal, R. Vasudevan, and K. A. Skinner, “Loner: Lidar only neural representations for real-time slam,” IEEE Robotics and Automation Letters , vol. 8, no. 12, pp. 8042–8049, 2023. [20] Y. Pan, X. Zhong, L. Wiesmann, T. Posewsky, J. Behley, and C. Stachniss, “Pin-slam: Lidar slam using a point-based implicit neural representation for achieving global map consistency,” IEEE Transactions on Robotics , vol. 40, pp. 4045–4064, 2024. [21] E. Giacomini, L. Di Giammarino, L. De Rebotti, G. Grisetti, and M. R. Oswald, “Splat-loam: Gaussian splatting lidar odometry and mapping,” arXiv preprint arXiv:2503.17491 , 2025. [22] P.-C. Kung, S. Harisha, R. Vasudevan, A. Eid, and K. A. Skinner, “Radarsplat: Radar gaussian splatting for high-fidelity data syn-thesis and 3d reconstruction of autonomous driving scenes,” arXiv preprint arXiv:2506.01379 , 2025. [23] B. Kerbl, G. Kopanas, T. Leimk¨ uhler, and G. Drettakis, “3d gaus-sian splatting for real-time radiance field rendering.” ACM Trans. Graph. , vol. 42, no. 4, pp. 139–1, 2023. [24] B. Mildenhall, P. P. Srinivasan, M. Tancik, J. T. Barron, R. Ra-mamoorthi, and R. Ng, “Nerf: Representing scenes as neural ra-diance fields for view synthesis,” Communications of the ACM ,vol. 65, no. 1, pp. 99–106, 2021. [25] C. Yan, D. Qu, D. Xu, B. Zhao, Z. Wang, D. Wang, and X. Li, “Gs-slam: Dense visual slam with 3d gaussian splatting,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2024, pp. 19 595–19 604. [26] Z. Zhu, S. Peng, V. Larsson, W. Xu, H. Bao, Z. Cui, M. R. Oswald, and M. Pollefeys, “Nice-slam: Neural implicit scalable encoding for slam,” in Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , 2022, pp. 12 786–12 796. [27] T. Huang, J. Miller, A. Prabhakara, T. Jin, T. Laroia, Z. Kolter, and A. Rowe, “Dart: Implicit doppler tomography for radar novel view synthesis,” in Proceedings of the IEEE/CVF Conference on Com-puter Vision and Pattern Recognition , 2024, pp. 24 118–24 129. [28] C. Doer and G. F. Trommer, “An EKF based approach to radar inertial odometry,” in Proceedings of the 2020 IEEE International Conference on Multisensor Fusion and Integration for Intelligent Systems (MFI) . IEEE, 2020, pp. 152–159. [29] ——, “x-rio: Radar inertial odometry with multiple radar sensors and yaw aiding,” Gyroscopy and Navigation , vol. 12, no. 4, pp. 329–339, 2021. [30] J.-T. Huang, R. Xu, A. Hinduja, and M. Kaess, “Multi-radar inertial odometry for 3d state estimation using mmwave imaging radar,” in 
+
+2024 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2024, pp. 12 006–12 012. [31] H. Lim, K. Han, G. Shin, G. Kim, and A. Kim, “ORORA: Outlier-robust radar odometry,” in Proceedings of the 2023 IEEE Interna-tional Conference on Robotics and Automation (ICRA) , 2023, pp. 2046–2053. [32] Q. Huang, Y. Liang, Z. Qiao, S. Shen, and H. Yin, “Less is more: Physical-enhanced radar-inertial odometry,” in 2024 IEEE Interna-tional Conference on Robotics and Automation (ICRA) . IEEE, 2024, pp. 15 966–15 972. [33] D. C. Herraez, M. Zeller, D. Wang, J. Behley, M. Heidingsfeld, and C. Stachniss, “RaI-SLAM: Radar-inertial SLAM for autonomous vehicles,” IEEE Robotics and Automation Letters , 2025, accepted March 2025 (preprint). [34] J. Lee, S. Choi, H. Lim, and A. Kim, “2d ego-motion with yaw estimation using only mmwave radars via two-way weighted ICP,” 
+
+arXiv preprint , 2024. [35] M. Hilger, J. Yachin, Z. Trivadi, and K. K¨ oser, “Radar SLAM based on intensity-augmented normal distributions transform,” arXiv preprint, 2024. [36] Z. Han, S. Yang, M. Zhu, F. Zhang, S. Xu, M. Ghaffari, and J. Wang, “Equi-ro: A 4d mmwave radar odometry via equivariant networks,” arXiv preprint arXiv:2509.20674 , 2025. [37] D. Nist´ er, O. Naroditsky, and J. Bergen, “Visual odometry,” in 
+
+Proceedings of the 2004 IEEE Computer Society Conference on Computer Vision and Pattern Recognition, 2004. CVPR 2004. ,vol. 1. Ieee, 2004, pp. I–I. [38] G. Klein and D. Murray, “Parallel tracking and mapping for small ar workspaces,” in 2007 6th IEEE and ACM international sympo-sium on mixed and augmented reality . IEEE, 2007, pp. 225–234. [39] A. Rosinol, J. J. Leonard, and L. Carlone, “Nerf-slam: Real-time dense monocular slam with neural radiance fields,” in 2023 IEEE/RSJ International Conference on Intelligent Robots and Sys-tems (IROS) . IEEE, 2023, pp. 3437–3444. [40] N. Keetha, J. Karhade, K. M. Jatavallabhula, G. Yang, S. Scherer, D. Ramanan, and J. Luiten, “Splatam: Splat track & map 3d gaussians for dense rgb-d slam,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2024, pp. 21 357–21 366. [41] H. Matsuki, R. Murai, P. H. Kelly, and A. J. Davison, “Gaus-sian splatting slam,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2024, pp. 18 039– 18 048. [42] J. Zhang, S. Singh, et al. , “Loam: Lidar odometry and mapping in real-time.” in Robotics: Science and systems , vol. 2, no. 9. Berkeley, CA, 2014, pp. 1–9. [43] D. R. Fuhrmann, E. J. Kelly, and R. Nitzberg, “A cfar adap-tive matched filter detector,” IEEE Trans. Aerosp. Electron. Syst ,vol. 28, no. 1, pp. 208–216, 1992. [44] F. Dellaert, “Factor graphs and gtsam: A hands-on introduction,” 
+
+Georgia Institute of Technology, Tech. Rep , vol. 2, no. 4, 2012. [45] D. Barnes, M. Gadd, P. Murcutt, P. Newman, and I. Posner, “The oxford radar robotcar dataset: A radar extension to the ox-ford robotcar dataset,” in 2020 IEEE international conference on robotics and automation (ICRA) . IEEE, 2020, pp. 6433–6438. [46] H. Caesar, V. Bankiti, A. H. Lang, S. Vora, V. E. Liong, Q. Xu, A. Krishnan, Y. Pan, G. Baldan, and O. Beijbom, “nuscenes: A multimodal dataset for autonomous driving,” in Proceedings of the IEEE/CVF conference on computer vision and pattern recognition ,2020, pp. 11 621–11 631. [47] A. Palffy, E. Pool, S. Baratam, J. F. Kooij, and D. M. Gavrila, “Multi-class road user detection with 3+ 1d radar in the view-of-delft dataset,” IEEE Robotics and Automation Letters , vol. 7, no. 2, pp. 4961–4968, 2022. [48] A. Kramer, K. Harlow, C. Williams, and C. Heckman, “Coloradar: The direct 3d millimeter wave radar dataset,” The International Journal of Robotics Research , vol. 41, no. 4, pp. 351–360, 2022. [49] M. Labb´ e and F. Michaud, “Rtab-map as an open-source lidar and visual simultaneous localization and mapping library for large-scale and long-term online operation,” Journal of field robotics ,vol. 36, no. 2, pp. 416–446, 2019.

@@ -1,0 +1,1126 @@
+Title: 2604.12753v1.pdf
+
+URL Source: https://arxiv.org/pdf/2604.12753v1
+
+Published Time: Wed, 15 Apr 2026 01:10:52 GMT
+
+Number of Pages: 14
+
+Markdown Content:
+Reliability -Guided Depth Fusion for Glare -Resilient Navigation Costmaps 
+
+Shang -En Tsai and Wei -Cheng Sun 
+
+Abstract — Specular glare on reflective floors and glass surfaces frequently corrupts RGB -D depth 
+
+measurements, producing holes and spikes that  accumulate as persistent phantom obstacles in occupancy -
+
+grid costmaps. This paper proposes a glare -resilient costmap construction method based on explicit depth -
+
+reliability modeling. A lightweight Depth Reliability Map (DRM) estimator predicts per -pixel 
+
+me asurement trustworthiness under specular interference, and a Reliability -Guided Fusion (RGF) 
+
+mechanism uses this signal to modulate occupancy updates before corrupted measurements are 
+
+accumulated into the map. Experiments on a real mobile robotic platform  equipped with an Intel 
+
+RealSense D435 and a Jetson Orin Nano show that the proposed method substantially reduces false 
+
+obstacle insertion and improves free -space preservation under real reflective -floor and glass -surface 
+
+conditions, while introducing only  modest computational overhead. These results indicate that treating 
+
+glare as a measurement -reliability problem provides a practical and lightweight solution for improving 
+
+costmap correctness and navigation robustness in safety -critical indoor environments. 
+
+Index Terms — Sensor data fusion, camera and vision -based sensors, intelligent sensing, occupancy -grid 
+
+mapping, specular reflection, mobile robot navigation. 
+
+# Introducution 
+
+Occupancy -grid  costmaps remain a core representation for mobile robot navigation due to their 
+
+simplicity and compatibility with real -time planners. However, their reliability depends critically on the 
+
+correctness of upstream depth measurements. In reflective indoor enviro nments —such as polished floors, 
+
+glass partitions, or glossy coatings —specular glare can severely corrupt RGB -D depth sensing [1], 
+
+introducing invalid measurements in the form of depth holes and spikes. When these corrupted 
+
+measurements  are integrated over time, they often become persistent phantom obstacles in the costmap, 
+
+triggering unnecessary detours, repeated emergency stops, and occasional collisions. 
+
+Recent studies suggest three complementary directions for mitigating reflection -induced failures in 
+
+robot perception and navigation. At the mapping level, reflection -aware 2 -D map construction can be 
+
+improved by exploiting indoor structural cues [2]; at th e SLAM level, reflective ground can be modeled 
+
+as a source of spurious observations and handled through dedicated outlier -removal strategies [3]; and at 
+
+the sensor -model level, RGB -D measurements can be corrected jointly with their uncertainty through 
+
+dept h-error modeling [4]. 
+
+Despite recent progress in reflection -aware mapping, SLAM, and depth -error modeling, glare -
+
+corrupted measurements can still accumulate as phantom occupancy in  local costmaps. For safety -critical 
+
+navigation, the key requirement is therefore not visually plausible depth everywhere, but correct obstacle 
+
+insertion and free -space preservation. This motivates our use of a lightweight per -pixel  reliability signal 
+
+before map integration, rather than full depth repair. 
+
+In this work, we reframe glare resilience as a measurement reliability problem. From a sensing 
+
+perspective, the underlying failure is rooted in the physics of active stereo depth estimation. The Intel 
+
+RealSense D435 projects infrared texture and recovers d epth through stereo correspondence. On polished 
+
+floors and glass -like surfaces, specular reflection can redirect or spatially distort the projected IR speckle 
+
+pattern, causing correspondence failure and thus invalid disparity estimates, observed as depth h oles. In 
+
+addition, multipath reflection and mismatched correspondences may lead to severely biased disparity 
+
+estimates, which appear as large positive depth outliers (spikes). This physical interpretation motivates 
+
+our formulation of glare handling as a se nsor -reliability problem rather than a purely downstream 
+
+navigation issue. This study proposes a Depth Reliability Map (DRM) estimator for predicting per -pixel depth 
+
+reliability under specular interference, together with a Reliability -Guided Fusion (RGF) framework for 
+
+gating or weighting occupancy updates. The method is designed  as a drop -in sensing module with 
+
+negligible overhead and no need to modify the planner or controller. An overview of the DRM+RGF 
+
+pipeline is shown in Fig. 1. 
+
+Fig. 1.  Overview of the proposed DRM+RGF framework for glare -resilient navigation costmaps. DRM -
+
+Net predicts a per -pixel depth reliability map from RGB -D input, and reliability -guided fusion suppresses 
+
+glare -induced phantom obstacles before generating the 2 -D cost map for navigation. 
+
+Contributions: 
+
+1.  A glare -aware DRM estimator that quantifies per -pixel depth reliability in the presence of specular 
+
+interference; 
+
+2.  An RGF mechanism that suppresses  phantom obstacles by reliability -modulated integration; 
+
+3.  A sensor -to -system evaluation on a real mobile robot equipped with an Intel RealSense D435, 
+
+including both sensor -level depth -corruption metrics and downstream costmap/navigation metrics 
+
+under controlled real -world glare conditions. 
+
+# Related Work 
+
+Non -Lambertian Surfaces in Depth -Based Mapping 
+
+Specular and transparent materials violate common sensing assumptions and can corrupt RGB -D
+
+measurements with missing values and outliers [5], [6]. In indoor robotics, reflective ground and glass 
+
+boundaries can also degrade SLAM and planning maps, motivati ng specialized robustness mechanisms 
+
+[3], [7]. Unlike these approaches, we target the local costmap accumulation failure mode by preventing 
+
+reflective outliers from being fused into occupancy updates. 
+
+Depth Completion for Transparent and Reflective Objects 
+
+Depth completion is another major direction for transparent and reflective objects [8], [9]. Geometry -
+
+aware studies further show that sensor  reliability is strongly nonuniform and should be considered during 
+
+learning and evaluation [10]. However, our goal is not dense reconstruction but conservative obstacle 
+
+insertion for real -time navigation. Recent benchmarks and multi -layer glass -depth data  confirm that 
+
+specular and transparent scenes remain difficult, especially because transparent surfaces can be confused 
+
+with the scene behind them [11], [12]. 
+
+Reliability, Uncertainty, and Filtering for Robust Integration 
+
+Another line of work emphasizes uncertainty -aware integration. RGB -D calibration studies model 
+
+depth -error distributions, including heteroscedastic variance, to support uncertainty -aware downstream estimation [4], [13]. In online mapping, variance -based refinement and  consistency checks have also 
+
+been used to reject unreliable depth before fusion [14]. More broadly, sensor -fusion surveys identify 
+
+reliability modeling as a central component of robust perception under adverse conditions [15]. Our work 
+
+follows this reliab ility -centric view, but targets the specific costmap accumulation failure mode under 
+
+glare. 
+
+Mirror/Specular Region Understanding 
+
+Mirror/specular -region understanding provides an additional cue for identifying unreliable depth. 
+
+Recent RGB -D video mirror detection studies leverage both depth and temporal consistency, suggesting 
+
+learnable alternatives to purely heuristic glare masking  [16]. Although our current method does not 
+
+explicitly segment mirror regions, such cues are a natural extension of the proposed reliability -estimation 
+
+framework. 
+
+# Methodology 
+
+Problem Formulation 
+
+Let  𝐷 𝑡 (𝑢 ) be the measured depth at pixel  𝑢  at time  𝑡  , and let the navigation costmap be an 
+
+occupancy grid  𝑝 𝑡 (𝑔 ) over 2D cells  𝑔 .Under specular glare,  𝐷 𝑡 (𝑢 ) may contain invalid measurements, 
+
+including holes, spikes, and out -of -range values, which are projected and accumulated as phantom 
+
+occupied cells. Our goal is to construct a glare -resilient fusion mechanism that improves both the integrity 
+
+of the sensed d epth signal and the correctness of downstream costmap updates, while remaining 
+
+lightweight enough for real -time deployment. 
+
+TABLE  I
+
+ARCHITECTURE AND  COMPUTATIONAL  COMPLEXITY OF THE  PROPOSED  DRM -NET 
+
+Block  Type  Output 
+
+channels 
+
+Params  Notes 
+
+Stem  Conv 3×3  16  720  5-channel input (RGB + 
+
+depth +  Δdepth) 
+
+Enc1 –4 DW+PW Conv  32 –128  22,864  Includes strided 
+
+downsampling 
+
+Dec0 –3 Up + DW+PW  96 –16  38,336  Includes skip connections 
+
+Head  Conv 1×1 + 
+
+Sigmoid 
+
+1 16  Outputs DRM reliability 
+
+score 
+
+Total  — — 61,936  ≈0.69 GFLOPs (per -frame 
+
+inference) 
+
+Notes:  Input is RGB -D with an optional temporal difference at 320× 240. Total parameters: 61,936. 
+
+Inference cost: ≈0.69 GFLOPs (≈0.344 GMAC). 
+
+Depth Reliability Map (DRM) Estimation 
+
+We estimate a per -pixel reliability map  𝑅 t(𝑢 ) ∈ [0,1] indicating the trustworthiness of each depth 
+
+measurement for fusion. We interpret  𝑅 t(𝑢 ) as an actionable proxy for depth uncertainty: values near 1 
+
+indicate geometrically consistent measurements, whereas values near 0 indicate likely glare -induced 
+
+failures. This view is consistent with prior RGB -D calibration work th at  models depth -error statistics as 
+
+a function of range to enable uncertainty -aware estimation [4], [17]. Compared with explicit probabilistic 
+
+calibration, DRM provides a lightweight reliability signal optimized for costmap correctness under non -
+
+Lambertian i nterference. 
+
+For efficiency, the DRM network operates on downsampled RGB -D input (320×240), and the 
+
+predicted reliability map is bilinearly upsampled to the native depth resolution. We adopt a compact U -
+
+Net -style encoder –decoder built from depthwise -pointwise convoluti ons and skip connections (Table I). 
+
+The resulting model contains 61,936 parameters and requires approximately 0.69 GFLOPs per frame. DRM supervision with reference depth is described in detail in Sec. IV -D.  The reference -target 
+
+construction process for DRM training and evaluation is illustrated in Fig. 2. 
+
+Fig . 2.  Reference -target construction for DRM training and evaluation. (a) Reliability targets are derived 
+
+by comparing observed RGB -D measurements with a temporally filtered reference depth map. (b) A 
+
+reference costmap is generated from reconstructed scene geome try by 3 -D-to -2-D projection with the 
+
+same navigation map settings. 
+
+Reliability -Guided Fusion (RGF) 
+
+We integrate depth observations into the occupancy grid using reliability -modulated updates, 
+
+following the classical occupancy -grid formulation for  robot perception and mapping [18], [19]. 
+
+Projection: Each pixel u back -projects to a 3D point using camera intrinsics and then maps to a grid cell 
+
+g(u) in the local map frame. Let  𝑜𝑏𝑠 𝑡 (𝑔 ) ∈ {0,1} denote the occupancy evidence for cell g from the 
+
+current depth observation. 
+
+Weighted occupancy update (recommended): 
+
+𝑝 𝑡 (𝑔 ) = 𝜆 𝑝 𝑡 −1(𝑔 ) + (1 − 𝜆 ) ⋅ 𝑤 𝑡 (u) ⋅ obs 𝑡 (𝑔 ) (1) 
+
+where  𝑤 𝑡 (u) = 𝑅 𝑡 (u). Here, λ  ∈ [0,1] is a temporal forgetting factor that controls the balance between 
+
+historical occupancy and the current observation. In all experiments, we use λ = 0.85, which provides 
+
+stable map persistence while remaining responsive to newly observed free space an d obstacle evidence 
+
+under real -world glare conditions. When multiple projected points fall into the same grid cell, their 
+
+reliability -weighted occupancy evidence is averaged before the cell update.  Low reliability automatically 
+
+suppresses spurious occupanc y insertions caused by glare. 
+
+Here, the predicted reliability  𝑅 𝑡 (𝑢 ) is directly used as the fusion weight  𝑤 𝑡 (𝑢 ) , so that 
+
+measurements likely affected by glare contribute less to occupancy insertion. 
+
+Optional gating (variant): If  𝑅 𝑡  (𝑢 ) < 𝜏 𝑅  , the measurement is ignored for obstacle insertion, or 
+
+Kconsecutive reliable confirmations are required before inserting occupancy. This variant can further 
+
+reduce flicker but may be slightly more conservative.  The complete online inference and fusion pipeline 
+
+is summarized in Algorithm 1. 
+
+Algorithm 1 : DRM+RGF for Online Glare -Resilient Costmap Construction 
+
+Inputs:  RGB image  𝐼 𝑡 , depth  𝐷 𝑡 , optional temporal term  ∣ 𝐷 𝑡  − 𝐷 𝑡 −1 ∣; robot pose 
+
+𝑇 𝑤 ←𝑐 ,𝑡 ; previous occupancy  𝑝 𝑡 −1(𝑔 )Experimental Platform and Sensor Configuration 
+
+Experimental Platform and Sensor  Configuration 
+
+All experiments were conducted on a real mobile robot equipped with an Intel RealSense D435 and 
+
+a Jetson Orin Nano. The D435 is an active -stereo RGB -D sensor that projects infrared texture and 
+
+estimates depth by stereo matching [20]. In reflective indoor s cenes, specular effects can disrupt 
+
+correspondence and induce multipath errors, producing holes and spikes; this broader sensing difficulty 
+
+is also consistent with recent optical -depth studies on highly reflective surfaces [21]. The proposed 
+
+reliability -gu ided fusion handles these corrupted measurements before costmap integration. 
+
+Reproducible Glare Scenarios 
+
+We evaluate the system in real indoor environments using a RealSense D435 mounted on the mobile 
+
+robot. nvblox integrates depth into a truncated signed distance field (TSDF) map [22] and generates a 
+
+local 12×12 m costmap for Navigation2 (Nav2) planning [23] , while the inflation behavior follows 
+
+standard costmap inflation settings [24]. The key sensing and mapping parameters used throughout the 
+
+real -world experiments are summarized in Table II. These settings are fixed a priori to ensure 
+
+reproducibility acros s glare levels and consistency in the subsequent evaluation. 
+
+TABLE  II 
+
+KEY  SENSING AND  MAPPING  PARAMETERS FOR THE  REAL -WORLD  EXPERIMENTAL  SETUP 
+
+Category  Key Parameter  Value/Setting 
+
+Sensing  RGB -D Resolution & FPS  848×480  @ 30FPS (Intel RealSense 
+
+D435) 
+
+Sensing  Depth Range  0.17 –10.0 m 
+
+Mapping  Voxel Size & TSDF Truncation  0.05 m / 0.15 m 
+
+Costmap  Grid Resolution  0.05  m / Cell 
+
+Costmap  Local 2D Costmap Size  12  m × 12  m
+
+Model  Reliability Threshold ( 𝜏 𝑅 ) 0.3 
+
+Trial  Runs Per Setting  𝑁  ≥ 20  Runs 
+
+Notes:  All parameters are fixed a priori and shared across methods to ensure fair comparison. Glare 
+
+severity is categorized into three levels (L0 –L2) based on reflective surface properties and lighting 
+
+conditions observed in the real experimental environments. No  simulation -derived metric is used in the 
+
+Outputs:  updated occupancy grid  𝑝 𝑡 (𝑔 ) and 2D costmap. 
+
+1:  𝑅 𝑡  ← 𝐷𝑅𝑀 ( 𝐼 𝑡 , 𝐷 𝑡 , ∣∣ 𝐷 𝑡  − 𝐷 𝑡 −1 ∣∣ )
+
+2:  Set  𝑝 𝑡 (𝑔 ) ⭠ 𝑝 𝑡 −1(𝑔 )
+
+3:  for each valid pixel  𝑢  ∈ Ω do 
+
+4:  Compute 3 -D point  𝑥 𝑤  from  𝑢  and  𝐷 𝑡 (𝑢 )
+
+5:  Determine corresponding grid cell  𝑔 (𝑢 )
+
+6:  Set  𝑤 𝑡 (𝑢 ) ← 𝑅 𝑡 (𝑢 )
+
+7:  if  𝑤 𝑡 (𝑢 ) > 𝜏 𝑅  then 
+
+8:  𝑝 𝑡 (𝑔 (𝑢 )) ← 𝜆 𝑝 𝑡 −1(𝑔 (𝑢 )) + (1 − 𝜆 )𝑤 𝑡 (𝑢 ) ⋅ 𝑜𝑏𝑠𝑡 (𝑔 (𝑢 ))
+
+9:  end if 
+
+10:  end for 
+
+11:  Binarize  𝑝 𝑡 (𝑔 ) to obtain the 2 -D costmap 
+
+12:  return  𝑝 𝑡 (𝑔 ), costmap main comparison tables. 
+
+Glare -Corruption Model for Depth Measurements 
+
+Real RGB -D sensors may produce corrupted depth measurements when observing reflective or 
+
+specular surfaces. In the Intel RealSense D435, these failures mainly arise when active -stereo 
+
+correspondence is degraded by specular reflection, IR -pattern distortion , or multipath effects. Let  𝐷 𝑡 (𝑢 )
+
+denote the measured depth at pixel  𝑢 . In reflective regions, we observe two dominant corruption modes: 
+
+holes, where the sensor fails to return a valid disparity and the depth becomes invalid or missing, and 
+
+spikes, where mismatched correspondence or multipath interference yields an abnormall y large positive 
+
+depth estimate. 
+
+Outside strong specular regions, the sensor generally follows nominal active -stereo depth -noise 
+
+behavior, whose uncertainty increases with range and viewing angle. These observations indicate that 
+
+glare -corrupted depth is better treated as a structured rel iability problem than as isolated sensor noise. 
+
+Because such artifacts can persist across repeated observations and accumulate into phantom occupancy, 
+
+robust mapping requires reliability -aware filtering before costmap fusion. 
+
+DRM Training Data and Reference -Depth Supervision 
+
+Following the corruption model described in Sec. IV -C, we next explain how DRM training data 
+
+and target reliabilities are constructed from real RGB -D observations. The Depth Reliability Map (DRM) 
+
+estimator is trained using RGB -D sequences collected in mult iple indoor environments containing 
+
+reflective floors, glass surfaces, and varying illumination conditions. Each training sample consists of the 
+
+RGB image  𝐼 𝑡  and the corresponding depth measurement  𝐷 𝑡 .
+
+To construct supervision signals without manual annotation, we generate a reference depth map  𝐷 𝑡 
+
+> ∗
+
+using temporally consistent multi -frame filtering. This process suppresses transient artifacts and provides 
+
+an approximation to artifact -free scene geometry. Reliability targets are then derived from the discrepancy 
+
+between the measured depth  𝐷 𝑡  and the reference depth  𝐷 𝑡 
+
+> ∗
+
+.
+
+The binary target is defined as 
+
+𝑅 𝑡 
+
+> ∗
+
+(𝑢 ) = {1, if 𝐷 𝑡 (𝑢 )is valid and  ∣ 𝐷 𝑡 (𝑢 ) − 𝐷 𝑡 
+
+> ∗
+
+(𝑢 ) ∣< 𝜀  (𝐷 𝑡 
+
+> ∗
+
+(u))
+
+0, otherwise , (2) 
+
+and the soft target is defined as 
+
+𝑅 𝑡 
+
+> ∗
+
+(𝑢 ) = {exp  (− ∣ 𝐷 𝑡 (𝑢 ) − 𝐷 𝑡 
+
+> ∗
+
+(𝑢 ) ∣
+
+𝜎  (𝐷 𝑡 
+
+> ∗
+
+(u)) ) , if  𝐷 𝑡 (𝑢 ) is valid ,
+
+0, otherwise .
+
+(3) 
+
+We set  𝜀 (𝑑 ) = 0.02 𝑑  and scale  𝜎 (𝑑 ) accordingly to reflect the widely reported increase in active -
+
+stereo depth uncertainty with range [20], [17], [25]. The same reference depth is also used during 
+
+evaluation to compute sensor -level error statistics, ensuring consistency between DRM supervis ion and 
+
+measurement -level performance analysis. 
+
+We optimize DRM using a  𝐿 1 regression objective: 
+
+𝐿 𝐷𝑅𝑀  = 1
+
+∣ 𝛺  ∣ ∑ ∣ R(u) − 𝑅 𝑡 
+
+> ∗
+
+(u) ∣
+
+> 𝑢 ∈𝛺
+
+(4) 
+
+where  𝛺  denotes the image domain,  𝑅 (𝑢 ) is the predicted reliability, and  𝑅 𝑡 
+
+> ∗
+
+(𝑢 ) is the reference -
+
+depth -derived target reliability at pixel  𝑢 . We adopt  𝐿 1 loss because it is stable and robust to occasional 
+
+large depth discrepancies in reflective regions. Although reliable pixels are more numerous than 
+
+unreliable ones, the supervision remains informative because low -reliability regions are concentrated 
+
+around  glare -corrupted structures that recur across training sequences. 
+
+Costmap Construction and Baselines 
+
+With the DRM supervision and target construction defined above, we next describe the common 
+
+costmap configuration and baseline methods used for comparison. All baselines are evaluated under an 
+
+identical costmap configuration to ensure fair comparison and r educe tuning bias. We fix the 3D -to -2D projection scheme, grid resolution, height band, inflation radius, marking/clearing range, and hysteresis 
+
+thresholds across methods. Therefore, performance differences primarily reflect how each method 
+
+handles corrupted depth measurements rather than downs tream parameter adjustment. The shared 
+
+costmap configuration is summarized in Table III. 
+
+ Naï ve fusion , i.e., direct depth -to -occupancy insertion without reliability modulation; 
+
+ Validity/range gating , which removes invalid depth and  measurements outside the trusted range; 
+
+ Spatial median filtering , which suppresses local impulsive outliers before map insertion; 
+
+ Temporal outlier rejection , which requires short -term consistency before persistent occupancy 
+
+insertion; and 
+
+ Proposed DRM+RGF , which uses a learned per -pixel reliability map to weight or gate occupancy 
+
+updates. 
+
+TABLE  III 
+
+COMMON  COSTMAP  CONFIGURATION  SHARED BY  ALL  COMPARED  METHODS 
+
+Item  Value (example) 
+
+Grid resolution  0.05 m/cell 
+
+Height band for 2.5D projection  [0.1, 2.0] m 
+
+Inflation radius  0.55 m (Nav2 default) 
+
+Mark/clear range  5.0 m 
+
+Binarization thresholds (hysteresis)  𝑇 𝑜𝑛  = 0.7, 𝑇 𝑜𝑓𝑓  = 0.5
+
+Note: The same grid resolution, projection height band, inflation radius, marking/clearing range, 
+
+and hysteresis  thresholds are used for all methods to ensure fair comparison. 
+
+Geometry -Based Ground -Truth Costmap for Correctness Evaluation 
+
+To evaluate costmap correctness independently of sensing noise, we construct a geometry -based 
+
+reference costmap from the verified static layout of the experimental environment. The reconstructed 
+
+scene geometry is projected into a 2D occupancy grid using th e same height band and inflation settings 
+
+as the evaluated methods, yielding  𝑂 𝑔𝑡  and  𝐹 𝑔𝑡  for metric computation. 
+
+Navigation Trial Protocol (Safety -Level Evaluation) 
+
+For navigation -level evaluation, each configuration is executed over repeated real -robot trials with 
+
+predefined trajectories and fixed sensing settings. We log robot pose, costmap snapshots, emergency -stop 
+
+events, and task -completion outcomes for paired co mparison across methods. 
+
+Metrics 
+
+Sensor -Level Depth Reliability Evaluation 
+
+We first evaluate whether the proposed DRM -guided pipeline improves the quality of the sensed 
+
+depth signal itself, rather than only downstream navigation behavior. Using the reference depth  𝐷 𝑡 
+
+> ∗
+
+(𝑢 )
+
+derived from temporally consistent multi -frame observations, we report three sensor -level metrics: 
+
+1. Hole Rate (HR) , the fraction of pixels with invalid, missing, or out -of -range depth; 
+
+2. Spike Rate (SR) , the fraction of valid pixels whose absolute depth error exceeds a predefined outlier 
+
+threshold  δ𝑠 ;
+
+3. Depth RMSE , computed against the reference depth as  𝑅𝑀𝑆𝐸  = √ 1 
+
+> ∣𝛺 𝑣 ∣
+
+∑ (𝐷 𝑡 (𝑢 ) − 𝐷 𝑡 
+
+> ∗
+
+(𝑢 ))2
+
+> 𝑢 ∈𝛺 𝑣
+
+.
+
+In addition, we retain AUPRC and F1 to evaluate the quality of the predicted reliability map itself. 
+
+Together, these metrics allow us to verify whether DRM improves both reliability prediction and the 
+
+underlying sensor measurements affected by specular gla re. Costmap Correctness (Primary Mapping Metrics) 
+
+Let  𝑂 ̂ and  𝐹 ̂ denote the predicted occupied/free cell sets, and let  𝑂 𝑔𝑡 and  𝐹 𝑔𝑡 denote the  geometry -based 
+
+ground truth . We report  False Obstacle Rate (FOR) and  Free -space Recall (FSR) as the primary mapping 
+
+metrics. To reflect downstream impact, we additionally report emergency stops, path length ratio (PLR), 
+
+detour rate, and time -to -goal. 
+
+𝐹𝑂𝑅  = |𝑂 ̂ ∩ 𝐹 𝑔𝑡 |
+
+| 𝐹 𝑔𝑡 | (5) 
+
+𝐹𝑆𝑅  = |𝐹 ̂ ∩ 𝐹 𝑔𝑡 |
+
+| 𝐹 𝑔𝑡 | (6) 
+
+TABLE  IV 
+
+SENSOR -LEVEL  DEPTH  CORRUPTION  METRICS  UNDER  REAL -WORLD  SPECULAR  GLARE  CONDITIONS 
+
+Glare level  Method  Hole Rate (%)↓  Spike Rate (%) ↓  RMSE (m) ↓ 
+
+L0 (No Glare)  Baseline  1.2  0.5  0.022 
+
+L0 (No Glare)  DRM+RGF (Ours)  1.1  0.4  0.021 
+
+L1 (Mild)  Baseline  18.5  9.4  0.185 
+
+L1 (Mild)  DRM+RGF (Ours)  2.8  1.2  0.045 
+
+L2 (Severe)  Baseline  45.2  27.6  0.840 
+
+L2 (Severe)  DRM+RGF (Ours)  5.4  3.1  0.082 
+
+Note:  Results are reported under three glare  severities (L0 –L2) using real -world Intel RealSense 
+
+D435 measurements. 
+
+Runtime and Overhead 
+
+We report DRM inference latency, costmap update time, total per -frame runtime, and relative 
+
+overhead with respect to naï ve fusion. 
+
+Statistical Reporting 
+
+All metrics are averaged over multiple runs per condition. For navigation trials, we reuse identical 
+
+start –goal pairs across methods, enabling paired comparisons under matched trajectories and consistent 
+
+environmental conditions. 
+
+# Results 
+
+Sensor -Level Depth  Corruption Suppression 
+
+Table IV shows that DRM+RGF substantially reduces glare -induced holes, spikes, and depth RMSE, 
+
+especially under L2. Table V and Fig. 3 further show that these sensing improvements translate into lower 
+
+FOR, higher FSR, fewer emergency stops, and higher succ ess rates. 
+
+The sensor -level gains in Table IV indicate that the proposed method improves not only downstream 
+
+navigation behavior but also the integrity of the raw depth signal used for mapping. The largest gain 
+
+appears under L2 glare, where the hole rate drops from 4 5.2% to 5.4% and RMSE decreases from 0.840 
+
+m to 0.082 m, confirming that DRM+RGF suppresses severe corruption before it propagates into 
+
+persistent phantom occupancy. Fig . 3.  Quantitative results under three glare  severities (L0 -L2). (a) Costmap correctness: FOR (↓) and 
+
+FSR (↑). (b) Navigation performance: emergency stops per 10 m (↓) and goal success rate (↑). 
+
+TABLE  V
+
+COSTMAP  CORRECTNESS AND  NAVIGATION  PERFORMANCE  UNDER  THREE  GLARE  SEVERITY  LEVELS 
+
+Glare level  Method  FOR (↓)  FSR (↑)  Emerg. stops / 10 m 
+
+(↓) 
+
+Success 
+
+(%) (↑) 
+
+L0 (no glare)  Naï ve fusion  0.009  0.993  0.12  100.0 
+
+L0 (no glare)  Validity/range 
+
+gating  0.008  0.993  0.12  100.0 
+
+L0 (no glare)  Spatial median  0.008  0.990  0.11  100.0 
+
+L0 (no glare)  Temporal  rejection  0.007  0.991  0.10  100.0 
+
+L0 (no glare)  DRM+RGF 
+
+(Ours)  0.008  0.995  0.10  100.0 
+
+L1 (mild glare)  Naï ve fusion  0.168  0.792  2.35  81.5 
+
+L1 (mild glare)  Validity/range 
+
+gating  0.125  0.840  1.80  88.0 
+
+L1 (mild glare)  Spatial median  0.095  0.890  1.20  92.5 
+
+L1 (mild glare)  Temporal rejection  0.080  0.910  0.95  95.0 
+
+L1 (mild glare)  DRM+RGF 
+
+(Ours)  0.024  0.968  0.32  98.2 
+
+L2 (severe 
+
+glare)  Naï ve fusion  0.432  0.515  6.84  28.6 
+
+L2 (severe 
+
+glare) 
+
+Validity/range 
+
+gating  0.350  0.620  5.10  45.5 
+
+L2 (severe 
+
+glare)  Spatial median  0.310  0.650  4.50  52.0 
+
+L2 (severe 
+
+glare)  Temporal rejection  0.245  0.710  3.20  68.5 
+
+L2 (severe 
+
+glare) 
+
+DRM+RGF 
+
+(Ours)  0.056  0.897  0.85  91.4 
+
+Note:  FOR = false obstacle rate; FSR = free -space recall. Lower FOR and emergency -stop counts are better, whereas higher FSR and success rate are better. 
+
+Costmap Correctness and Navigation Performance 
+
+Table V and Fig. 3 summarize the system -level  performance under three glare severities. Compared 
+
+with naïve fusion and conventional heuristic filters, DRM+RGF consistently suppresses phantom obstacle 
+
+insertion while preserving free space, leading to lower FOR, higher FSR, fewer emergency stops, and 
+
+hi gher task success rates. The improvement becomes most pronounced under L2, where glare -induced 
+
+corruption is strongest . Table VI further reports path -level efficiency degradation, including PLR, detour 
+
+rate, and time -to -goal. 
+
+As shown in Fig. 4, severe glare at L2 produces markedly different navigation behaviors. Under 
+
+baseline fusion, a glare -induced phantom obstacle forms a “glare wall” in the local costmap, triggering 
+
+repeated recovery behaviors and eventually forcing a larg e detour (PLR = 2.84, time -to -goal = 124.7 s). 
+
+In contrast, DRM+RGF assigns very low reliability to the corrupted measurements, preventing their 
+
+accumulation into persistent occupancy and enabling near -straight traversal through the reflective region 
+
+(PLR  = 1.08, time -to -goal = 49.8 s). 
+
+TABLE  VI 
+
+NAVIGATION  PATH  EFFICIENCY  ACROSS  GLARE  SEVERITY  LEVELS 
+
+Glare level  Method  PLR (↓)  Detour rate (%) (↓)  Time -to -goal (s) (↓) 
+
+L0 (no glare)  Baseline  1.01  ± 0.02  0%  45.2 
+
+L0 (no glare)  DRM+RGF 
+
+(Ours)  1.01  ± 0.01  0%  45.1 
+
+L1 (mild glare)  Baseline  1.24  ± 0.15  25%  58.4 
+
+L1 (mild glare)  DRM+RGF 
+
+(Ours)  1.04  ± 0.03  5%  47.3 
+
+L2 (severe glare)  Baseline  2.84  ± 1.22 * 85%  124.7* 
+
+L2 (severe glare)  DRM+RGF 
+
+(Ours)  1.08  ± 0.05  12%  49.8 
+
+Note:  PLR, detour rate, and time -to -goal are reported as mean ±  standard deviation over successful trials. 
+
+Under L2, baseline statistics may be success -conditioned because some trials fail to reach the goal. 
+
+Trend Analysis and Deployment Insights 
+
+The performance gap widens as glare intensifies, which is  consistent with the failure mode of TSDF 
+
+fusion: corrupted depth observations can be repeatedly integrated and persist as phantom structures. By 
+
+down -weighting or rejecting low -reliability pixels, RGF prevents this error accumulation. Despite this 
+
+added re liability modeling, the network remains lightweight (61,936 parameters, ≈0.69 GFLOPs), and 
+
+Table VII shows that the runtime overhead remains acceptable for embedded real -time deployment. This 
+
+lightweight design is important because the goal of the proposed  method is not dense geometric 
+
+restoration but reliable obstacle integration for embedded navigation. In this sense, DRM+RGF occupies 
+
+a practical middle ground: it is substantially more robust than heuristic filtering, yet much lighter than 
+
+full depth -comp letion pipelines that would be difficult to deploy at real -time rates on Jetson -class 
+
+platforms. 
+
+TABLE  VII 
+
+RUNTIME AND  COMPUTATIONAL  OVERHEAD ON THE  EMBEDDED  ROBOTIC  PLATFORM 
+
+Method  Baseline (TSDF)  DRM+RGF (Ours) 
+
+DRM Latency (ms)  - 6.5 
+
+Costmap  Update (ms)  10.0  10.0 Total (ms)  10.0  16.5 
+
+Throughput (FPS)  100.0  60.6 
+
+Relative Overhead  - 65.0% 
+
+Note:  Total runtime is measured per frame on the real robotic platform with on -board Jetson Orin 
+
+Nano processing. Relative overhead is computed with  respect to the baseline TSDF fusion pipeline .
+
+Fig. 4.  Trajectory detour analysis under severe glare (L2). (a) Top -down view of the reflective corridor. 
+
+(b) Baseline fusion produces a large detour due to glare -induced phantom obstacles. (c) DRM+RGF 
+
+preserves a near -straight trajectory through the reflective r egion. Discussion 
+
+Why reliability -guided fusion instead of full depth completion? 
+
+Depth completion methods achieve strong reconstruction performance on transparent and reflective 
+
+objects [8], [9], but their goal differs from ours. For real -time navigation costmap construction, the priority 
+
+is not visually complete depth but conservative  obstacle insertion and stable free -space preservation. 
+
+DRM+RGF therefore focuses on suppressing unreliable measurements before fusion, without modifying 
+
+the planner/ controller. Although simulation frameworks and sensor simulators are increasingly used to 
+
+support robot learning and perception development [26], [27], our objective here is different: we evaluate 
+
+reliability -guided fusion exclusively under real -world hardware conditions. 
+
+Limitations and failure cases 
+
+Our method may under -insert obstacles when large regions are consistently flagged as unreliable, 
+
+especially under extreme glare or near -mirror reflections. Additional cues such as mirror/specular 
+
+segmentation [16], multi -view consistency checks [14], or ou t-of -distribution depth uncertainty detection 
+
+[28] may improve recall in such cases. This reliability -gating strategy is complementary to both structure -
+
+based reflection filtering [2] and reflection -aware SLAM back -ends [3]. In extreme cases where a large 
+
+contiguous region is repeatedly assigned low reliability, the system may enter a degraded sensing mode 
+
+in which conservative obstacle suppression improves false -positive robustness but reduces geometric 
+
+observability. A practical safeguard is to combine re liability gating with a slow -down or re -observation policy when the proportion of low -reliability pixels exceeds a predefined threshold. 
+
+Extensions to multi -sensor robustness 
+
+Reliability modeling is broadly useful for robust perception and sensor fusion under adverse 
+
+conditions [15]. Future work will extend DRM to additional sensing modalities and investigate cross -
+
+sensor reliability fusion in reflective environments. 
+
+# Conclusion 
+
+This paper presented a reliability -guided depth fusion framework for suppressing specular -glare -
+
+induced corruption in active stereo RGB -D sensing before it propagates into TSDF -based mapping and 
+
+navigation costmaps. Evaluated on a real mobile robot equippe d with an Intel RealSense D435 and a 
+
+Jetson Orin Nano, the proposed DRM+RGF improves both sensor -level depth integrity and system -level 
+
+navigation robustness in reflective indoor environments. Under severe glare (L2), the false -obstacle rate 
+
+(FOR) dropped  from 0.432 to 0.056 and free -space recall (FSR) increased from 0.515 to 0.897, which 
+
+translated into a success -rate improvement from 28.6% to 91.4% and a reduction in emergency stops from 
+
+6.84 to 0.85 per 10 m. 
+
+Because DRM is lightweight and can run within a few milliseconds per frame on embedded GPUs, 
+
+the proposed module can be deployed as a drop -in reliability layer for TSDF -based mapping pipelines 
+
+such as nvblox –Nav2 navigation systems. Future work will extend  the reliability modeling framework to 
+
+more diverse reflective materials (e.g., wet asphalt and glass façades), incorporate multi -view or temporal 
+
+consistency cues for challenging edge cases, and investigate multi -sensor reliability fusion to further 
+
+impro ve navigation robustness in complex reflective environments. 
+
+# REFERENCES 
+
+[1]  P. Foster, C. Johnson, and B. Kuipers, “The reflectance field map: Mapping glass and specular 
+
+surfaces in dynamic environments,” in  Proc. IEEE Int. Conf. Robot. Autom. (ICRA) , London, U.K., 
+
+2023, pp. 8393 –8399, doi: 10.1109/ICRA48891.2023.10161520. 
+
+[2]  A. Mora, R. Barber, and L. Moreno, “Leveraging 3 -D data for whole object shape and reflection -
+
+aware 2 -D map building,”  IEEE Sensors Journal , vol. 24, no. 14, pp. 21941 –21948, Jul. 15, 2024, 
+
+doi: 10.1109/JSEN.2023.3321936. 
+
+[3]  N. Zhou, H. Yao, C. Zhai, Z. Zhao, and X. Zhu, “A robust RGB -D SLAM system for indoor 
+
+environments with reflective ground,”  IEEE Sensors Journal , vol. 25, no. 20, pp. 38258 –38270, 
+
+Oct. 15, 2025, doi: 10.1109/JSEN.2025.3600569. 
+
+[4]  G. Chen, G. Cui, Z. Jin, F. Wu, and X. Chen, “Accurate intrinsic and extrinsic calibration of RGB -
+
+D cameras with GP -based depth correction,”  IEEE Sensors Journal , vol. 19, no. 7, pp. 2685 –2694, 
+
+2019, doi: 10.1109/JSEN.2018.2889805. 
+
+[5]  X. Zhao and S. Schwertfeger, “3DRef: 3D dataset and benchmark for reflection detection in RGB 
+
+and LiDAR data,”  arXiv preprint  arXiv:2403.06538, 2024, doi: 10.48550/arXiv.2403.06538. 
+
+[6]  P. Z. Ramirez  et al ., “NTIRE 2025 challenge on HR depth from images of specular and transparent 
+
+surfaces,” in  Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. Workshops (CVPRW) ,
+
+Nashville, TN, USA, 2025, pp. 978 –992, doi: 10.1109/CVPRW67362.2025.00098. 
+
+[7]  C. He, H. Zhao, X. Zhang, J. Li, and Z. Dong, “Glass recognition and map optimization method 
+
+for mobile robot based on boundary guidance,”  Chin. J. Mech. Eng. , vol. 36, Art. no. 88, Jun. 2023, 
+
+doi: 10.1186/s10033 -023 -00902 -9. 
+
+[8]  X. Fan  et al ., “TDCNet: Transparent objects depth completion with CNN -transformer dual -branch 
+
+parallel network,”  IEEE Sensors Journal , vol. 25, no. 19, pp. 36629 –36641, Oct. 1, 2025, doi: 
+
+10.1109/JSEN.2025.3599381. [9]  G. Xie  et al ., “HDCNet: A hybrid depth completion network for grasping transparent and reflective 
+
+objects,”  arXiv preprint  arXiv:2511.07081, Nov. 10, 2025. [Online]. Available: 
+
+https://arxiv.org/abs/2511.07081 .
+
+[10]  T. Salloom, D. Zhou, and X. Sun, “Geometry -aware sparse depth sampling for high -fidelity RGB -
+
+D depth completion in robotic systems,”  arXiv preprint  arXiv:2512.08229, Dec. 9, 2025. [Online]. 
+
+Available:  https://arxiv.org/abs/2512.08229 .
+
+[11]  P. Z. Ramirez, A. Costanzino, F. Tosi, M. Poggi, L. Di Stefano, J. -B. Weibel, D. Antensteiner, M. 
+
+Vincze, B. Busam, G. Zhai, W. Li, J. Huang, H. Jung, M. Lavreniuk, P. Sun, Y. Luo, H. Wang, M. 
+
+Gao, K. Jiang, and J. Jiang, “TRICKY 2025 challenge on monocula r depth from images of specular 
+
+and transparent surfaces,” in  Proc. IEEE/CVF Int. Conf. Comput. Vis. Workshops (ICCVW) , 2025, 
+
+pp. 3280 –3291. 
+
+[12]  H. Wen, X. Yan, W. Tian, and J. Deng, “Seeing and seeing through the glass: Real and synthetic 
+
+data for multi -layer depth estimation,”  arXiv preprint  arXiv:2503.11633, Mar. 14, 2025. [Online]. 
+
+Available: https://arxiv.org/abs/2503.11633. 
+
+[13]  T. Schöps, T. Sattler, and M. Pollefeys, “BAD SLAM: Bundle adjusted direct RGB -D SLAM,” in 
+
+Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR) , Long Beach, CA, USA, 2019, pp. 
+
+134 –144, doi: 10.1109/CVPR.2019.00022. 
+
+[14]  J. Park, B. Lee, S. Lee, and S. Son, “Stereo -GS: Online 3D Gaussian splatting mapping using stereo 
+
+depth estimation,”  Electronics , vol. 14, no. 22, Art. no. 4436, 2025, doi: 
+
+10.3390/electronics14224436. 
+
+[15]  A. Abdulmaksoud and R. Ahmed, “Transformer -based sensor fusion for autonomous vehicles: A 
+
+comprehensive review,”  IEEE Access , vol. 13, pp. 41822 –41838, 2025, doi: 
+
+10.1109/ACCESS.2025.3545032. 
+
+[16]  M. Xu, P. Herbert, Y. -K. Lai, Z. Ji, and J. Wu, “RGB -D video mirror detection,” in  Proc. IEEE/CVF 
+
+Winter Conf. Appl. Comput. Vis. (WACV) , 2025, pp. 9622 –9631. [Online]. Available: 
+
+https://github.com/UpChenF/DVMDNet . Accessed: Feb. 2, 2026. 
+
+[17]  K. Khoshelham and S. O. Elberink, “Accuracy and resolution of Kinect depth data for indoor 
+
+mapping applications,”  Sensors , vol. 12, no. 2, pp. 1437 –1454, 2012. 
+
+[18]  H. Moravec and A. Elfes, “High resolution maps from wide angle sonar,” in  Proc. 1985 IEEE Int. 
+
+Conf. Robot. Autom. , St. Louis, MO, USA, 1985, pp. 116 –121, doi: 
+
+10.1109/ROBOT.1985.1087316. 
+
+[19]  A. Elfes, “Using occupancy grids for mobile robot perception and navigation,”  Computer , vol. 22, 
+
+no. 6, pp. 46 –57, Jun. 1989, doi: 10.1109/2.30720. 
+
+[20]  Intel Corp., “Intel RealSense D400 series product family datasheet,” Doc. 337029 -005. [Online]. 
+
+Available:  https://www.intelrealsense.com/wp -
+
+content/uploads/2019/09/Intel_RealSense_D400_Series_Product_Family_Datasheet . Accessed: 
+
+Feb. 2, 2026. 
+
+[21]  X. Huang, C. Wu, X. Xu, B. Wang, S. Zhang, C. Shen, C. Yu, J. Wang, N. Chi, S. Yu, and C. J. 
+
+Chang -Hasnain, “Polarization structured light 3D depth image sensor for scenes with reflective 
+
+surfaces,”  Nat. Commun. , vol. 14, Art. no. 6855, 2023, doi: 10.1038/s41467 -023 -42678 -5. 
+
+[22]  A. Millane, H. Oleynikova, E. Wirbel, R. Steiner, V. Ramasamy, D. Tingdahl, and R. Siegwart, 
+
+“nvblox: GPU -accelerated incremental signed distance field mapping,” in  Proc. IEEE Int. Conf. 
+
+Robot. Autom. (ICRA) , Yokohama, Japan, May 2024, pp. 2698 –2705, doi: 
+
+10.1109/ICRA57147.2024.10611532. 
+
+[23]  Navigation2, “Costmap 2D,”  Navigation2 Documentation . [Online]. Available: 
+
+https://docs.nav2.org/configuration/packages/configuring -costmaps.html . Accessed: Feb. 2, 2026. 
+
+[24]  ROS Wiki, “costmap_2d/Inflation.” [Online]. Available: 
+
+https://wiki.ros.org/costmap_2d/hydro/inflation . Accessed: Feb. 2, 2026. 
+
+[25]  O. Wasenmüller and D. Stricker, “Comparison of Kinect v1 and v2 depth images in terms of 
+
+accuracy and precision,” in  Proc. Asian Conf. Comput. Vis. Workshops (ACCV Workshops) , 2016, 
+
+pp. 34 –45. [26]  NVIDIA, “Camera sensors,”  Isaac Sim Documentation . [Online]. Available: 
+
+https://docs.isaacsim.omniverse.nvidia.com/latest/sensors/isaacsim_sensors_camera.html .
+
+Accessed: Feb. 2, 2026. 
+
+[27]  NVIDIA, “Isaac Lab: A GPU -accelerated simulation framework for multi -modal robot learning,” 
+
+arXiv preprint  arXiv:2511.04831, Nov. 2025. [Online]. Available: 
+
+https://doi.org/10.48550/arXiv.2511.04831 . Accessed: Feb. 9, 2026. 
+
+[28]  J. Hornauer, A. Holzbock, and V. Belagiannis, “Out -of -distribution detection for monocular depth 
+
+estimation,” in  Proc. IEEE/CVF Int. Conf. Comput. Vis. (ICCV) , 2023, pp. 1911 –1921. 
+
+Shang -En Tsai  is with Department of Computer Science and Information 
+
+Engineering, Chang Jung Christian University, Taiwan. His research interests 
+
+include RGB -D perception, robotic navigation, edge AI,  sensor fusion, embedded 
+
+intelligent systems, and reliability -aware mapping under challenging environmental 
+
+conditions. He has authored and coauthored journal and conference papers in 
+
+robotics, sensing, artificial intelligence, and related interdisciplinary  applications. 
+
+Wei -Cheng Sun i s a student researcher working in robotics, computer vision, and 
+
+intelligent sensing systems. His research interests include RGB -D perception, 
+
+robotic mapping and navigation, and glare -robust environmental  understanding. He 
+
+has participated in several research projects on perception -aware sensing and real -
+
+world robotic system evaluatio n.

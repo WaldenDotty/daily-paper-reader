@@ -6,58 +6,62 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-04-21
-- 运行时间：2026-04-21 20:18:08 UTC
+- 最新运行日期：2026-04-22
+- 运行时间：2026-04-22 19:55:26 UTC
 - 运行状态：成功
-- 本次总论文数：12
-- 精读区：1
+- 本次总论文数：14
+- 精读区：3
 - 速读区：11
 
 ### 今日简报（AI）
-今日深度探索航天器自主引导与复杂动力学建模，重点解析推理模型在空间任务中的意图对齐。
-核心结论指出推理模型能显著提升航天器引导精度，而辛归纳偏置则有效解决了哈密顿系统在稀疏噪声数据下的建模难题。
-建议关注大模型推理能力与物理信息机器学习的结合，以应对极端环境下的机器人集群控制挑战。
-- 详情：[/202604/21/README](/202604/21/README)
+今日深度研读14篇前沿论文，重点聚焦航天器路径规划与月表高精度地形建模。
+- 详情：[/202604/22/README](/202604/22/README)
 
 ### 精读区论文标签
-1. [Intent-aligned Autonomous Spacecraft Guidance via Reasoning Models](/202604/21/2604.17176v1-intent-aligned-autonomous-spacecraft-guidance-via-reasoning-models)  
+1. [Formulation and Analysis for Integrated Spacecraft Routing and Trajectory Design Problem](/202604/22/2604.18826v1-formulation-and-analysis-for-integrated-spacecraft-routing-and-trajectory-design-problem)  
+   标签：评分：9.0/10、query:cislunar-dyn-nav
+   evidence：动态环境下的航天器路径规划与轨道优化
+2. [DEM Refinement and Validation on the Lunar Surface Using Shape-from-Shading with Chandrayaan-2 OHRC Imagery](/202604/22/2604.17436v1-dem-refinement-and-validation-on-the-lunar-surface-using-shape-from-shading-with-chandrayaan-2-ohrc-imagery)  
    标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：自主航天器制导与轨迹优化
+   evidence：月球表面数字高程模型精化
+3. [Pulsar Selection Criteria and Performance Evaluation of Autonomous X-ray Pulsar Navigation Systems](/202604/22/2604.18844v1-pulsar-selection-criteria-and-performance-evaluation-of-autonomous-x-ray-pulsar-navigation-systems)  
+   标签：评分：8.0/10、query:cislunar-dyn-nav
+   evidence：用于状态估计的自主X射线脉冲星导航
 
 ### 速读区论文标签
-1. [Greedy Kalman-Swarm: Improving State Estimation in Robot Swarms in Harsh Environments](/202604/21/2604.16868v1-greedy-kalman-swarm-improving-state-estimation-in-robot-swarms-in-harsh-environments)  
+1. [On-Orbit Space AI: Federated, Multi-Agent, and Collaborative Algorithms for Satellite Constellations](/202604/22/2604.16518v1-on-orbit-space-ai-federated-multi-agent-and-collaborative-algorithms-for-satellite-constellations)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：机器人集群状态估计中的卡尔曼滤波
-2. [Symplectic Inductive Bias for Data-Driven Target Reachability in Hamiltonian Systems](/202604/21/2604.17213v1-symplectic-inductive-bias-for-data-driven-target-reachability-in-hamiltonian-systems)  
+   evidence：在轨空间人工智能与卫星星座自主性
+2. [Long-Term Dynamical Evolution and Ejection of Near-Earth Asteroids](/202604/22/2604.16971v1-long-term-dynamical-evolution-and-ejection-of-near-earth-asteroids)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：哈密顿系统和辛几何是三体问题(CR3BP)及轨道力学的数学基础
-3. [Machine Learning Hamiltonian Dynamical Systems with Sparse and Noisy Data](/202604/21/2604.17470v1-machine-learning-hamiltonian-dynamical-systems-with-sparse-and-noisy-data)  
+   evidence：轨道长期动力学演化与混沌运动
+3. [Inferring lunar wake potentials from electron phase space densities](/202604/22/2604.17825v1-inferring-lunar-wake-potentials-from-electron-phase-space-densities)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：结合物理结构的非线性哈密顿动力系统符号表示学习
-4. [BIND-USBL: Bounding IMU Navigation Drift using USBL in Heterogeneous ASV-AUV Teams](/202604/21/2604.11861v1-bind-usbl-bounding-imu-navigation-drift-using-usbl-in-heterogeneous-asv-auv-teams)  
+   evidence：月球尾迹电势与哈密顿反演
+4. [Tropical low-rank approximation and application to optimal control of N-body systems](/202604/22/2604.18785v1-tropical-low-rank-approximation-and-application-to-optimal-control-of-n-body-systems)  
+   标签：评分：7.0/10、query:cislunar-dyn-nav
+   evidence：N体系统最优控制
+5. [Differentiable Satellite Constellation Configuration via Relaxed Coverage and Revisit Objectives](/202604/22/2604.19062v1-differentiable-satellite-constellation-configuration-via-relaxed-coverage-and-revisit-objectives)  
+   标签：评分：7.0/10、query:cislunar-dyn-nav
+   evidence：卫星星座轨道参数的可微优化
+6. [Nonlinear Programming of Low-Thrust Multi-Rendezvous Trajectories Using Analytical Hessian](/202604/22/2604.19573v1-nonlinear-programming-of-low-thrust-multi-rendezvous-trajectories-using-analytical-hessian)  
+   标签：评分：7.0/10、query:cislunar-dyn-nav
+   evidence：用于轨道优化和多交会任务的解析海森矩阵
+7. [Data-driven Reachable Set Estimation with Tunable Adversarial and Wasserstein Distributional Guarantees](/202604/22/2604.12654v1-data-driven-reachable-set-estimation-with-tunable-adversarial-and-wasserstein-distributional-guarantees)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：在无GPS环境下限制导航漂移的协作定位框架
-5. [Are Thalassa and Despina in Resonance Lock with Neptune's Oscillations?](/202604/21/2604.13200v1-are-thalassa-and-despina-in-resonance-lock-with-neptunes-oscillations)  
+   evidence：动力系统可达集估计
+8. [Reliability-Guided Depth Fusion for Glare-Resilient Navigation Costmaps](/202604/22/2604.12753v1-reliability-guided-depth-fusion-for-glare-resilient-navigation-costmaps)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：多体行星系统中的轨道共振与稳定性分析
-6. [Continuation of Hamiltonian dynamics from the plane to constant-curvature surfaces](/202604/21/2604.13250v1-continuation-of-hamiltonian-dynamics-from-the-plane-to-constant-curvature-surfaces)  
+   evidence：用于弹性导航代价地图的深度融合
+9. [Capability-Aware Heterogeneous Control Barrier Functions for Decentralized Multi-Robot Safe Navigation](/202604/22/2604.13245v1-capability-aware-heterogeneous-control-barrier-functions-for-decentralized-multi-robot-safe-navigation)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：曲面上的哈密顿动力学与对称性
-7. [Keep It CALM: Toward Calibration-Free Kilometer-Level SLAM with Visual Geometry Foundation Models via an Assistant Eye](/202604/21/2604.14795v1-keep-it-calm-toward-calibration-free-kilometer-level-slam-with-visual-geometry-foundation-models-via-an-assistant-eye)  
+   evidence：异构机器人的分布式安全导航
+10. [RadarSplat-RIO: Indoor Radar-Inertial Odometry with Gaussian Splatting-Based Radar Bundle Adjustment](/202604/22/2604.13492v1-radarsplat-rio-indoor-radar-inertial-odometry-with-gaussian-splatting-based-radar-bundle-adjustment)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：公里级SLAM与轨迹漂移修正
-8. [Dual Pose-Graph Semantic Localization for Vision-Based Autonomous Drone Racing](/202604/21/2604.15168v1-dual-pose-graph-semantic-localization-for-vision-based-autonomous-drone-racing)  
+   evidence：用于导航的多传感器融合与平差
+11. [UNRIO: Uncertainty-Aware Velocity Learning for Radar-Inertial Odometry](/202604/22/2604.13584v1-unrio-uncertainty-aware-velocity-learning-for-radar-inertial-odometry)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：针对高速动力学的自主定位与位姿图优化
-9. [C-GenReg: Training-Free 3D Point Cloud Registration by Multi-View-Consistent Geometry-to-Image Generation with Probabilistic Modalities Fusion](/202604/21/2604.16680v1-c-genreg-training-free-3d-point-cloud-registration-by-multi-view-consistent-geometry-to-image-generation-with-probabilistic-modalities-fusion)  
-   标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：用于自主导航的3D点云配准
-10. [NaviFormer: A Deep Reinforcement Learning Transformer-like Model to Holistically Solve the Navigation Problem](/202604/21/2604.16967v1-naviformer-a-deep-reinforcement-learning-transformer-like-model-to-holistically-solve-the-navigation-problem)  
-   标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：整体路径规划与轨迹预测
-11. [Uniform Hyperbolicity and Symbolic Dynamics: Markov Partitions, Shadowing, and the Coding of Axiom A Systems](/202604/21/2604.17608v1-uniform-hyperbolicity-and-symbolic-dynamics-markov-partitions-shadowing-and-the-coding-of-axiom-a-systems)  
-   标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：稳定流形定理与几何理论
+   evidence：用于里程计的多传感器融合与不确定性感知速度估计
 
 
 <div class="dpr-home-promo-card">
