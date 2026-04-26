@@ -1,0 +1,2841 @@
+Title: ADMM-Based Distributed Kalman-like Observer with Applications to Cooperative Localization
+
+URL Source: https://arxiv.org/pdf/2604.21608v1
+
+Published Time: Fri, 24 Apr 2026 00:50:51 GMT
+
+Number of Pages: 16
+
+Markdown Content:
+> 1
+
+# ADMM-Based Distributed Kalman-like Observer with Applications to Cooperative Localization 
+
+Nicola De Carli, Nicola Bastianello, Dimos V. Dimarogonas 
+
+Abstract — This paper addresses distributed state esti-mation for multi-agent systems with local and relative mea-surements, motivated by cooperative localization problems in which the global state dimension scales with the size of the network. We consider a Kalman-like observer in infor-mation form and introduce a sparsity-preserving prediction step based on an exponential forgetting factor, thereby avoiding the dense Riccati recursion of the standard infor-mation filter. The correction step is recast as a strongly convex quadratic program with structure induced by the sensing graph, which enables a distributed solution based on the alternating direction method of multipliers (ADMM). In the resulting scheme, each agent updates local copies of its own correction variable and those of its neighbors using only local communication, thus avoiding centralized matrix inversion and consensus over full global-state quan-tities. A two-time-scale stability analysis is developed for the interconnected observer: the reduced estimation-error dynamics are shown to be uniformly exponentially stable, the ADMM dynamics define an exponentially stable fast subsystem, and these properties are combined to estab-lish uniform exponential stability of the overall distributed observer. Numerical simulations in a multi-agent coopera-tive localization scenario illustrate the performance of the proposed distributed observer. 
+
+Index Terms — Multi-agent systems, distributed optimiza-tion, cooperative localization, observer design 
+
+I. I NTRODUCTION 
+
+Distributed cooperative state estimation is a fundamental problem in networked systems, with applications including cooperative localization [1]–[5] and distributed power network state-estimation [6], [7]. In such scenarios, agents may have access to local measurements, depending only on their own state, as well as relative measurements involving neighboring agents. It could be the case, however, that local measure-ments are available only to a subset of the agents, while the others must estimate their state through relative sensing and information exchange. While these sensing modalities provide rich information, they also induce estimation problems whose dimension grows with the size of the network, making centralized approaches increasingly difficult to scale. Distributed estimation strategies are thus particularly ap-pealing. The Kalman filter is the standard solution for state                                  
+
+> This work was supported in part by the Wallenberg AI, Autonomous Systems and Software Program (WASP) funded by the Knut and Alice Wallenberg (KAW) Foundation, the ERC LEAFHOUND Project, the Swedish Research Council (VR), Digital Futures and the Swedish Foundation for Strategic Research project. Nicola De Carli, Nicola Bastianello and Dimos V. Dimarogo-nas are with the Department of Decision and Control Systems, KTH Royal Institute of Technology, Stockholm, Sweden. E-mail:
+> {ndc,nicolba,dimos }@kth.se
+
+estimation, and its information form is well suited to dis-tributed sensing since measurement information is aggregated additively [8]–[10]. A large body of work has addressed distributed Kalman filtering and information fusion in sensor networks [8]–[10], often relying on consensus mechanisms to aggregate informa-tion terms. These approaches are effective when the network estimates a global state of fixed dimension, as in target tracking [9]. In contrast, in cooperative localization and related multi-agent estimation problems, the state dimension grows with the number of agents, while each robot typically needs an accurate estimate only of its own state and, at most, of those of nearby agents. As a result, reconstructing the full state of the entire network may be unnecessary and computationally inefficient. In this setting, the direct use of the information filter faces two main limitations. First, the standard prediction step generally destroys the sparsity of the information matrix, since the Riccati recursion introduces dense couplings even when the underlying sensing interactions are local. Second, the correction step requires the inversion of a global infor-mation matrix, which is incompatible with fully distributed implementations and scales poorly with the number of agents. In the cooperative localization literature, a number of ap-proaches have been proposed to distribute Kalman filtering while coping with the dense covariance matrix and the cross-correlations induced by inter-agent measurements [1]–[4], [11]. Broadly speaking, these methods can be grouped into three main categories: (i) centralized-equivalent schemes [2], [3], (ii ) approximation-based schemes that modify the covari-ance propagation or update [1], [3], [11], and (iii ) covariance-intersection (CI) based methods, which are designed to fuse estimates under unknown correlations [4], [12]–[14]. Centralized-equivalent approaches [2], [3] aim at reproduc-ing exactly the estimate that would be obtained by a central-ized Kalman filter. Their main advantage is that they preserve the optimality and consistency properties of the centralized estimator. However, this is typically achieved at the expense of substantial communication and bookkeeping requirements, often involving all-to-all information exchange or the prop-agation of cross-covariance terms across the network. As a result, these methods become increasingly difficult to scale as the number of agents grows. A second line of work seeks scalability by approximating the covariance recursion. In particular, the method in [1], on which [11] further builds, introduces approximations in the prediction and correction steps so as to preserve a distributed structure while remaining close, in a suitable sense, to the nominal Riccati iteration. These methods have been shown to 
+
+> arXiv:2604.21608v1 [eess.SY] 23 Apr 2026 2
+
+yield good empirical performance in cooperative localization problems [1], [11], [15], and they offer an attractive compro-mise between estimation quality and computational tractabil-ity. Nevertheless, because the exact covariance recursion is modified, the resulting estimates are in general not consistent, and rigorous stability properties of the overall observer are typically not established. A third class of approaches relies on covariance intersection and related conservative fusion rules [4], [12]–[14]. These methods are particularly appealing when the cross-correlations among local estimates are unknown or difficult to track, since they allow multiple estimates to be fused while preserving con-sistency. Their main drawback, however, is conservatism: to guarantee consistency without explicit correlation information, they often underuse the information provided by neighboring agents, which may lead to degraded estimation accuracy. Overall, most existing distributed cooperative localization methods primarily focus on preventing overconfidence when fusing information across agents, or on approximating the centralized covariance recursion in a scalable way. By contrast, the question of establishing stability of the resulting distributed observer is often left open. This gap is one of the main motivations for the present work, which seeks to combine a fully distributed implementation with a stability guarantee while still exploiting information from all agents, so as to asymptotically recover the corresponding centralized Kalman-like observer. In our previous work [16], building on the Kalman-like design of [17], we proposed a continuous-time distributed Kalman-like observer in which the process-noise term is replaced by a forgetting factor, thereby preserving the sparsity of the information matrix, while the correction step is com-puted through a distributed dynamic inversion scheme. That approach relies on a continuous-time version of the Richardson iteration [18], which can be used to solve sparse positive-definite linear systems in a distributed manner [19]. Although this method can provide good estimation performance, its convergence may become slow when the matrix to be inverted is ill-conditioned. Moreover, in the discrete-time setting, the admissible Richardson step size depends on spectral properties of the time-varying information matrix. In practice, distributed implementations typically require a fixed step size that remains valid over time; however, deriving a sufficiently tight offline bound may be conservative, while online adaptation is difficult to realize in a fully distributed way. To address these limitations, this paper proposes a dis-tributed discrete-time Kalman-like observer that integrates a sparsity-preserving prediction step with an optimization-based correction stage. By employing an exponential forgetting fac-tor [17], [20], the prediction maintains the sparsity of the sensing topology and avoids the computational burden of stan-dard Riccati recursions. The correction step is then recast as a structured quadratic program and solved via a partition-based ADMM [21], [22]. This architecture allows agents to maintain and update local copies of neighboring variables using only one-hop communication, effectively removing the need for centralized matrix inversions. Notably, the framework enables the closed-form integration of local measurements, reserving the distributed optimization layer exclusively for the residual correction induced by relative sensing. This allows agents to exploit private information immediately while minimizing the communication overhead associated with the collaborative estimation task. The main contributions of this paper are: 1) The formulation of a discrete-time Kalman-like observer in information form that preserves the sparsity of the sensing graph during prediction, bypassing the dense Riccati recursions typical of standard information filters. 2) A distributed correction architecture based on a partition-based ADMM. This scheme asymptotically recovers the centralized estimate while requiring only local communi-cation, avoids consensus over the full global state, and allows for the direct, closed-form integration of local sensing. 3) A rigorous stability analysis of the resulting intercon-nected observer. Using a two-time-scale framework and small gain arguments, we establish the uniform global ex-ponential stability (UGES) of the full system by showing that the fast ADMM dynamics track the slow estimation-error dynamics.  
+
+> Notation:
+
+Scalars, vectors, matrices, and sets are denoted by lowercase letters, bold lowercase letters, bold uppercase letters, and calligraphic symbols, respectively. The identity and zero matrices are denoted by In and 0n, with dimensions omitted when clear from the context. The operator col( ·)
+
+denotes vertical concatenation. In particular, given a finite index set V, the expression col( xi,k )i∈V denotes the vector obtained by stacking the blocks xi,k for all i ∈ V . For instance, if V = {1, . . . , N }, then col( xi,k )i∈V =  
+
+> h
+> x⊤
+> 1,k · · · x⊤
+> N,k
+> i⊤
+> .
+
+Likewise, blkdiag( ·) denotes block-diagonal concatenation, so that blkdiag( Ai)i∈V is the block-diagonal matrix whose diagonal blocks are the matrices Ai, arranged according to the same ordering of V. The symbol ⊗ denotes the Kronecker product. For symmetric matrices A and B, A ⪰ B means that 
+
+A−B is positive semidefinite. For M ≻ 0, ∥x∥2 
+
+> M
+
+:= x⊤M x 
+
+denotes the weighted squared norm. Finally, λmax (A) denotes the maximum eigenvalue of A.
+
+II. S YSTEM MODEL 
+
+Consider a network of N agents with decoupled discrete-time linear dynamics           
+
+> xi,k +1 =Ai,k xi,k +Bi,k ui,k ,i∈ V := {1, . . . , N },(1)
+
+where xi,k ∈ Rd, ui,k ∈ Rm, and the matrices Ai,k ∈ Rd×d
+
+and Bi,k ∈ Rd×m may be time-varying. 1
+
+Agent interactions are described by: (i) a directed sensing graph Gs = ( V, Es), and (ii ) an undirected communication graph Gc = ( V, Ec). A directed edge (i, j ) ∈ E s indicates that agent i obtains a relative measurement involving agent j.The communication graph is assumed to be the undirected counterpart of the sensing graph, i.e. if (i, j ) ∈ Es or 
+
+(j, i ) ∈ E s, then {i, j } ∈ E c, ensuring bidirectional information   
+
+> 1The extension to heterogeneous agent dimensions is straightforward and omitted for brevity. Similarly, for heterogeneous measurements. AUTHOR et al. : TITLE 3
+
+exchange. We denote the set of communication neighbors of agent i by Ni := {j ∈ V | { i, j } ∈ E c}.
+
+Each agent may obtain: (i) a local measurement yℓi,k ∈ Rqℓ
+
+yℓi,k = Hℓi,k xi,k ∈ Rqℓ , i ∈ V ℓ ⊆ V , (2) 
+
+(ii ) a relative measurement yrij,k ∈ Rqr for each (i, j ) ∈ E s
+
+yrij,k = Hrij,i,k xi,k + Hrij,j,k xj,k ∈ Rqr . (3) 
+
+Here Vℓ denotes the subset of agents equipped with sensors providing local measurements. Define the stacked state and input vectors xk := col( xi)k∈V , and uk := col( ui,k )i∈V . Let Ak := blkdiag( Ai,k )i∈V , and Bk := blkdiag( Bi,k )i∈V .Then the network dynamics compactly read 
+
+xk+1 = Akxk + Bkuk. (4) 
+
+The stacked measurement vector is 
+
+yk := 
+
+ col( yℓi,k )i∈V ℓ
+
+col( yrij,k )(i,j )∈E s
+
+
+
+= Hkxk. (5) 
+
+Here, Hk is partitioned into block rows associated with individual measurements and block columns associated with agents. Its sparsity reflects the measurement structure: each block row has nonzero blocks only in the columns correspond-ing to the agents involved in that measurement. Accordingly, a local measurement of agent i contributes a single nonzero block in column i, while a relative measurement between agents i and j contributes nonzero blocks only in columns i
+
+and j. Hence, Hk has the sparsity pattern of a block incidence matrix of the measurement graph. The subsequent analysis relies on the following standard assumptions [20] for time-varying linear systems and Kalman-type observers and additional bounds on the variation of the system matrices. 
+
+Assumption 1 (Uniform boundedness) . There exist constants 
+
+¯a, ¯b, ¯h, ¯a∆, ¯h∆ > 0 such that, for all k,
+
+∥Ak∥ ≤ ¯a, ∥Bkuk∥ ≤ ¯b, ∥Hk∥ ≤ ¯h
+
+∥Ak+1 − Ak∥ ≤ ¯a∆ ∥Hk+1 − Hk∥ ≤ ¯h∆.
+
+As in standard Kalman filtering, an appropriate uniform observability condition is required. To this end, let Φ(k, k 0)
+
+denote the state transition matrix of (4), namely 
+
+Φ(k, k 0) := 
+
+(Ak−1Ak−2 · · · Ak0 , k > k 0,
+
+IN d , k = k0.
+
+Given an integer K ≥ 1, define the observability Gramian over K samples as 
+
+G(k, K ) := 
+
+> k
+
+X
+
+> t=k−K
+
+Φ(t, k − K)⊤H⊤ 
+
+> t
+
+HtΦ(t, k − K). (6) 
+
+Assumption 2 (Complete uniform observability) . There exist an integer K ≥ 1 and constants α1, α 2 > 0 such that, for all 
+
+k ≥ K,
+
+α1IN d ⪯ G(k, K ) ⪯ α2IN d .
+
+Finally, since the proposed information prediction step involves A−1 
+
+> k
+
+, we require the state-transition matrices to be uniformly invertible. 
+
+Assumption 3 (Uniform invertibility) . For all k, the matrix 
+
+Ak is invertible, and there exists a constant ¯ainv > 0 such that 
+
+∥A−1 
+
+> k
+
+∥ ≤ ¯ainv , ∀k. 
+
+III. I NFORMATION -F ORM OBSERVER AND DISTRIBUTED 
+
+CORRECTION 
+
+This section develops the proposed distributed Kalman-like observer in information form. We first exploit the additive measurement-update structure to obtain a graph-structured information update and combine it with a sparsity-preserving prediction step based on exponential forgetting. We then rewrite the correction step as a sparse symmetric positive defi-nite linear system, or equivalently as a structured strongly con-vex quadratic program, which enables the distributed ADMM-based implementation developed later in the section. Let Pk|k−1 and ˆxk|k−1 denote the prior covariance and state estimate, and define the corresponding prior information matrix and vector as 
+
+Sk|k−1 := P −1
+
+> k|k−1
+
+, zk|k−1 := Sk|k−1 ˆxk|k−1. (7) 
+
+Since the global state xk = col( x1,k , . . . , xN,k ) is stacked agent-wise, the matrix Sk|k−1 ∈ RN d ×N d is naturally parti-tioned into N × N blocks, where the block Sij,k |k−1 ∈ Rd×d
+
+captures the coupling between the information corresponding to the states of agents i and j.
+
+Assumption 4. The initial information matrix S0|0 is symmet-ric positive definite and has sparsity pattern consistent with the communication graph Gc = ( V, Ec), in the sense that 
+
+Sij, 0|0 = 0 , ∀ i̸ = j with {i, j } /∈ E c,
+
+where Sij, 0|0 denotes the (i, j ) block of S0|0. Hence, nonzero off-diagonal blocks are allowed only between neighboring agents. 
+
+A. Centralized information update in additive form 
+
+Let Ei ∈ RN d ×d denote the block selection matrix such that E⊤ 
+
+> i
+
+x = xi and x = PNi=1 Eixi. For an edge (i, j ) ∈ E s,define Eij := [ Ei Ej ] ∈ RN d ×2d.For each local measurement yℓi,k = Hℓi,k xi,k , define the corresponding global measurement matrix Hℓi,k E⊤ 
+
+> i
+
+. For each relative measurement yrij,k = Hrij,i,k xi,k +Hrij,j,k xj,k , define 
+
+Hrij,k := Hrij,i,k Hrij,j,k 
+
+ ∈ Rqr ×2d, Hrij,k E⊤ 
+
+> ij
+
+x = yrij,k .
+
+We express the measurement update by explicitly separating local and relative measurements, as in Section II. Let Vℓ ⊆ V 
+
+be the set of agents equipped with local measurements (2). For each (i, j ) ∈ E s, let the relative measurement be given by (3). Assume positive definite measurement information gains 
+
+Rℓi,k ⪰ rℓIqℓ for i ∈ V ℓ, Rrij,k ⪰ rr Iqr for (i, j ) ∈ E s, and 
+
+Rk = blkdiag  {Rℓi,k }i∈V ℓ , {Rrij,k }(i,j )∈E s
+
+,
+
+with bounded variation ∥Rk+1 − Rk∥ ≤ ¯r∆.4
+
+Then the centralized information update can be written as 
+
+Sk|k = Sk|k−1 + εH⊤ 
+
+> k
+
+RkHk
+
+= Sk|k−1 + ε X
+
+> i∈V ℓ
+
+Ei
+
+ Hℓi,k 
+
+⊤Rℓi,k Hℓi,k E⊤
+
+> i
+
++ ε X
+
+> (i,j )∈E s
+
+Eij 
+
+ Hrij,k 
+
+⊤Rrij,k Hrij,k E⊤ 
+
+> ij
+
+, (8a) 
+
+zk|k = zk|k−1 + ε X
+
+> i∈V ℓ
+
+Ei
+
+ Hℓi,k 
+
+⊤Rℓi,k yℓi,k 
+
++ ε X
+
+> (i,j )∈E s
+
+Eij 
+
+ Hrij,k 
+
+⊤Rrij,k yrij,k (8b) 
+
+ˆxk|k = S−1
+
+> k|k
+
+zk|k. (8c) 
+
+Here, ε ∈ (0 , 1] is a correction gain that will later be used to tune the observer while preserving the additive structure of the update. For ε = 1 , (8) reduces to the standard information-form Kalman update. Equation (8a) also makes explicit that the measurement update preserves the graph-induced sparsity pattern. This ob-servation is formalized next. 
+
+Proposition 1 (Sparsity preservation of the measurement update) . If Sk|k−1 has sparsity pattern consistent with the communication graph Gc, then the additive measurement up-date (8a) preserves the same sparsity pattern. Proof. From (8a), each local contribution is premultiplied and postmultiplied by Ei, and therefore affects only the diagonal block associated with agent i. Likewise, each relative contri-bution associated with an edge (i, j ) ∈ E s is premultiplied and postmultiplied by Eij and E⊤ 
+
+> ij
+
+, and therefore affects only the 
+
+2 × 2 block submatrix indexed by agents i and j. Hence, no nonzero blocks are created outside the graph-induced sparsity pattern. The additive structure in (8) has been widely used in sensor networks estimating a global state of fixed dimension (e.g., target tracking) [8]–[10], where the sums can be computed via average consensus. However, in cooperative localization the state dimension grows with N and each agent ultimately requires only its local estimate. Thus, neither centralized inversion of Sk|k (as required by (8c)) nor consensus over global quantities is scalable. 
+
+B. Sparsity-preserving prediction 
+
+A key difficulty in applying information filtering to the considered setup is that the standard prediction step 
+
+Sk+1 |k =  AkPk|kA⊤ 
+
+> k
+
++ Qk
+
+−1
+
+typically becomes dense due to the additive process noise co-variance Qk. To preserve sparsity, similarly to [16], we adopt a modified prediction step based on exponential forgetting, namely 
+
+Sk+1 |k = γ A−⊤  
+
+> k
+
+Sk|kA−1 
+
+> k
+
+, 0 < γ < 1. (9) 
+
+Since Ak is block diagonal, (9) preserves the sparsity pattern of Sk|k.
+
+Proposition 2 (Sparsity preservation of the information pre-diction) . For the multi-agent system (1) –(5) , assume that Sk|k
+
+has sparsity pattern consistent with the communication graph 
+
+Gc. Then the modified prediction step (9) preserves the same sparsity pattern. Proof. In the considered setup, the dynamics matrix Ak
+
+is block diagonal. Hence, A−1 
+
+> k
+
+is block diagonal as well. Therefore, the (i, j ) block of Sk+1 |k is 
+
+Sij,k +1 |k = γA−⊤  
+
+> i,k
+
+Sij,k |kA−1 
+
+> j,k
+
+.
+
+It follows that Sij,k +1 |k = 0 whenever Sij,k |k = 0 . Hence, the sparsity pattern is preserved. A diagonal matrix forgetting factor can also be considered, namely 
+
+Γ = blkdiag( Γi)i∈V , Γi = diag( γi,n )dn=1 ,
+
+0 < γ i,n < 1, ∀n ∈ { 1, . . . , d },
+
+together with the prediction 
+
+Sk+1 |k = A−⊤  
+
+> k
+
+Γ Sk|k Γ A−1 
+
+> k
+
+. (10) 
+
+This variant may be desirable in practice, as it allows differ-ent rates of forgetting to be tuned differently across agents and/or state components while still preserving sparsity. Since the corresponding stability conditions are more involved and generally conservative, the stability of the matrix-forgetting case is discussed separately in Appendix B and here we focus on the scalar case (9). By Assumption 4 together with Propositions 1 and 2, the information matrix retains a sparsity pattern consistent with 
+
+Gc for all k.
+
+Lemma 1. Under Assumptions 1–3 and choosing γ ≤ 1/a 2inv 
+
+(see [20, Lemma 1]), the matrix Sk|k is such that 
+
+0N d ×N d ≺ sεIN d ⪯ Sk|k ⪯ ¯sεIN d (11) 
+
+with sε = εs , ¯sε = ε¯s and s, ¯s > 0.Proof. Denote by ¯Sk|k the information matrix generated by the same recursion as Sk|k with ε = 1 and initialization ¯S0|0
+
+such that it holds S0|0 = ε ¯S0|0. Then, using recursively the prediction step (9) and the additive update (8a), one obtains 
+
+Sk|k = ε
+
+h
+
+γk Φ(0 , k )⊤ ¯S0|0Φ(0 , k )+
+
+> k
+
+X
+
+> h=0
+
+γk−h Φ(h, k )⊤H⊤ 
+
+> h
+
+RhHhΦ(h, k )
+
+# (12) 
+
+This shows that Sk|k = ε ¯Sk|k, i.e. the resulting information matrix is a scaled version of the one obtained when ε = 1 .By [20, Lemma 1], there exist constants s, ¯s > 0 such that 
+
+0 < s IN d ≤ ¯Sk|k ≤ ¯s IN d .
+
+Multiplying by ε yields the stated result. Hence, under Assumption 4, the correction step and the modified prediction preserve the graph-induced sparsity pat-tern of Sk|k, while Lemma 1 guarantees that Sk|k remains symmetric positive definite. Consequently, as it will be shown in the next section, the posterior update can be recast as the solution of a sparse symmetric positive definite linear system, which is the starting point for the distributed observer developed next. AUTHOR et al. : TITLE 5
+
+C. Correction form and local observer dynamics 
+
+Define the correction ξk := 1 
+
+> ε
+
+( ˆ xk|k − ˆxk|k−1). The Kalman update can be written in correction form as 
+
+ˆxk|k = ˆ xk|k−1 + εξk, Sk|kξk = bk, (13) 
+
+where the right-hand side bk collects all innovation terms: 
+
+bk := H⊤ 
+
+> k
+
+Rk(yk − Hk ˆxk|k−1). (14) 
+
+Since this expression is not the common form of the Kalman update, we report its derivation in Appendix A for the reader’s convenience. Equation (13) shows that computing the posterior estimate is equivalent to solving a sparse symmetric positive definite linear system. While this remains equivalent to inverting Sk|k,the key advantage is that the sparsity of the system enables a distributed iterative solution, rather than requiring a centralized matrix inversion. 
+
+Remark 1 (On the role of ε). The gain ε ∈ (0 , 1] does not change the nominal Kalman-like observer dynamics. In fact, since Sk|k = ε ¯Sk|k as per Lemma 1, the correction equation 
+
+Sk|kξk = bk
+
+implies ξk = ε−1 ¯S−1
+
+> k|k
+
+bk, so that the update term actually applied to the estimate is 
+
+ε ξk = ¯S−1
+
+> k|k
+
+bk,
+
+which is the same as for ε = 1 . Hence, ε should be interpreted not as a modification of the nominal observer correction, but rather as a parameter that regulates the interaction with the distributed correction dynamics. 
+
+Before introducing the distributed algorithm used to solve (13), we make the agent-wise structure of the observer explicit. To this end, define the indicators 
+
+δℓi := 
+
+(
+
+1, i ∈ V ℓ,
+
+0, otherwise , δrij := 
+
+(
+
+1, (i, j ) ∈ E s,
+
+0, otherwise . (15) 
+
+Then the i-th block of bk depends only on local quantities, namely 
+
+bi,k = δℓi (Hℓi,k )⊤Rℓi,k 
+
+ yℓi,k − Hℓi,k ˆxi,k |k−1
+
+
+
++ X
+
+> j∈N i
+
+δrij (Hrij,i,k )⊤Rrij,k 
+
+ yrij,k − Hrij,k E⊤ 
+
+> ij
+
+ˆxk|k−1
+
+
+
++ X
+
+> j∈N i
+
+δrji (Hrji,i,k )⊤Rrji,k 
+
+ yrji,k − Hrji,k E⊤ 
+
+> ji
+
+ˆxk|k−1
+
+.
+
+(16) 
+
+We next make explicit the observer dynamics from the perspective of agent i. Define the local and relative information increments as 
+
+∆Sℓi,k := εδ ℓi (Hℓi,k )⊤Rℓi,k Hℓi,k ,
+
+∆Srij,ii,k := εδ rij (Hrij,i,k )⊤Rrij,k Hrij,i,k ,
+
+∆Srji,ii,k := εδ rji (Hrji,i,k )⊤Rrji,k Hrji,i,k ,
+
+∆Srij,ij,k := εδ rij (Hrij,i,k )⊤Rrij,k Hrij,j,k ,
+
+∆Srji,ij,k := εδ rji (Hrji,i,k )⊤Rrji,k Hrji,j,k .
+
+Then, from (13) and (8a), the local update can be written as 
+
+ˆxi,k |k = ˆ xi,k |k−1 + εξi,k ,
+
+Sii,k |k = Sii,k |k−1 + ∆ Sℓi,k + X
+
+> j∈N i
+
+ ∆Srij,ii,k + ∆ Srji,ii,k 
+
+,
+
+Sij,k |k = Sij,k |k−1 + ∆ Srij,ij,k + ∆ Srji,ij,k , ∀j ∈ N i.
+
+(17) 
+
+The local prediction step can be written as 
+
+ˆxi,k +1 |k = Ai,k ˆxi,k |k + Bi,k ui,k ,
+
+Sij,k +1 |k = γA−⊤  
+
+> i,k
+
+Sij,k |kA−1 
+
+> j,k
+
+∀j ∈ { i} ∪ N i. (18) 
+
+D. Quadratic program and separable structure 
+
+Equation (13) shows that computing the correction amounts to solving a sparse symmetric positive definite linear system. Rather than explicitly forming S−1
+
+> k|k
+
+, we seek ξk through a distributed iterative scheme. 
+
+Remark 2 (Richardson iteration) . As it was shown in [16] in a continuous-time setting, a solution of (13) can be obtained in a distributed way using the Richardson iteration, which we write here in a discrete-time setting as 
+
+ˆξk+1 = ˆξk − αR,k 
+
+ Sk|k ˆξk − bk
+
+, 0 < α R,k < 2
+
+λmax (Sk|k) .
+
+(19) 
+
+Since Sk|k is sparse and positive definite, (19) can be im-plemented in a distributed way and converges for fixed bk.However, its convergence may deteriorate when Sk|k is ill-conditioned, and selecting the step size is not straightforward, because reliable upper bounds on λmax (Sk|k) are typically unavailable a priori and may vary substantially, e.g., with the size of the network. This motivates the ADMM-based distributed correction proposed next. 
+
+By Lemma 1, the information matrix satisfies Sk|k ⪰ sεIN d 
+
+with sε > 0. Hence, the linear system (13) admits a unique solution and can be equivalently characterized as the first-order optimality condition of the strongly convex quadratic program 
+
+ξk = arg min 
+
+> ξ∈RN d
+
+ 12 ξ⊤Sk|kξ − ξ⊤bk
+
+
+
+. (20) 
+
+This reformulation is natural for two reasons. First, the sparsity of Sk|k induces a decomposition of the objective into local and pairwise coupling terms. Second, (20) is equivalent, up to an additive constant, to minimizing the weighted squared residual of (13), namely 12 Sk|kξ − bk
+
+> 2
+> S−1
+> k|k
+
+.
+
+The weighting by S−1 
+
+> k|k
+
+is crucial. Let J denote the objective in (20). Then 
+
+∇J(ξ) = Sk|kξ − bk,
+
+where we denoted by J the cost in (20) and whose i-th block depends only on ξi and on the corrections of the neighbors of agent i. By contrast, minimizing the unweighted residual norm 
+
+Sk|kξ − bk
+
+> 22
+
+would produce a gradient involving S2
+
+> k|k
+
+, which generally introduces couplings over two-hop neighborhoods. Moreover, the Richardson iteration (19) can be interpreted as gradient descent applied to (20). 6
+
+We now exploit the sparsity structure of Sk|k to express (20) as a sum of local and edge terms. To obtain a distributed formulation yielding positive-semidefinite local costs, we ex-ploit the additive structure of the information and keep separate the information contributions due to local measurements and those due to relative measurements. Specifically, for each agent i ∈ V , we introduce the local information contribution 
+
+Sℓi,k |k ∈ Rd×d and the corresponding innovation term bℓi,k ∈
+
+Rd, updated as 
+
+Sℓi,k |k := Sℓi,k |k−1 + ∆ Sℓi,k ,
+
+bℓi,k := δℓi (Hℓi,k )⊤Rℓi,k 
+
+ yℓi,k − Hℓi,k ˆxi,k |k−1
+
+. (21) 
+
+Likewise, for each undirected edge {i, j } ∈ E c, we intro-duce the pairwise information contribution 
+
+Seij,k |k := 
+
+Seij,ii,k |k Seij,ij,k |k
+
+Seij,ji,k |k Seij,jj,k |k
+
+
+
+∈ R2d×2d
+
+and the corresponding innovation term 
+
+beij,k := 
+
+bij,i,k 
+
+bij,j,k 
+
+
+
+∈ R2d,
+
+computed as 
+
+Seij,k |k = Seij,k |k−1
+
++
+
+"∆Srij,ii,k + ∆ Srji,ii,k ∆Srij,ij,k + ∆ Srji,ij,k 
+
+∆Sij ji,k + ∆ Sji ji,k ∆Sij jj,k + ∆ Sji jj,k 
+
+#
+
+beij,k = δrij 
+
+"
+
+(Hrij,i,k )⊤
+
+(Hrij,j,k )⊤
+
+#
+
+Rrij,k 
+
+ yrij,k − Hrij,k E⊤ 
+
+> ij
+
+ˆxk|k−1
+
+
+
++ δrji 
+
+"
+
+(Hrji,i,k )⊤
+
+(Hrji,j,k )⊤
+
+#
+
+Rrji,k 
+
+ yrji,k − Hrji,k E⊤ 
+
+> ji
+
+ˆxk|k−1
+
+
+
+(22) 
+
+where the indicator δrij was introduced in (15). Here, the pairwise term associated with the undirected edge {i, j }
+
+collects the information contributions of both oriented relative measurements (i, j ) and (j, i ), whenever present. In particular, the indicators δrij and δrji allow either contribution to be present independently, so the construction does not require both directed edges to belong to Es. Moreover, Seij,k |k and 
+
+Seji,k |k denote the pairwise information matrices associated with the same undirected edge, but written with opposite ordering of the state blocks. By construction, Sℓi,k |k ⪰ 0 and 
+
+Seij,k |k ⪰ 0.The corresponding prediction step is obtained by applying the same sparsity-preserving forgetting-factor recursion intro-duced above to each of the information contributions Sℓi,k |k
+
+and Seij,k |k.Define the quadratic cost associated to the local measure-ments as 
+
+ϕi(ξi) := 12 ξ⊤ 
+
+> i
+
+Sℓi,k |kξi − ξ⊤ 
+
+> i
+
+bℓi,k , (23) 
+
+and for each edge (i, j ) ∈ E c, define the pairwise quadratic cost associated with relative measurements as 
+
+ϕij (ξi, ξj ) := 12
+
+ξi
+
+ξj
+
+⊤
+
+Seij,k |k
+
+ξi
+
+ξj
+
+
+
+−
+
+ξi
+
+ξj
+
+⊤
+
+beij,k . (24) 
+
+With these definitions, the global objective in (20) can be written exactly as 
+
+J(ξ) = 
+
+> N
+
+X
+
+> i=1
+
+ϕi(ξi) + 12
+
+X
+
+> j∈N i
+
+ϕij (ξi, ξj )
+
+ . (25) 
+
+The first sum collects the contributions due to local measure-ments, while the second sum contains the full quadratic terms induced by relative measurements. The factor 12 compensates for the fact that each undirected edge appears twice in the neighbor sums. This decomposition is exact and preserves the positive-semidefinite structure of each individual information contribution. As a final remark, the above decomposition only changes the internal representation of the information variables, not the observer itself. Indeed, the global information matrix and innovation vector used in the original correction form are recovered by summing the local contributions and the pairwise edge contributions introduced above. Therefore, the state update and prediction steps in (17) and (18) are preserved, with the only modification that the information associated with local measurements and relative measurements is now stored and propagated separately. 
+
+E. Distributed solution via partition-based ADMM 
+
+Problem (20) is a strongly convex quadratic program whose objective decomposes into local and pairwise coupling terms as shown in (25). Each agent i is coupled only with its neighbors j ∈ N i through the off-diagonal blocks Sij,k |k.This structure enables a distributed solution using the partition-based ADMM method [22], [23]. Each agent i maintains a local copy of its own correction 
+
+ξi and local copies of the corrections of its neighbors. Specif-ically, agent i stores 
+
+ξNi =
+
+"
+
+ξ(i)
+
+> i
+
+col( ξ(i) 
+
+> j
+
+)j∈N i
+
+#
+
+,
+
+where ξ(i) 
+
+> i
+
+denotes the local estimate of ξi and ξ(i) 
+
+> j
+
+denotes agent i’s local copy of ξj .Using the decomposition (25), the local cost function at agent i can be written as 
+
+Ji(ξNi ) = ϕi(ξ(i) 
+
+> i
+
+) + 12
+
+X
+
+> j∈N i
+
+ϕij (ξ(i) 
+
+> i
+
+, ξ(i) 
+
+> j
+
+). (26) 
+
+To ensure consistency among local copies, consensus is im-posed by introducing equality constraints that require neigh-boring agents to agree on their shared variables, namely 
+
+ξ(i) 
+
+> i
+
+= ξ(j) 
+
+> i
+
+, ξ(i) 
+
+> j
+
+= ξ(j) 
+
+> j
+
+, ∀{ i, j } ∈ E c. (27) 
+
+With these consensus constraints, the optimization problem can be written in a form suitable for distributed computation as 
+
+min  
+
+> {ξNi}Ni=1
+> N
+
+X
+
+> i=1
+
+Ji(ξNi ) s.t. (27) . (28) 
+
+Problem (28) reveals that the correction step has the standard structure of a distributed optimization problem: the cost is separable across agents, and coupling is captured only by con-sistency constraints on shared variables. Consequently, once the problem is cast in the form (28), a variety of distributed optimization algorithms could in principle be employed. In this paper, we focus on ADMM, due to its favorable properties in terms of convergence and robustness. AUTHOR et al. : TITLE 7
+
+Following [22, Prop. 1], the relaxed ADMM iterations consist of two steps. 
+
+1) Local primal update. Each agent solves the quadratic subproblem 
+
+ˆξNi,k,h = argmin 
+
+> ξNi
+
+Ji(ξNi ) − X
+
+> j∈N i
+
+ q⊤
+
+> ij,i,k,h
+
+ξ(i) 
+
+> i
+
++ q⊤
+
+> ij,j,k,h
+
+ξ(i)
+
+> j
+
+
+
++ ρ
+
+2
+
+|N i| ∥ ξ(i) 
+
+> i
+
+∥2 + X
+
+> j∈N i
+
+∥ξ(i) 
+
+> j
+
+∥2
+
+ .
+
+(29) 
+
+2) Dual update. For every {i, j } ∈ E c, the dual variables are updated as 
+
+qij,i,k,h +1 = (1 − α)qij,i,k,h + α  − qji,i,k,h + 2 ρ ˆξ(j)
+
+> i,k,h
+
+,
+
+qij,j,k,h +1 = (1 − α)qij,j,k,h + α  − qji,j,k,h + 2 ρ ˆξ(j)
+
+> j,k,h
+
+,
+
+(30) 
+
+where ρ > 0 is the ADMM penalty parameter, α ∈ (0 , 1) is a relaxation factor, and h denotes the ADMM iteration index. In particular, at each observer step we allow for the execution of multiple ADMM iterations, denoted by H ≥ 1.Because Ji is quadratic and convex, and the ADMM penalty term makes (29) strongly convex, the corresponding Hessian 
+
+Hρ,i,k is symmetric positive definite, and therefore invertible for all i and k. As a result, the primal update admits the closed-form solution 
+
+ˆξNi,k,h = H−1
+
+> ρ,i,k
+
+¯bi,k + A⊤
+
+> qi
+
+qi,k,h 
+
+
+
+, (31) 
+
+where 
+
+¯bi,k =
+
+bℓi,k + 12
+
+P 
+
+> j∈N i
+
+bij,i,k 
+
+col( bij,j,k )j∈N i
+
+
+
+qi,k,h =
+
+col( qij,i,k,h )j∈N i
+
+col( qij,j,k,h )j∈N i
+
+
+
+.
+
+(32) 
+
+Define S×Ni,k |k := col( Seij,ji,k |k)j∈N i , Sdiag  
+
+> Ni,k |k
+
+:= blkdiag( Seij,jj,k |k)j∈N i and Sagg  
+
+> i,k |k
+
+:= Sℓi,k |k +1/2 P 
+
+> j∈N i
+
+Seij,ii,k |k, then the Hessian matrix of the quadratic cost (29), denoted Hρ,i,k , is given by 
+
+Hρ,i,k = ρH0 
+
+> i
+
++ H1
+
+> i,k
+
+, (33) 
+
+with H0 
+
+> i
+
+= blkdiag( |N i|Id, I|N i|d)
+
+H1 
+
+> i,k
+
+=
+
+" Sagg  
+
+> i,k |k
+> 12
+
+(S×Ni,k |k)⊤ 
+
+> 12
+
+S×Ni,k |k 
+
+> 12
+
+Sdiag 
+
+> Ni,k |k
+
+#
+
+,
+
+where it is important to note that, by Lemma 1, we can write 
+
+H1 
+
+> i,k
+
+= ε ¯H1
+
+> i,k
+
+, with ¯H1 
+
+> i,k
+
+independent of ε. Finally, A⊤ 
+
+> qi
+
+is the matrix selecting the dual terms in the linear part of (29), namely 
+
+Aqi =
+
+1|N i| ⊗ Id 0|N i|· d×|N i|· d
+
+0|N i|· d×d I|N i|· d
+
+
+
+, (34) 
+
+where Aqi is such that 
+
+A⊤
+
+> qi
+
+qi,k,h =
+
+ P  
+
+> j∈N i
+
+qij,i,k,h 
+
+col( qij,j,k,h )j∈N i
+
+
+
+.
+
+The complete distributed observer is summarized in Algo-rithm 1. 
+
+Remark 3 (On graph connectivity and observability) . We stress that connectivity of neither the sensing graph nor the communication graph is required. The standing assumption is 
+
+Algorithm 1 Distributed Kalman-like observer 
+
+Require: ˆxi, 0|0, Sℓi, 0|0, Srij, 0|0 ∀j ∈ N i, Γ, ρ, α 
+
+> 1:
+
+for k = 0 , 1, 2, . . . do  
+
+> 2:
+
+for all i ∈ V in parallel do  
+
+> 3:
+
+Acquire local and relative measurements  
+
+> 4:
+
+Update Sℓi,k |k, bℓi,k , and Seij,k |k, beij,k for all j ∈ N i
+
+according to (21) and (22)  
+
+> 5:
+
+Set qij,i,k, 0 = qij,i,k −1,H and qij,j,k, 0 =
+
+qij,j,k −1,H , ∀j ∈ N i 
+
+> 6:
+
+for h = 0 , 1, . . . , H do  
+
+> 7:
+
+Form the local correction subproblem and com-pute ˆξNi,k,h as in (31)  
+
+> 8:
+
+Compute          
+
+> ηi→ji:= −qij,i,k,h + 2 ρˆξ(i)
+> i,k,h ,
+> ηi→jj:= −qij,j,k,h + 2 ρˆξ(i)
+> j,k,h ,
+> 9:
+
+transmit ηi→ji and ηi→jj to each j ∈ N i 
+
+> 10:
+
+Update dual variables using (30)  
+
+> 11:
+
+end for  
+
+> 12:
+
+Set ˆξi,k = ˆξ(i) 
+
+> i,k,H
+
+obtained from the primal step  
+
+> 13:
+
+Observer state update as in (17) using ˆξi,k  
+
+> 14:
+
+Information prediction of the local and pairwise information contributions analogous to (18)  
+
+> 15:
+
+State prediction as in (18)  
+
+> 16:
+
+end for  
+
+> 17:
+
+end for 
+
+instead complete uniform observability, as stated in Assump-tion 2. In particular, the network may consist of multiple dis-connected clusters. In this case, both the global observability Gramian and the information matrix have a block-diagonal structure, with one block associated with each connected component (cluster). Consequently, the optimization problem 
+
+(28) decouples into independent subproblems, one for each cluster. Assumption 2 must then hold for each corresponding block. Hence, graph connectivity is not needed per se, provided that each disconnected cluster is uniformly observable through its own local and relative measurements. 
+
+F. Direct integration of local measurements 
+
+As shown in Sec. III-D, the cost in (25) naturally decom-poses into a component induced by local measurements and a component induced by relative measurements. This structure can be exploited to directly integrate the information provided by local measurements, which depend only on agent i, without being affected by the additional dynamics associated with reaching consensus with neighboring agents. Specifically, let 
+
+Sk|k = Sℓk|k + Srk|k, bk = bℓk + brk,
+
+where Sℓk|k is block diagonal and collects the contributions due only to local measurements, while Srk|k contains the con-tributions due to relative measurements. Then the correction equation Sk|kξk = bk can be written as 
+
+(Sℓk|k + Srk|k)ξk = bℓk + brk. (35) 8
+
+Equivalently, the corresponding quadratic cost can be decom-posed as 
+
+J(ξ) = Jℓ(ξ) + Jr (ξ),
+
+where 
+
+Jℓ(ξ) = 12 ξ⊤Sℓk|kξ − ξ⊤bℓk, Jr (ξ) = 12 ξ⊤Srk|kξ − ξ⊤brk.
+
+Since Sℓk|k is block diagonal, the minimization of Jℓ is fully decoupled across agents. Therefore, local measurements can be integrated immediately by solving the local problem 
+
+ξℓk = ( Sℓk|k)−1bℓk, (36) 
+
+or, equivalently, agent-wise, 
+
+ξℓi,k = ( Sℓi,k |k)−1bℓi,k , i ∈ V .
+
+This yields an instantaneous correction based only on local measurements, without requiring communication. To account for the relative measurements without double counting the local information, one may then introduce the residual variable 
+
+ξk = ξℓk + ηk.
+
+Substituting this expression into (35) gives 
+
+(Sℓk|k + Srk|k)( ξℓk + ηk) = bℓk + brk.
+
+Using the identity Sℓk|kξℓk = bℓk, one obtains 
+
+(Sℓk|k + Srk|k)ηk = brk − Srk|kξℓk
+
+| {z }
+
+> := bηk
+
+. (37) 
+
+Hence, the residual correction solves (37) and the full correc-tion is recovered as 
+
+ξk = ξℓk + ηk. (38) 
+
+Accordingly, when direct integration of local measurements is employed, the distributed optimization layer is no longer used to compute the full correction ξk, but rather the residual correction ηk. The local term ξℓk is computed independently by each agent using only its own measurements, whereas the distributed ADMM iterations are applied to (37). Once the residual correction has been computed, the full correction is recovered through (38). More precisely, the residual correction is the unique solution of the quadratic program 
+
+ηk = argmin 
+
+> η∈RN d
+
+ 12 η⊤Sk|kη − η⊤bηk
+
+
+
+, (39) 
+
+where bηk was defined in (37). Equivalently, the distributed ADMM scheme developed in Sec. III-E can be applied un-changed after replacing the global correction variable ξk with the residual variable ηk, and the linear term bk with bηk.When direct integration of local measurements is used, Algorithm 1 is modified as follows: 1) after Line 4 of the algorithm, each agent first computes the local correction 
+
+ξℓi,k = ( Sℓi,k |k)−1bℓi,k ;
+
+2) the distributed ADMM layer is then applied to the resid-ual problem (37), using ηk as optimization variable, i.e.  
+
+> •
+
+the primal step becomes: 
+
+ˆηNi,k,h = H−1
+
+> ρ,i,k
+
+¯bηi,k + A⊤
+
+> qi
+
+qi,k,h 
+
+
+
+, (40) 
+
+where ˆηNi,k,h and ¯bηi,k are defined analogously to 
+
+ˆξNi,k,h and ¯bi,k . 
+
+> •
+
+the dual step is as in (30) replacing ˆξ(j) 
+
+> i,k,h
+
+and ˆξ(j)
+
+> j,k,h
+
+with ˆη(j) 
+
+> i,k,h
+
+and ˆη(j)
+
+> j,k,h
+
+3) the full correction is reconstructed as ˆξi,k = ξℓi,k + ˆ η(i) 
+
+> i,k,H
+
+.
+
+All subsequent observer and prediction updates are then per-formed using the correction ˆξi,k .For simplicity, in the following we focus on the algorithm introduced in the previous section. Nevertheless, the same analysis extends directly to the present decomposition. 
+
+IV. S TABILITY ANALYSIS 
+
+This section establishes the stability of the proposed dis-tributed observer. The analysis adopts a slow–fast viewpoint inspired by singular perturbation arguments [24], [25]. After deriving the coupled error dynamics, we study separately the fast subsystem associated with the ADMM correction layer and the reduced estimation-error dynamics obtained for exact correction. These two ingredients are then combined through a comparison-based small-gain argument to establish uniform global exponential stability of the full interconnected system. 
+
+A. Error dynamics 
+
+Define ˆξk := col( ˆξi,k )i∈V and the prior estimation error and correction error as 
+
+˜xk := xk − ˆxk|k−1, ˜ξk := ξk − ˆξk. (41) 
+
+Using the observer update ˆxk|k = ˆxk|k−1 + ε ˆξk, together with the prediction ˜xk+1 = Ak(xk − ˆxk|k), and adding and subtracting the ideal correction term εξk, the estimation error dynamics can be written as 
+
+˜xk+1 = Ak(xk − ˆxk|k)= Ak
+
+ xk − ˆxk|k−1 − ε ˆξk
+
+
+
+= Ak
+
+  ˜xk − εξk + ε(ξk − ˆξk)
+
+= Ak
+
+  ˜xk − εξk
+
+ + εAk ˜ξk
+
+= Ak
+
+
+
+˜xk − εS−1
+
+> k|k
+
+bk
+
+
+
++ εAk ˜ξk
+
+= Ak
+
+
+
+˜xk − εS−1
+
+> k|k
+
+H⊤ 
+
+> k
+
+RkHk ˜xk
+
+
+
++ εAk ˜ξk
+
+= Ak
+
+
+
+IN d − εS−1
+
+> k|k
+
+H⊤ 
+
+> k
+
+RkHk
+
+
+
+˜xk + εAk ˜ξk.
+
+(42) 
+
+Using (8a), we can rewrite (42) as 
+
+˜xk+1 = Ak
+
+
+
+IN d − S−1
+
+> k|k
+
+(Sk|k − Sk|k−1)
+
+
+
+˜xk + εAk ˜ξk
+
+= AkS−1
+
+> k|k
+
+Sk|k−1
+
+| {z }
+
+> := Φk
+
+˜xk + εAk ˜ξk. (43) 
+
+We now express the ADMM iterations in (30)–(31) in compact vector form by stacking the variables of all agents. The internal state of the ADMM is entirely described by the dual variables qk,h := col( qi,k,h )i∈V ∈ R2|E| d, with qi,k,h 
+
+defined in (32). Likewise, define the stacked primal variable 
+
+ˆξN ,k,h := col( ˆξNi,k,h )i∈V ,
+
+together with Hρ,k := blkdiag( Hρ,i,k )i∈V , ¯bk := col( ¯bi,k )i∈V ,
+
+and Aq := blkdiag( Aqi )i∈V , where Hρ,i,k , ¯bi,k , and Aqi are defined in (33), (32), and (34), respectively. Collecting the dual AUTHOR et al. : TITLE 9
+
+updates in (30) into a single stacked equation for all agents and edges yields 
+
+qk,h +1 = (1 − α)qk,h + α
+
+
+
+−P q k,h + 2 ρ Aq ˆξN ,k,h 
+
+
+
+,
+
+where P is the permutation matrix exchanging the dual variables associated with the two endpoints of each edge. On the other hand, by stacking the closed-form primal update (31), one obtains 
+
+ˆξN ,k,h = H−1
+
+> ρ,k
+
+¯bk + A⊤ 
+
+> q
+
+qk,h 
+
+
+
+.
+
+Substituting this expression into the stacked dual update gives 
+
+qk,h +1 = (1 − α)qk,h + α
+
+
+
+−P q k,h 
+
++ 2 ρ Aq H−1
+
+> ρ,k
+
+ ¯bk + A⊤ 
+
+> q
+
+qk,h 
+
+
+
+= (1 − α)qk,h − αP q k,h + 2 αρ Aq H−1
+
+> ρ,k
+
+A⊤ 
+
+> q
+
+qk,h 
+
++ 2 αρ Aq H−1 
+
+> ρ,k
+
+¯bk
+
+=
+
+
+
+(1 − α)I2|E| d − αP + 2 αρ Aq H−1
+
+> ρ,k
+
+A⊤
+
+> q
+
+
+
+qk,h 
+
++ 2 αρ Aq H−1 
+
+> ρ,k
+
+¯bk.
+
+Therefore, defining 
+
+Fk := I2|E| d + P − 2ρ Aq H−1
+
+> ρ,k
+
+A⊤ 
+
+> q
+
+, (44) 
+
+the internal ADMM dynamics can be written in compact form as 
+
+qk,h +1 =
+
+
+
+I2|E| d − αFk
+
+| {z }
+
+> := Tk
+
+qk,h + α 2ρ Aq H−1 
+
+> ρ,k
+
+¯bk
+
+| {z }
+
+> := ck
+
+. (45) 
+
+From (45), the set of equilibria at time k for the dynamics of ADMM is 
+
+Qeq ,k = {qk | Fkqk = ck} ,
+
+where the linear system in general admits multiple solutions, induced by the edge-based formulation, see [26, Lemma 2]. The projection of qk,h onto the affine set Qeq ,k is ( [27, Sec.6.2.2]) 
+
+qeq ,k,h = qk,h − F † 
+
+> k
+
+(Fkqk,h − ck) (46) 
+
+where (·)† denotes the Moore-Penrose pseudo-inverse. Ac-cordingly, define ˜qk,h = qeq ,k,h −qk,h . We define the distance from the set of equilibria as 
+
+dQeq ,k (qk,h ) := inf 
+
+> q∗∈Q eq ,k
+
+∥qk,h − q∗∥ = ˜qk,h . (47) 
+
+We now characterize the correction term injected into the observer as an output of the ADMM dynamics. Specifically, define Σ := blkdiag( Σi)i∈V , where Σi is a selection matrix such that ˆξi,k = Σi ˆξNi,k,H . Then, by stacking the local corrections, one obtains 
+
+ˆξk = Σ ˆξN ,k,H = ΣH−1
+
+> ρ,k
+
+¯bk + A⊤ 
+
+> q
+
+qk,H 
+
+
+
+.
+
+Likewise, if qeq ,k,H ∈ Q eq ,k is an equilibrium point of the ADMM dynamics, the corresponding primal variable is 
+
+ξN ,k, eq = H−1
+
+> ρ,k
+
+¯bk + A⊤ 
+
+> q
+
+qeq ,k,H 
+
+
+
+.
+
+By construction of the ADMM reformulation, the equilibrium primal variable coincides with the exact optimizer of the correction problem. Therefore, the ideal correction satisfies 
+
+ξk = ΣξN ,k, eq = ΣH−1
+
+> ρ,k
+
+¯bk + A⊤ 
+
+> q
+
+qeq ,k,H 
+
+
+
+.
+
+Recalling the definition of ˜ξk we obtain 
+
+˜ξk = ΣH−1
+
+> ρ,k
+
+¯bk + A⊤ 
+
+> q
+
+qeq ,k,H 
+
+
+
+− ΣH−1
+
+> ρ,k
+
+¯bk + A⊤ 
+
+> q
+
+qk,H 
+
+
+
+= ΣH−1
+
+> ρ,k
+
+A⊤ 
+
+> q
+
+˜qk,H .
+
+The exact coupled dynamics are most conveniently written in terms of the pair ( ˜ xk, qk,h ). Then the coupled error system is described by 
+
+˜xk+1 = Φk ˜xk + εAk ˜ξk, (48a) 
+
+qk, 0 = qk−1,H (48b) 
+
+qk,h +1 = Tkqk,h + αck, (48c) 
+
+qeq ,k,h = qk,h − F † 
+
+> k
+
+(Fkqk,h − ck), (48d) 
+
+˜ξk = ΣH−1
+
+> ρ,k
+
+A⊤ 
+
+> q
+
+˜qk,H . (48e) 
+
+B. ADMM subsystem 
+
+Here, we analyze the stability of the ADMM subsystem while keeping the time index of the Kalman observer frozen. We denote the frozen observer time by k, while the ADMM iterations evolve in the index h. Under this assumption, ¯bk and 
+
+Sk|k are constant, and, from (45), the frozen ADMM dynamics reduce to 
+
+qk,h +1 = Tkqk,h + αck
+
+| {z } 
+
+> :=T k(qk,h )
+
+, (49) 
+
+To establish convergence, we recall the following operator-theoretic notions; see, e.g., [28]. 
+
+Definition IV.1. An operator T : Rn → Rn is nonexpansive if ∥T( x) − T( y)∥ ≤ ∥ x − y∥, ∀x, y ∈ Rn
+
+Definition IV.2. An operator G : Rn → Rn is α-averaged ,with α ∈ (0 , 1) , if there exists a nonexpansive operator T : 
+
+Rn → Rn such that G = (1 − α)Id + αT, with Id being the identity operator. 
+
+For an α-averaged operator it holds [29, Prop. 4.35]: 
+
+∥Gx − Gy∥2 ≤ ∥ x − y∥2 − 1 − αα ∥(Id − G) x − (Id − G) y∥2
+
+(50) 
+
+Definition IV.3. An operator G : Rn → Rn is said to be 
+
+metrically subregular if there exists σ > 0 such that 
+
+Fix(G) := {z ∈ Rn : G( z) = z},
+
+dFix(G) (x) = inf  
+
+> z∈Fix(G)
+
+∥x − z∥ ≤ σ ∥x − G( x)∥, ∀x ∈ Rn.
+
+Before proceeding with the stability proof of the ADMM subsystem, we state the following two lemmas, which will be used therein. The following lemma shows that the nullspace of Fk
+
+is purely structural, being determined by the graph-induced permutation matrix P and the edge-based constraint matrix 
+
+Aq , and is therefore independent of the time-varying positive definite weights. 
+
+Lemma 2 (Structural invariance of ker( Fk)). Let Fk = I +
+
+P −2ρ P A q H−1
+
+> ρ,k
+
+A⊤ 
+
+> q
+
+as in (44) , where P and Aq are constant matrices induced by the graph structure, and Hρ,k ≻ 0 is block diagonal for all k. Then 
+
+ker( Fk) = ker( I + P ) ∩ ker( A⊤ 
+
+> q
+
+), ∀k. 
+
+In particular, ker( Fk) is independent of k.10 
+
+Proof. Consider Tk defined as in (45). One has ker( Fk) = ker( I − Tk). By [26, Lemma 2], 
+
+ker( I − Tk) ⊆ ker( A⊤ 
+
+> q
+
+).
+
+Hence, if v ∈ ker( Fk), then A⊤ 
+
+> q
+
+v = 0 . Substituting into the definition of Fk yields 
+
+0 = Fkv = ( I + P )v − 2ρ P A q H−1
+
+> ρ,k
+
+A⊤ 
+
+> q
+
+v = ( I + P )v,
+
+so that v ∈ ker( I + P ). Therefore, 
+
+ker( Fk) ⊆ ker( I + P ) ∩ ker( A⊤ 
+
+> q
+
+).
+
+Conversely, let v ∈ ker( I + P ) ∩ ker( A⊤ 
+
+> q
+
+). Then 
+
+(I + P )v = 0 , A⊤ 
+
+> q
+
+v = 0 ,
+
+and thus 
+
+Fkv = ( I + P )v − 2ρ P A q H−1
+
+> ρ,k
+
+A⊤ 
+
+> q
+
+v = 0.
+
+Hence, 
+
+ker( I + P ) ∩ ker( A⊤ 
+
+> q
+
+) ⊆ ker( Fk).
+
+Combining the two inclusions proves the claim. Since neither 
+
+P nor Aq depends on k, the right-hand side is independent of k, and therefore so is ker( Fk).
+
+Lemma 3 (Uniform boundedness of the pseudoinverse of Fk).
+
+Suppose that the penalty parameter ρ > 0 is fixed. Under Assumptions 1–3, there exists a constant ¯F † > 0 such that 
+
+∥F † 
+
+> k
+
+∥ ≤ ¯F †, ∀k. (51) 
+
+Equivalently, the smallest nonzero singular value of Fk admits a uniform positive lower bound. Proof. We proceed in four steps. 
+
+Step 1: uniform positive definiteness of Hρ,i,k . By con-struction, Hρ,i,k = ρH0,i + ε ¯H1,i,k . Since H0,i ≻ 0 and the information contributions entering ¯H1,i,k are positive semidefinite, one has Hρ,i,k ⪰ ρH0,i . Hence, letting 
+
+h0 := min  
+
+> i∈V
+
+λmin (H0,i ) > 0,
+
+it follows that 
+
+Hρ,i,k ⪰ ρh 0 I, ∀i, ∀k, 
+
+and therefore 
+
+∥H−1
+
+> ρ,i,k
+
+∥ ≤ 1
+
+ρh 0
+
+, ∀i, ∀k. (52) 
+
+Since Hρ,k is block diagonal, (52) implies 
+
+∥H−1
+
+> ρ,k
+
+∥ ≤ 1
+
+ρh 0
+
+, ∀k. (53) 
+
+Step 2: boundedness of the family {Fk}k. Using the defini-tion of Fk and (53), 
+
+∥Fk∥ ≤ ∥ I + P ∥ + 2 ρ∥P ∥ ∥ Aq ∥2∥H−1
+
+> ρ,k
+
+∥≤ ∥ I + P ∥ + 2∥P ∥ ∥ Aq ∥2
+
+h0
+
+,
+
+for all k. Therefore, the set F := {Fk}k is bounded in 
+
+R2|E| d×2|E| d. Since this space is finite-dimensional, its closure 
+
+F is compact. 
+
+Step 3: constant rank of Fk. By Lemma 2, one has 
+
+ker( Fk) = ker( I + P ) ∩ ker( A⊤ 
+
+> q
+
+), ∀k. 
+
+Hence ker( Fk) is independent of k, and so rank( Fk) is constant over F and over its closure F.
+
+Step 4: uniform lower bound on the smallest nonzero singu-lar value. Let σ+min (F ) denote the smallest nonzero singular value of a matrix F . On the set of matrices of fixed rank, 
+
+σ+min (·) is continuous. Since every matrix in F has the same rank as Fk, the map 
+
+F 7 → σ+min (F )
+
+is continuous on the compact set F. Moreover, σ+min (F ) > 0
+
+for every F ∈ F because the rank is constant. Therefore, by compactness, there exists σF > 0 such that 
+
+σ+min (Fk) ≥ σF , ∀k. 
+
+Finally, using the standard identity 
+
+∥F † 
+
+> k
+
+∥ = 1
+
+σ+min (Fk) ,
+
+we obtain 
+
+∥F † 
+
+> k
+
+∥ ≤ 1
+
+σF
+
+=: ¯F †, ∀k, 
+
+which proves (51). 
+
+Lemma 4 (Uniform exponential stability of the ADMM subsystem) . Under Assumptions 1–3, for every fixed ¯bk and 
+
+Sk|k, the frozen ADMM iteration (49) satisfies 
+
+dQeq ,k (qk,h +1 ) ≤ μ dQeq ,k (qk,h ), μ =
+
+r
+
+1 − 1 − αασ 2 ∈ (0 , 1) .
+
+(54) 
+
+In particular, after H ≥ 1 ADMM iterations performed during observer step k,
+
+dQeq ,k (qk,H ) ≤ μH dQeq ,k (qk, 0) (55) 
+
+Proof. The following argument is a specialization of [30, Thm. 3] to the present deterministic affine setting. The operator Tk in (49) corresponds to the relaxed Peaceman–Rachford splitting applied to the dual of (28) [26]. Since the local costs Ji(ξNi ) are convex, Tk is α-averaged [28, Sec. 7.3]. Moreover, by construction, Fix(T k) = Qeq ,k .
+
+We next show that Tk is metrically subregular. Using (46) and (47), we obtain 
+
+dQeq ,k (qk,h ) = ∥qk,h − qeq ,k,h ∥ = ∥F † 
+
+> k
+
+(Fkqk,h − ck)∥.
+
+Therefore, using the submultiplicativity of the norm gives 
+
+dQeq ,k (qk,h ) ≤ ∥ F † 
+
+> k
+
+∥ ∥ Fkqk,h − ck∥.
+
+Now, from the definition of Tk in (49) and the one of Tk in (45), Fkqk,h − ck = − 1 
+
+> α
+
+(T k(qk,h ) − qk,h ), and hence 
+
+dQeq ,k (qk,h ) ≤ ∥F † 
+
+> k
+
+∥
+
+α ∥qk,h − Tk(qk,h )∥.
+
+This shows that Tk is metrically subregular for some σk ≥   
+
+> ∥F†
+> k∥
+> α
+
+. By Lemma 3, the pseudoinverse of Fk is uniformly bounded. Hence a common subregularity constant can be chosen as 
+
+σ ≥ ¯F †
+
+α , ¯F † = sup 
+
+> k
+
+∥F † 
+
+> k
+
+∥ < ∞.
+
+Therefore, the metric subregularity estimate holds uniformly with respect to the frozen observer index k.AUTHOR et al. : TITLE 11 
+
+Since Tk is α-averaged, by (50), for every q∗,k ∈ Q eq ,k ,one has 
+
+∥ Tk(qk,h )−q∗,k ∥2 ≤ ∥ qk,h −q∗,k ∥2− 1 − αα ∥ Tk(qk,h )−qk,h ∥2.
+
+Choosing q∗,k = qeq ,k and using the definition of the distance to the equilibrium set gives 
+
+dQeq ,k (qk,h +1 )2 ≤ dQeq ,k (qk,h )2 − 1 − αα ∥ Tk(qk,h ) − qk,h ∥2.
+
+Using metric subregularity, ∥ Tk(qk,h ) − qk,h ∥ ≥ 
+
+> 1
+> σ
+
+dQeq ,k (qk,h ). Substituting into the previous inequality yields 
+
+dQeq ,k (qk,h +1 )2 ≤
+
+
+
+1 − 1 − αασ 2
+
+
+
+dQeq ,k (qk,h )2.
+
+where notice that, since α ∈ (0 , 1) and σ can be chosen large enough, the term in parentheses takes values in (0 , 1) for σ
+
+sufficiently large. Taking square roots gives (54). Finally, (55) follows by iterating (54) H times. 
+
+C. Kalman-like subsystem 
+
+We now consider the reduced system obtained for exact correction, i.e., ˜ξk ≡ 0 and expanding Φk:
+
+˜xk+1 = AkS−1
+
+> k|k
+
+Sk|k−1 ˜xk. (56) 
+
+Lemma 5 (UGES of the Kalman-like subsystem) . Under Assumptions 1, 2, and 3, the reduced system (56) is uniformly globally exponentially stable. In particular, the Lyapunov function 
+
+sε∥ ˜xk∥2 ≤ Vk := ˜ x⊤ 
+
+> k
+
+Sk|k−1 ˜xk ≤ ¯sε∥ ˜xk∥2
+
+satisfies 
+
+Vk+1 − Vk ≤ − (1 − γ)sε ∥ ˜xk∥2 .
+
+Proof. Using (56), 
+
+Vk+1 = ˜ x⊤
+
+> k+1
+
+Sk+1 |k ˜xk+1 
+
+=
+
+
+
+AkS−1
+
+> k|k
+
+Sk|k−1 ˜xk
+
+⊤
+
+Sk+1 |k
+
+
+
+AkS−1
+
+> k|k
+
+Sk|k−1 ˜xk
+
+
+
+= ˜ x⊤ 
+
+> k
+
+Sk|k−1S−1
+
+> k|k
+
+A⊤ 
+
+> k
+
+Sk+1 |kAkS−1
+
+> k|k
+
+Sk|k−1 ˜xk.
+
+(57) 
+
+Using the modified prediction (9), A⊤ 
+
+> k
+
+Sk+1 |kAk = γSk|k.
+
+Then substituting back in (57), we obtain 
+
+Vk+1 ≤ γ ˜x⊤ 
+
+> k
+
+Sk|k−1S−1
+
+> k|k
+
+Sk|k−1 ˜xk (58) 
+
+Since the correction step adds positive semidefinite infor-mation, one has Sk|k ⪰ Sk|k−1. Because matrix inversion reverses the Loewner order for positive definite matrices, 
+
+S−1 
+
+> k|k
+
+⪯ S−1
+
+> k|k−1
+
+. Premultiplying and postmultiplying by Sk|k−1
+
+gives 
+
+Sk|k−1S−1
+
+> k|k
+
+Sk|k−1 ⪯ Sk|k−1S−1
+
+> k|k−1
+
+Sk|k−1 = Sk|k−1.
+
+Hence, 
+
+Vk+1 ≤ γ ˜x⊤ 
+
+> k
+
+Sk|k−1 ˜xk = γV k.
+
+It follows that 
+
+Vk+1 − Vk ≤ − (1 − γ)Vk.
+
+Finally, by Lemma 1, 
+
+Vk ≥ sε∥ ˜xk∥2,
+
+and therefore 
+
+Vk+1 − Vk ≤ − (1 − γ)sε∥ ˜xk∥2,
+
+which proves the claim. In Appendix B, we extend the above UGES result to the case of a matrix forgetting factor. The associated sufficient conditions are, however, more difficult to verify a priori and generally conservative. 
+
+Remark 4 (Practical tuning of Matrix Forgetting Factor) . The sufficient conditions in Lemma 9 (in Appendix B) are primarily of theoretical interest, as they depend on the conditioning of the time-varying information matrix and may be quite con-servative in practice. Accordingly, a matrix forgetting factor is more naturally chosen by tuning, e.g., by assigning faster decay rates to state components expected to be more strongly affected by noise and then validating the resulting behavior numerically. 
+
+D. Stability of the feedback interconnection 
+
+We now analyze the feedback interconnection between the estimation-error dynamics (43) and the ADMM correction dynamics (45) when H ≥ 1 ADMM iterations are performed at each observer step, as described in (48). The proof proceeds in four steps. First, we derive an ISS-type estimate for the reduced dynamics with respect to the correction mismatch. Second, we bound the drift of the time-varying equilibrium set of the ADMM subsystem. Third, we combine this drift estimate with the H-step contraction induced by Lemma 4 to obtain a perturbed estimate for the ADMM subsystem. Fourth, we combine the perturbed estimates of the reduced and ADMM dynamics into a comparison system for the full interconnection, from which exponential stability follows by a small-gain argument. 
+
+Theorem 1 (UGES of the interconnected system) . Under Assumptions 1, 2, and 3, suppose that 
+
+ε < (1 − √γ)(1 − μH )
+
+c12 c21 + (1 − √γ)c22 
+
+. (59) 
+
+Then the set 
+
+{( ˜ xk, qk, 0) | ˜xk = 0, qk, 0 ∈ Q eq ,k }
+
+of the coupled system is uniformly globally exponentially stable. In particular, there exist constants C > 0 and λ ∈
+
+(0 , 1) such that 
+
+∥ ˜xk∥ + d Qeq ,k (qk, 0) ≤ Cλ k ∥ ˜x0∥ + d Qeq ,0 (q0,0).
+
+We next establish the auxiliary estimates needed in the proof of Theorem 1. 
+
+Lemma 6 (Perturbed estimate for the reduced dynamics) .
+
+Define 
+
+wk := pVk =
+
+q
+
+˜x⊤ 
+
+> k
+
+Sk|k−1 ˜xk.
+
+Then there exists a constant cw > 0 such that 
+
+wk+1 ≤ √γ w k + εc w dQeq ,k (qk,H ), ∀k, (60) 
+
+where 
+
+cw := √¯sε ¯a c h.12 
+
+Proof. By Lemma 5, the unperturbed reduced system satisfies 
+
+wk+1 ≤ √γ w k.
+
+For the full interconnected system, (48a) and the triangle inequality yield 
+
+wk+1 ≤ ∥ AkS−1
+
+> k|k
+
+Sk|k−1 ˜xk∥Sk+1 |k + ε∥Ak ˜ξk∥Sk+1 |k .
+
+The first term is bounded by √γ w k. For the second term, since 
+
+Sk+1 |k ⪯ ¯sεI, ∥Ak∥ ≤ ¯a, 
+
+one has 
+
+∥Ak ˜ξk∥Sk+1 |k ≤ √¯sε ¯a ∥ ˜ξk∥.
+
+Moreover, by (48e) and the uniform boundedness of H−1 
+
+> ρ,k
+
+,there exists ch > 0 such that 
+
+∥ ˜ξk∥ ≤ ch∥ ˜qk,H ∥.
+
+Using (47) gives 
+
+wk+1 ≤ √γ w k + ε√¯sε ¯a c h dQeq ,k (qk,H ),
+
+which is (60). We now turn to the ADMM subsystem. Because the dis-tributed optimization layer solves a time-varying problem, the natural quantity to track is the distance to the equilibrium set 
+
+Qeq ,k , rather than the error with respect to a single equilibrium point. Since the observer interacts with the ADMM layer only once per sampling step, we measure this distance at the beginning of each observer step, namely at qk, 0.Let wk ∈ Q eq ,k satisfy 
+
+dQeq ,k (qk+1 ,0) = ∥qk+1 ,0 − wk∥.
+
+Then, by the triangle inequality, 
+
+dQeq ,k +1 (qk+1 ,0) ≤ ∥ qk+1 ,0 − wk∥ + d Qeq ,k +1 (wk).
+
+Hence 
+
+dQeq ,k +1 (qk+1 ,0) ≤ dQeq ,k (qk+1 ,0) + ∆ Q,k , (61) 
+
+where 
+
+∆Q,k := sup 
+
+> w∈Q eq ,k
+
+dQeq ,k +1 (w)
+
+denotes the one-sided drift of the equilibrium set. The next result bounds this drift in terms of the reduced-state error and the current distance from equilibrium. 
+
+Lemma 7 (Drift of the equilibrium set) . There exist constants 
+
+cQ,w > 0 and cQ,q > 0 such that 
+
+∆Q,k ≤ cQ,w wk + εc Q,q dQeq ,k (qk, 0), ∀k. (62) 
+
+In particular, one may choose 
+
+cQ,w := ¯F † ¯F∆ ¯F † ¯M
+
+√sε
+
++ ¯M (1 + cΦ) + ¯M∆
+
+√sε
+
+!
+
+,cQ,q := ¯F † ¯M ¯ac h.
+
+where 
+
+¯F † := sup 
+
+> k
+
+∥F † 
+
+> k
+
+∥ < ∞, ¯F∆ := sup 
+
+> k
+
+∥Fk+1 − Fk∥ < ∞.
+
+Proof. Define the minimum-norm equilibrium point 
+
+qref ,k := F † 
+
+> k
+
+ck.
+
+Since ker( Fk) is independent of k by Lemma 2, the equilib-rium sets satisfy 
+
+Qeq ,k = {qref ,k + v | v ∈ ker( Fk)},
+
+that is, they are affine translates of the same linear subspace. Therefore, for every w ∈ Q eq ,k , there exists v ∈ ker( Fk) = ker( Fk+1 ) such that 
+
+w = qref ,k + v.
+
+Since Qeq ,k +1 is invariant under translations by ker( Fk+1 ), it follows that 
+
+dQeq ,k +1 (w) = d Qeq ,k +1 (qref ,k ).
+
+Hence 
+
+∆Q,k = d Qeq ,k +1 (qref ,k ).
+
+Now, by (47) applied to the set 
+
+Qeq ,k +1 = {q | Fk+1 q = ck+1 },
+
+we have 
+
+∆Q,k = F †
+
+> k+1
+
+ Fk+1 qref ,k − ck+1 
+
+ .
+
+Using Fkqref ,k = ck, we obtain 
+
+Fk+1 qref ,k − ck+1 = ( Fk+1 − Fk)qref ,k − (ck+1 − ck),
+
+and therefore 
+
+∆Q,k ≤ ∥ F †
+
+> k+1
+
+∥
+
+
+
+∥Fk+1 − Fk∥ ∥ qref ,k ∥ + ∥ck+1 − ck∥
+
+
+
+. (63) 
+
+Since ¯bk depends linearly on ˜xk, there exists a matrix Mk
+
+such that 
+
+ck = Mk ˜xk,
+
+with ∥Mk∥ ≤ ¯M uniformly in k. Hence 
+
+∥ck∥ ≤ ¯M ∥ ˜xk∥ ≤ ¯M
+
+√sε
+
+wk. (64) 
+
+It follows that 
+
+∥qref ,k ∥ ≤ ∥ F † 
+
+> k
+
+∥ ∥ ck∥ ≤ ¯F † ¯M
+
+√sε
+
+wk. (65) 
+
+Moreover, 
+
+ck+1 − ck = Mk+1 ( ˜ xk+1 − ˜xk) + ( Mk+1 − Mk) ˜ xk.
+
+Since the matrices Mk are uniformly bounded and have uniformly bounded variation, there exists ¯M∆ > 0 such that 
+
+∥ck+1 − ck∥ ≤ ¯M ∥ ˜xk+1 − ˜xk∥ + ¯M∆ ∥ ˜xk∥. (66) 
+
+From (48a), 
+
+˜xk+1 − ˜xk = ( Φk − IN d ) ˜ xk + εAk ˜ξk,
+
+hence 
+
+∥ ˜xk+1 − ˜xk∥ ≤ (1 + ∥Φk∥) ∥ ˜xk∥ + ε∥Ak∥ ∥ ˜ξk∥.
+
+Using the uniform bounds on Φk and Ak, together with 
+
+∥ ˜ξk∥ ≤ ch dQeq ,k (qk,H ),
+
+there exists cΦ > 0 such that 
+
+∥ ˜xk+1 − ˜xk∥ ≤ 1 + cΦ
+
+√sε
+
+wk + ε ¯a c h dQeq ,k (qk,H ). (67) 
+
+By (55), 
+
+dQeq ,k (qk,H ) ≤ μH dQeq ,k (qk, 0),AUTHOR et al. : TITLE 13 
+
+hence this term is bounded by dQeq ,k (qk, 0), up to a multiplica-tive factor strictly smaller than one. Absorbing this factor into the constant cQ,q , we obtain from (67) 
+
+∥ck+1 −ck∥ ≤ 
+
+ ¯M (1 + cΦ) + ¯M∆
+
+√sε
+
+
+
+wk +ε ¯M ¯ac h dQeq ,k (qk, 0).
+
+(68) 
+
+Finally, since Fk is uniformly bounded, there exists ¯F∆ > 0
+
+such that 
+
+∥Fk+1 − Fk∥ ≤ ¯F∆, ∀k. 
+
+Using (65) and (68) in (63) yields 
+
+∆Q,k ≤ cQ,w wk + ε c Q,q dQeq ,k (qk, 0),
+
+which proves (62). We can now combine the set-drift estimate with the con-traction of the frozen ADMM subsystem to derive a perturbed estimate for the fast dynamics. 
+
+Lemma 8 (Perturbed estimate for the ADMM subsystem) .
+
+Define 
+
+dk := d Qeq ,k (qk, 0).
+
+Then 
+
+dk+1 ≤ (μH + εc Q,q ) dk + cQ,w wk, ∀k. (69) 
+
+Proof. By (61), 
+
+dk+1 ≤ dQeq ,k (qk+1 ,0) + ∆ Q,k .
+
+Using the warm-start relation qk+1 ,0 = qk,H , and then Lemma 4, we obtain 
+
+dQeq ,k (qk+1 ,0) = d Qeq ,k (qk,H ) ≤ μH dk.
+
+Combining the two inequalities with Lemma 7 yields 
+
+dk+1 ≤ μH dk + cQ,w wk + εc Q,q dk,
+
+which proves (69). We are now in a position to combine the perturbed estimates of the reduced and ADMM dynamics into a comparison system for the full interconnection. 
+
+Proof of Theorem 1. By Lemmas 6 and 8, the interconnected system satisfies 
+
+wk+1 ≤ √γ w k + εc 12 dk,dk+1 ≤ c21 wk + ( μH + εc 22 ) dk,
+
+where, for compactness, 
+
+c12 := cw, c21 := cQ,w , c22 := cQ,q .
+
+Equivalently, 
+
+wk+1 
+
+dk+1 
+
+
+
+≤ A
+
+wk
+
+dk
+
+
+
+, A =
+
+"√γ εc 12 
+
+c21 μH + εc 22 
+
+#
+
+.
+
+Since A ∈ R2×2 
+
+> ≥0
+
+, it is enough to verify that 
+
+A11 < 1, A22 < 1, det( I − A) > 0.
+
+Under these conditions, I − A is a nonsingular M -matrix [31, Theorem 6.2.3, condition (E17)], and therefore ρ(A) < 1 [31, Def. 6.1.2]. First, 
+
+A11 = √γ < 1.
+
+Next, (59) implies 
+
+ε c12 c21 + (1 − √γ)c22 
+
+ < (1 − √γ)(1 − μH ),
+
+and therefore 
+
+εc 22 < 1 − μH ,
+
+which yields 
+
+A22 = μH + εc 22 < 1.
+
+Finally, 
+
+det( I − A) = (1 − √γ)(1 − μH ) − ε c12 c21 + (1 − √γ)c22 
+
+,
+
+which is positive by (59). Hence A is Schur. Therefore, there exist constants C > 0 and λ ∈ (0 , 1) such that 
+
+∥Ak∥ ≤ Cλ k, ∀k ≥ 0.
+
+Iterating the comparison inequality gives 
+
+wk
+
+dk
+
+
+
+≤ Ak
+
+w0
+
+d0
+
+
+
+,
+
+and hence 
+
+wk + dk ≤ Cλ k w0 + d0
+
+.
+
+Finally, by Lemma 1, 
+
+√sε ∥ ˜xk∥ ≤ wk ≤ √¯sε ∥ ˜xk∥,
+
+so wk is uniformly equivalent to ∥ ˜xk∥. Recalling that dk =dQeq ,k (qk, 0), we conclude that 
+
+∥ ˜xk∥ + d Qeq ,k (qk, 0) ≤ Cλ k ∥ ˜x0∥ + d Qeq ,0 (q0,0),
+
+which proves the claim. 
+
+Remark 5 (Non-circularity of condition (59)) . Although c12 
+
+depends on ε through ¯sε, the coefficient c21 = cQ,w contains the reciprocal factor (sε)−1/2, so the product c12 c21 is inde-pendent of ε. Indeed, by Lemma 1, 
+
+¯sε = ε ¯s, sε = ε s. 
+
+Hence 
+
+c12 c21 = C0,
+
+for a constant C0 independent of ε. Condition (59) is therefore equivalent to a ε-independent small-gain requirement. 
+
+Remark 6. The final Schur condition on A captures the required separation between the slow and fast dynamics. In practice, this condition can be improved by decreasing ε,tuning the ADMM parameters (ρ, α ), or by increasing the number H of ADMM iterations performed per observer step. 
+
+V. S IMULATION RESULTS 
+
+We evaluate the proposed distributed observer in a co-operative localization task with N = 10 agents connected by a randomly generated proximity communication graph. A number M = 3 of agents are anchors with access to absolute position measurements, while all other agents only use relative measurements. The robots state is described by 
+
+xi,k = p⊤ 
+
+> i,k
+
+v⊤
+
+> i,k
+
+⊤ ∈ R4, where pi,k ∈ R2 denotes the position of the i-th robot, vi,k ∈ R2 its velocity, the input is given by the acceleration ui,k ∈ R2, and 
+
+Ai =
+
+1 Ts
+
+0 1
+
+
+
+⊗ I2, Bi =
+
+ 12 T 2
+
+> s
+
+Ts
+
+
+
+⊗ I2.14 
+
+where Ts = 0 .05 is the sampling time. Measurements are 
+
+yℓi,k = pi,k (i ∈ V p), yrij,k = pi,k − pj,k (i, j ) ∈ E .
+
+Initial positions are drawn uniformly in the workspace and initial velocities are random. The initial state estimate is perturbed by ˆx0|0 = x0 + ν, with ν ∼ N (0 , P0), P0 =diag(1 , 1, 0.1, 0.1) ⊗ IN . While, for simplicity, a scalar γ
+
+is used in the proof, a diagonal forgetting matrix Γ can help improve performance. Here we use a diagonal forgetting matrix with larger decay on velocity than position: γp =
+
+e−5Ts ≈ 0.779 , γv = e−50 Ts ≈ 0.082 , applied as Γi =diag( γp, γ p, γ v , γ v ). Moreover, we use a correction gain ε = 1 ,and the information-weight gains are chosen as (Rℓi )−1 = 5 I2,
+
+(Rrij )−1 = 0 .5I2.We compare the centralized Kalman-like observer with three distributed correction schemes, namely a Richardson-based implementation and the two proposed ADMM-based implementation, i.e. the one in Algorithm. 1 simply indicated as ADMM in the legend and the modification described in Sec. III-F, indicated as ADMM-direct. The number of inner loop iterations for both Richardson and ADMM is fixed to the same value H = 1 and we use ε = 1 . For the Richardson method, we use the fixed gain αR = 0 .05 . Because the infor-mation matrix Sk|k is time-varying, the optimal Richardson step size 
+
+α∗ 
+
+> R
+
+= 2
+
+λmin (Sk|k) + λmax (Sk|k)
+
+also varies with time. The value αR = 0 .05 was thus chosen as a fixed compromise, based on simulation data: it remains close to the optimal value over most of the time horizon, as estimated from the average values of λmin (Sk|k) and 
+
+λmax (Sk|k), while preserving stability of the iteration. For the ADMM-based method, we use the fixed penalty and relaxation parameters (ρ, α ) = (1 , 0.95) , selected empirically through simulation. In all methods, the prediction and measurement-update steps coincide; only the correction step is implemented differently. Figure 1 shows the initial sensing graph, together with the true and estimated states of the agents. Fig. 2a and the zoomed 0 1 2 3 4 5     
+
+> px[m]
+> 0
+> 1
+> 2
+> 3
+> 4
+> py [m]
+> Anchor true p
+> Anchor initial ˆp0
+> Non-anchor true p
+> Non-anchor initial ˆp0
+
+Fig. 1 : Initial robot configuration and sensing graph. Circle markers denote the true robot positions, while cross markers denote the corresponding initial estimated positions. The anchor robots are in blue, and the dashed green lines represent the graph edges, while solid lines connect a robot true position to the corresponding estimate. 
+
+in Fig. 3 report the global estimation error norm, showing that both distributed schemes track the centralized estimate closely, with ADMM achieving closer performance to the centralized scheme, as visible in Fig. 3. 10 13                  
+
+> 10 10
+> 10 7
+> 10 4
+> 10 1Richardson ADMM ADMM-direct
+> 010000 20000 30000 40000 50000 60000 70000 Time [s]
+> 10 7
+> 10 5
+> 10 3
+> 10 1
+> 10 1Centralized Richardson ADMM ADMM-direct
+
+Fig. 2 : Results over the full simulation. (a) Norm of the global estimation error, i.e. ∥ ˜xk∥. (b) Norm of the global correction error, i.e. ∥ ˜ξk∥.10 5              
+
+> 10 4
+> 10 3
+> 10 2
+> 10 1
+> 10 0Richardson ADMM ADMM-direct 010 20 30 40 50 Time [s] 2 × 10 03 × 10 04 × 10 0Centralized Richardson ADMM ADMM-direct
+
+Fig. 3 : Zoom of the results over the first 1000 steps. (a) Norm of the global estimation error, i.e. ∥ ˜xk∥. (b) Norm of the global correction error, i.e. ∥ ˜ξk∥.
+
+Fig. 2b and the zoomed in Fig. 2 show the global correction error norm with respect to the distributed Richardson, indicat-ing that ADMM achieves considerably faster convergence to the centralized correction term under the selected tuning. A further improvement is visible when using the modification described in Sec. III-F. Overall, the proposed ADMM-based distributed observer closely reproduces centralized performance while preserving sparse local communication. 
+
+VI. C ONCLUSIONS 
+
+This work proposed a distributed Kalman-like observer for multi-agent systems with local and relative measurements. The AUTHOR et al. : TITLE 15 
+
+approach combines a sparsity-preserving information predic-tion step based on exponential forgetting with a distributed correction step obtained by solving the resulting sparse linear system through partition-based ADMM. In contrast to cen-tralized information-form filtering, the proposed construction preserves the graph-induced sparsity of the information matrix and avoids both dense Riccati-type prediction updates and centralized matrix inversion. A two-time-scale separation was used to separate the re-duced estimation dynamics from the distributed optimization layer, and small gain arguments established uniform global exponential stability of the interconnected observer. The numerical results in a cooperative localization scenario showed that the proposed ADMM-based correction closely reproduces the centralized observer while converging signifi-cantly faster than the previously considered Richardson-based dynamic inversion scheme. Future work will consider asynchronous and event-triggered implementations, switching graphs, robustness with respect to communication losses, and packet drops, and extensions to nonlinear estimation problems. 
+
+APPENDIX 
+
+A. Derivation of the correction form 
+
+From the standard information-form update 
+
+Sk|k = Sk|k−1 +ε H⊤ 
+
+> k
+
+RkHk, zk|k = zk|k−1 +ε H⊤ 
+
+> k
+
+Rkyk,
+
+(70) 
+
+together with zk|k−1 = Sk|k−1 ˆxk|k−1 and ˆxk|k = S−1
+
+> k|k
+
+zk|k, it follows that 
+
+ˆxk|k = S−1
+
+> k|k
+
+
+
+Sk|k−1 ˆxk|k−1 + ε H⊤ 
+
+> k
+
+Rkyk
+
+
+
+. (71) 
+
+Expanding Sk|k as in (70), we also have 
+
+Sk|k ˆxk|k−1 = Sk|k−1 ˆxk|k−1 + ε H⊤ 
+
+> k
+
+RkHk ˆxk|k−1.
+
+After pre-multiplying both sides by S−1
+
+> k|k
+
+, subtracting this expression from the (71) yields 
+
+ˆxk|k − ˆxk|k−1 = εS−1 
+
+> k|k
+
+H⊤ 
+
+> k
+
+Rk
+
+ yk − Hk ˆxk|k−1
+
+.
+
+Therefore, defining 
+
+ξk := 1
+
+ε
+
+  ˆxk|k − ˆxk|k−1
+
+, bk := H⊤ 
+
+> k
+
+Rk
+
+ yk − Hk ˆxk|k−1
+
+,
+
+we obtain the correction form 
+
+ˆxk|k = ˆ xk|k−1 + ε ξk, Sk|kξk = bk.
+
+B. UGES of the reduced system with matrix forgetting factor 
+
+In the case of a matrix forgetting factor Γ, a corresponding UGES result can still be established. However, unlike the scalar case, the resulting contraction condition is difficult to verify in practice and generally very conservative. 
+
+Lemma 9 (UGES of the reduced system with matrix forgetting factor) . Under Assumptions 1, 2, and 3, consider the reduced system (56) with the matrix-forgetting prediction (10) . Suppose that there exists ¯γ ∈ (0 , 1) such that 
+
+Γ⊤Sk|kΓ ⪯ ¯γ Sk|k, ∀ k. (72) 
+
+Then the reduced system is uniformly globally exponentially stable, with Lyapunov function Vk := ˜ x⊤ 
+
+> k
+
+Sk|k−1 ˜xk satisfying 
+
+sε∥ ˜xk∥2 ≤ Vk ≤ ¯sε∥ ˜xk∥2, Vk+1 − Vk ≤ − (1 − ¯γ)sε∥ ˜xk∥2.
+
+Moreover, condition (72) admits the following equivalent and sufficient characterizations, in decreasing order of tight-ness: (i) (Equivalent condition) (72) holds if and only if 
+
+S1/2 
+
+> k|k
+
+ΓS−1/2 
+
+> k|k
+> 22
+
+≤ ¯γ, ∀ k. 
+
+(ii) (Sufficient condition) A sufficient condition is 
+
+∥Γ∥22 κ(Sk|k) ≤ ¯γ < 1, ∀ k, 
+
+where κ(Sk|k) := λmax (Sk|k)/λ min (Sk|k) is the condition number of Sk|k.(iii) (Uniform sufficient condition) Using the uniform bounds of Lemma 1, a condition that is uniform in k and independent of the trajectory is 
+
+∥Γ∥22
+
+¯sε
+
+sε < 1.
+
+Proof. Lyapunov bound. From the reduced dynamics (56) and the matrix-forgetting prediction (10), 
+
+Vk+1 = ˜ x⊤ 
+
+> k
+
+Sk|k−1S−1
+
+> k|k
+
+Γ⊤Sk|kΓS−1
+
+> k|k
+
+Sk|k−1 ˜xk.
+
+Applying (72) and using Sk|k ⪰ Sk|k−1 (so that 
+
+Sk|k−1S−1
+
+> k|k
+
+Sk|k−1 ⪯ Sk|k−1), 
+
+Vk+1 ≤ ¯γ V k,
+
+and the stated decay follows from Lemma 1. 
+
+Equivalence of (i). Pre- and post-multiplying (72) by S−1/2
+
+> k|k
+
+yields 
+
+Υ⊤ 
+
+> k
+
+Υk ⪯ ¯γI, Υk := S1/2 
+
+> k|k
+
+ΓS−1/2 
+
+> k|k
+
+,
+
+which is equivalent to ∥Υk∥22 ≤ ¯γ.
+
+Sufficiency of (ii). Since Γ⊤Sk|kΓ ⪯ ∥ Γ∥22λmax (Sk|k)I ⪯∥Γ∥22κ(Sk|k)Sk|k, condition (72) holds whenever 
+
+∥Γ∥22κ(Sk|k) ≤ ¯γ.
+
+Sufficiency of (iii). The uniform bounds give κ(Sk|k) ≤
+
+¯sε/s ε for all k, so (ii) is satisfied uniformly whenever 
+
+∥Γ∥22 ¯sε/s ε < 1.                       
+
+> [1] L. Luft, T. Schubert, S. I. Roumeliotis, and W. Burgard, “Recursive decentralized localization for multi-robot systems with asynchronous pairwise communication,” The International Journal of Robotics Re-search , vol. 37, no. 10, pp. 1152–1167, 2018. [2] S. S. Kia, S. Rounds, and S. Martinez, “Cooperative localization for mobile agents: A recursive decentralized algorithm based on kalman-filter decoupling,” IEEE Control Systems Magazine , vol. 36, no. 2, pp. 86–101, 2016. [3] S. I. Roumeliotis and G. A. Bekey, “Distributed multirobot localization,”
+> IEEE transactions on robotics and automation , vol. 18, no. 5, pp. 781– 795, 2002. [4] T.-K. Chang, K. Chen, and A. Mehta, “Resilient and consistent mul-tirobot cooperative localization with covariance intersection,” IEEE Transactions on Robotics , vol. 38, no. 1, pp. 197–208, 2021. [5] N. De Carli, E. Restrepo, and P. R. Giordano, “Adaptive observer from body-frame relative position measurements for cooperative localization,”
+> IEEE Control Systems Letters , vol. 8, pp. 1337–1342, 2024. [6] A. G´ omez-Exp´ osito, A. De La Villa Ja´ en, C. G´ omez-Quiles, P. Rousseaux, and T. Van Cutsem, “A taxonomy of multi-area state estimation methods,” Electric Power Systems Research , vol. 81, no. 4, pp. 1060–1069, 2011. 16
+
+[7] J. Yang, W.-A. Zhang, and F. Guo, “Distributed kalman-like filtering and bad data detection in the large-scale power system,” IEEE transactions on industrial informatics , vol. 18, no. 8, pp. 5096–5104, 2021. [8] G. Battistelli, L. Chisci, G. Mugnai, A. Farina, and A. Graziano, “Consensus-based linear and nonlinear filtering,” IEEE Transactions on Automatic Control , vol. 60, no. 5, pp. 1410–1415, 2014. [9] A. T. Kamal, J. A. Farrell, and A. K. Roy-Chowdhury, “Information weighted consensus filters and their application in distributed camera networks,” IEEE Transactions on Automatic Control , vol. 58, no. 12, pp. 3112–3125, 2013. [10] E. Sebasti´ an, E. Montijano, and C. Sag¨ u´ es, “Eco-dkf: Event-triggered and certifiable optimal distributed kalman filter under unknown corre-lations,” IEEE Transactions on Automatic Control , vol. 69, no. 4, pp. 2613–2620, 2023. [11] R. Jung, C. Brommer, and S. Weiss, “Decentralized collaborative state estimation for aided inertial navigation,” in 2020 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2020, pp. 4673–4679. [12] P. O. Arambel, C. Rago, and R. K. Mehra, “Covariance intersection algorithm for distributed spacecraft state estimation,” in Proceedings of the 2001 American Control Conference.(Cat. No. 01CH37148) , vol. 6. IEEE, 2001, pp. 4398–4403. [13] L. C. Carrillo-Arce, E. D. Nerurkar, J. L. Gordillo, and S. I. Roumeliotis, “Decentralized multi-robot cooperative localization using covariance intersection,” in 2013 IEEE/RSJ international conference on intelligent robots and systems . IEEE, 2013, pp. 1412–1417. [14] J. Klingner, N. Ahmed, and N. Correll, “Fault-tolerant covariance intersection for localizing robot swarms,” Robotics and Autonomous Systems , vol. 122, p. 103306, 2019. [15] N. De Carli, P. Salaris, and P. R. Giordano, “Online decentralized perception-aware path planning for multi-robot systems,” in 2021 Inter-national Symposium on Multi-Robot and Multi-Agent Systems (MRS) .IEEE, 2021, pp. 128–136. [16] N. De Carli and D. V. Dimarogonas, “A distributed kalman-like observer with dynamic inversion-based correction for multi-agent estimation,” 
+
+IEEE Control Systems Letters , 2025. [17] P. Bernard, N. Mimmo, and L. Marconi, “On the semi-global stability of an ek-like filter,” IEEE Control Systems Letters , vol. 5, no. 5, pp. 1771–1776, 2020. [18] D. Bertsekas and J. Tsitsiklis, Parallel and distributed computation: numerical methods . Athena Scientific, 2015. [19] N. De Carli, P. Salaris, and P. R. Giordano, “Distributed control barrier functions for global connectivity maintenance,” in 2024 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2024, pp. 12 048–12 054. [20] A. T ¸ iclea and G. Besanc ¸on, “Exponential forgetting factor observer in discrete time,” Systems & Control Letters , vol. 62, no. 9, pp. 756–763, 2013. [21] P. Neal, C. Eric, P. Borja, and E. Jonathan, “Distributed optimization and statistical learning via the alternating direction method of multipliers,” 
+
+Foundations and Trends® in Machine learning , vol. 3, no. 1, pp. 1–122, 2011. [22] N. Bastianello, R. Carli, L. Schenato, and M. Todescato, “A partition-based implementation of the relaxed admm for distributed convex opti-mization over lossy networks,” in 2018 IEEE Conference on Decision and Control (CDC) . IEEE, 2018, pp. 3379–3384. [23] O. Shorinwa, T. Halsted, and M. Schwager, “Scalable distributed op-timization with separable variables in multi-agent networks,” in 2020 American Control Conference (ACC) . IEEE, 2020, pp. 3619–3626. [24] G. Carnevale, N. Bastianello, G. Notarstefano, and R. Carli, “Admm-tracking gradient for distributed optimization over asynchronous and unreliable networks,” IEEE Transactions on Automatic Control , vol. 70, no. 8, pp. 5160–5175, 2025. [25] G. Carnevale, N. Mimmo, and G. Notarstefano, “A unifying system theory framework for distributed optimization and games,” IEEE Trans-actions on Automatic Control , 2025. [26] N. Bastianello, R. Carli, L. Schenato, and M. Todescato, “Asynchronous distributed optimization over lossy networks via relaxed admm: Stability and linear convergence,” IEEE Transactions on Automatic Control ,vol. 66, no. 6, pp. 2620–2635, 2020. [27] N. Parikh and S. Boyd, “Proximal algorithms,” Foundations and Trends in optimization , vol. 1, no. 3, pp. 127–239, 2014. [28] E. K. Ryu and S. Boyd, “Primer on monotone operator methods,” Appl. comput. math , vol. 15, no. 1, pp. 3–43, 2016. [29] H. H. Bauschke and P. L. Combettes, Convex Analysis and Monotone Operator Theory in Hilbert Spaces , 1st ed., ser. CMS Books in Mathe-matics. New York, NY: Springer, 2011. [30] N. Bastianello, D. Deplano, M. Franceschelli, and K. H. Johansson, “Ro-bust online learning over networks,” IEEE Transactions on Automatic Control , vol. 70, no. 2, pp. 933–946, 2024. [31] A. Berman and R. J. Plemmons, Nonnegative matrices in the mathemat-ical sciences . SIAM, 1994.
