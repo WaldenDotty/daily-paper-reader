@@ -1,0 +1,1205 @@
+Title: Equinox: Decentralized Scheduling for Hardware-Aware Orbital Intelligence
+
+URL Source: https://arxiv.org/pdf/2604.19958v1
+
+Published Time: Thu, 23 Apr 2026 00:10:54 GMT
+
+Number of Pages: 21
+
+Markdown Content:
+# Eqinox : Decentralized Scheduling for Hardware-Aware Orbital Intelligence 
+
+## Ansel Kaplan Erol 
+
+aerol3@gatech.edu 
+
+Georgia Institute of Technology Atlanta, Georgia, USA 
+
+## Divya Mahajan 
+
+divya.mahajan@gatech.edu 
+
+Georgia Institute of Technology Atlanta, Georgia, USA 
+
+## Abstract 
+
+Earth-observation satellites are emerging as distributed edge computing platforms for time-critical tasks such as disas-ter response and maritime intelligence, carrying onboard accelerators that enable in-orbit inference. Scheduling these workloads fundamentally differs from datacenter schedul-ing: energy is harvested intermittently, and decisions are temporally coupled where processing an image eagerly can deplete battery reserves needed minutes later for higher-value events. Existing schedulers rely on static priorities or resource thresholds and lack mechanisms to adaptively shed lower-value work as constraints tighten. We present Eqinox , a lightweight, decentralized runtime for the strict constraints of low-power orbital edge systems. 
+
+Eqinox enables adaptive scheduling under complex condi-tions by compressing heterogeneous and time-varying hard-ware constraints such as battery charge, thermal headroom, and queue backlog into a single state-dependent marginal cost of execution. Derived from a barrier function that rises sharply as system state approaches safety limits, this cost encodes both instantaneous resource pressure and future risk. This local cost signal also serves as a constellation-wide coordination primitive. Tasks execute only when their value exceeds the current cost, producing value-ordered load shed-ding without explicit prioritization policies. Furthermore, if local execution costs exceed those of a neighbor, tasks are dy-namically offloaded over inter-satellite links. This achieves distributed load balancing without routing protocols, queue exchange, or global state. We show this single signal is suf-ficient to align scheduling decisions across a disconnected, resource-constrained system. We evaluate Eqinox using a hardware-validated, multi-day simulation of a 143-satellite constellation, grounded in measurements from a physical Jetson Orin Nano Super. 
+
+Eqinox improves scientific goodput by 20% and image-processing throughput by 31% over priority-based schedul-ing, while maintaining 2.2 × higher mean battery reserves. Under increasing demand, Eqinox gracefully sheds work to achieve 5.2 × the execution rate of static scheduling rather than collapsing under contention. 
+
+Keywords: orbital edge scheduling, resource management, load balancing, inter-satellite links, energy harvesting 
+
+## 1 Introduction 
+
+Modern Low-Earth Orbit (LEO) constellations leverage ma-chine learning accelerators capable of running models for wildfire detection, flood mapping, and maritime surveil-lance directly in orbit, eliminating the multi-hour latency of downlink-then-analyze pipelines [ 9 , 16 , 26 ]. The energy budget powering these inferences, however, is physically coupled to sunlight. Satellites spend roughly 35% of each orbit in Earth’s shadow, known as eclipse, operating entirely on a 50–100 Wh battery [ 1 ]. A scheduler that processes at full rate during sunlight risks exhausting those reserves be-fore eclipse ends, which could leave no resources available at the moment the satellite passes over a region of interest. Satellites image continuously, but onboard compute can ser-vice only a fraction of arriving events; the scheduler must triage, deciding which images are worth processing at all, not merely in what order. A satellite’s onboard compute is fixed at launch within a rigid mass and power envelope, motivating efficient edge accelerators like the NVIDIA Jetson [ 17 ] and Google Edge TPU [ 7] for large-scale industry OEC initiatives [ 2, 16 ]. Com-pute capacity cannot be provisioned on demand. Energy arrives only during sunlit phases and cannot be replenished. These properties create an inter-temporal coupling : process-ing an image now consumes energy that may be needed minutes later, during eclipse, for a detection of far greater value. Delaying or dropping work risks missing time-critical phenomena. Figure 1 illustrates this challenge. The scheduling problem is further complicated by the in-feasibility of centralized control. A satellite is visible to a ground station for only minutes per orbit. For the remainder, including most of eclipse, it operates entirely without con-tact, making it impractical to delegate scheduling decisions to the ground. The runtime must act from local hardware state alone, with no global view and no coordinator. This combi-nation of non-replenishable energy, intertemporal coupling, and enforced autonomy places satellite scheduling closer to real-time control under physical resource limits than to traditional workload management. Existing approaches address only one dimension of this problem. Value-based systems [ 10 , 29 ] rank the tasks by ex-pected utility, thus prioritizing certain tasks before others but ignoring hardware state. These systems greedily exce-cute the highest priority work available at time 𝑡 . However,              
+
+> 1
+> arXiv:2604.19958v1 [cs.DC] 21 Apr 2026 ECLIPSE
+> Equinox Satellite
+> Network
+> Prior
+> Approaches Satellites
+> Out of
+> Power
+> 10
+> 20
+> 30
+> 40
+> 50
+> 60
+> 70
+> 0010 20 30 40 50 60 70 80 90
+> Time in orbit (min)
+> Total Scientific  Value (M)  SUNLIT ECLIPSE
+> Battery:
+> full → depleted
+> Equinox
+> Prior Approaches (Out of Battery)
+> !
+> Sat-to-Sat (ISL)
+> Sat-to-Ground (Downlink)
+> High-value region:
+> Equinox still
+> active
+> SUNLIT  +27%
+
+Figure 1. Scheduling for OEC satellites must maintain processing power for the 30% of orbit spent in eclipse. by ignoring future resource constraints, they risk depleting battery reserves needed for higher-value inference tasks that arrive later, resulting in suboptimal performance over the full orbit. Resource-based systems [ 19 , 20 ] enforce battery or thermal limits and may redistribute load via inter-satellite links (ISLs), but treat all tasks as uniform importance, lack-ing a mechanism to preferentially retain higher-value work under contention. Thus, no existing system jointly accounts for task value and time-varying resource constraints in a de-centralized setting. 
+
+We present Eqinox , a decentralized runtime for resource-constrained orbital edge systems. Solutions that reason over the full resource-task state space exceed the computational budget of satellites already saturated by inference, and ground-directed systems cannot adapt in time as contact windows span only minutes per orbit. Our key insight for overcoming this challenge is that heterogeneous and time-varying hard-ware constraints such as battery charge, thermal headroom, and queue backlog, can be compressed into a single state-dependent marginal cost of execution . This cost is derived from a barrier function that rises sharply as system state ap-proaches safety limits, encoding both instantaneous resource pressure and the risk of future depletion. Tasks execute only when their value exceeds this cost, producing value-ordered load shedding without explicit priority policies. This formulation yields two important properties. First, it induces staggered dropout : as resources tighten, tasks are re-jected in strict order of increasing value, leaving the highest-value work as the last to lose access. Second, the cost sig-nal also serves as a coordination primitive across satellites. When the cost of execution on the local node exceeds that of a neighbor (plus communication cost), tasks are offloaded over inter-satellite links. This enables distributed load bal-ancing without routing protocols, queue exchange, or global state; the cost signal is sufficient to guide both scheduling and placement decisions. 
+
+Eqinox is the first decentralized runtime to unify value-aware scheduling with state-dependent resource control in orbital edge systems. Our contributions are as follows: 
+
+• We introduce a scheduling framework that compresses bat-tery, thermal, and queue state into a single state-dependent marginal cost, enabling value-aligned execution without relying solely on task priorities or resource accounting. 
+
+• We design a barrier-based cost function that enforces safety constraints by construction and induces value-ordered task rejection under arbitrary arrival sequences. 
+
+• We show that this cost signal serves as a unified coordi-nation primitive, enabling inter-satellite load balancing without routing protocols or global state. 
+
+• We propose a constellation-level evaluation framework spanning scientific value and goodput, event detection coverage, time with battery reserves , brownout risk, and scientific load balance. We evaluate Eqinox via a 143-satellite simulation us-ing the fMoW dataset [ 6 ], anchored by hardware profiling on an NVIDIA Jetson Orin [ 17 ]. Our central finding is that strategically shedding lower-value tasks to preserve battery headroom directly maximizes long-term scientific through-put, particularly during energy-starved eclipse phases where greedy schedulers predictably fail. By sustaining operations through eclipse transitions, Eqinox extracts 20% higher scientific value per hour than priority baselines (+64% vs. FIFO) and processes 31% more images, all while maintain-ing 2.2 × greater mean battery reserves. Under severe con-tention (16 tasks), Eqinox sustains 5.2 × the execution rate of static scheduling by shedding marginal work rather than collapsing. Furthermore, we show Eqinox ’s marginal cost formulation allows operators the flexibility to shift Eqinox 
+
+along the scientific throughput–battery health trade-off to match mission requirements. 1
+
+## 2 Background 
+
+2.1 Orbital Edge Computing 
+
+Early Earth observation platforms such as Sentinel and Aqua transmitted raw sensor data to ground stations for offline processing [ 11 , 21 ]. This bent-pipe architecture is fundamen-tally constrained by short contact windows (typically under  
+
+> 1Anonymized code: https://github.com/equinox-authors/equinox
+> 2ML Inference Tasks
+> Camera Stream
+> P(fire | port)
+> P(ship | port)
+> Prior Estimates
+> Spatio-temporal
+> State and Inputs
+> Schedulers
+> Equinox
+> Maps Resources
+> and Value
+> Priority-based
+> Resource-based
+> Ignores hardware state:
+> EarthSight[9], Serval[27]
+> Treat all images uniformly:
+> Phoenix[18], Lyapunov [12,13]
+> Device State
+
+Figure 2. Context of Eqinox to Earth-observation alterna-tives. Only Eqinox incorporates both hardware state and image priors to schedule Earth Observation workloads. 10 minutes per orbit), shared downlink bandwidth, and the sheer volume of imagery generated by modern constella-tions [ 8, 31 ]. As a result, time-critical events such as wildfires, floods, and maritime incidents cannot be processed in time when relying on ground-side analysis. Modern constellations address this limitation by mov-ing inference onboard the satellite. Nanosatellites equipped with commercial off-the-shelf accelerators [ 17 , 22 , 27 ] exe-cute models in orbit and transmit only detections or com-pressed summaries. This paradigm, Orbital Edge Computing (OEC) [9], reduces downlink demand and enables real-time response at constellation scale. Commercial deployments are already underway: Spire Global performs in-orbit wild-fire detection [ 26 ], Planet integrates NVIDIA Jetson accel-erators into its Pelican satellites [ 16 ], and Google’s Project Suncatcher explores general-purpose orbital inference [2]. 
+
+2.2 The Orbital Scheduling Problem 
+
+Moving inference in-orbit replaces the downlink bottleneck with a tightly coupled resource management problem. Un-like datacenters, both compute and energy are severely con-strained and evolve over time. Energy availability follows the orbital cycle, increasing during sunlight and depleting during eclipse, while compute demand varies with the spatiotem-poral distribution of incoming imagery and task complexity. As a result, resource availability and workload demand are continuously changing, creating a scheduling problem with strong intertemporal dependencies. 
+
+Compute oversubscription. Onboard accelerators are or-ders of magnitude weaker than datacenter hardware. Mean-while, high-resolution sensors generate imagery at rates that exceed what can be processed in real time, creating a persistent compute deficit. As a result, the scheduler must continuously decide which images to process, which models to apply, and which tasks to defer or drop. 
+
+Intermittent energy and eclipse. Satellites harvest solar power during sunlight for roughly 65% of each orbit and rely on batteries for the remaining 35% [ 20 ] of the orbit during Eclipse. With only 50–100 Wh [ 1 ], yet decisions that need to be made are intertemporal: executing a task now will consume energy that may be required minutes later during eclipse. A scheduler that runs aggressively during sunlight risks depleting reserves and becoming unavailable when high-value events occur. Maintaining sufficient battery headroom is therefore essential not only for safety, but for sustained throughput. 
+
+Thermal limits. Thermal constraints further restrict sus-tained computation. In the absence of convective cooling, heat must be dissipated via radiation, and continuous in-ference drives accelerators toward thermal throttling limits. Thermal state is further coupled with the solar cycle: sunlit satellites absorb external radiation while generating compute heat, reducing available headroom. 
+
+Scientific value heterogeneity. Workloads are highly heterogeneous in value. An image over open ocean may carry negligible utility, while one over a dense port or wildfire region may be highly valuable. Uniformly allocating compute under scarcity wastes resources on low-value inputs and risks missing high-value events when constraints tighten. 
+
+Orbital dynamics and spatial heterogeneity. Beyond per-satellite constraints, orbital scheduling is inherently dis-tributed. Resource availability and workload demand are not only time-varying but also spatially distributed across the constellation. At any given time, satellites occupy different phases of the orbital cycle: some are in sunlight with abun-dant energy, while others are in eclipse operating on limited battery reserves. Similarly, observation opportunities are unevenly distributed across the Earth’s surface, with crucial events concentrated in specific regions and at specific times. This spatial and temporal heterogeneity creates opportu-nities for cooperation across satellites. A satellite in eclipse may be energy-constrained while a neighboring satellite in sunlight has surplus capacity. However, exploiting this asymmetry requires transferring tasks across inter-satellite links (ISLs), introducing additional latency and energy costs. Scheduling decisions must therefore account not only for local resource state, but also for the relative resource avail-ability of neighboring nodes and the cost of offloading work. 
+
+2.3 The Gap in Existing Approaches 
+
+These constraints create a scheduling problem that existing systems address only partially (Figure 2). Scientific value-aware systems [ 10 , 29 ] prioritize tasks by expected utility, but ignore resource state, executing moderate-value work even when doing so consumes energy needed for higher-value events arriving shortly thereafter. Resource-aware sys-tems [ 8, 14 , 19 , 20 , 37 ] enforce battery or thermal limits and 
+
+> 3
+
+may redistribute load via inter-satellite links (ISLs), but treat tasks uniformly, lacking a mechanism to preferentially retain higher-value work under contention. ISLs provide a mechanism to exploit this spatial hetero-geneity by redistributing work across satellites. However, they introduce an additional layer of complexity: deciding not only whether a satellite has spare capacity, but whether a specific task should be offloaded . This requires jointly rea-soning about local resource pressure, the value of the task, the neighbor’s available capacity, and the cost of transfer. Existing approaches capture either capacity or value, but not both, and therefore cannot make value-aware offloading decisions under resource constraints. What is missing is a unified abstraction that encodes sys-tem state in a form that can drive both scheduling and routing decisions. Such an abstraction must reflect current resource pressure, anticipate future constraints, and allow tasks to be selected based on their value relative to system state. 
+
+Eqinox provides this abstraction through a state-dependent marginal cost signal that enables both value-aware schedul-ing and decentralized coordination. 
+
+## 3 Eqinox System 
+
+3.1 Overview 
+
+Eqinox is a decentralized runtime for distributed resource management in orbital edge systems. It is motivated by a key challenge: that scheduling decisions in an OEC setting must simultaneously account for time-varying resource con-straints, heterogeneous scientific task values, and distributed execution across satellites. However, existing approaches treat these concerns in isolation. 
+
+Equinox addresses this challenge through a single unifying abstraction: a state-dependent marginal ex-ecution cost that captures the instantaneous pressure on a satellite’s resources. Rather than separating priori-tization, scheduling, and routing into distinct mechanisms, 
+
+Eqinox reduces all decisions both local and global, to a sin-gle comparison: task value versus marginal execution cost. This simple, low-dimensional signal is critical for edge de-ployment. Scheduling algorithms that optimize over the full resource-task state space are computationally out of reach for satellite-class hardware already saturated by inference workloads. Ground-directed control is equally impractical: contact windows span only minutes per orbit, making reac-tive teleoperation too slow to adapt to eclipse transitions or burst arrivals. A single closed-form scalar computed from local sensor readings provides the necessary control without competing with inference for CPU headroom. This signal compresses battery state, thermal headroom, and queue congestion into a single control scalar that reflects current utilization and proximity to critical limits. Thus, 
+
+Eqinox selects tasks based on their predicted scientific value relative to resource pressure, rather than through sep-arate priority and resource management mechanisms. Each satellite independently computes this marginal cost and uses it as a local control signal. There is no centralized controller, and coordination emerges implicitly through comparisons of cost across satellites. As shown in Figure 3, the Eqinox runtime continuously executes a four-step loop: (1) computes the marginal exe-cution cost from local sensor readings; (2) evaluates incom-ing tasks to estimate their expected scientific value, based on event likelihood and importance weighting; (3) executes tasks whose expected science value exceeds the local cost; and (4) compares costs with neighbors via inter-satellite links (ISLs) to offload tasks to cheaper nodes, dropping or deferring the rest. By strictly decoupling tasks (which act as hardware-agnostic value estimators) from the system (which exposes only the execution cost), Eqinox replaces explicit priority queues, hand-tuned thresholds, and resource-specific poli-cies with a unified, elegant decision rule. 
+
+3.2 Marginal Execution Cost 
+
+Eqinox represents system state of each satellite through the marginal execution cost 𝑃 , defined as the incremental cost of processing one additional task at the current hardware state. This signal unifies multiple resource constraints into a single control variable that can drive both scheduling and routing decisions. The marginal cost increases as any resource ap-proaches its limit, encoding not only current utilization but also proximity to unsafe or unsustainable operating regimes. Tasks are admitted when their expected value exceeds this cost, and rejected or deferred otherwise. 
+
+Eqinox decomposes marginal execution cost into inde-pendent factors: battery state, thermal headroom, and queue congestion. Each factor captures how close the sys-tem is to a limiting condition along a single resource dimen-sion. We combine these factors multiplicatively so that pres-sure on any one resource can dominate the overall cost. This ensures that no single resource (e.g., a healthy battery) can mask risk in another (e.g., thermal limits), and that the cost rises sharply as the system approaches any critical boundary. The resulting execution cost formulated by Eqinox is:            
+
+> 𝑃 =𝑃 base ·𝑓 batt (SoC ) · 𝑓 thermal (𝑇 ) · 𝑓 queue (𝑞 )(1)
+
+where 𝑃 base is the nominal cost under standard conditions. Calibration of coefficients and hyperparameters is deferred to Section 4.1 and Appendix B. Importantly, the sensitivity coefficients 𝛽 and 𝛾 𝑞 are operational knobs: increasing 𝛽 
+
+enforces stricter energy conservation, improving battery reserve time at the cost of throughput, while smaller values favor processing under tighter energy margins. This allows operators to tune Eqinox along the scientific throughput– battery health trade-off to match mission priorities without modifying the control structure (Figure 4, Table 2). 
+
+> 4
+
+Eclipse Sunlit 
+
+## OEC System  
+
+> Pricing Compute from Hardware State
+> Task Value Estimation
+> Pneighbor
+> Execute Local Offload
+
+## Equinox Runtime 
+
+> Equinox Local Scheduling
+> ML Tasks  Value
+> Predictor
+> Category
+> Priors
+> Offloading Decision
+> AI Processor
+> (TPU/GPU)
+> Task Selection
+> (Greedy Knapsack)
+> ESV task
+
+## Inter-satellite 
+
+## Coordination         
+
+> Task Value Estimation
+> Pricing Compute from Hardware State
+> Sat-to-Sat (ISL)
+> Sat-to-Ground (Downlink)
+> Marginal Exec. Cost
+> (scalar signal)
+> State
+> fthermal (T)fbatt (SoC) fqueue (q)
+> Pspot
+> Deferred
+> Task Queue
+> Pneighbor +clink +clat <Plocal
+
+Figure 3. Overview of the Eqinox framework, illustrating per-satellite marginal execution cost, per-satellite local scheduling, and ISL arbitrage components within a decentralized runtime for distributed resource management in orbital edge systems. 
+
+Battery factor. Battery state governs the system’s ability to survive future execution, particularly across eclipse. Unlike other resources, energy is not continuously replenished, and mistakes are irreversible over the short horizon of an orbit. The battery factor therefore encodes proximity to energy depletion as a hard constraint. We model this using a barrier function around the critical state of charge SoC 𝑐 .         
+
+> 𝑓 batt (SoC )=1+𝛽
+> (SoC −SoC 𝑐 )2(2)
+
+As SoC → SoC + 
+
+> 𝑐
+
+, the marginal cost diverges, forcing the system to shed load before running out of power. This cap-tures a key asymmetry: while tasks can be deferred, energy shortfall during eclipse cannot be corrected in real time. We calibrate 𝛽 such that this behavior activates early enough to preserve power for an eclipse interval. 
+
+Thermal factor. Thermal state limits how long compu-tation can be sustained. Unlike battery constraints, which are driven by future availability, thermal limits arise from instantaneous power density and the inability to dissipate heat efficiently in orbit. We encode this using a soft barrier as temperature approaches the throttle threshold 𝑇 max :                
+
+> 𝑓 thermal (𝑇 )=1+𝛾 𝑇 · ( 𝑇 −𝑇 0)2
+> (𝑇 max −𝑇 )2+1(3)
+
+where 𝑇 0 is the nominal operating temperature, 𝑇 max is the thermal throttle threshold, and 𝛾 𝑇 is a sensitivity coefficient controlling how steeply cost rises with thermal headroom loss. This factor remains near one under nominal conditions, but rises sharply as thermal headroom collapses. Its role is preventive, avoiding schedules that appear feasible in the short term but would trigger throttling and reduce effec-tive throughput, especially during sunlit phases when both external heating and compute load are high. 
+
+Queue factor. Queue factor captures mismatch between input rate and processing capacity. While battery and ther-mal factors are physical limits, the queue factor captures system-level congestion. We model this as a linear function of deferred workload:         
+
+> 𝑓 queue (𝑞 )=1+𝛾 𝑞 ·𝑞 (4)
+
+where 𝑞 is the number of images in the deferred queue and 𝛾 𝑞 is the congestion sensitivity coefficient. As backlog grows, the marginal cost increases, biasing the system to-wards higher-value tasks and preventing accumulation of low-value work. Unlike the barrier functions, this term pro-vides continuous back-pressure rather than enforcing a hard limit. 𝑃 represents the current cost of executing one addi-tional task. Tasks with expected value above 𝑃 are admitted, while those below 𝑃 are deferred or dropped. 
+
+3.3 Per-Satellite Scheduling and Resource Allocation 
+
+Eqinox operates as a continuous decision process in which tasks compete for execution based on their expected value relative to current system cost. Rather than separating prior-itization, scheduling, and routing into distinct mechanisms, the system reduces all decisions to a single comparison: task value versus marginal execution cost. 
+
+Value representation. Each task 𝑡 corresponds to a detec-tion objective and expresses the expected scientific value of processing an image as a scalar:          
+
+> 𝐸𝑆𝑉 𝑡 =𝑃 (event 𝑡 |category ) · acc 𝑡 ·𝑤 𝑡 (5)
+
+where 𝑃 (event | category ) captures the likelihood of rel-evance to an image’s region category, acc 𝑡 reflects model capability, and 𝑤 𝑡 encodes the scientific importance of task 
+
+𝑡 . This formulation separates opportunity, capability, and importance, allowing heterogeneous tasks to be compared on a common scale without exposing its internals. 
+
+Admission and Resource-constrained Selection. At runtime, tasks are admitted only if their value exceeds the current execution cost 𝑃 . This condition acts as a global, state-dependent threshold: as resource pressure increases, 
+
+> 5
+
+fewer tasks remain economically viable. Crucially, this re-places explicit priority queues and hand-tuned policies with a single, consistent decision rule that adapts automatically to system conditions. Admitted tasks compete for limited compute and energy resources. Because the system operates under persistent oversubscription, selection is unavoidable even in nominal conditions. The runtime therefore chooses a subset of tasks that maximizes total expected value under the instantaneous compute budget:       
+
+> max ∑︁
+> 𝑖 ∈𝑆
+> 𝐸𝑆𝑉 𝑖 s.t. ∑︁
+> 𝑖 ∈𝑆
+> 𝑔 𝑖 ≤𝐺 (6)
+
+where 𝑔 𝑖 denotes the compute demand of task 𝑖 . We approx-imate this using a value-density ordering 𝑉 𝑖 /𝑔 𝑖 , reflecting the system’s objective of extracting the most value per unit of constrained resource. The marginal cost 𝑃 plays a crit-ical upstream role: by filtering out low-value tasks before selection, it reduces problem complexity and ensures that the remaining competition is focused on high-impact work. 
+
+Temporal adaptation. Tasks that are not selected are not immediately discarded. Instead, they are deferred and recon-sidered as system conditions evolve. Because 𝑃 varies over time with battery, thermal, and queue state, tasks that are uneconomical under current conditions may become viable later, for example, after exiting eclipse or clearing congestion. This mechanism effectively shifts demand across time with-out requiring tasks to predict future conditions. The system, rather than the task, absorbs temporal uncertainty. 
+
+Graceful degradation. As resource pressure increases, the system does not fail abruptly. Instead, rising marginal cost progressively filters out lower-value tasks while preserving higher-value ones. This behavior can be characterized an-alytically. A task 𝑎 ceases to execute when 𝑃 > 𝑉 𝑎 , which defines a critical state of charge SoC ∗ 
+
+> 𝑎
+
+:        
+
+> SoC ∗
+> 𝑎 =SoC 𝑐 +√︄ 𝛽 ·𝑃 base
+> 𝐸𝑆𝑉 𝑡𝑎𝑠𝑘 −𝑃 base
+> (7)
+
+Because SoC ∗ 
+
+> 𝑎
+
+decreases monotonically with 𝑉 𝑎 , tasks exit the system in strict value order. High-value tasks persist deeper into constrained regimes, while lower-value tasks are shed earlier. This value-ordered degradation is not explicitly programmed; it directly emerges from the cost formulation, ensuring that the system remains aligned with scientific priorities even under severe resource constraints. 
+
+3.4 Satellite Constellation Load Redistribution 
+
+Orbital dynamics introduce persistent asymmetries in cost. Satellites in eclipse experience rising marginal cost due to energy constraints, while sunlit satellites operate at lower cost. Thus, the same value–cost abstraction extends naturally across satellites. Each node exposes its marginal execution cost, and tasks are routed toward locations where they can be executed more efficiently. A task is offloaded when a neighboring satellite offers lower effective cost after accounting for transfer overhead:        
+
+> 𝑃 𝑛𝑒𝑖𝑔ℎ𝑏𝑜𝑟 +𝑐 link +𝑐 lat <𝑃 𝑙𝑜𝑐𝑎𝑙 (8)
+
+where 𝑐 link is the ISL transmission cost and 𝑐 lat is a penalty for routing latency. As a result, load redistribution is a process of cost equalization across the constellation, rather than explicit load balancing. This process is entirely decentralized: no satellite maintains a global view or explicitly balances load. These gradients naturally drive a flow of tasks toward energy-rich regions, causing workload to follow the solar cycle without explicit coordination or eclipse-aware logic. Routing decisions rely only on observable hardware state and exclude queue congestion that is not live across nodes: 
+
+𝑃 phys  
+
+> 𝑛
+
+= 𝑃 base · 𝑓 batt (𝑆𝑜𝐶 𝑛𝑒𝑖𝑔ℎ𝑏𝑜𝑟 ) · 𝑓 therm (𝑇 𝑛𝑒𝑖𝑔ℎ𝑏𝑜𝑟 ). (9) This ensures that offloading decisions remain stable and grounded in shared physical signals. Because routing is gov-erned by the same value–cost comparison as local schedul-ing, it preserves value awareness: only tasks that remain worthwhile after transfer are offloaded. Unlike capacity-based schemes that redistribute load uniformly, Eqinox 
+
+preserves value-awareness during routing. Offloading is only beneficial if the task remains worth executing at the desti-nation after accounting for transfer costs. As a result, high-value tasks are preferentially redistributed under contention, while low-value tasks are filtered out locally. Overall, Eqinox extends the scheduling problem from a single node to a distributed system. Locally, scheduling selects tasks that maximize value under resource constraints; globally, it determines where in the constellation that value should be realized. The marginal execution cost serves as a common currency across satellites, allowing each node to make independent decisions that collectively approximate a system-wide allocation of work. In this view, offloading is not a separate mechanism but a continuation of schedul-ing across nodes: tasks are placed where their value can be realized at lowest cost. 
+
+3.5 Satellite Constellation Performance Metrics 
+
+Eqinox makes decisions using a scalar control signal, the marginal execution cost, but evaluating its behavior requires a broader view. No single metric can capture the trade-offs inherent in orbital systems, where value, resource availabil-ity, and hardware health are tightly coupled. Standard per-formance metrics such as throughput are insufficient: they ignore resource constraints, system safety, and the value of observations. A throughput-maximizing scheduler may ex-haust battery reserves and miss critical events during eclipse, while an overly selective system may achieve high per-image quality but fail to capture rare events. We therefore evaluate how a simple, low-dimensional control signal translates into system-level behavior using a set of complementary metrics spanning value, efficiency, and operational readiness. 
+
+> 6
+
+Scientific Value and Goodput. Scientific Value (SV) cap-tures the total realized scientific utility, i.e., the weighted and summed value of detected events:          
+
+> SV =∑︁
+> 𝑖 ∈E ∑︁ 𝑡 ∈T 𝑖
+> 1[event 𝑎 ∈content (𝑖 ) ] · 𝑤 𝑡 (10)
+
+where E is the set of executed images and T𝑖 is the set of tasks applied to image 𝑖 . SV weights detections by their scientific importance; for example, fire detection is more time-critical than routine environmental monitoring. Task-specific weights are provided in Section 4.1. Moreover, Scientific Goodput (SG) measures the rate at which scientific value is produced, i.e., scientific value per hour. Unlike raw throughput, the Scientific Goodput rewards systems that sustain high-value processing over time, and therefore captures both selectivity and sustained execution. 
+
+Event Coverage. Event Coverage measures the fraction of observable events that are actually detected. This metric ensures that selectivity does not come at the cost of miss-ing rare but important events. A system with high image throughput but no value-aware selection may achieve high coverage even with low per-image utility, while a highly selective system may achieve strong per-image utility but low overall coverage if it processes too few images. 
+
+Scientific Load Balance. Scientific Load Balance measures how evenly scientific value is distributed across each satellite in the constellation:             
+
+> LoadBalance =1−
+> Í𝑁 𝑖 =1
+> Í𝑁 𝑗 =1|𝑣 𝑖 −𝑣 𝑗 |
+> 2𝑁 Í𝑁 𝑖 =1𝑣 𝑖
+> !
+> ×100% (11)
+
+where 𝑣 𝑖 is the total Scientific Value accumulated by satellite 
+
+𝑖 over the simulation. A value of 100% indicates perfectly uniform distribution across satellites, while 0% indicates complete concentration in a single satellite. Higher values are better. This formula is based on the Gini index [12]. 
+
+Battery Reserve Time and Brownout Risk. Battery Re-serve Time captures operational readiness: the fraction of satellite-timesteps for which battery is above the safe operat-ing threshold SoC safe = 0.35 . Satellites above this threshold can perform unexpected high-value events without immedi-ate energy stress. 
+
+Brownout Risk. Brownout Risk measures the fraction of satellite timesteps in which battery level falls below the near-critical threshold: SoC brn = 0.20 . Lower brownout risk is better. In this regime, a satellite has little usable reserve above the hard cutoff ( SoC 𝑐 = 0.15 ), making it vulnerable to missed detections and unable to absorb additional load. 
+
+Together, these metrics evaluate the system along three axes: value (Scientific Value and Goodput, Event Coverage), oper-ational health (SG, Brownout Risk), and constellation-wide scientific load balance (Scientific Load Balance). 
+
+## 4 Evaluation 
+
+4.1 Experimental Setup 
+
+We evaluate Eqinox with a hardware-augmented satellite constellation simulator that combines validated orbital dy-namics with measurements from a real edge platform. Rather than relying on abstract resource models alone, we profile a physical Jetson Orin (Section 4.8) and use those measure-ments to instantiate the simulator’s compute, energy, and physical parameters (battery and thermals). 
+
+Constellation setting. The orbital environment is mod-eled using standard, validated astrodynamics components: SGP4 for orbit propagation [ 30 ], Skyfield for eclipse ge-ometry [ 24 ], and SciPy for pairwise ISL distance compu-tation [ 32 ], all widely used in prior related work [ 9, 20 ]. The overall simulation encompasses 143 LEO satellites arranged in 13 orbital planes of 11 satellites each, at 500 km altitude, with an orbital period of approximately 94 minutes. ISL topol-ogy is recomputed each step; satellites within 5,000 km are considered linked, corresponding to demonstrated optical terminal capabilities in LEO mega-constellations [ 5 ] and en-suring 8–12 neighbors per satellite on average. To quantify robustness beyond the homogeneous Walker baseline, we also run orbital heterogeneity stress tests (phase jitter, alti-tude tiers, and their combination), reported in Appendix A.2. 
+
+Satellite configuration. Each satellite comprises a 100 Wh lithium-ion battery, a 120 W peak solar panel (cosine-attenuated), and an NVIDIA Jetson AGX Orin compute mod-ule (Table 1). The compute budget is 2.0 GFLOPs/s, calibrated to the power-envelope-limited throughput: at 10 W per con-current image (heavy tier, 1.8 GFLOPs), the budget supports roughly one image per scheduling step, resulting in compute demand 1.35 × supply. Simulations use a timestep of Δ = 1𝑠 
+
+over a 72-hour duration. 
+
+Workload. Each satellite captures 90 images per minute, producing approximately 33% compute oversubscription relative to the profiled Orin-class power envelope. Event probabilities follow the 1,047,691-image, 62 land-use cate-gory fMoW dataset [ 6 ] (e.g., ports have high vessel prob-ability, while agricultural regions have near-zero probabil-ity), providing the spatial and temporal heterogeneity that 
+
+Eqinox is designed to exploit. We evaluate four detection tasks—fire, flood, vessel, and environmental monitoring— with base event probabilities of 0.05, 0.08, 0.12, and 0.10, respectively. We train EfficientNet [ 28 ] models, following prior work [ 4, 10 ], across three model sizes (B0, B2, B3) with the most accurate models achieving 93-95% precision and recall. We assign scientific weights 𝑤 = {200 , 100 , 50 , 20 } to reflect relative environmental urgency. This produces well-separated Expected Science Values that result in staggered task dropout. Our four-task workload already exceeds the 1-3 task standard in related work [ 8 , 9, 19 , 20 , 29 ] and we 
+
+> 7
+
+Table 1. NVIDIA Jetson AGX Orin hardware configuration.       
+
+> Component Specification
+> CPU 12-core Arm Cortex-A78AE v8.2, 64-bit GPU 2048-core NVIDIA Ampere + 64 Tensor Cores AI perf. 275 TOPS (CPU, GPU, and DLA combined) Memory 32 GB LPDDR5 (204.8 GB/s bandwidth) Power 15 W (idle) – 60 W (max TDP)
+
+demonstrate scale-up to sixteen tasks per image in Section 4.5. 
+
+Baselines. We compare Eqinox with four baselines repre-senting progressively richer scheduling policies. Static FIFO 
+
+processes images strictly in arrival order, with no notion of task value. Priority Queue ranks images by expected sci-entific value and executes them in descending order. This baseline incorporates value awareness but remains oblivious to hardware state. To avoid pathological behavior at very low battery levels, we add a simple guardrail that suppresses tasks with scientific weight 𝑤 < 100 below 20% battery level. 
+
+ESA [15 ] is a Lyapunov-based online optimizer that bal-ances immediate reward against a virtual battery backlog to maintain long-term energy stability. Phoenix [20 ] uses cen-tralized coordination to offload tasks from eclipsed satellites to the highest-SoC neighbor in sunlit orbital planes. Tasks are deferred locally if their TTL expires before the eclipse ends; otherwise, they are offloaded. Finally, we evaluate three variants of Eqinox . Equinox (no-ISL) disables inter-satellite offloading. Equinox (no-context) replaces category-conditioned ESVs with a uniform base-rate, isolating the value of contextual priors. Equinox (noisy-context) perturbs those priors with log-normal noise ( 𝜎 = 0.25 ), evaluating robustness to imperfect context. 
+
+Hardware thresholds. The hardware thresholds come from the device itself: SoC 𝑐 = 0.15 is the minimum battery reserve, SoC safe = 0.35 is the point where the scheduler begins conserving energy, 𝑇 0 = 50 ◦C is the nominal tem-perature, and 𝑇 max = 85 ◦C is the throttling threshold. We then choose the sensitivity coefficients so that the scheduler behaves intuitively: all tasks remain admissible under nor-mal conditions, lower-value tasks are dropped first as eclipse approaches, and thermal and queue effects stay small unless the system is actually under stress. 
+
+4.2 Main Results 
+
+Figure 4 summarizes the central trade-off in our evaluation. The baselines occupy opposite ends of the return-resilience spectrum: Phoenix preserves battery almost perfectly but delivers relatively low scientific goodput, while Priority in-creases scientific return at the cost of chronic depletion. 
+
+Eqinox moves this frontier outward. It is the only sys-tem that simultaneously achieves high scientific goodput and strong battery reserves, placing it on the most favorable Equinox  
+
+> (Increasing SoC min )
+> Efficiency
+> Frontier
+
+Figure 4. Eqinox achieves the highest scientific goodput and event coverage of all evaluated systems while maintain-ing 59.5% or more battery reserve time—the best outcome on the scientific return–operational resilience frontier. Pareto frontier among all evaluated designs. This also show-cases that tuning the parameters of Eqinox cost model (in this case, to prioritize battery more) can effectively move 
+
+Eqinox along the efficiency frontier. Table 2 shows the full breakdown. Eqinox achieves the highest scientific goodput at 13.41 M SV/hr, improving on Priority by 20% and Static by 64%, while also delivering the highest event coverage (73.8%). Unlike Priority, which spends only 5.9% of timesteps with adequate battery reserve and incurs 85.1% brownout risk, Eqinox maintains substantially stronger operational health, with 59.5% battery reserve time and 27.7% brownout risk. It also achieves the highest sci-entific load balance (96.4%), indicating that ISL offloading distributes work cleanly across the constellation rather than concentrating execution on a small subset of satellites. The gains in scientific goodput decompose across three architectural layers. First, value-aware selection (Static → Pri-ority) improves scientific goodput by 36% by concentrating execution on higher-value scenes. Second, hardware feed-back (Priority → Eqinox (no-ISL)) substantially improves operational resilience while still increasing scientific good-put: hardware-aware scheduling prevents chronic eclipse depletion and thermal stress, increasing battery reserve time from 5.9% to 58%. Third, ISL offloading (Eqinox (no-ISL) →
+
+Eqinox ) converts locally deferred work into additional sci-entific return by routing tasks to less constrained neighbors, increasing scientific goodput from 11.85 to 13.41M SV/hr and event coverage from 65.7% to 73.8%. The contextual variants clarify the role of scene priors. 
+
+Equinox (no-context) achieves nearly the same scientific goodput as the full system, but only by processing substan-tially more images (564 K/hr vs. 509 K/hr) and with weaker battery health (43.0% battery reserve time vs. 59.5%, 37.9% brownout risk vs. 27.7%). Without category-conditioned con-text, the value gap between tasks narrows, and scheduling 
+
+> 8
+
+Table 2. 72-hour fMoW results over a 143-satellite constellation. Eqinox delivers the best overall trade-off between scientific return and operational resilience, achieving the highest scientific goodput and event coverage while maintaining stronger battery health and more even load distribution than the baselines.                                                              
+
+> Scientific Value Operational Health Fairness System Scientific Goodput (M SV/hr) Throughput (K Images/hr) Event Coverage (%) Mean Battery Level (%) Battery Reserve Time (%) Brownout Risk (%) Science Load Balance (%)
+> Static 8.20 346 44.8 20.4 7.4 64.4 91.2 Phoenix [20] 9.00 380 49.1 84.8 99.9 0.0 90.2 ESA [15] 9.16 390 50.1 17.0 5.9 85.1 91.0 Priority 11.18 387 62.2 17.0 6.0 85.1 91.4
+> Eqinox (no-ISL) 11.85 417 65.7 35.7 58.0 29.1 94.4
+> Eqinox (no-context) 13.38 564 73.1 26.7 43.0 37.9 94.7
+> Eqinox (noisy-context) 13.36 508 73.6 36.6 59.3 27.9 96.4
+> Eqinox 13.41 509 73.8 36.7 59.5 27.7 96.4
+
+Table 3. Per-category detection precision (%) and total detec-tions (K) over 72 hours, where precision reflects per-image selectivity and detections reflect operational impact. 
+
+Detection Precision (%) Events Detected (K) System Fire Flood Ship Monitor Fire Flood Ship Monitor 
+
+Static 6.0 7.2 5.4 8.5 1500 1803 1346 2126 ESA 6.0 7.2 5.4 8.5 1674 1996 1510 2393 Phoenix 6.0 7.2 5.4 8.5 1644 1961 1479 2344 Priority 7.3 8.6 7.3 10.5 2031 2384 2037 2907 
+
+Eqinox 6.7 7.9 6.3 9.5 2452 2885 2315 3452 
+
+behaves more like resource-aware FIFO: the system still ex-ploits hardware feedback and ISL routing, but spends more computation on lower-value images. In contrast, contextual priors allow Eqinox to preserve aggregate scientific return while processing fewer images and maintaining better bat-tery reserves. Equinox (noisy-context) performs nearly iden-tically to the full system, with 13.36 SV/hr scientific goodput, 73.6% coverage, and the same scientific load balance, showing that Eqinox is robust to moderate context error. 
+
+Comparison with prior works. ESA is hardware-aware but value-blind: it matches Priority in throughput (387 K im-ages/hr), yet achieves 18.0% lower scientific goodput than Priority and 31.7% lower than Eqinox because it does not prioritize higher-value scenes. Phoenix makes the opposite trade-off, preserving battery extremely well (99.9% battery re-serve time, 0.0% brownout risk) but yielding only 9.00 SV/hr scientific goodput and 49.1% coverage. Its rigid offloading structure also produces the weakest scientific load balance (90.2%). By jointly incorporating scene value, local hardware state, and distributed offloading, Eqinox achieves substan-tially higher scientific return without chronic depletion. 
+
+Detection Quality. Priority improves per-image detection precision by discarding low to mid ESV images, but quickly depletes battery reserves and shortens sustained execution through eclipse due to lack of hardware awareness. Eqinox 0   
+
+> 25
+> 50
+> 75
+> 100
+> Mean Battery Level (%)
+> 60
+> 65
+> 70
+> 75
+> 80
+> Mean Temp (°C)
+> Static Priority Phoenix Equinox
+
+(a) Fleet-wide battery and temperature distributions across systems. 20 40 60 80 100 
+
+> Battery Level (%)
+> 0.0
+> 2.5
+> 5.0
+> 7.5
+> 10.0
+> Marginal
+> Execution Cost  fire (9.20)
+> flood (7.44)
+> ship (5.64)
+> monitor (1.82)
+
+(b) Battery-Aware Task Dropout. 
+
+Figure 5. Constellation-level resource behavior under sus-tained orbital load. (a) Eqinox maintains a stable battery regime with lower thermal stress than the baselines. (b) As battery declines, lower-value tasks are shed first, preserving reserve for higher-value work deeper into eclipse. instead trades a small reduction in per-image precision for much longer active operation, processing 31% more images overall than Priority. As Table 3 shows, this yields more abso-lute detections across all categories: 20.7% more fires, 21.0% more floods, 13.6% more ships, and 18.7% more environmen-tal events. ESA and Phoenix closely track Static in detection precision, reflecting their lack of value-aware selection. 
+
+4.3 Battery Health and Thermal Management 
+
+Figure 5a illustrates the constellation’s distributions of both battery state-of-charge (SoC) and GPU temperatures. Under the Priority baseline, battery levels cluster at the critical threshold ( SoC 𝑐 = 0.15 ), confirming depletion and effectively zero operating reserve. While Phoenix preserves a high mean 
+
+> 9
+
+Table 4. Value-ordered ISL offloading by task. Higher-value tasks are offloaded under larger cost gaps, while neighbor cost remains nearly constant, indicating that offloaded work is absorbed by healthy, sunlit satellites. Offload quantity peaks at tasks with value high enough for admission to a sunlit neighbor but low-enough for rejection locally.                       
+
+> Task Avg. ESV Local/Neighbor Cost Ratio Neighbor Cost Offloaded Events (K)
+> Monitor 1.82 1.1 ×1.40 <1 Ship 5.64 1.40 ×2.13 6,494 Flood 7.44 1.90 ×2.15 152 Fire 9.20 3.53 ×2.15 30510 15 20 25 30
+> % of 10-min windows with zero executions
+> 0
+> 25
+> 50
+> 75
+> 100
+> Cumulative % of satellites
+> Static
+> Priority
+> Equinox
+> (No-ISL)
+> Equinox
+
+Figure 6. CDF of per-satellite inactivity, measured as the fraction of 10-minute windows in which no images are pro-cessed. Dashed lines mark fleet means. Eqinox substantially reduces dark observation windows, indicating more consis-tent coverage across the constellation. battery level ( >0.86 ), it demonstrates greater variance in battery distribution, reflecting uneven load accumulation across sunlit satellites. Eqinox instead strikes a balance: it maintains a healthy mean battery level with tight fleet-wide variance, indicating an efficient use of available energy rather than either exhaustion or under-utilization. As shown in Figure 5b, this behavior stems from ordered task shedding: lower-value work drops out first as the battery declines, preserving both energy and compute capacity for higher-value tasks. Consequently, Eqinox achieves not only better battery stability but also lower thermal stress. As reflected in the Fig. 5a temperature distributions, Eqinox reduces mean GPU temperature to 64.6 ◦C (compared to 69.5 ◦C for Priority) and caps peak temperature at 77.4 ◦C (versus 81.0 ◦C). 
+
+4.4 Task Selection and ISL Decisions 
+
+Eqinox routes ≈12% of executed workload, showing that offloading is important but must be selective during the over-all execution strategy. Table 4 confirms that ISL offloading is value-ordered. Lower-value Ship tasks (base ESV 5.64) offload under modest local stress (1.40 × neighbor cost), whereas higher-value Flood and Fire tasks offload only when local Phoenix 
+
+> Equinox
+> Static
+> Priority
+> ESA
+> 6
+> 2
+> 16
+> 4 2
+> 8
+> 6
+> 2
+> 4
+> 4
+> 4
+> 6
+> 8
+> 16
+> 6
+> 8
+> 16
+
+Figure 7. Execution rate vs. battery reserve time under in-creasing task contention (2–16 tasks/image), with dashed trend lines. Eqinox sustains a strictly higher frontier at equal contention. execution becomes much more expensive (1.90 × and 3.53 ×). Neighbor costs stay nearly constant across all tiers, showing that offloaded work is naturally absorbed by healthy, sunlit satellites rather than redistributed among stressed nodes. The key distinction is that Eqinox offloads selectively by value , not merely by available capacity. Capacity-blind ISL strategies such as ESA and Phoenix can redistribute queue volume, but they do not distinguish between low-value monitoring and high-value detections. Eqinox in-stead uses offloading to preserve the most valuable work, improving scientific load balance from 90.2% (Phoenix) to 96.4% and avoiding the failure mode in which sunlit satel-lites spend scarce compute on low-value tasks while eclipsed neighbors are forced to drop high-value events. Figure 6 shows the downstream effect on constellation coverage. We measure, for each satellite, the fraction of 10-minute windows in which no images are processed. Static leaves 21.9% of windows dark on average, and Priority re-duces this to 15.9% by selecting more valuable work, but both still exhibit a broad spread across satellites. Eqinox cuts the fleet mean to 8.9%, substantially reducing chronically inactive windows. This improvement comes from preserv-ing battery and computation during stressed periods, which allows satellites to remain active longer and maintain more consistent geographic coverage over time. 
+
+4.5 Demand Scaling 
+
+We evaluate behavior under increasing contention by scaling the number of tasks per satellite from 2 to 16, which pro-portionally increases both task arrival rate and per-image energy demand. As Figure 7 shows, execution rate declines for every system as contention grows—this is unavoidable when demand outpaces fixed compute and energy budgets. What differentiates the systems is where their trendlines sit: 
+
+Eqinox occupies a strictly higher frontier than all baselines,            
+
+> 10 60 64 68 72 76 80
+> Mean Temperature (°C)
+> 10
+> 12
+> 14
+> 16
+> 18
+> Scientific Goodput (M SV/hr)
+> Scientific Goodput Ceiling
+> Favorable (lower temp, higher work)
+> Unfavorable (higher temp, lower work)
+> Theoretical: +Free ISL +Inf Battery +Zero-Latency
+> Real Systems: Equinox Priority Equinox No-Context
+
+Figure 8. Scientific goodput vs. mean temperature under individual constraint relaxations (72 h fMoW). Each system is shown across four configurations: baseline, free ISL, infinite battery, and zero-latency GPU inference. The dashed line marks the oracle scientific goodput ceiling (18.31 M SV/hr). executing a greater fraction of arriving tasks at every con-tention level while maintaining comparable or better battery reserve. Only Phoenix exceeds Eqinox in battery reserve time, at the cost of far lower execution rate. At low contention, all systems execute roughly 66% of tasks and behave similarly. Phoenix is the outlier: it preserves battery aggressively (100% reserve time) but executes fewer tasks (49%), trading throughput for operational safety. As contention increases, the baselines degrade rapidly. Static and Priority drop below 15% execution rate by 8 tasks, with battery reserve collapsing to near zero. Eqinox instead sheds lower-value work selectively before the fleet reaches depletion, sustaining 50.7% execution at 8 tasks and 21.5% at 16—a 5.2× improvement over Static. This translates directly into scientific goodput: Eqinox reaches 39.3 M SV/hr at 16 tasks, 4.4x Priority and ESA and 1.8x Phoenix. Phoenix maintains strong battery reserve throughout, but pays a steep throughput cost that widens at high contention. 
+
+4.6 Constraint Relaxation 
+
+Figure 8 places each system under four hardware relaxations to isolate why Eqinox must combine value awareness with resource awareness. More execution does not automatically produce more scientific value. Under infinite battery, Eqinox 
+
+and Eqinox (no-context) execute at nearly identical rates (67.3% vs. 67.6%), yet Eqinox delivers 17% higher good-put (14.48 vs. 12.36 M SV/hr) and runs 6.2 ◦C cooler (73.7 ◦Cvs. 79.9 ◦C). Contextual priors continue to steer compute to-ward higher-value images even when energy is no longer scarce. Latency reduction helps only when energy is managed. 
+
+Zero-latency inference gives Priority essentially no goodput gain—it simply exhausts battery faster. Eqinox converts the same relaxation into a 6% goodput increase, because it 0 10 20 30 40 50 60 
+
+> Battery Reserve Time (%)
+> 12
+> 13
+> 14
+> Scientific Goodput (M SV/hr)
+> Battery-x-Thermal
+> Equinox-All-Factors-Summed
+> All-Images-Equal-Value
+> Equinox-All-Factors-Multiplied
+> Battery-Only
+> Favorable (more work, higher battery)
+> Unfavorable (less work, lower battery)
+
+Figure 9. Control signal ablation: scientific goodput vs. bat-tery reserve time for each pricing variant (72 h fMoW). The original, multiplicative Eqinox achieves the best combined outcome; additive composition and battery-only signals col-lapse battery reserve without improving goodput. retains enough reserve to exploit the freed capacity. Network capacity amplifies value awareness but does not replace it. 
+
+With free ISL, Eqinox reaches 16.61 M SV/hr at 89.9% exe-cution rate. Under identical routing conditions, Eqinox still outperforms Eqinox (no-context) by 1.58 M SV/hr (16.61 vs. 15.03): routing redistributes work, but without contex-tual priors more of that capacity is spent on lower-value tasks. Across all relaxations, the gap to the oracle ceiling (18.31 M SV/hr) narrows most when both value awareness and resource awareness are present. A detailed per-system breakdown is in Appendix C. 
+
+4.7 Ablation of Control Components 
+
+Figure 9 shows how each component of the Eqinox control signal contributes to the scientific goodput–battery reserve frontier. Battery Only is insufficient, achieving 11.8 M SV/hr with only 12% battery reserve time. Adding thermal feedback raises goodput to 13.2M SV/hr and reserve time to 54.6%, demonstrating that thermal moderation is not merely a safety guardrail but a prerequisite for sustained execution. The full multiplicative formulation reaches 13.4M SV/hr at 59.5% reserve time; queue-depth awareness absorbs bursty arrivals before they translate into battery stress. Signal structure matters as much as signal content. Re-placing multiplication with addition ( All-Factors-Summed )reduces reserve time to 12.9%, matching battery only, as additive composition compresses dropout thresholds that separate high- and low-value tasks, causing all work to re-main active until exhaustion. 
+
+All-Images-Equal-Value , a scenario where all tasks and im-ages share a uniform ESV, enables understanding the benefit of priority based offloading. This system achieves the highest raw goodput (13.7M SV/hr) but only 33.1% reserve time, as 
+
+> 11
+
+Table 5. Jetson Orin Nano Super hardware profile. Task energy is driven primarily by latency across tiers.                   
+
+> EfficientNet Variant p50 (ms) p95 (ms) GPU Power (W) Energy/Image (𝜇 Wh)
+> Light (B0) 32 33 3.14 28 Standard (B2) 45 46 3.13 39 Heavy (B3) 51 52 3.24 46 0100 200 300 400 500 600
+> Time (s)
+> 2
+> 3
+> 4
+> 5
+> Board power (W)
+> GPU active
+
+Figure 10. Board power (W) during a 600-second live trace on Jetson Orin Nano Super. Red shading marks GPU-active inference bursts. Idle runtime power sits at 3.7 W. without value differentiation the system cannot shed low-priority work early to preserve power. The full Eqinox de-sign is the only variant that simultaneously achieves strong scientific return and strong operational reserve. 
+
+4.8 Hardware Validation 
+
+Table 5 grounds our simulator in measurements from a Jet-son Orin Nano Super. Across task tiers, GPU power is nearly constant (3.13–3.24 W), while energy varies primarily with execution time. Latency is also tightly concentrated within each tier, with p50–p95 spread of at most 1 ms, supporting our use of fixed-duration task models in simulation. Under these measurements, the simulator’s 2.0 GFLOPs/s budget maps closely to the 10 W concurrent image-processing enve-lope. A 600-second live tegrastats trace (Figure 10) further shows that the runtime itself imposes negligible overhead. Scheduling and admission logic run entirely on the CPU, contributing no measurable GPU utilization during task se-lection, while total board power remains stable at 3.5–3.8 W and GPU temperature at 44–46 ◦C. In other words, the con-trol logic does not consume the thermal or power budget reserved for inference, validating our assumption that sched-uling overhead is negligible relative to task execution. 
+
+4.9 Limitations 
+
+Three design choices bound the current system and point to natural extensions. 
+
+• Single-hop ISL. Eqinox forwards tasks at most once. However, since the first hop typically reaches a sunlit, low-cost neighbor, multi-hop likely offers small benefit. 
+
+• Fixed control parameters. Battery, thermal, and queue coefficients are fixed at deployment. While currently ro-bust (Figure 11), dynamically adapting parameters to mis-sion phase or workload conditions is a natural next step. 
+
+• Fixed task set. Deployment-static task sets simplify scheduling but preclude joint valuation of interdependent events (e.g., correlated wildfires and flooding). 
+
+## 5 Related Work 
+
+Orbital Edge Computing and Real-Time Analytics. 
+
+OEC [ 9] first demonstrated in-orbit inference on CubeSats to alleviate downlink bottlenecks. Subsequent systems refined 
+
+what to run and where : Serval [ 29 ] splits queries between glacial filters on the ground and dynamic filters on orbit, while EarthSight [ 10 ] couples ground-station scheduling with adaptive on-orbit filter ordering. OrbitChain [ 19 ], Sate-Light [ 34 ], and LEOEdge [ 36 ] further explore workflow or-chestration, model lifecycle management, and orbital offload-ing. Another OEC direction address compressing models to enabling more efficient inference for real-time analytics, in-cluding knowledge distillation [ 13 ], model pruning [ 33 , 38 ], and weight sharing [ 3 , 10 ]. Across OEC literature, however, scheduling remains mostly static, ground-directed, or decou-pled from instantaneous hardware state. Eqinox addresses this gap by making execution decisions directly responsive to local battery, thermal, and queue conditions. 
+
+Energy-Aware and Safety-Critical Scheduling. Prior work treats energy either as a resource to optimize or as a constraint to satisfy. Kodan [ 8] and AdaEO [ 35 ] reduce on-board cost through model selection and confidence-adaptive compression. Huang and Neely [ 15 ] provide the theoretical basis for constrained energy-harvesting scheduling through ESA, while Hu et al. [ 14 ] and Zhang et al. [ 37 ] adapt Lya-punov methods to satellite edge systems. HyperDrive [ 23 ]treats thermal state as a hard placement constraint. Eqinox 
+
+instead unifies these signals into a single runtime control mechanism: local battery, thermal, and queue state jointly determine when lower-value tasks should be shed and when higher-value work should still proceed. 
+
+Inter-Satellite Coordination and Mobility. Phoenix [ 20 ]and SkyCastle [ 18 ] address complementary aspects of con-stellation coordination. Phoenix always routes tasks towards sunlit satellites to reduce battery depletion, while SkyCas-tle focuses on routing under fast ISL topology changes. Or-bitChain [ 19 ] and FedSpace [ 25 ] use ISLs for tracking image history and federated learning, respectively. The main lim-itation of prior offloading schemes is that they are driven primarily by energy state or connectivity, not by task value. 
+
+Eqinox instead uses ISLs selectively to preserve high-value work under local resource stress. 
+
+> 12
+
+## 6 Conclusion 
+
+Eqinox shows that orbital scheduling should not separate scientific prioritization from hardware state. By compress-ing battery, thermal, queue, and value signals into a single hardware-aware control mechanism, it enables decentral-ized satellites to shed low-value work early, preserve reserve through eclipse, and redirect high-value tasks to healthier neighbors. Eqinox suggests that real-time resource-aware control can serve as a practical foundation for constellation-scale scientific autonomy, with natural extensions to adaptive mission objectives, ISL routing, and downlink planning. 
+
+## References 
+
+[1] Ignacio F. Acero, Jonathan Diaz, Ronald Hurtado-Velasco, Sergio Ramiro Gonzalez Bautista, Sonia Rincón, Francisco L. Hernández, Ju-lian Rodriguez-Ferreira, and Jesus Gonzalez-Llorente. 2023. A Method for Validating CubeSat Satellite EPS Through Power Budget Analysis Aligned With Mission Requirements. IEEE Access 11 (2023), 43316– 43332. doi: 10.1109/ACCESS.2023.3271596 
+
+[2] Blaise Agüera y Arcas, Travis Beals, Maria Biggs, Jessica V Bloom, Thomas Fischbacher, Konstantin Gromov, Urs Köster, Rishiraj Prava-han, and James Manyika. 2025. Towards a future space-based, highly scalable AI infrastructure system design. arXiv preprint arXiv:2511.19468. https://arxiv.org/abs/2511.19468 
+
+[3] Han Cai, Chuang Gan, Tianzhe Wang, Zhekai Zhang, and Song Han. 2020. Once-for-All: Train One Network and Specialize it for Efficient Deployment. arXiv:1908.09791 [cs.LG] [4] Luigi Capogrosso and Michele Magno. 2026. TinyML Enhances Cube-Sat Mission Capabilities. arXiv:2603.20174 [cs.CV] https://arxiv.org/ abs/2603.20174 
+
+[5] Aizaz U. Chaudhry and Halim Yanikomeroglu. 2021. Laser In-tersatellite Links in a Starlink Constellation: A Classification and Analysis. IEEE Vehicular Technology Magazine 16 (2021), 48–56. doi: 10.1109/mvt.2021.3063706 
+
+[6] Gordon Christie, Neil Fendley, James Wilson, and Ryan Mukherjee. 2018. Functional Map of the World. In Proceedings of the IEEE Confer-ence on Computer Vision and Pattern Recognition (CVPR) . 6172–6180. doi: 10.1109/CVPR.2018.00646 
+
+[7] Google Coral. 2019. USB Accelerator Datasheet. https://coral.ai/docs/ accelerator/datasheet/ .[8] Bradley Denby, Krishna Chintalapudi, Ranveer Chandra, Brandon Lu-cia, and Shadi Noghabi. 2023. Kodan: Addressing the Computational Bottleneck in Space. In Proceedings of the 28th ACM International Con-ference on Architectural Support for Programming Languages and Oper-ating Systems, Volume 3 (ASPLOS 2023) . Association for Computing Ma-chinery, New York, NY, USA, 392–403. doi: 10.1145/3582016.3582043 
+
+[9] Bradley Denby and Brandon Lucia. 2020. Orbital Edge Computing: Nanosatellite Constellations as a New Class of Computer System. In Proceedings of the Twenty-Fifth International Conference on Archi-tectural Support for Programming Languages and Operating Systems (ASPLOS ’20) . Association for Computing Machinery, New York, NY, USA, 939–954. doi: 10.1145/3373376.3378473 
+
+[10] Ansel Kaplan Erol, Seungjun Lee, and Divya Mahajan. 2025. Earth-Sight: A Distributed Framework for Low-Latency Satellite Intelligence. arXiv preprint arXiv:2511.10834. https://arxiv.org/abs/2511.10834 
+
+[11] European Space Agency. 2025. Sentinel Satellite Data. https://sentinel. esa.int/web/sentinel/user-guides Accessed: 2025. [12] Corrado Gini. 1921. Measurement of Inequality of Incomes. The Economic Journal 31, 121 (1921), 124–125. [13] Jianping Gou, B. Yu, Stephen J. Maybank, and Dacheng Tao. 2020. Knowledge Distillation: A Survey. International Journal of Com-puter Vision 129 (2020), 1789 – 1819. https://api.semanticscholar. org/CorpusID:219559263 
+
+[14] Yifei Hu, Wenbin Gong, and Fangming Zhou. 2023. A Lyapunov-Optimized Dynamic Task Offloading Strategy for Satellite Edge Com-puting. Applied Sciences 13, 7 (2023), 4281. doi: 10.3390/app13074281 
+
+[15] Longbo Huang and Michael J. Neely. 2013. Utility Optimal Sched-uling in Energy-Harvesting Networks. IEEE/ACM Transactions on Networking 21, 4 (2013), 1117–1130. doi: 10.1109/TNET.2012.2226406 
+
+[16] Rachel Jewett. 2024. Planet to Use Nvidia AI Proces-sor Onboard Pelican Satellite. Via Satellite (June 2024). 
+
+https://www.satellitetoday.com/innovation/2024/06/10/planet-to-use-nvidia-ai-processor-onboard-pelican-satellite/ Accessed: 2024-06-10. [17] Leela S Karumbunathan. 2022. Nvidia Jetson AGX Orin Series. NVIDIA Technical Brief. https://www.nvidia.com/content/dam/en-zz/Solutions/gtcf21/jetson-orin/nvidia-jetson-agx-orin-technical-brief.pdf 
+
+[18] Jihao Li, Hewu Li, Zeqi Lai, Qian Wu, Weisen Liu, Xiaomo Wang, Yuan-jie Li, Jun Liu, and Qi Zhang. 2024. SKYCASTLE: Taming LEO Mobility to Facilitate Seamless and Low-latency Satellite Internet Services. In 
+
+IEEE INFOCOM 2024 — IEEE Conference on Computer Communica-tions . IEEE, Vancouver, BC, Canada. doi: 10.1109/INFOCOM52122. 2024.10621419 
+
+[19] Zhouyu Li, Zhijin Yang, Huayue Gu, Xiaojian Wang, Yuchen Liu, and Ruozhou Yu. 2025. OrbitChain: Orchestrating In-orbit Real-time Analytics of Earth Observation Data. arXiv preprint arXiv:2508.13374. 
+
+https://doi.org/10.48550/arXiv.2508.13374 
+
+[20] Weisen Liu, Zeqi Lai, Qian Wu, Hewu Li, Qi Zhang, Zonglun Li, Yuanjie Li, and Jun Liu. 2024. In-Orbit Processing or Not? Sunlight-Aware Task Scheduling for Energy-Efficient Space Edge Computing Networks. In 
+
+IEEE INFOCOM 2024 — IEEE Conference on Computer Communica-tions . IEEE, Vancouver, BC, Canada. doi: 10.1109/INFOCOM52122. 2024.10621268 
+
+[21] NASA Atmospheric Science Data Center. 2025. CER SSF Aqua-FM3-MODIS Edition4A. https://asdc.larc.nasa.gov/project/CERES/CER_ SSF_Aqua-FM3-MODIS_Edition4A 
+
+[22] Planet Labs Inc. 2025. Our Constellations: Dove, RapidEye, and SkySat Fleets. https://www.planet.com/our-constellations/ Accessed: 2025-04-13. [23] Thomas Pusztai, Cynthia Marcelino, and Stefan Nastic. 2024. Hyper-Drive: Scheduling Serverless Functions in the Edge-Cloud-Space 3D Continuum. In 2024 IEEE/ACM Symposium on Edge Computing (SEC) .IEEE, Rome, Italy. doi: 10.1109/SEC62691.2024.00028 
+
+[24] Brandon Rhodes. 2019. Skyfield: High Precision Research-Grade Posi-tions for Planets and Earth Satellites Generator . https://rhodesmill.org/ skyfield/ 
+
+[25] Jinhyun So, Kevin Hsieh, Behnaz Arzani, Shadi Noghabi, Salman Aves-timehr, and Ranveer Chandra. 2022. Fedspace: An Efficient Federated Learning Framework at Satellites and Ground Stations. arXiv preprint arXiv:2202.01267. https://arxiv.org/abs/2202.01267 
+
+[26] Spire Global Inc. 2025. Canadian Space Agency Assigns Can$72 Million Contract to Spire Global Canada to Design WildFireSat Mission. https://ir.spire.com/news-events/press-releases/detail/242/ canadian-space-agency-assigns-can72-million-contract-to Accessed: 2025-04-13. [27] Spire Global Inc. 2025. Spirepedia: Spire’s Satellite Constellation. 
+
+https://spire.com/spirepedia/constellation/ Accessed: 2025-04-13. [28] Mingxing Tan and Quoc V. Le. 2020. EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks. arXiv:1905.11946 [cs.LG] 
+
+https://arxiv.org/abs/1905.11946 
+
+[29] Bill Tao, Om Chabra, Ishani Janveja, Indranil Gupta, and Deepak Va-sisht. 2024. Known Knowns and Unknowns: Near-realtime Earth Observation Via Query Bifurcation in Serval. In 21st USENIX Sym-posium on Networked Systems Design and Implementation (NSDI 24) .USENIX Association, Santa Clara, CA, USA, 809–824. https://www. 
+
+> 13
+
+usenix.org/conference/nsdi24/presentation/tao 
+
+[30] David A. Vallado, Paul Crawford, Richard Hujsak, and T.S. Kelso. 2006. Revisiting Spacetrack Report #3. In AIAA/AAS Astrodynamics Specialist Conference and Exhibit . AIAA. doi: 10.2514/6.2006-6753 
+
+[31] Deepak Vasisht, Jayanth Shenoy, and Ranveer Chandra. 2021. L2D2: Low Latency Distributed Downlink for LEO Satellites. In Proceedings of the 2021 ACM SIGCOMM Conference . Association for Computing Ma-chinery, New York, NY, USA, 151–164. doi: 10.1145/3452296.3472932 
+
+[32] Pauli Virtanen, Ralf Gommers, Travis E. Oliphant, Matt Haberland, Tyler Reddy, David Cournapeau, Evgeni Burovski, Pearu Peterson, Warren Weckesser, Jonathan Bright, et al . 2020. SciPy 1.0: Fundamental Algorithms for Scientific Computing in Python. Nature Methods 17 (2020), 261–272. doi: 10.1038/s41592-019-0686-2 
+
+[33] Irene Wang, Prashant J. Nair, and Divya Mahajan. 2023. FLuID: mit-igating stragglers in federated learning using invariant dropout. In 
+
+Proceedings of the 37th International Conference on Neural Informa-tion Processing Systems (New Orleans, LA, USA) (NIPS ’23) . Curran Associates Inc., Red Hook, NY, USA, Article 3202, 16 pages. [34] Jinfeng Wen, Jianshu Zhao, Zixi Zhu, Xiaomin Zhang, Qi Liang, Ao Zhou, and Shangguang Wang. 2025. SateLight: A Satellite Application Update Framework for Satellite Computing. In Proceedings of the 40th IEEE/ACM International Conference on Automated Software Engineering (ASE) . IEEE, Seoul, Republic of Korea. doi: 10.1109/ASE62289.2025. 11334499 arXiv:2509.12809. [35] Chen Yang, Qibo Sun, Qiyang Zhang, Hao Lu, Claudio A. Ardagna, Shangguang Wang, and Mengwei Xu. 2024. Toward Efficient Satellite Computing Through Adaptive Compression. IEEE Transactions on Services Computing 17, 6 (2024), 4411–4422. doi: 10.1109/TSC.2024. 3470341 
+
+[36] Su Yao, Yiying Lin, Mu Wang, Ke Xu, Mingwei Xu, Changqiao Xu, and Hongke Zhang. 2025. LEOEdge: A Satellite-Ground Cooperation Platform for AI Inference in Large LEO Constellations. IEEE Journal on Selected Areas in Communications 43, 1 (2025), 36–50. doi: 10.1109/ JSAC.2024.3460083 
+
+[37] Xinyuan Zhang, Jiang Liu, Ran Zhang, Yudong Huang, Jincheng Tong, Ning Xin, Liang Liu, and Zehui Xiong. 2024. Energy-Efficient Computation Peer Offloading in Satellite Edge Computing Networks. 
+
+IEEE Transactions on Mobile Computing 23, 4 (2024), 3077–3091. doi: 10.1109/TMC.2023.3269801 
+
+[38] Yihua Zhang, Yuguang Yao, Parikshit Ram, Pu Zhao, Tianlong Chen, Min-Fong Hong, Yanzhi Wang, and Sijia Liu. 2022. Advancing Model Pruning via Bi-level Optimization. ArXiv abs/2210.04092 (2022). https: //api.semanticscholar.org/CorpusID:252780187 
+
+> 14
+
+## A Experimentation Environment 
+
+With the mechanism and its parameters defined, this section documents the physical simulation environment and detailed per-task results to support reproducibility of Section 4. 
+
+A.1 Orbital Mechanics 
+
+The constellation consists of 143 satellites in 13 orbital planes of 11 satellites each, at 500 km altitude with 53 ◦ inclination. Orbits are initialized from Two-Line Element (TLE) sets gen-erated for the Walker-Delta pattern; propagation uses the SGP4 model via the sgp4 Python library’s SatrecArray in-terface, which propagates all 143 satellites in a single C-level call per timestep. Positions are returned in the True Equator Mean Equinox (TEME) reference frame; geodetic coordi-nates (latitude, longitude, altitude) are derived via vectorized NumPy operations. TEME differs from the Geocentric Celes-tial Reference System (GCRS) by at most ∼0.3 arcsec, negli-gible for the inter-satellite distance and shadow geometry calculations used here. 
+
+Eclipse detection. The Sun’s position is computed once per timestep via the Skyfield ephemeris library. Eclipse state for all 143 satellites is then determined by a vectorized cylin-drical shadow test: a satellite is in eclipse if the perpendicular distance from the satellite to the Earth–Sun line is less than Earth’s radius and the satellite is on the far side of the Earth from the Sun. This avoids per-satellite Skyfield calls and reduces eclipse computation to a single matrix operation. 
+
+ISL topology. Inter-satellite distances are computed us-ing scipy.spatial.distance.cdist over TEME positions, producing the full 143 × 143 distance matrix in a single C-level call. Satellites within 5,000 km are linked, yielding 8–12 neighbors per satellite on average. The ISL graph is repre-sented as a NetworkX graph, recomputed each timestep. 
+
+A.2 Orbital Heterogeneity Stress Test 
+
+The primary evaluation in Section 4.2 uses a homogeneous Walker-style constellation. To test whether conclusions de-pend on that symmetry, we evaluate three perturbations of orbital trajectories while keeping workload, hardware, and marginal execution cost calculation parameters unchanged: 
+
+• Phase Jitter: Random mean-anomaly perturbation within each plane (non-uniform intra-plane phasing). 
+
+• Altitude Tiers: Plane-wise altitude tiers at 450/475/500/525/550 km. 
+
+• Both: Phase jitter and altitude tiers enabled simulta-neously. Table 6 compares these variants against the Default (Even Spacing) baseline for five systems, including the 
+
+Eqinox (no-ISL) ablation. 
+
+Interpretation. The results are robust to orbital hetero-geneity. Across all four orbit configurations, Eqinox re-mains the highest-scientific-goodput system, and its advan-tage over the baselines persists under both phase and altitude perturbations. The Eqinox (no-ISL) ablation changes little across the perturbed cases, whereas full Eqinox continues to benefit from heterogeneity, showing that ISL coordination is the mechanism that converts orbital diversity into addi-tional scientific return. Phoenix preserves battery almost perfectly in every setting, but again does so at the cost of substantially lower scientific goodput, reproducing the same return–resilience trade-off as in the main evaluation. Notably, the combined perturbation case ( Both ) improves Eqinox 
+
+most strongly, raising scientific goodput to 14.56 SV/hr and throughput to 584.6 K images/hr, suggesting that greater or-bital asymmetry creates more opportunities for value-aware offloading. 
+
+A.3 Hardware Models Battery model. Each satellite carries a 100 Wh lithium-ion battery modeled as an energy reservoir with instantaneous charge/discharge: SoC 𝑡 +1 = SoC 𝑡 + (𝑃 solar − 𝑃 load ) · Δ𝑡 𝐶 batt 
+
+where 𝑃 solar = min (𝑃 max · cos 𝜃 sun , 𝑃 max ) when sunlit and 0 during eclipse, 𝑃 load = 𝑃 idle + 𝑁 tasks · 𝑃 task is total power draw, and 𝐶 batt = 100 Wh. SoC is clamped to [0, 1].
+
+Thermal model. Die temperature follows a first-order RC thermal model with radiative cooling: 
+
+𝑇 𝑡 +1 = 𝑇 𝑡 + Δ𝑡 𝜏 · ( 𝑇 eq − 𝑇 𝑡 )
+
+where 𝜏 is the thermal time constant and 𝑇 eq is the equilib-rium temperature at current power dissipation. In vacuum, heat rejection is by radiation only ( ∝ 𝑇 4), and the equilibrium temperature can decrease below current temperature when power dissipation drops—this is correct RC model behavior, not a bug. 
+
+A.4 fMoW Category Mapping 
+
+Table 7 lists representative categories from the functional Map of the World (fMoW) dataset and their task-conditioned event probabilities. The full mapping covers 62 categories; we show the 15 with the greatest variation across tasks to highlight the scene heterogeneity that Eqinox exploits through category-conditioned context. This heterogeneity is substantial: for example, 𝑃 (ship | shipyard ) = 0.80 whereas 
+
+𝑃 (ship | crop_field ) = 0.02 , a 40 × difference. Such varia-tion is what makes contextual ranking effective. A vessel-detection task applied to a shipyard image is far more likely to produce useful scientific output than the same task applied to an agricultural scene, so category-conditioned estimates help Eqinox focus limited onboard compute and energy on the most promising opportunities. Without these priors (the no-context ablation), images within the same task class become artificially indistinguishable, and scheduling loses 
+
+> 15
+
+Table 6. Orbital heterogeneity stress test (72h fMoW). Default (Even Spacing) is the homogeneous Walker baseline used in Section 4.2. Column names follow the main evaluation table where applicable: Scientific Goodput (M SV/hr), Throughput (K Images/hr), Mean Battery Level, Battery Reserve Time, and Brownout Risk.                                                                                                              
+
+> Orbit Config System Scientific Goodput (M SV/hr) Throughput (K Images/hr) Mean Battery Level Battery Reserve Time (%) Brownout Risk (%)
+> Default (Even Spacing) Static 8.20 346.0 0.204 7.4 64.4 Priority 11.18 387.0 0.170 5.9 85.1 Phoenix 9.00 380.0 0.848 99.9 0.0
+> Eqinox (no-ISL) 11.85 417.0 0.357 58.0 29.1
+> Eqinox 13.41 509.0 0.367 59.5 27.7 Phase Jitter Static 8.20 345.7 0.204 4.3 94.8 Priority 11.18 386.7 0.170 4.3 94.8 Phoenix 9.04 381.2 0.848 99.9 0.0
+> Eqinox (no-ISL) 11.65 410.0 0.344 23.6 33.7
+> Eqinox 13.27 505.4 0.357 33.5 29.5 Altitude Tiers Static 8.16 344.1 0.204 4.3 95.0 Priority 11.41 395.2 0.169 4.3 95.0 Phoenix 9.09 383.4 0.850 99.9 0.0
+> Eqinox (no-ISL) 11.65 409.9 0.333 23.6 33.7
+> Eqinox 13.35 510.2 0.349 33.9 29.5 Both Static 8.16 344.1 0.204 4.3 95.0 Priority 11.42 395.6 0.169 4.3 95.0 Phoenix 9.04 381.4 0.851 99.9 0.0
+> Eqinox (no-ISL) 11.65 409.9 0.333 23.6 33.7
+> Eqinox 14.56 584.6 0.360 38.7 28.5
+
+Table 7. Representative fMoW categories and event probabil-ities. Full mapping covers 62 categories; default probabilities apply to unlisted categories. 
+
+Category 𝑃 fire 𝑃 flood 𝑃 ship 𝑃 monitor 
+
+flooded_road 0.01 0.90 0.01 0.15 shipyard 0.03 0.03 0.80 0.05 port 0.03 0.05 0.70 0.08 smokestack 0.35 0.03 0.02 0.12 dam 0.02 0.40 0.05 0.10 military_facility 0.08 0.05 0.08 0.40 
+
+nuclear_powerplant 0.10 0.05 0.02 0.35 
+
+oil_or_gas_fac. 0.30 0.03 0.05 0.15 lighthouse 0.02 0.10 0.35 0.06 factory_or_pp. 0.25 0.04 0.02 0.15 lake_or_pond 0.02 0.25 0.08 0.06 space_facility 0.08 0.03 0.02 0.30 
+
+prison 0.06 0.04 0.02 0.25 
+
+crop_field 0.06 0.10 0.02 0.06 
+
+_default 0.05 0.08 0.12 0.10 
+
+an important source of selectivity, behaving much more like resource-limited FIFO within each task type. 
+
+## B Parameter Calibration 
+
+The scheduling mechanism (Section 3) uses several fixed parameters. This section justifies each choice and character-izes sensitivity where applicable. All parameters are set at deployment; Appendix D evaluates robustness to the most important one ( 𝛽 ). 
+
+B.1 Barrier Coefficient 𝛽 
+
+The barrier coefficient 𝛽 = 0.001 controls how sharply the marginal execution cost rises as SoC approaches the critical threshold SoC 𝑐 = 0.15 . Using Eq. 7, Table 8 gives the closed-form dropout SoC for each task under the default parameters (𝑃 base = 1.40 , SoC 𝑐 = 0.15 ). 
+
+Table 8. Analytic dropout thresholds at 𝛽 = 0.001 , 𝑃 base =
+
+1.40 , SoC 𝑐 = 0.15 .
+
+task ESV SoC ∗
+
+Env. monitoring 1.82 0.208 Vessel detection 5.64 0.168 Flood detection 7.44 0.165 Fire detection 9.20 0.163 
+
+The separation between the monitor task (SoC ∗ = 0.208 )and the three higher-value tasks (SoC ∗ ∈ [0.163 , 0.168 ])spans approximately 4 percentage points of SoC—roughly 4 Wh on a 100 Wh battery, or ∼2 minutes of eclipse-phase drain at 120 W load. This is large enough for the monitor task to be consistently excluded before the others, but small 
+
+> 16
+
+enough that the transition occupies a narrow SoC band rather than wasting capacity. At 𝛽 = 0.01 (10 × larger), the mon-itor dropout shifts to SoC ∗ = 0.33 , sacrificing significant sunlit throughput. At 𝛽 = 0.0001 (10 × smaller), the monitor dropout falls to SoC ∗ = 0.168 , barely above the higher-value tasks, and the staggered dropout effect is compressed into a 
+
+<2 Wh window. Figure 11 in Appendix D shows that despite this sensi-tivity in where dropout occurs, Scientific Goodput varies by only ±10% across a 100 × range of 𝛽 . The mechanism is self-correcting: increasing 𝛽 raises execution costs earlier, triggering self-curtailment that increases SoC headroom and moderates 𝑓 batt .
+
+B.2 Queue Backpressure 𝛾 
+
+The queue factor 𝑓 queue (𝑞 ) = 1 + 𝛾 𝑞 𝑞 with 𝛾 𝑞 = 0.01 is delib-erately linear. A quadratic or exponential form would create a sharp cost jump when the first deferred image arrives, suppressing task execution and causing the queue to drain, which lowers the execution cost, re-admitting tasks, refilling the queue—an oscillation cycle. The linear form provides pro-portional backpressure: at 𝑞 = 10 images, the cost markup is 10%; at 𝑞 = 100 , it doubles. This keeps queue growth stable while applying meaningful cost when backlogs accumulate during extended eclipse periods. The constant 𝛾 = 0.01 is calibrated so that the deferred queue depth at which the queue factor alone would exclude the monitor task ( ESV = 1.82 ) is approximately 𝑞 = 30 
+
+images: 
+
+𝑃 base · ( 1 + 𝛾𝑞 ) = 1.82 =⇒ 𝑞 = 1.82 /1.40 − 10.01 = 30 
+
+This ensures that moderate backlogs (10–20 images) create cost pressure without immediately excluding any task, while sustained backlogs ( >30) begin to trigger value-ordered shed-ding. 
+
+B.3 ISL Cost Parameters 
+
+The offloading condition (Section 3.4) uses two cost terms: 
+
+Link cost ( 𝑐 link ). 𝑐 link = 0.05 · 𝑃 ℓ , proportional to the local marginal execution cost. At the base execution cost (1.40), this is 0.07 per hop. At eclipse-stressed execution costs (5– 10), it rises to 0.25–0.50. The proportional form ensures that ISL routing requires a relative cost advantage, not just an absolute one: a 5% cost differential is the minimum for rout-ing to be profitable at any cost level. This prevents spurious routing during sunlit periods when both local and neighbor execution costs are near baseline. 
+
+Latency penalty ( 𝑐 lat ). 𝑐 lat = 0.10 flat per hop. At 5,000 km maximum ISL range and optical link speeds, one-way propa-gation delay is ∼17 ms—negligible for image processing but non-zero for time-critical detections. The flat 0.10 penalty represents the opportunity cost of delayed processing. Com-bined with 𝑐 link , the total ISL cost at the base execution cost is 0.17 per hop, requiring 𝑃 ℓ ≥ 𝑃 𝑛 +0.17 for routing to trigger—a condition met only during eclipse-induced battery stress. 
+
+Multi-hop cost accumulation. A second ISL hop would add another 0.05 ·𝑃 𝑛 1 +0.10 ≈ 0.17 at baseline-cost neighbors. Since the first-hop destination is typically a sunlit satellite with execution cost near 𝑃 base , the cost differential between the first-hop destination and its neighbors is small ( <0.10), making a second hop unprofitable except under extreme, sustained eclipse at the highest-ESV tiers. This justifies the single-hop design (Section 4.9). 
+
+B.4 Deferred Queue TTL 
+
+The TTL of 300 seconds ( ≈5 minutes) is calibrated to the eclipse-to-sunlit transition. A satellite at 500 km LEO has an orbital period of ∼94 minutes with ∼33 minutes in eclipse. The transition from peak eclipse stress to sunlit recovery takes approximately 10–15 minutes as the satellite crosses the terminator and solar panels begin recharging. A 300-second TTL spans roughly one-third of this transition, giving deferred images a reasonable window to encounter lower execution costs as the battery recharges, without retaining stale images across a full orbital cycle. If the TTL were much shorter ( <60 s), deferred images would expire before the satellite reaches sunlight, negat-ing the temporal demand-shifting benefit. If much longer (>900 s), images from the previous eclipse cycle would com-pete with fresh arrivals in the next sunlit phase, creating artificial congestion. 
+
+B.5 Safe Reserve Threshold SoC safe 
+
+The battery reserve time metric (Section 3.5 uses SoC safe =
+
+0.35 as the operator-defined reserve threshold. This value represents the minimum charge at which a satellite can han-dle an unplanned high-priority tasking burst—for example, a wildfire detection request that arrives during eclipse. At 100 Wh battery capacity, SoC = 0.35 provides 40 Wh of re-serve, sufficient for approximately 20 minutes of continuous processing at 120 W task load (accounting for concurrent solar charging on lit satellites). The choice is conservative: a satellite with SoC > 0.35 can execute any arriving task with-out risk of breaching SoC 𝑐 = 0.15 , even if the task arrives during the worst-case eclipse phase. 
+
+## C Constraint Relaxation Ablation 
+
+Table 9 reports all eight metrics for three systems— Eqinox ,
+
+Eqinox (no-prior), and Priority—under four independent constraint relaxations over a 72-hour fMoW simulation. Each row removes exactly one resource limit; Oracle removes all simultaneously. The no-prior variant uses uniform base-rate task allocation with no category-conditioned ESV; it is otherwise identical to Eqinox .
+
+Joint hardware and value awareness jointly determine Scientific Goodput. The infinite battery rows expose the 
+
+> 17
+
+Table 9. Full constraint relaxation results (72 h fMoW, AGX Orin). Science Load Balance is higher when more uniform across satellites.                                                                                                           
+
+> System Scientific Goodput (M SV/hr) Event Coverage (%) Executed Images (M) Execution Rate (%) Mean Battery Level Mean Temp (°C) Science Load Balance (%)
+> Eqinox 13.21 72.6 36.1 65.0 0.356 64.6 96.1 +Free ISL 16.61 90.7 50.0 89.9 0.409 62.0 96.2 +Inf. Battery 14.48 80.0 37.4 67.3 1.000 73.7 99.7 +Instant CPU 14.03 76.5 42.0 75.6 0.181 66.3 93.3 Oracle 18.31 100 55.6 100 0.968 35.0 99.8
+> Eqinox (no-prior) 13.42 73.3 40.7 73.3 0.264 66.1 94.7 +Free ISL 15.03 82.1 45.6 82.1 0.358 64.1 94.2 +Inf. Battery 12.36 67.5 37.5 67.6 1.000 79.9 99.7 +Instant CPU 13.94 76.1 42.3 76.2 0.172 66.4 93.1 Oracle 18.31 100 55.6 100 0.968 35.0 99.8 Priority 11.18 61.9 27.8 50.1 0.170 69.5 91.4 +Free ISL ———————+Inf. Battery 14.57 80.5 37.1 66.7 1.000 81.0 99.8 +Instant CPU 11.19 61.9 27.9 50.3 0.154 69.7 91.3 Oracle 18.31 100 55.6 100 0.968 35.0 99.8
+
+fundamental gap between the systems. Eqinox and no-prior execute at nearly identical rates (67.3% vs. 67.6%), yet Eqinox delivers 17% higher Scientific Goodput (14.48 vs. 12.36 M SV/hr). With equal access to energy, the differ-entiator is which images are chosen: Eqinox ’s category-conditioned ESV concentrates compute on scenes with high estimated event probability, while no-prior applies uniform values that treats a port and a crop field identically. At base-line, both systems are energy-constrained and the Scien-tific Goodput gap is narrow (13.21 vs. 13.42 M SV/hr), as no-prior’s higher execution rate (73.3% vs. 65.0%) partially compensates for its indiscriminate selection. Once energy is unlimited, execution rate equalization isolates selection qual-ity as the sole differentiator, and the 17% Scientific Goodput gap emerges. 
+
+Thermal management is a consequence of value-aware scheduling. At equal execution volume under infinite battery, Eqinox runs 6.2 ◦C cooler than no-prior (73.7 vs. 79.9 ◦C) and 7.3 ◦C cooler than Priority (73.7 vs. 81.0 ◦C). This is not a separate thermal policy: Eqinox ’s joint scheduling signal ( 𝑓 therm coupled with 𝑓 batt and per-task ESV) naturally gates execution when temperature rises, pacing compute load within the safe thermal band described in Section 4.3. No-prior and Priority, lacking this signal, run unconstrained at full load whenever energy permits, resulting in higher temperature and—for no-prior—active suppression of future tasks as rising temperature pushes 𝑓 therm upward, contribut-ing to its Scientific Goodput regression relative to baseline (12.36 vs. 13.42 M SV/hr) under infinite battery. This thermal gap vanishes under the oracle (all systems reach 35.0 ◦C), confirming it is a product of scheduling policy under load, not hardware asymmetry. 
+
+Energy management is Priority’s binding policy gap, not compute. Providing Priority with instant CPU yields zero Scientific Goodput improvement (805 M in both cases); mean SoC decreases from 0.170 to 0.154, as faster processing accelerates energy drain with no mechanism to moderate pace. This directly confirms the diagnosis from Section 4.3: Priority depletes to SoC 𝑐 before exhausting its compute bud-get, leaving available cycles idle at the energy floor. The contrast with Eqinox ’s instant CPU result is informative: 
+
+Eqinox gains 6% Scientific Goodput (13.21 →14.03 M SV/hr) and 10.6 pp in execution rate (65.0 →75.6%), because its bat-tery barrier preserves operating headroom that additional compute can actually fill. Compute relaxation is productive only when energy management prevents the system from reaching the floor in the first place. 
+
+Free ISL enables load balancing, but amplifies rather than substitutes for value awareness. Unrestricted ISL connectivity allows satellites to route images to any neigh-bor at no cost, enabling optimal geographic load distribu-tion across the fleet. For Eqinox , this raises execution rate from 65.0% to 89.9% and event coverage from 72.6% to 90.7%. The no-prior variant sees smaller gains (73.3 →82.1% execu-tion rate, 15.03 vs. 16.61 M SV/hr Scientific Goodput), despite identical ISL conditions: the Scientific Goodput gap reflects 
+
+Eqinox ’s ability to route selectively by task value, concen-trating high-probability images on the satellites best posi-tioned to process them. Priority has no ISL capability and therefore has no +Free ISL entry. Science Load Balance ap-proaches 99.8% under all free-ISL and oracle configurations,        
+
+> 18 0% 10% 25% 50% 100%
+> ISL Link Failure Rate
+> 0
+> 5
+> 10
+> 15
+> Sci. Goodput (M SV/hr)
+> 14.89 14.89 14.88 14.89
+> 9.80
+> < 0.1% variation
+
+Figure 12. Robustness to ISL link failures. Scientific Goodput remains stable through 50% link failure. Significant degrada-tion ( −34% Scientific Goodput) occurs only at complete ISL loss. 10 4 10 3 10 2
+
+> Barrier coefficient
+> 14.0
+> 14.5
+> 15.0
+> Sci. Goodput (M SV/hr)
+> 20
+> 25
+> 30
+> 35
+> 40
+> Mean Battery Level (%)
+
+Figure 11. Sensitivity to barrier coefficient 𝛽 (24h, 4 tasks). Scientific Goodput varies by ±10% across a 100 × range. Higher 𝛽 safely raises mean battery level (right axis) due to a self-correcting cost feedback loop. confirming that per-satellite load imbalance in baseline sys-tems arises from geographic eclipse asymmetry, which free ISL eliminates. In the operational setting where ISL band-width carries real cost, value-aware routing determines how much of this balancing potential is realized without sacrific-ing selection quality. 
+
+## D Sensitivity Analysis 
+
+This section complements the main ablation studies with sen-sitivity analysis complementing system design exploration. 
+
+D.1 Barrier Coefficient 𝛽 Robustness 
+
+The barrier coefficient 𝛽 dictates cost sensitivity to battery depletion. We sweep 𝛽 across a 100 × range ( 10 −4 to 10 −2). As Figure 11 demonstrates, Scientific Goodput varies by only 
+
+±10% across the full range. The mechanism is self-correcting: an artificially high 𝛽 raises execution costs earlier, forcing tasks out, which safely increases SoC headroom (mean fleet SoC rises from 0.26 to 0.34). This elevated SoC lowers 𝑓 batt and moderates further cost escalation. The system achieves stable performance near the default ( 𝛽 = 10 −3) without brittle parameter tuning. 
+
+D.2 ISL Link Failure Robustness 
+
+To test graceful degradation to ISL failures, we inject in-dependent link failures uniformly across the constellation. Figure 12 shows Scientific Goodput remains stable ( <0.1% variation) up to 50% link failure. Because ISL offloading han-dles only ≈12% of total traffic and dense LEO topology pro-vides 8–12 original neighbors per satellite, 50% connectivity loss leaves sufficient path redundancy for nominal opera-tions. Performance degrades significantly ( −34% Scientific Goodput) only under complete ISL loss ( 100% ), proving the system relies on offloading for optimization but not baseline survival. 
+
+## E Formal Properties 
+
+Section 3.3 derives the critical SoC at which each task is excluded from execution (Eq. 7) and claims that this thresh-old is monotonically decreasing in ESV, producing value-ordered dropout. We prove this claim below, then establish that the greedy clearing algorithm is exactly optimal under the uniform-compute assumption. 
+
+E.1 Staggered Dropout: Proof of Value-Ordered Exit Theorem E.1 (Value-ordered dropout) . Let tasks 𝑎 and 𝑏 
+
+have expected science values ESV 𝑎 < ESV 𝑏 , both strictly greater than the base execution cost 𝑃 base . Under the barrier cost function 𝑓 batt (SoC ) = 1 + 𝛽 /( SoC − SoC 𝑐 )2 with 𝛽 > 0,the critical SoC values satisfy SoC ∗ 
+
+> 𝑎
+
+> SoC ∗ 
+
+> 𝑏
+
+. That is, the lower-value task is excluded at a strictly higher state of charge. Proof. From Eq. 7, the critical SoC for task 𝑎 is: 
+
+SoC ∗ 
+
+> 𝑎
+
+= SoC 𝑐 +√︄ 𝛽 · 𝑃 base 
+
+ESV 𝑎 − 𝑃 base 
+
+Define ℎ(𝑣 ) = SoC 𝑐 +√︁ 𝛽𝑃 base /( 𝑣 − 𝑃 base ) for 𝑣 > 𝑃 base .We show ℎ is strictly decreasing. The derivative is: 
+
+ℎ′ (𝑣 ) = − 12 ·√︁ 𝛽𝑃 base 
+
+(𝑣 − 𝑃 base )3/2 < 0
+
+since 𝛽, 𝑃 base > 0 and 𝑣 > 𝑃 base . Therefore ESV 𝑎 < ESV 𝑏 
+
+implies ℎ(ESV 𝑎 ) > ℎ(ESV 𝑏 ), i.e., SoC ∗ 
+
+> 𝑎
+
+> SoC ∗ 
+
+> 𝑏
+
+. □
+
+Corollary E.2 (Uniqueness of crossing point) . Each task 𝑎 
+
+has exactly one SoC value at which 𝑃 = ESV 𝑎 . For SoC > SoC ∗
+
+> 𝑎
+
+the task is admitted; for SoC < SoC ∗ 
+
+> 𝑎
+
+it abstains. There is no oscillation. Proof. The marginal execution cost 𝑃 (SoC ) = 𝑃 base · [ 1 +
+
+𝛽 /( SoC − SoC 𝑐 )2] is strictly decreasing on (SoC 𝑐 , ∞) , since 
+
+𝑓 batt is strictly decreasing. A strictly monotone function crosses any horizontal line ESV 𝑎 at most once. Existence follows from the intermediate value theorem: 𝑃 → ∞ as 
+
+> 19
+
+Algorithm 1: Per-Satellite Scheduling Step 
+
+Input: Hardware state (SoC, 𝑇 ), arriving images I,deferred queue D, ISL neighbors N
+
+Output: Executed images, updated D
+
+// Step 1: Compute marginal execution cost (Eqs. 1–4)  
+
+> 1
+
+𝑃 ← 𝑃 base · 𝑓 batt (SoC ) · 𝑓 thermal (𝑇 ) · 𝑓 queue (|D|) 
+
+// Step 2: Collect and Assign Tasks  
+
+> 2
+
+B ← ∅  
+
+> 3
+
+foreach image 𝑖 ∈ I ∪ RetryDeferred (D , 𝑃 ) do  
+
+> 4
+
+foreach task 𝑎 do  
+
+> 5
+
+if ESV 𝑎 (𝑖 ) > 𝑃 then  
+
+> 6
+
+B ← B ∪ {( 𝑎, 𝑖, ESV 𝑎 (𝑖 ))}  
+
+> 7
+
+end  
+
+> 8
+
+end  
+
+> 9
+
+end  
+
+> 10
+
+W, L ← GreedyKnapsack (B , 𝐺, 𝐸 ) // Alg. 2 // Step 3: Execute winners  
+
+> 11
+
+foreach (𝑎, 𝑖, 𝑤 ) ∈ W do  
+
+> 12
+
+Execute image 𝑖 for task 𝑎 ; update SoC, 𝑇  
+
+> 13
+
+end 
+
+// Step 4: Manage deferred queue  
+
+> 14
+
+foreach image 𝑖 without winning tasks do  
+
+> 15
+
+if 𝑖 is fresh then  
+
+> 16
+
+D ← D ∪ {( 𝑖, TTL = 300 s)}  
+
+> 17
+
+end  
+
+> 18
+
+end  
+
+> 19
+
+Expire entries in D where TTL ≤ 0
+
+// Step 5: ISL Offloading  
+
+> 20
+
+𝑃 phys  
+
+> ℓ
+
+← 𝑃 base · 𝑓 batt (SoC ) · 𝑓 thermal (𝑇 ) · 𝑓 queue (0) 
+
+> 21
+
+foreach fresh-event loser (𝑎, 𝑖, 𝑤 ) ∈ L do  
+
+> 22
+
+ISLOffloading (𝑖, 𝑃 phys  
+
+> ℓ
+
+, N) // Alg. 3  
+
+> 23
+
+end Algorithm 2: Greedy Knapsack Task Selection 
+
+Input: Bids B = {( 𝑎 𝑖 , img 𝑖 , ESV 𝑖 )} , compute budget 
+
+𝐺 , energy budget 𝐸 
+
+Output: Winners W, losers L 
+
+> 1
+
+Sort B by ESV 𝑖 descending // uniform 𝑔 𝑖 ⇒ rank by ESV  
+
+> 2
+
+W ← ∅ ; 𝐺 rem ← 𝐺 ; 𝐸 rem ← 𝐸  
+
+> 3
+
+foreach task-bid (𝑎 𝑖 , img 𝑖 , ESV 𝑖 ) in sorted order do  
+
+> 4
+
+if 𝑔 ≤ 𝐺 rem and 𝑒 ≤ 𝐸 rem then  
+
+> 5
+
+W ← W ∪ {( 𝑎 𝑖 , img 𝑖 , ESV 𝑖 )}  
+
+> 6
+
+𝐺 rem ← 𝐺 rem − 𝑔 ; 𝐸 rem ← 𝐸 rem − 𝑒  
+
+> 7
+
+end  
+
+> 8
+
+end  
+
+> 9
+
+L ← B \ W  
+
+> 10
+
+return W, L
+
+Algorithm 3: ISL Offloading 
+
+Input: Image 𝑖 , local execution cost 𝑃 phys  
+
+> ℓ
+
+, ISL neighbors N 
+
+> 1
+
+𝑛 ∗ ← None ; 𝑃 ∗ 
+
+> adj
+
+← 𝑃 phys  
+
+> ℓ
+> 2
+
+foreach neighbor 𝑛 ∈ N do  
+
+> 3
+
+𝑃 phys  
+
+> 𝑛
+
+← 𝑃 base · 𝑓 batt,n · 𝑓 thermal,n · 𝑓 queue (0) 
+
+> 4
+
+𝑃 adj ← 𝑃 phys  
+
+> 𝑛
+
++ 𝑐 link (𝑑 𝑛 ) + 𝑐 lat  
+
+> 5
+
+if 𝑃 adj < 𝑃 ∗ 
+
+> adj
+
+then  
+
+> 6
+
+𝑛 ∗ ← 𝑛 ; 𝑃 ∗ 
+
+> adj
+
+← 𝑃 adj  
+
+> 7
+
+end  
+
+> 8
+
+end  
+
+> 9
+
+if 𝑛 ∗ ≠ None then  
+
+> 10
+
+Forward image 𝑖 to satellite 𝑛 ∗ 
+
+> 11
+
+Credit scientific value to originating satellite  
+
+> 12
+
+end 
+
+SoC → SoC + 
+
+> 𝑐
+
+and 𝑃 → 𝑃 base as SoC → ∞ , so for any 
+
+ESV 𝑎 > 𝑃 base there is exactly one crossing. □
+
+Corollary E.3 (Queue-shifted invariance) . When the de-ferred queue is non-empty ( 𝑞 > 0), the effective marginal execution cost becomes 𝑃 ′ = 𝑃 · ( 1 +𝛾𝑞 ). The critical SoC shifts upward uniformly for all tasks: 
+
+SoC ∗′  
+
+> 𝑎
+
+= SoC 𝑐 +√︄ 𝛽 · 𝑃 base · ( 1 + 𝛾𝑞 )
+
+ESV 𝑎 − 𝑃 base · ( 1 + 𝛾𝑞 )
+
+The monotonicity argument is identical (the numerator scales by a positive constant and the denominator remains positive for all tasks still available), so the dropout order is preserved. Queue congestion makes all tasks exit earlier but does not alter which task exits first. 
+
+E.2 Optimality of Greedy Task Selection 
+
+Section 3.3 uses a greedy-by-value-density heuristic to select tasks. With 𝑘 constant compute tiers, the knapsack has at most 𝑘 distinct item weights and admits an exact DP solution in 𝑂 (𝑛𝐵 ) time. We show below that the greedy heuristic is itself exactly optimal in the common case. 
+
+Proposition E.4 (Exact optimality under uniform compute) .
+
+When all tasks consume the same compute 𝑔 𝑖 = 𝑔 for all 𝑖 , the greedy-by-ESV algorithm solves the single-constraint knapsack 
+
+exactly .Proof. With uniform item size 𝑔 , the budget 𝐺 admits at most 𝑚 = ⌊𝐺 /𝑔 ⌋ items. Selecting the 𝑚 highest-ESV tasks is optimal by a simple exchange argument: swapping any selected task for a non-selected one with lower ESV can only decrease total value. □
+
+Dual-constraint case. In practice, task selection enforces both a compute constraint ( Í 𝑔 𝑖 ≤ 𝐺 ) and an energy 
+
+> 20
+
+constraint ( Í 𝑒 𝑖 ≤ 𝐸 ). When both 𝑔 𝑖 and 𝑒 𝑖 are uni-form across tasks, the dual constraint reduces to |𝑆 | ≤
+
+min (⌊ 𝐺 /𝑔 ⌋, ⌊𝐸 /𝑒 ⌋) , and greedy-by-ESV remains exactly op-timal. When tasks select heterogeneous tiers, the problem has at most 𝑘 distinct weight classes; an exact solution is available via DP in 𝑂 (𝑛𝐵 ) time, but we observe that greedy-by-ESV-density matches DP in all evaluated configurations. 
+
+## F Algorithms 
+
+Appendix E establishes the theoretical properties of stag-gered dropout and greedy task selection. The pseudocode below shows how the runtime realizes them. All four proce-dures execute sequentially within each satellite’s scheduling step; the full loop is given in Algorithm 1.

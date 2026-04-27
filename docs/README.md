@@ -6,55 +6,58 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-04-26
-- 运行时间：2026-04-26 19:58:47 UTC
+- 最新运行日期：2026-04-27
+- 运行时间：2026-04-27 20:25:00 UTC
 - 运行状态：成功
-- 本次总论文数：11
+- 本次总论文数：12
 - 精读区：1
-- 速读区：10
+- 速读区：11
 
 ### 今日简报（AI）
-今日聚焦天体力学重大突破，深度解析圆型限制性三体问题中希尔等值面的解析解。
-满分论文完美解决三体运动边界难题，同时涵盖 UAV 视觉伺服巡检与传感器调度等前沿自动化技术。
-建议优先研读三体问题这一里程碑式成果，领略经典力学难题在数学理论上的最新进展。
-- 详情：[/202604/26/README](/202604/26/README)
+今日深度评测月球环境图像模拟的开源方案，并速览非线性动力学与安全控制等12项前沿成果。
+重点推荐月球合成图像仿真技术评估，同时关注利用世界模型实现安全关键型上下文控制的新进展。
+建议开发者关注仿真工具链的选型，并探索稀疏识别在复杂非线性系统建模中的应用。
+- 详情：[/202604/27/README](/202604/27/README)
 
 ### 精读区论文标签
-1. [Hill's level surfaces in the circular restricted three-body problem solved](/202604/26/2604.21426v1-hills-level-surfaces-in-the-circular-restricted-three-body-problem-solved)  
-   标签：评分：10.0/10、query:cislunar-dyn-nav
-   evidence：圆型限制性三体问题中希尔曲面的闭式表达式
+1. [Evaluation of image simulation open source solutions for simulation of synthetic images in lunar environment](/202604/27/2604.22296v1-evaluation-of-image-simulation-open-source-solutions-for-simulation-of-synthetic-images-in-lunar-environment)  
+   标签：评分：9.0/10、query:cislunar-dyn-nav
+   evidence：用于验证导航系统的月球环境模拟
 
 ### 速读区论文标签
-1. [Stability of geodesic-ray data, horofunctions, and rectifiability of fixed-shape slices in the Newtonian \(N\)-body problem](/202604/26/2604.18082v1-stability-of-geodesic-ray-data-horofunctions-and-rectifiability-of-fixed-shape-slices-in-the-newtonian-n-body-problem)  
+1. [Uniform Hyperbolicity and Symbolic Dynamics: Markov Partitions, Shadowing, and the Coding of Axiom A Diffeomorphisms](/202604/27/2604.17608v2-uniform-hyperbolicity-and-symbolic-dynamics-markov-partitions-shadowing-and-the-coding-of-axiom-a-diffeomorphisms)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：牛顿N体问题稳定性
-2. [Autonomous UAV Pipeline Near-proximity Inspection via Disturbance-Aware Predictive Visual Servoing](/202604/26/2604.19618v1-autonomous-uav-pipeline-near-proximity-inspection-via-disturbance-aware-predictive-visual-servoing)  
+   evidence：稳定流形定理与几何理论
+2. [AC-SINDy: Compositional Sparse Identification of Nonlinear Dynamics](/202604/27/2604.18889v1-ac-sindy-compositional-sparse-identification-of-nonlinear-dynamics)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：自主近距离巡检与预测控制
-3. [Scalable Sensor Scheduling for Continuous-Discrete Kalman Filtering via Information-Form Surrogate Dynamics](/202604/26/2604.21302v1-scalable-sensor-scheduling-for-continuous-discrete-kalman-filtering-via-information-form-surrogate-dynamics)  
+   evidence：结合状态估计的非线性动力学稀疏识别
+3. [Safety-Critical Contextual Control via Online Riemannian Optimization with World Models](/202604/27/2604.19639v1-safety-critical-contextual-control-via-online-riemannian-optimization-with-world-models)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：卡尔曼滤波的传感器调度与信息型动力学
-4. [Informativity of Data-Knowledge Pairs for Lyapunov Equations](/202604/26/2604.18149v1-informativity-of-data-knowledge-pairs-for-lyapunov-equations)  
+   evidence：利用黎曼几何进行安全关键控制与轨迹优化
+4. [SLAM as a Stochastic Control Problem with Partial Information: Optimal Solutions and Rigorous Approximations](/202604/27/2604.21693v1-slam-as-a-stochastic-control-problem-with-partial-information-optimal-solutions-and-rigorous-approximations)  
+   标签：评分：7.0/10、query:cislunar-dyn-nav
+   evidence：作为随机控制的主动SLAM用于自主导航与建图
+5. [Depth-Aware Rover: A Study of Edge AI and Monocular Vision for Real-World Implementation](/202604/27/2604.22331v1-depth-aware-rover-a-study-of-edge-ai-and-monocular-vision-for-real-world-implementation)  
+   标签：评分：7.0/10、query:cislunar-dyn-nav
+   evidence：月球地形模拟器与巡视器导航
+6. [A Hamilton-Jacobi Reachability-Guided Search Framework for Efficient and Safe Indoor Planar Robot Navigation](/202604/27/2604.17679v1-a-hamilton-jacobi-reachability-guided-search-framework-for-efficient-and-safe-indoor-planar-robot-navigation)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：动力系统Lyapunov方程的数据驱动分析
-5. [Centre manifold theorem for maps along manifolds of fixed points](/202604/26/2604.18202v1-centre-manifold-theorem-for-maps-along-manifolds-of-fixed-points)  
+   evidence：自主导航与可达性引导搜索
+7. [Leader-Follower Formation Control Using Differential Drag and Effective Surface Regulation](/202604/27/2604.18140v1-leader-follower-formation-control-using-differential-drag-and-effective-surface-regulation)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：沿流形映射的中心流形定理
-6. [Classical counterparts of shortcuts to adiabaticity in nonlinear dissipative Lagrangian systems](/202604/26/2604.18439v1-classical-counterparts-of-shortcuts-to-adiabaticity-in-nonlinear-dissipative-lagrangian-systems)  
+   evidence：小卫星的编队控制与相对定位
+8. [HALO: Hybrid Auto-encoded Locomotion with Learned Latent Dynamics, Poincaré Maps, and Regions of Attraction](/202604/27/2604.18887v1-halo-hybrid-auto-encoded-locomotion-with-learned-latent-dynamics-poincar-maps-and-regions-of-attraction)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：用于轨迹设计的欧拉-拉格朗日方程逆向工程
-7. [State Forecasting in an Estimation Framework with Surrogate Sensor Modeling](/202604/26/2604.19442v1-state-forecasting-in-an-estimation-framework-with-surrogate-sensor-modeling)  
+   evidence：周期性动力系统的庞加莱映射与稳定性分析
+9. [Active Inference-Enabled Agentic Closed-Loop ISAC with Long-Horizon Planning](/202604/27/2604.19599v1-active-inference-enabled-agentic-closed-loop-isac-with-long-horizon-planning)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：针对观测数据有限的空间目标跟踪状态估计
-8. [Covariance Steering of Discrete-Time Markov Jump Linear Systems with Multiplicative Noise](/202604/26/2604.19994v1-covariance-steering-of-discrete-time-markov-jump-linear-systems-with-multiplicative-noise)  
+   evidence：自主智能体的不确定性感知状态推理与定位
+10. [Equinox: Decentralized Scheduling for Hardware-Aware Orbital Intelligence](/202604/27/2604.19958v1-equinox-decentralized-scheduling-for-hardware-aware-orbital-intelligence)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：协方差控制与轨迹引导
-9. [RG-Based Local Hopf Reduction and Slow-Manifold Reconstruction for Nonlinear Aeroelastic Systems](/202604/26/2604.20753v1-rg-based-local-hopf-reduction-and-slow-manifold-reconstruction-for-nonlinear-aeroelastic-systems)  
+   evidence：轨道智能与分布式调度
+11. [StarLoc: Pinpointing Transmitting LEO Satellites from a Single Passive Array](/202604/27/2604.21147v1-starloc-pinpointing-transmitting-leo-satellites-from-a-single-passive-array)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：非线性系统的不变流形重构
-10. [ADMM-Based Distributed Kalman-like Observer with Applications to Cooperative Localization](/202604/26/2604.21608v1-admm-based-distributed-kalman-like-observer-with-applications-to-cooperative-localization)  
-   标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：用于多智能体协同定位的分布式类卡尔曼观测器
+   evidence：用于卫星跟踪的轨道建模和3D到达角估计
 
 
 <div class="dpr-home-promo-card">

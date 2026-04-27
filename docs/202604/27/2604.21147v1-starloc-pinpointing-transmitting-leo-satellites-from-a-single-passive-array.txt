@@ -1,0 +1,779 @@
+Title: StarLoc: Pinpointing Transmitting LEO Satellites from a Single Passive Array
+
+URL Source: https://arxiv.org/pdf/2604.21147v1
+
+Published Time: Fri, 24 Apr 2026 00:21:34 GMT
+
+Number of Pages: 14
+
+Markdown Content:
+# Pinpointing Transmitting LEO Satellites from a Single Passive Array 
+
+# Ishani Janveja 1, Jida Zhang 2, Emerson Sie 1, Deepak Vasisht 1
+
+> 1
+
+University of Illinois Urbana-Champaign 2Stanford University 
+
+## Abstract 
+
+This paper focuses on 3D localization of transmitting satellites in low Earth orbits (LEO). 3D localization of transmitters in low orbits is an important emerging problem for many applications such as spectrum management, orbit determination, and backup for GPS failures in orbit. We present StarLoc – a system to geolocate trans-mitters in space using a combination of orbital modeling and a new interferometric 3D angle-of-arrival estimation technique. StarLoc’s design relies on a unique insight – the motion of satellites is gov-erned by orbital dynamics and is therefore along a 2D manifold in a 3D space. This reduces the degrees of freedom in satellite mo-tion and allows us to 3D-locate and track a satellite with just three antennas in a 2D plane. We evaluate StarLoc using signal trans-missions from 81 Starlink satellites. Our results show that StarLoc can estimate the 3D-angle of a satellite within 0.7◦ and the orbital range within 5 km. Our dataset and implementation are available at: https://connectedsystemslab.github.io/starloc. 
+
+## 1 Introduction 
+
+This paper focuses on an emergent question in the growing LEO (low earth orbit) satellite space: can we accurately estimate the 3D location of a transmitter in low earth orbit using ubiquitously deploy-able hardware? 
+
+3D localization of satellite transmissions is critical to support effective spectrum monitoring, orbital safety, network operations, and the broader goals of space situational awareness. For instance, international bodies like the ITU have explicitly called for improved mechanisms to identify and geolocate illegal or misconfigured satel-lite transmitters following a rise in unauthorized spectrum usage incidents [ 13 , 43 ]. Similarly, independent satellite operators, such as Planet Labs [ 15 ], need to track satellite transmissions to improve orbit determination because onboard GPS or radar infrastructure is not always available. Designing a system to localize LEO transmissions requires us to meet the following goals:  
+
+> ■
+
+Transmitter localization: The system should be able to locate source of transmissions to enable spectrum management.  
+
+> ■
+
+Ubiquitously deployable: The system should not require high end specialized equipment including massive antenna arrays, dishes, orchestration, etc. that cost hundreds of thousands of dollars.  
+
+> ■
+
+Accurate: The system should be accurate enough to resolve the location of a LEO transmitter despite the presence of other nearby satellites.  
+
+> ■
+
+Generalizable: The system should generalize to a broad range of transmitter types, including those already in-orbit. Therefore, it must not place additional requirements like packet exchanges or synchronization between satellite and ground receiver. StarLoc ’s Goal: 
+
+★Tx Sat Location ( Az.+El.+Range ): ?       
+
+> All feasible
+> transmitter
+> satellite locations
+> induced by sparse -
+> array ambiguity
+> Monitored
+> Spectrum
+> Estimate 3D bearing
+> angle ( 𝜓 ,𝜃 )
+> Doppler -assisted
+> Spatial ambiguity
+> resolution (DSAR)
+> time
+> Doppler Shift
+> All possible AoA
+> candidates
+> Resolved Ambiguity
+> Gravimetric satellite
+> range estimation
+> |𝑣ℎ 2𝑟 ℎ − 𝐺𝑀 |
+> ℎ=orbit height
+> Satellite range:
+> 𝑟 =ℎ∗
+> sin 𝜃
+> Range
+> Ambiguity
+> Angle
+> Ambiguity
+> StarLoc ’sSparse
+> Antenna Array
+> 1
+> 2
+> 3
+> ℎ∗
+
+Figure 1: StarLoc System Overview. StarLoc localizes a trans-mitting LEO satellite in 3D space. 
+
+Existing methods of satellite localization do not meet these goals. Specifically, the default mechanism to track satellites is an exist-ing infrastructure of ground-based radars and optical telescopes. For example, the US Space Surveillance Network consists of about 
+
+30 + ground-based radars and optical telescopes to track all objects orbiting the Earth. These radars are huge, consisting of 1000s of antenna elements to emulate a large aperture and achieve accura-cies of <10 m. Since they are active radars, they require multiple megawatts of power to operate [ 21 ]. These operational require-ments underpin the difficulty in deploying such radars at multiple sites to track satellites and this is why the number of such radar sites is well below 100 across the entire globe. These sparsely deployed radars were sufficient for tracking satel-lites in higher orbits for long, continuous periods of time. However, at 7-8 km/s or more, with low orbit altitudes and orbital periods of 90 minutes or less, satellites in LEO and VLEO (very low earth orbits) are not in view at any of these stations for around half their journey around the Earth [34]. In addition, these radars are active systems and cannot monitor space transmitters. They can detect that there are five satellites in view, but not which of the five is transmitting at that moment. We present StarLoc, a new system that enables 3D location of transmitting LEO satellites. Unlike existing systems that use active radars, with transmitters to “illuminate” satellites and receivers to capture reflections, StarLoc is implemented as a receiver only. It determines the locations of transmitting satellites by “sniffing” 
+
+> arXiv:2604.21147v1 [cs.NI] 22 Apr 2026
+
+the transmissions and does not need to decode them. StarLoc uses generic features of satellite transmissions such as phase and Doppler shift so that they can be extracted from a variety of signal types. A unique combination of orbital constraints and localization tech-niques allows StarLoc to locate satellites with just three antennas in a 2D space by solving the following challenges: 
+
+Precision without large antenna arrays: To passively localize transmitters without their cooperation, traditional systems rely on either measuring time difference of arrival (TDoA) across a synchro-nized receiver network or angle of arrival (AoA) estimation from large phased arrays. Both approaches are impractical to achieve our goal of low-cost, ubiquitous deployment in the LEO satellite context. TDoA requires an established infrastructure of synchronized dis-tributed receivers. LEO satellites, unlike MEO and GEO, have a small footprint since they are closer to the Earth [ 11 ]. This means that the receivers measuring TDoA from a satellite should all be located within the satellite footprint to receive transmissions. This will, therefore, require a dense network of receivers. Similarly, AoA sys-tems require a large number of antennas to achieve useful precision. For a small two-antenna array, even 0.1𝜋 radian error (common for commercial receivers) in measuring the phase difference can cause up to > 10 ◦ of error in estimating the satellite elevation, leading to hundreds of kilometers of error in estimated location. Larger arrays can improve accuracy, but are bulky, expensive, and infeasible for ubiquitous deployment. This leads us to ask: can we enable precise AoA-based position-ing without requiring large arrays? We seek inspiration from the principles behind radio astronomy imaging. Specifically, to image far away space-based objects at high resolution, radio astronomy telescopes use antennas that are far away from each other, i.e., they are separated by much more than the standard half-wavelength separation. Such systems exploit a unique insight – placing anten-nas at large separation enables high resolution imaging, but creates ambiguity – a single object appears to be at multiple locations (due to grating lobes [ 8]). Radio astronomy telescopes resolve such ambiguity by exploiting the motion of the Earth. Inspired by this approach, StarLoc uses a sparse antenna array with multiple wave-length separation between antenna elements to estimate precise angle of arrival. Since LEO constellations largely use X/Ku/Ka bands (>6 GHz) for high bandwidth communications, multiple wavelength separation is possible even on small form factor devices. The large separation allows StarLoc to achieve the effective precision of large antenna arrays, with just three antennas placed in an L-shaped pattern in a single plane. 
+
+3D positioning & range estimation: StarLoc can accurately estimate the azimuth and elevation using its array. However, we also need to estimate satellite range from the receiver. The central insight behind StarLoc’s range estimation is that orbital motion of the satellite itself encodes its distance from the Earth. Specifically, any non-propelled satellite’s motion must obey Newton’s second law, and for uniform circular motion, its velocity 𝑣 and geocentric distance 𝑟 satisfy 𝑣 2𝑟 = 𝐺𝑀 where 𝐺 is gravitational constant and 𝑀 is the mass of Earth. This means that, unlike terrestrial transmitters, a satellite’s range is not an independent unknown, it is tightly coupled to its angular motion through orbital dynamics. We show that this equation derived from Newton’s second law can be modeled as a function of azimuth, elevation and range. Star-Loc therefore exploits this physical constraint and estimates the satellite range by solving a gravimetric least-squares optimization problem that enforces this Newtonian constraint. The only ob-servables that we need for this method are accurate azimuth and elevation estimates. In doing so, we enable a new mechanism of range estimation without requiring additional signal exchange or coordination with the satellite. 
+
+Resolving ambiguity: While using a sparse array helps StarLoc achieve higher precision, it also leads to grating lobes, causing multiple possible angles of arrival corresponding to the same signal measured at the antennas. Each angle of arrival candidate, paired with the estimated range, gives a candidate 3D transmitter location. We need to identify the correct location from this candidate set. StarLoc designs a new Doppler-assisted Spatial Ambiguity 
+
+Resolution (DSAR) technique to resolve satellite location. The Doppler shift for each grating lobe varies differently over time as a result of the different angular motion of each grating lobe. In principle, only one of these Doppler shift patterns should match the Doppler shift for the received signal, measured at the receiver. However, in practice, Doppler shift measurements suffer from off-sets caused by carrier frequency offsets and imperfect knowledge of the transmission frequency. Because StarLoc’s receiver is ignorant of the signal modulation, we cannot decode the signal to correct for CFO using the preamble. We make a key observation that while the absolute Doppler shift measurement is inaccurate, the rate of change of Doppler shift is not impacted by these offsets. We build on this observation to disambiguate the correct location by leveraging the Doppler change rate. We have implemented a real-world prototype of StarLoc using 3 horn antennas and USRP software-defined radios. We chose Star-link transmissions for our evaluation because (a) it is the largest LEO constellation with ∼10,000 satellites, comprising nearly two-thirds of all active satellites, and (b) it provides frequently updated ground-truth data, with satellite locations published three times per day [ 55 ]. We evaluate StarLoc using downlink signals from 81 Starlink satellites observed across 8 locations. We demonstrate that with only 3 antennas, StarLoc can precisely estimate the 3D-angle (i.e., azimuth and elevation) and distance of each satellite transmit-ter with a median error of 0.73 ◦ and 5 km, respectively. This level of accuracy is sufficient to reliably resolve the location of nearby satellites. Our contributions are as follows:  
+
+> ■
+
+StarLoc introduces a novel gravimetric range resolution method that uses orbital dynamics to estimate range purely from angle measurements.  
+
+> ■
+
+StarLoc proposes a novel Doppler-assisted angle resolution (DSAR) technique that leverages satellite motion and resulting Doppler shift to resolve ambiguity in sparse arrays.  
+
+> ■
+
+We build StarLoc and evaluate it by capturing Starlink downlink signals. We locate the satellites with these signals and identify them with their unique IDs.  
+
+> ■
+
+Finally, we contribute a new dataset of Starlink Ku-band down-link signals to facilitate research in passive LEO localization and broader space-spectrum awareness.                            
+
+> 2Feature / Capability Ground radars (SpaceTrack, LeoLabs [17, 29]) Doppler-only Tracking [25, 50] AoA with Planar Array [26] StarLoc (ours)
+> Operate without TLEs ✓✗✓✓
+> Identify transmitting satellite ✗✗✗✓
+> 3D localization (az/el/range) ✓✗✗(no range) ✓
+> Hardware scale Massive phased arrays Small LNB receivers Small but inaccurate planar array Compact & accurate sparse array Antenna beamwidth Narrow (few degrees) Wide (75 ◦-80 ◦)Omni-directional (UHF/VHF band) 20 ◦horn antenna (Ku-band) Angular accuracy Very high N/A Low ( ∼7◦/9 ◦)High ( <1◦est.)
+
+Table 1: Comparison of prior satellite tracking systems and StarLoc. Only StarLoc achieves full 3D localization with compact hardware. 
+
+## 2 Related Work 
+
+Existing systems to track satellites, or space objects more broadly, rely on optical telescopes or large active radars deployed across the world by government agencies [ 29 , 56 ] and commercial providers [ 12 ,17 , 33 , 57 ]. As discussed, these systems are costly to setup, sparsely deployed, and are not always available to monitor the rapidly grow-ing population of LEO satellites. Instead, the measurement data they collect is used to generate Two-Line Element sets (TLEs), which can then be used with an orbital propagation model (e.g. SGP4, SDP4 [ 58 ]) to predict the satellite’s position at any time. In principle, this extends the usefulness of each radar or telescope observation far beyond the brief moment when the satellite is in view. However, TLEs do not eliminate the need for ubiquitously de-ployable systems. They come with several limitations. First, they degrade over time because LEO orbits are strongly influenced by atmospheric drag, solar radiation pressure, and routine station-keeping maneuvers [ 14 ]. Second, TLEs exist only for cataloged ob-jects, and therefore cannot help locate newly launched, malfunction-ing, or unregistered LEO transmitters. Third, while TLEs provide orbital predictions, they say nothing about real-time activity—such as which satellite is actually transmitting on a given frequency—and therefore cannot support applications like spectrum-usage moni-toring or interference attribution. 
+
+Tracking LEO satellites with downlink signals: Due to the above limitations, recent work focuses on tracking LEO satellites using transmitted signals. A key point about transmissions from LEO satellites is that they undergo very high Doppler shifts before reaching the receiver due to high orbital speeds of ∼7 km/s. The ob-served Doppler shift also varies over time as satellites approach and recede from the receiver’s view throughout their orbits. This shift is also independent of the signal structure used by a specific satellite and can be tracked by tracking beacon signals from satellites [32]. Typically, this shift is compensated to correctly decode the re-ceived data [ 36 , 41 , 54 , 60 ]. Beyond communication, due to grow-ing interest in space domain awareness, there are increasing num-ber of proposals for Doppler-based tracking of transmitter satel-lites [ 4, 19 , 30 , 31 , 50 , 51 ], for different applications like satellite maneuver detection and orbit correction. Note that since Doppler is a one-dimensional measurement, it alone is not enough to estimate the 3D-location of a transmitting satellite in space [ 50 ]. For exam-ple, a satellite traveling north-to-south produces the same Doppler signature as one traveling south-to-north. As a result, these systems rely on known satellites and propagate TLEs to obtain their initial trajectories and only estimate deviations from the propagated tra-jectories. Rogue, uncatalogued transmitters cannot be localized or tracked using Doppler alone. In contrast, StarLoc does not rely on TLE parameters to locate a satellite. StarLoc performs full 3D localization before satellite identification, whereas other systems cannot localize without al-ready knowing the satellite identity or TLE. To the best of our knowledge, [ 26 ] is the only closely related work where authors use an L-shaped array to estimate the source satellite’s angle bearing (azimuth and elevation). However, they use half-wavelength planar arrays and results confirm that a system based on this standard design leads to large angular errors ( Δ𝑎𝑧𝑖𝑚𝑢𝑡ℎ = 7◦, Δ𝑒𝑙𝑒𝑣𝑎𝑡𝑖𝑜𝑛 = 9◦). Moreover, their system cannot completely localize a satellite in 3D, since it does not estimate range. 
+
+Ambiguity resolution in sparse arrays: Sparse antenna arrays achieve higher resolution by increasing the spacing between anten-nas beyond the standard half-wavelength. Prior work [ 9, 59 ] has leveraged sparse arrays to increase precision for handwriting track-ing purposes. But they suffer from phase ambiguities (also referred to as grating lobes). For trajectory estimation tasks, this ambiguity is less problematic because changes in the location of these grating lobes mirror the true trajectory, thereby providing a similar trajec-tory estimate, only displaced in the absolute position. However, in StarLoc, our goal is to estimate the transmitter satellite’s absolute position. Estimating an incorrect grating lobe in StarLoc severely degrades the accuracy of localizing the transmitter satellite. This effect is even more pronounced due to the high dilution of precision at large distances. Prior work on sparse antenna arrays has explored suppressing grating lobes and resolving ambiguity. Their approaches have gener-ally relied on one of two strategies: (i) Additional hardware: optimiz-ing sub-array configurations to achieve mutual cancellation of sec-ondary lobes [ 6, 16 , 20 , 61 ]. This, however, undermines the benefits of using fewer antenna elements. (ii) Auxiliary information: incorpo-rating data from external sensors (such as IMU [ 9 , 18 ] or ToF/TDoA measurements in ultra-wide band (UWB) systems [ 7 , 35 ]). However, such auxiliary information is seldom shared by satellite operators. In contrast, we exploit satellite motion to resolve ambiguity. We also design a new technique to enable ranging by exploiting the orbital constraints of a satellite. Using these new techniques, we are 
+
+> 3
+
+the first to design a sparse array system to 3D localize transmitting LEO satellites. Table 1 summarizes how StarLoc stands out from existing systems for satellite tracking in terms of its capabilities. 
+
+## 3 StarLoc’s Design 
+
+We now describe the key design choices that enable passive, accu-rate, and deployable localization of LEO transmitters. 
+
+## 3.1 How accurate does StarLoc need to be? 
+
+We begin by quantifying how much accuracy is sufficient for dis-tinguishing between nearby LEO transmitters and, in turn, how much accuracy StarLoc can trade for its compact, low-cost form factor. We analyze this by doing an analytical experiment. The left plot in Fig. 2 shows a distribution of the minimum angle separating satellites that pass over a location within a span of 24 hours. For this experiment we consider all satellites in existing LEO constella-tions. These include Starlink, OneWeb, PlanetLabs, Iridium and AST SpaceMobile, totaling about 10,200 satellites. We use the publicly available TLE data published by CelesTrak [ 1 ] for this analysis. To confirm this generalizes beyond a single location, we repeated this analysis across 10 geographically diverse ground stations spanning different continents. The global 5th and 10th percentiles of mini-mum angular separation are 2.66 ◦ and 3.83 ◦, respectively, with the tightest case (demonstrated in Fig. 2) being 2.17 ◦ and 3.08 ◦. This means that StarLoc should have an accuracy of <2 ◦ in order to resolve the location of a transmitting satellite. To achieve this level of accuracy, previously proposed systems [ 26 ] require more than 16 antennas. Moreover, as LEO constellations expand over the next few years, we will need sub-degree accuracy to distinguish nearby transmitters. 
+
+Figure 2: Minimum 3D-angle and orbital range separation between LEO satellites. 
+
+We conduct a similar experiment to understand the vertical (range) separation between satellites. The right plot in Fig. 2 shows that the 10th-percentile range difference among visible satellites is about 12 km, and the 5th-percentile is 7.4 km. Across 10 global locations, the 10th-percentile range separation is as low as 5.5 km, indicating that range resolution requirements are at least as strin-gent as our single-location analysis suggests. These values indicate the range resolution required to estimate a satellite’s orbital dis-tance without mistakenly associating it with a nearby neighbor. 
+
+## 3.2 Impact of Large Spacing on AoA 
+
+The phase difference of a signal received at multiple antennas in an antenna array can be used to identify its angle-of-arrival (AoA). For simplicity, let’s consider a 2-element antenna array with signal 
+
+Figure 3: Effect of antenna spacing and number of elements on AoA error 
+
+wavelength 𝜆 and antenna spacing 𝑑 . If the measured phase differ-ence between antenna elements is Δ𝜙 , then the estimated angle ˆ𝜃 
+
+is given by: 
+
+cos ( ˆ𝜃 ) = 𝜆 
+
+2𝜋𝑑 (Δ𝜙 + 𝜙 𝑛 ) (1) where 𝜙 𝑛 is the phase noise of the antenna array. In general, we require 𝑑 ≤ 𝜆  
+
+> 2
+
+for Eq. 1 to have a unique solution. A key challenge with AoA-based approaches is that the localiza-tion error increases with distance from the receiver for the same AoA estimation error. Consider the case where Δ𝜙 = 𝜋  
+
+> 2
+
+and 𝑑 = 𝜆  
+
+> 2
+
+.Then, if phase noise 𝜙 𝑛 = 0, the correct estimate for 𝜃 is 60 ◦. If 
+
+𝜙 𝑛 = 𝜋  
+
+> 10
+
+, the error in estimating the angle will be ∼7◦. If the trans-mitter is 𝑅 = 500 𝑘𝑚 away, then this small angle error will result in a large location error of 61 𝑘𝑚 . Therefore, to effectively locate a source satellite using AoA, we need high precision in our angle estimates. Consider Eq. 1. Given a fixed phase noise 𝜙 𝑛 , we can reduce its impact on estimated AoA by increasing 𝑑 , the spacing between the two antennas in our 2-element array. For example, let us set 𝑑 = 𝜆 ,which is double the spacing of our previous example. If 𝜃 = 𝜋  
+
+> 3
+
+(60 ◦
+
+as before), then Δ𝜙 = 𝜋 . With the same phase noise ( 𝜙 𝑛 = 𝜋  
+
+> 10
+
+), the estimated AoA error would be halved to ∼3.5◦.However, simply increasing the inter-antenna spacing leads to a problem: ambiguity. As 𝑑 increases beyond 𝜆  
+
+> 2
+
+, Eq. 1 no longer has a single solution. In our example, increasing the antenna spacing to 𝑑 = 𝜆 would yield two possible values of 𝜃 , only one of which is correct ( 𝜋  
+
+> 3
+
+and 2𝜋  
+
+> 3
+
+). In general, for antenna spacing 𝑑 = 𝑘 𝜆  
+
+> 2
+
+, Eq. 1 takes the following form: 
+
+cos (𝜃 ) = 𝜆 
+
+2𝜋𝑑 (Δ𝜙 + 𝜙 𝑛 ) + 𝑛 𝜆 𝑑 (2) Here, 𝑛 can be any integer between 
+
+h −𝑑 𝜆 − Δ𝜙  
+
+> 2𝜋
+
+, 𝑑 𝜆 − Δ𝜙 
+
+> 2𝜋
+
+i
+
+. Each feasible value of 𝑛 gives us a candidate AoA. For example, if 𝑑 = 6𝜆 ,then 𝑛 has 12 possible values, resulting in 12 possible AoA candi-dates. These candidates are also called grating lobes. A traditional antenna array uses multiple antennas with half-wavelength spac-ing to increase the aperture, and hence accuracy, while avoiding grating lobes. We demonstrate the impact of increased antenna spacing (𝑑 ) and number of elements (𝑁 ) in Fig. 3. The figure shows that the lower bound in AoA error decreases with increase in antenna elements and increase in antenna spacing. Initially, we can see that twice the half-wavelength spacing results in the same error in AoA as having 3 antenna elements (separated by 𝜆  
+
+> 2
+
+). Both these arrays would occupy the same space but the antenna with 3 elements has more receive chains and needs more power. The figure demonstrates 
+
+> 4
+
+that increasing the spacing has similar effect as increasing the number of antennas at the cost of increased ambiguity. It also shows that the benefit begins to saturate beyond 𝑘 = 10 , requiring an exponentially increasing number of antennas to further reduce the error. Therefore, StarLoc designs antenna arrays with large spacings to get accurate angle estimates. 
+
+## 3.3 3D localization of LEO transmitter with a 2D array 
+
+To build intuition for StarLoc’s 3D localization pipeline, in this section we first describe how to recover a satellite’s full 3D position assuming half-wavelength spacing. We start by computing the azimuth and elevation using the 2D antenna array and then show how StarLoc leverages satellite orbital dynamics, alongside the measured angles, to get satellite range. 
+
+Computing 3D-angle: To compute angle in 3D space, StarLoc uses three receive antennas placed in an L-shaped configuration (Fig. 4). By measuring phase differences between antenna pairs, we calculate azimuth and elevation. This identifies the transmitter’s position along a ray in 3D space. RX0        
+
+> RX1 RX2 x
+> y
+> z
+> 2D Antenna
+> Array
+> Satellite projection
+> Antenna array's
+> 2D plane
+> : Elevation Angle
+> :Azimuth Angle
+> : Range
+> (East)
+> (North)
+> (Up)
+> 𝑟 𝑟
+
+Figure 4: Left: Geometric model for 3D localization with Star-Loc’s 2D array. Right: Relation between slant range 𝑟 , orbital height ℎ, and orbit radius 𝑅 used for passive range estimation. 
+
+Specifically, antenna RX0–RX1 lie along the y-axis and RX1–RX2 along the x-axis, with RX1 at the origin and each pair separated by distance 𝑑 . When considered independently, the phase difference from RX0–RX1 constrains the satellite angle in the z-y plane, while RX1–RX2 constrains it in the z-x plane. So phase differences Δ𝜙 0−1
+
+and Δ𝜙 1−2 relate to the azimuth (𝜓 ) and elevation (𝜃 ) as follows: 
+
+Δ𝜙 0−1 = −2𝜋𝑑 cos (𝜃 ) sin (𝜓 ) (3a) 
+
+Δ𝜙 1−2 = −2𝜋𝑑 cos (𝜃 ) cos (𝜓 ) (3b) which can be used to calculate 𝜓 and 𝜃 (see App. A): 
+
+𝜓 = atan2 (− Δ𝜙 0−1, −Δ𝜙 1−2) (4a) 
+
+𝜃 = arccos 
+
+ 𝜆 
+
+2𝜋𝑑 √︁ (Δ𝜙 0−1)2 + ( Δ𝜙 1−2)2
+
+
+
+(4b) 
+
+Estimating Satellite Range: Apart from azimuth and elevation, range information is needed to determine the 3D location of a transmitting satellite. Range estimation is conventionally achieved by active radar systems that transmit modulated wireless signals towards the target and leverage the echoed signal to find the dis-tance, which is not feasible because StarLoc only passively sniffs the downlink signals. Instead, we leverage the orbital dynamics of satellites. LEO orbits are almost circular [ 40 ]. The satellite itself has no propulsion 1, so its motion is entirely determined by Earth’s gravity, which obeys Newton’s second law. Let 𝐺 be gravitational constant, 𝑀 be the mass of Earth, 𝑚 be the mass of satellite (which is not needed as it will be canceled out), 𝑣 and 𝑅 be satellite’s velocity and orbital radius (distance to the Earth’s center) under Earth-centered inertial (ECI) coordinate respectively. By Newton’s second law, the motion of a satellite should satisfy: 
+
+𝐺𝑀𝑚 𝑅 2 = 𝑚 𝑣 2
+
+𝑅 ⇔ 𝑣 2𝑅 = 𝐺𝑀 (5) StarLoc exploits this physical constraint to estimate the slant range 𝑟 between the receiver and the satellite. Specifically, we first infer the satellite’s orbital radius 𝑅 and then recover the correspond-ing slant range for the observed pass. The key question is how to express 𝑅 and 𝑣 using only passive angle observations. We begin by hypothesizing a candidate orbital radius 𝑅 for the observed satellite by picking a value for ℎ, the orbit height/altitude. As shown in Fig. 4 (right), 𝑅 = 𝑅 𝑒 +ℎ, where 𝑅 𝑒 is the Earth’s radius and ℎ is orbital height. By law of cosines, the slant range can be expressed by ℎ and elevation 𝜃 as follows (see App. B): 
+
+𝑟 = −𝑅 𝑒 sin (𝜃 ) + √︃ 𝑅 2 
+
+> 𝑒
+
+sin 2 (𝜃 ) + 2𝑅 𝑒 ℎ + ℎ2 (6) Now using this slant range 𝑟 , StarLoc can express satellite’s position vector at time 𝑡 , sECEF (𝑡 ) in the ECEF (Earth-centered Earth-fixed) coordinate frame as (see Fig. 4(right)): 
+
+sECEF (𝑡 ) = gs ECEF + 𝑟 ˆLoS ECEF (𝑡 )
+
+=gs ECEF + 𝑟 (cos (𝜓 ) cos (𝜃 ) ˆn + sin (𝜓 ) cos (𝜃 ) ˆe + sin (𝜃 ) ˆu) (7) where gs ECEF is the StarLoc receiver position under ECEF co-ordinates, ˆLoS ECEF is the unit line-of-sight vector pointing from StarLoc to the satellite, ˆn, ˆe, ˆu are basis vectors pointing North, East and up of the local north-east-up (NEU) coordinate at GS. These are given by: 
+
+ˆn = [− sin (𝑙𝑜𝑛 ), cos (𝑙𝑜𝑛 ), 0]
+
+ˆe = [− sin (𝑙𝑎𝑡 ) cos (𝑙𝑜𝑛 ), sin (𝑙𝑎𝑡 ) sin (𝑙𝑜𝑛 ), cos (𝑙𝑎𝑡 )] 
+
+ˆu = [cos (𝑙𝑎𝑡 ) cos (𝑙𝑜𝑛 ), cos (𝑙𝑎𝑡 ) sin (𝑙𝑜𝑛 ), sin (𝑙𝑎𝑡 )] 
+
+where 𝑙𝑎𝑡 and 𝑙𝑜𝑛 are the latitude and longitude of StarLoc re-ceiver respectively. We differentiate this trajectory to compute the satellite’s velocity 𝑣 . Now given that we have an assumed value of 
+
+𝑅 and computed 𝑣 , we can see how well this assumed value satisfies Eq. 5. Note that since Eq. 5 only holds in an inertial frame, we first do a coordinate transform of the satellite’s position vector from ECEF to ECI frame to get sECI (𝑡 ) = ECEF2ECI (sECEF (𝑡 )) and then calculate the satellite velocity. Additionally, since the observation window is short, we treat 𝑣 as constant over time and estimate it using the mean value of the 𝑙 -2 norm of { 𝑑 𝑑𝑡 sECI (𝑡 )} , i.e., the time derivative of 3D trajectory. 
+
+> 1Satellites may use propulsion sparsely for orbit correction, but do not do this for continuous operation.
+> 5
+
+Figure 5: Error |𝑣 2𝑟 − 𝐺𝑀 | for different orbital heights 
+
+Above we discussed how satellite velocity 𝑣 can be obtained from orbital radius 𝑅 . Finally, StarLoc optimizes Eq. 5. Since 𝑅 itself depends on our chosen value of ℎ, we parameterize the optimization in terms of the satellite’s orbit height ( ℎ) above the Earth’s surface and find the best value of ℎ by optimizing: 
+
+ℎ★ = argmin 
+
+> ℎ
+
+𝑣 2𝑅 − 𝐺𝑀 . (8) Once we obtain ℎ★ (indicated by the minima in Fig. 5), the slant range is inferred using Eq. 6. 
+
+Relaxing half-wavelength assumption: On further extending equations 3, 4 to consider larger antenna spacing, i.e., 𝑑 > 𝜆  
+
+> 2
+
+, each phase difference results in 𝑘 possible values, separated by 2𝜋 . In practice, once the phase difference pairs, Δ𝜙 0−1 and Δ𝜙 1−2, are measured, we construct 𝑘 × 𝑘 phase difference pairs as follows: 
+
+Δ𝜙 𝑖  
+
+> 0−1
+
+= Δ𝜙 0−1 + 2𝜋 × ( 𝑖 − 𝑘 /2) (9a) 
+
+Δ𝜙 𝑗  
+
+> 1−2
+
+= Δ𝜙 1−2 + 2𝜋 × ( 𝑗 − 𝑘 /2) (9b) where 𝑖, 𝑗 ∈ { 1, 2, ..., 𝑘 } denotes ambiguity index. Each (𝑖, 𝑗 ) pair corresponds to a unique possible 3D angle for a satellite. Fig. 6(ii) shows all possible 3D-AoA candidates in different colors, tracked over the period of signal transmission from a single location. Using each pair, we estimate the satellite’s distance from the receiver and hence land up with 𝑘 2 location estimates for the satellite. We note that achieving a similar resolution with 𝜆  
+
+> 2
+
+-separation would require a 2-D antenna array with 𝑘 2 antennas. In contrast, StarLoc’s design achieves high-resolution with just three antennas. However, we need to resolve the resulting ambiguity to identify the correct 3D position from the 𝑘 2 alternatives. As discussed in §2, prior work suppresses this ambiguity by using additional hardware or data from external sensors. However, this is not practical in our case. In the next section, we discuss how StarLoc resolves this ambiguity only using the received signals, without additional hardware or sensors. 
+
+## 3.4 Doppler-assisted Spatial Ambiguity Resolution 
+
+As the name suggests, to resolve ambiguity in transmitter’s location, StarLoc exploits the Doppler shift that the transmitted signal under-goes due to the motion of the satellite. Due to the very high orbital velocities of satellites in LEO ( ∼7 km/s), the signals transmitted by these satellites undergo very high and rapidly changing frequency shifts. The Doppler shift is in fact a function of the relative velocity of a satellite with respect to the receiver, projected on the line of sight between them [ 5]. The distance between satellite and receiver (𝑟 ) decreases as the satellite rises from the horizon. It attains its lowest value at maximum elevation angle w.r.t. the receiver and then, the distance starts increasing as the satellite recedes to the horizon. Thus, the Doppler shift is positive and decreasing when the satellite is rising, negative and increasing when it is setting. We show measured Doppler shifts for some satellites in Fig. 7(top). Mathematically, given range 𝑟 (𝑡 ), Doppler shift can be expressed as: 
+
+𝑓 Doppler (𝑡 ) = −𝑓 𝑐 /𝑐 × ¤ 𝑟 (𝑡 ) (10) where 𝑓 𝑐 is carrier frequency and 𝑐 is speed of light. So in principle, one could match the observed Doppler shift with the Doppler shift calculated for each location candidate resulting from the AoA can-didates in Fig. 6 using Eq. 10. The observed Doppler will only match with the Doppler shift computed from the correct location track of the satellite. However, this is not as trivial, because the observed Doppler shift is not the exact Doppler shift. Since the transmit-ting satellite is unknown, we do not know its carrier frequency (𝑓 𝑐 ). Even if the carrier frequency is publicly available for certain constellations, there is also carrier frequency offset ( 𝑓 cfo ). So the observed Doppler shift has a constant, unknown offset equivalent to: Δ𝑓 offset = 𝑓 cfo + 𝑓 𝑐 offset , where 𝑓 𝑐 offset is the difference between the assumed and real carrier frequency. So, instead of directly relying on Doppler, we use the rate of change of Doppler shift. Specifically, StarLoc’s Doppler-assisted 
+
+Spatial Ambiguity Resolution (DSAR) algorithm tracks the can-didate locations (azimuth, elevation and estimated range) across time to construct their Doppler profiles. DSAR also observes the frequency shift of the received signal across time to construct a Doppler profile for the transmitting satellite. Finally, DSAR picks the location candidate that minimizes the loss function between predicted Doppler rate and measured Doppler rate: 
+
+loss 𝑖 𝑗 = || 𝑑 𝑑𝑡 b𝑓 Doppler (𝑡 ) − 𝑑 𝑑𝑡 𝑓 Doppler (𝑡 )|| 2 (11) that is, the location candidate for which the estimated Doppler rate matches the observed Doppler rate. Since raw Doppler measure-ments are noisy and intermittent, we fit a degree-3 polynomial curve 2 to these measurements and then, differentiate the curve to obtain the Doppler change rate 𝑑 𝑓 Doppler (𝑡 ) 
+
+> 𝑑𝑡
+
+, as shown in Fig. 7(bot-tom). This Doppler change rate is independent of the frequency offsets. In practice, to reduce the set of potential candidates, we first discard location candidates with elevation angles below 30 ◦, since this elevation is below the operational limits of LEO constellations. Additionally, DSAR also calculates the time of maximum elevation for every location track. Similarly, we obtain the time of maximum elevation from the observed Doppler rate. This is the instant when the Doppler rate is at its minima. We filter out candidates with a very different time of maximum elevation. During implementation this threshold is set to 2 seconds. LEO satellites can travel more than 14 km in 2 seconds, so this threshold is reasonable. This initial filtering helps us reduce the number of location candidates from 100 to <10.             
+
+> 2Doppler can be approximated as a sin (·) function near max elevation [ 5], whose taylor expansion is 𝑥 −𝑥 3/6+𝑜 (𝑥 3)
+> 6Time (s)
+> Phase difference  Δɸ (radian)
+> Azimuth
+> Elevation
+> Ground
+> Truth
+> (i)(ii) (iii )
+
+Figure 6: StarLoc’s approach to pruning AoA candidates: (i) Phase difference between antenna pairs over time. (ii) All AoA candidates calculated from the observed phase difference. (iii) Filtered candidates based on time of relative maximum elevation. 
+
+Figure 7: Doppler-profiles– Top: Doppler shift from tracked beacons. Bottom: Doppler rate obtained by polynomial inter-polation and differentiating. 
+
+Figure 8: Elevation, azimuth and Doppler profiles of AoA candidates for STARLINK-4687 in Fig. 7. 
+
+This process can be seen in Fig. 8 which plots the AoA profiles for the filtered AoA candidates in Fig. 6(iii). Finally, DSAR picks the candidate in orange since it satisfies Eq. 11. Fig. 8(right) shows that the Doppler profile of the orange location (candidate 2) closely resembles the measured Doppler and also has the lowest loss. One may ask why not just pick the candidate with the clos-est time of maximum elevation with the observed Doppler rate? However, in our experiments, we observed that time of maximum elevation estimated using the observed Doppler profile can be very sensitive to polynomial fitting error. Instead, we track the entire Doppler rate profile over time and use the optimization in Eq. 11 to resolve ambiguity. We summarize StarLoc’s algorithm for estimat-ing the location of a LEO transmitter in the appendix (Alg. 1). 
+
+## 4 Implementation 4.1 Hardware 
+
+StarLoc’s end-to-end design is demonstrated in Fig. 9a and the hardware setup is shown in Fig. 10a. We use three off-the-shelf Orbital Research 5400X low-noise blocks (LNBs) [ 48 ] with WR-75 horn antennas [ 42 ] to capture satellite signals. The LNBs provide low noise amplification and downconvert the signals from the high Ku-band frequencies to an intermediate band compatible with our receive chain. The LNBs are arranged in a 13 .25 cm ×13 .25 cm 2D antenna array by attaching them to a 3D printed frame (the red fixture). Each LNB is connected to an Orbital Research MT-25 “Mux-Tee” which is a bias tee and reference clock multiplexer [ 49 ]. These are in turn connected to receive ports on a USRP X310 Software-Defined Radio (SDR) [ 47 ] equipped with UBX-160 daughterboards [ 45 ]. We also connect an OctoClock reference clock generator [ 44 ]to both the USRPs and Mux-Tees for phase-coherent reception of satellite signals. Finally, we also attach a Movella XSENS MTi-670 attitude and heading reference system (AHRS) and GNSS module [ 39 ] to Star-Loc’s 3D printed frame. We use the AHRS to measure the orientation of the receiver relative to north and the GNSS module to record StarLoc’s location during experiments. Since the azimuth, elevation and range are estimated in the ENU frame, this AHRS module helps us transform our measurements to the ENU frame, if the antenna is rotated. We center our receiver at 11 .325 GHz to capture Starlink signals. The half-wavelength at this frequency is ∼1.325 cm. Horn antennas cannot be placed at half-wavelength spacing due to their compar-atively larger size, as seen in Fig. 10a. Therefore, grating lobes cannot be avoided. Nevertheless, we needed horn antennas to (a) compensate for the high path loss in Ku-band, and (b) achieve suffi-cient per-element SNR for reliable phase difference measurements across the array. This requirement is stricter than Doppler-only systems [ 25 , 50 ], which only need to detect frequency shifts and can thus utilize universal LNB receivers with wider beamwidths.     
+
+> 7(a) Receiver hardware block diagram (b) End-to-end processing pipeline
+> STFT Obtain
+> IQ0 RX0
+> IQ1 RX1
+> IQ2 RX2
+> &
+> N
+> N
+> freq
+> phase
+> N210
+> RF Switch
+> 3
+> LNB LNB Mux-Tee
+> LNB LNB LNB 3
+> 2
+> Clock Gen
+> Power Splitter
+> 3
+> 3
+> 3
+> X310 X310
+> Main Datapath Calibration Synchronization
+> Host
+
+Figure 9: StarLoc’s hardware and software design 
+
+In contrast, the Clearbox system [ 26 ] uses omni-directional anten-nas for AoA measurements but operates at VHF/UHF frequencies where path loss is substantially lower. Such antennas are infeasible in the Ku-band where modern high-bandwidth LEO constellations like Starlink operate. Despite limited angular coverage, StarLoc requires no prior in-formation about satellite locations for antenna pointing. In our experiments, the array is simply pointed at 90 ◦ elevation (straight up), and any satellite passing through the beam is captured. We use a 10 𝜆  
+
+> 2
+
+spacing for our 2D horn antenna array leading to 100 (=10 ×10) ambiguous AoA candidates. This decision is informed by our initial analysis on the theoretically achievable lower bound on the AoA error (Fig. 3). 
+
+## 4.2 Receiver Synchronization & Calibration 
+
+Synchronization: All components of the receive chain, i.e., the LNBs and the SDRs, are connected to a common clock source. This synchronizes the local oscillators (LOs) for phase synchronous operation of the Phase Locked Loop (PLL). However, despite this, the PLL may have an initial phase bias. In addition to this, the variance in the length of the path that the signal takes along the receive chains (due to factors like minute difference in length of the wire, internal circuit, etc.) or thermal changes in the SDR, all add additional offsets to the measured phase difference between receivers. These need to be calibrated for. 
+
+On-Wire calibration: To eliminate any phase offsets introduced by receive chains in the SDR, we periodically transmit a refer-ence signal to the ports of the SDR over the wire using a switch that can toggle the reference signal. A USRP N210 SDR [ 46 ] gen-erates the reference signal which is split into 4 outputs using a ZN4PD-4R722+ 4-way power splitter [ 38 ]. We use an RC-4SPDT-A18 electro-mechanical RF switch [ 37 ] to periodically switch be-tween the LNB inputs and the calibration signal input to the X310s with the receiver-chains. 
+
+On-Air calibration: To eliminate any offsets introduced due to disparities between the LNBs, we use a known satellite’s orbital pa-rameters and the location of the receiver to determine the expected phase difference. We measure the phase of the signal transmitted by the known satellite and compare it to the expected phase value to compute and remove fixed phase offsets across receive chains. In our experiments, we consider the first observed satellite as a known satellite and use its ground truth location to determine the expected phase difference and perform on-air calibration. 
+
+## 4.3 Software & Signal Processing 
+
+We implement our signal capture system in Python using GNURa-dio. The signal processing and satellite angle estimation pipeline use Python and Matlab. Fig. 9 shows an overview of our end-to-end pipeline. DSAR and range estimation both rely on 2 observables– phase difference between antennas and Doppler shifts of captured signal. Both measurements can be obtained via the short-time Fourier transform (STFT) of the received signal. First, given the time-domain received signal from the ℓ-th an-tenna, the STFT is calculated 
+
+𝑋 ℓ (𝑡, 𝑓 ) = STFT {𝑥 ℓ (𝑡 )} , ℓ = 0, 1, 2 (12) To determine the window length, we consider the trade-off between integration time and spectral resolution. While a longer integration time enhances signal strength, it also causes power to spread across multiple frequency bins due to the motion of LEO satellites. We select a 14 ms window as a suitable compromise [ 27 ]. Additionally, we apply 50% overlap between windows to achieve a twofold in-crease in temporal resolution. Then, we keep a subset of the STFT result with signal-to-noise ratio (SNR) more than a threshold (10 dB) 
+
+{𝑋 ℓ (𝑡, 𝑓 )} ← { 𝑋 ℓ (𝑡, 𝑓 ) : |𝑋 ℓ (𝑡, 𝑓 )| 2 > 10 × mean (| 𝑋 ℓ (𝑡, 𝑓 )| 2)} .
+
+Measuring Phase difference: Note that the STFT is a complex operation that contains phase information. Hence, StarLoc uses the STFT of the received IQ samples, i.e., 𝑋 ℓ (𝑡, 𝑓 ), at receiver RX ℓ to measure the phase difference of the received signal: 
+
+Δ𝜙 0−1 (𝑡 ) = ∠𝑋 0 (𝑡, 𝑓 ) − ∠𝑋 1 (𝑡, 𝑓 ) (13a) 
+
+Δ𝜙 1−2 (𝑡 ) = ∠𝑋 1 (𝑡, 𝑓 ) − ∠𝑋 2 (𝑡, 𝑓 ) (13b) Fig. 6(i) plots the raw phase of the signal received from one of the satellites. 
+
+Measuring Doppler shifts: Doppler shift profiles are obtained by tracking the phase of repeated sequences in the received signals. Such sequences are transmitted by satellites to facilitate detection of signals by target devices. However, to track these periodic signals, it is not necessary to know them beforehand. Existing implemen-tations have shown how to detect these beacons using cross cor-relation and track Doppler by observing the change in periodicity of these signals [ 22 , 24 ]. In our experiments, we track the frequen-cies of the detected Starlink beacon tones over time in the STFT spectrum to obtain Doppler profiles, as shown in the top figure of Fig. 7.   
+
+> 8(a) Hardware (b) Data collection (c) Experiment locations
+
+Figure 10: Experimental Setup – We use a 2D array of LNBs to sniff the transmissions of satellites passing overhead at 8 different locations (location labels removed for anonymity) 
+
+## 5 Experimental Evaluations 
+
+We describe our evaluation of StarLoc below. 
+
+## 5.1 Experimental Setup 
+
+Testing with Starlink: We use transmissions from Starlink con-stellation for our evaluation because (a) it is currently the largest constellation (with ∼9,000 satellites), and (b) Starlink makes their orbital data publicly accessible. StarLoc does not rely on Starlink-specific signaling; it only requires a pilot signal that allows phase and Doppler tracking. Such periodic beacons or preamble sequences are commonly transmitted by satellite systems [ 52 – 54 ] to aid in signal detection, decoding or relaying satellite health and telemetry to the ground stations. Starlink’s downlink includes such beacons. Starlink satellites use 10.7-12.7 GHz spectrum for downlink. The 2 GHz band is divided into 8 channels, each with a bandwidth of 240 MHz (excluding 10 MHz inter-channel guard bands) [ 24 ]. The center 1 MHz of the operating frequency channel includes 9 beacon tones. We tune our USRP to one of these channels to detect Starlink transmissions, and track their Doppler shifts and measure phase difference. 
+
+Data Collection: We move StarLoc setup to various test locations by mounting it in a vehicle as shown in Fig. 10b. We collected signals at 8 different locations, spaced roughly 2 km apart. Fig. 10c shows the locations on a map. We collect data at these locations at various times of the day and with varying receiver orientations. Our dataset consists of signals captured from 81 satellites. In addition, we record timestamps, receiver orientation, and the location of the receiver using the AHRS and paired GNSS module. The resulting size of our dataset is 460 gigabytes. 
+
+Ground Truth: SpaceX provides updated high-precision ephemeris data for Starlink satellites roughly every 8 hours, for accurate col-lision predictions and other operations. CelesTrak publishes sup-plemental TLEs [ 2] derived from this data, which typically exhibit RMS fit errors of ∼0.4 km. In contrast, standard TLEs maintained by organizations like the US Space Force accumulate position errors of 1–6 km. Because the supplemental data originates from SpaceX, it also reflects trajectory changes from active station-keeping maneu-vers. StarLoc utilizes this as the ground truth for all evaluations. 
+
+## 5.2 Signal Statistics 
+
+The SNR and phase noise of the received signals play a key role in the design decisions that we have made in StarLoc. For instance, why does StarLoc use Doppler as an indicator of satellite elevation or geometry and not the signal SNR? 
+
+SNR. Fig. 11a shows the beacons from Starlink detected by StarLoc. We take a 28000 points FFT of the samples received at a 2 MS/s sample rate to detect these beacon tones and use a threshold of 
+
+>10 dB. Fig. 11c shows the SNR distribution of the beacons captured in our dataset. The SNR of these detected beacons changes over time as the satellite moves. Fig. 11b shows the amplitude of signal from a single satellite changing over time. The signal amplitude is highly variable and sensitive to environmental changes, which makes SNR-fingerprinting for distance or location estimation challenging. The time of maximum elevation for a satellite also does not co-incide with the time of maximum signal SNR— motivating StarLoc’s Doppler-assisted localization algorithm. 
+
+Phase Noise. Fig. 11d quantifies the distribution of random phase noise that affects our phase measurements. We aim to capture the effect of any hardware noise, such as thermal noise, local oscillator noise or quantization effects. Any deterministic phase offset is re-moved by the calibration process which is why the distribution is centered around 0. The blue dashed lines mark two standard devi-ations of the measured distribution, meaning that approximately 95% of the random noise lies below 0.16 radian. If we were to use a standard 𝜆  
+
+> 2
+
+-wavelength planar array, this would lead to ∼9◦ angu-lar error which is way below the required accuracy. Using larger antenna spacing, we are able to reduce this error to <1◦ without using a large number of antennas. 
+
+## 5.3 Overall positioning accuracy 
+
+The end-to-end performance of StarLoc is measured on our entire dataset which consists of signals captured from 81 satellites. Bea-cons from each satellite last for about 15 seconds. We benchmark the accuracy of StarLoc against the existing passive and portable solution proposed by Clearbox Systems [ 26 ]. It uses a passive planar antenna array with half-wavelength spacing and the same number of antennas as StarLoc to estimate the azimuth and elevation. To capture the effect of 𝜆  
+
+> 2
+
+spacing we scale down the phase measure-ments from the larger separation antenna, while maintaining the same phase noise and SNR.            
+
+> 9-1 -0.8 -0.6 -0.4 -0.2 00.2 0.4 0.6 0.8 1
+> Frequency (Hz) 10 6
+> -40
+> -35
+> -30
+> -25
+> -20
+> -15
+> -10
+> -5
+> 0
+> 5
+> Power (dB)
+> Noise floor
+> Threshold
+> Power (dB)
+> Frequency (Hz)
+
+(a) Detected beacons at 
+
+11.325 GHz from Starlink 
+
+(b) SNR variation for beacons 
+
+from a single satellite 
+
+(c) SNR distribution of all 
+
+received beacons 
+
+(d) Phase noise distribution Figure 11: Starlink beacon signal statistics 
+
+Figure 12: Overall accuracy of positioning with StarLoc, benchmarked against Clearbox systems [26] 3D-Angle: We first quantify StarLoc’s error in estimating a satel-lite’s 3D-angle. To do this, we first calculate a pointing vector ˆP in the direction of the satellite using the estimated azimuth ( ˆ𝜓 ) and elevation ( ˆ𝜃 ) angles: ˆP = [cos ( ˆ𝜃 ) sin ( ˆ𝜓 ), cos ( ˆ𝜃 ) cos ( ˆ𝜓 ), sin ( ˆ𝜃 )] 𝑇 .The true pointing vector P is calculated similarly using the ground truth azimuth and elevation angles from the orbital data provided by Starlink. The angle between the true and our esti-mated vector gives us the error in our 3D-angle estimates: 𝛿 3D =
+
+arccos 
+
+ ˆP·P 
+
+> |ˆP| | P|
+
+
+
+. Fig. 12(left) shows the CDF of the 3D-angle error. StarLoc has a low median error of 0.73 ◦ in estimating the 3D-angle of a satellite transmission. In contrast, the baseline achieves a median error of 5 ◦, which is 7 × worse than StarLoc. In §3.1, we showed that the 5th percentile of the minimum angular separation between visible satellites is ∼2◦, i.e., 95% of satellites are separated by at least about 2 ◦. This means that the accuracy achieved by StarLoc is sufficient to spatially separate satellites in the sky. On the other hand, the baseline’s median error lies near the upper end of the separation distribution, making it insufficient to reliably distinguish closely spaced satellites. 
+
+Slant Range: StarLoc estimates the range of the source satellite (orbital range) from the receiver using orbital constraints alone and without relying on explicit ranging techniques that require co-operation on both ends. StarLoc performs a grid search over the possible orbit height of LEO satellites to find the orbit that can minimize the orbital constraint represented by Eq. 5. The search is performed over a granularity of 2 km which is small enough since orbit heights are typically separated by more than 10 km. Fig. 12(middle) shows that StarLoc can determine a satellite’s range with a median error of ∼5 km which satisfies the requirement that we established in §3.1. Since [ 26 ] cannot estimate range using its planar array, we do not plot the baseline error for range in Fig. 12. 
+
+Satellite Location: Finally, we calculate the absolute error in esti-mating the satellite location. StarLoc’s median error is low ( ∼10 km). While 10 km may appear large in absolute terms, it is small in the context of LEO. These satellites are typically operated with closest-approach distances above 20 km, and 10 km is commonly used as a conjunction-risk threshold [ 3 , 10 ]. Thus, StarLoc’s median localiza-tion error is within operationally meaningful safety limits. We also evaluate localization error that Clearbox Systems would achieve us-ing its angle measurements and StarLoc’s range estimation. Fig. 12 shows the baseline’s median error is 45 km. 
+
+## 5.4 Azimuth vs. Elevation Errors 
+
+We measure the azimuth and elevation errors separately in Fig. 13 to understand how each contributes to the final 3D pointing angle error. We observe that while the median elevation error is 0.37 ◦,the median azimuth error is 3.7 ◦, about 10 × the elevation error. On investigating this further, we found that azimuth errors depend on the elevation angle and can be very sensitive to small measurement errors at high elevation. At an elevation of 90 ◦, all azimuth angles correspond to the same point and even a small error in measure-ment can lead to error as large as 180 ◦. Therefore, there are large azimuth errors when the satellite is at zenith. This can be seen in Fig. 13(right). This is also why the CDF in Fig. 13 showing azimuth error has a tail that extends to angles as large as 175 ◦.
+
+## 5.5 Sensitivity to Antenna Rotation 
+
+Since the ground truth 3D-angle from a given point on Earth always assumes the East-North-Up frame, StarLoc needs to correct for the 
+
+> 10
+
+Figure 13: Elevation and azimuth errors in locating a satellite. Azimuth error is high at high elevations (as azimuth is undefined for an elevation of 90 ◦), but does not impact absolute location estimates. 
+
+Figure 14: Impact of antenna orientation. K=1: Median = 0.73 
+
+> K=2: Median = 16.98
+> K=3: Median = 17.39
+
+Figure 15: Impact of incorrect ambiguity resolution on AoA error. We choose the top K=3 candidates and measure their impact on AoA accuracy. 
+
+antenna array’s orientation (yaw) when estimating a transmitting satellite’s position. Measurements from the onboard AHRS help in correctly estimating the rotation of the array. However, these sensors are error prone and impact the accuracy of our algorithm. To quantify the effect of inaccurate yaw estimation, we add different offsets to the true values. Fig. 14 shows the impact of these errors on the AoA accuracy. Azimuth errors are most sensitive to errors in heading/yaw of our antenna array and even a 10 ◦ offset can lead to azimuth errors >10 ◦.
+
+## 5.6 Impact of Error in Resolving Ambiguity 
+
+We analyze the impact of picking an incorrect ambiguity on the 3D angle error. Due to 10- 𝜆  
+
+> 2
+
+antenna spacing, StarLoc initially produces 100 angle candidates, some of which are filtered out due to below-operation elevation values. DSAR then fuses Doppler and phase observables to filter candidates and select the right one. However, DSAR can occasionally select an incorrect candidate when the observables used for disambiguation are noisy. Two factors contribute to such failures. First, phase measurement noise can distort the elevation profile of some candidates causing multiple tracks to appear consistent with the Doppler-derived peak-elevation time. Second, low SNR can lead to ill-fitting Doppler-rate polynomial and thereby shift the Doppler-derived maximum elevation time. Fig. 15 quantifies the impact of selecting an incorrect candidate due to such errors. We rank the top-K AoA candidates by how closely their Doppler profiles match the observed Doppler trend, i.e., in the increasing order of the LMS error calculated using Eq. 11. Fig. 15 reports the resulting AoA error when choosing among these alternatives. While StarLoc overwhelmingly picks the correct candidate (i.e., 𝐾 =1), selecting even the second-best candidate leads to errors exceeding 10 ◦.
+
+## 5.7 Trade-off between Spacing and Accuracy 
+
+Ambiguity resolution becomes easier with lower antenna sparsity, but phase measurement noise begins to dominate the final 3D-angle estimation accuracy. To demonstrate this trade-off in our system, we sweep antenna spacing 𝑑 ∈ [ 4 𝜆  
+
+> 2
+
+, 20 𝜆  
+
+> 2
+
+], that is, around StarLoc’s current operating point of 𝑑 = 10 𝜆  
+
+> 2
+
+. We scale the measured phase differences in our dataset, keeping the phase noise the same as the original signal, to get the phase difference between antenna pairs for different spacing. 3D-angles are then estimated with these measurements for each setting using Eq. 4. A larger spacing increases the array aperture, which reduces the sensitivity to phase noise and lowers the best-case 3D-angle/pointing error, as captured by the 5th percentile errors for different values of 
+
+𝑑 in Fig. 16. However, a larger spacing also increases the number of phase ambiguities that must be resolved, and incorrect disambigua-tion leads to large pointing errors (reflected in the growing 95th percentile). A smaller spacing eliminates most ambiguity errors but leaves the system noise-limited. StarLoc’s configuration with 
+
+𝑑 = 10 𝜆  
+
+> 2
+
+balances these two effects. 
+
+## 5.8 Effect of Circular Orbit Assumption 
+
+Finally, we discuss the impact of assuming circular LEO orbits in StarLoc’s range estimation algorithm. To do this, we begin by measuring the eccentricity of LEO satellites ( 𝑒 = 0 is circle). The 99th percentile eccentricity is below 0.0063 (Starlink is <0.00083). For 𝑒 ≈ 0.006 , circular orbit assumption induces range error of 
+
+≤0.14 km. For Starlink-like 𝑒 ≈ 0.001 , the bound is ≤0.04 km. This is 
+
+> 11
+
+Figure 16: Effect of antenna spacing on 3D-Angle error. 
+
+negligible compared to StarLoc’s median ranging accuracy of 5 km, validating that the circular orbit assumption is not a meaningful source of error in our pipeline. 
+
+## 6 Concluding Discussion 
+
+We built StarLoc, a novel system for fully passive 3D localization of LEO satellite transmitters using only three antennas. StarLoc combines sparse-array interferometry with orbital-dynamics-based range estimation, and we evaluate it on real Starlink signals. Our results show that StarLoc enables 3D localization with compact, low-cost hardware, opening the door to more ubiquitous and scalable monitoring of the rapidly growing LEO environment. 
+
+Capabilities & Limitations: StarLoc is well suited for applications in spectrum monitoring and management, where a key require-ment is to determine which satellite is responsible for an observed transmission. StarLoc achieves median pointing accuracy of 0.73 ◦
+
+and median ranging accuracy of 5 km, which is sufficient to re-liably match observed trajectories to entries in orbit catalogs or TLE databases in the vast majority of cases. As shown in §3.1, in 95% of cases the angular and range separation between simultane-ously visible LEO satellites exceeds StarLoc’s median error, making transmitter identification reliable for most practical monitoring scenarios. However, StarLoc is not yet sufficient for applications that re-quire precise orbit determination for operational safety. For in-stance, Planet Labs requires sub-kilometer orbit determination ac-curacy for their operations, and so they use two-way messaging to estimate satellite range with less than 1 km error [ 15 ]. Since they operate their own satellites and ground stations, such two-way coordination is possible. In contrast, StarLoc relies on passive observations and currently achieves 5 km median ranging accuracy, which is not yet sufficient for high-precision operations. 
+
+Future Work: We currently focus on localizing a single transmit-ting satellite. Extending StarLoc to settings with multiple interfering transmitters will require separating signals from different sources before localization. One promising direction is to leverage the pe-riodic beacons present in satellite transmissions: autocorrelation can reveal peaks at delays corresponding to each satellite’s bea-con period, enabling signal separation. Distinct Doppler signatures induced by relative motion may further aid separation [ 23 , 28 , 54 ]. Separately, each recovered signal must still be localized in the presence of the sparse-array ambiguity introduced by StarLoc’s large inter-antenna spacing. §5.6 shows the impact of errors in disambiguating the angle candidate. An alternative design choice to consider for future work is to use an additional antenna with a smaller separation, yielding a coarser but less ambiguous AoA estimate. This can be used to prune the grating-lobe candidates produced by the sparse array, thereby improving robustness to measurement noise in Doppler. Finally, our current design assumes a dominant line-of-sight path, which typically holds for space-to-Earth links. In dense ur-ban environments where multipath may be significant, spectrum owners could deploy StarLoc on elevated structures (e.g., rooftops) to mitigate multipath. We leave robust multi-satellite separation, ambiguity-resistant array design and urban deployments to future work. 
+
+## References  
+
+> [1] Celestrak. https://celestrak
+
+.org/ Accessed March 2026. [2] Supplemental GPEs. https://celestrak .org/NORAD/elements/supplemental/ Accessed March 2026. [3] 2023. NASA Spacecraft Conjunction Assessment and Collision Avoidance Best Practices Handbook . Technical Report NASA/SP-20230002470 (Rev. 1). National Aeronautics and Space Administration. https://nodis3 .gsfc .nasa .gov/OCE _ docs/ OCE_51 .pdf [4] Akram Al-Hourani. 2024. In-orbit space situational awareness using doppler frequency shift. IEEE Trans. Aerospace Electron. Systems 60, 5 (2024), 7542–7547. [5] I. Ali, N. Al-Dhahir, and J.E. Hershey. 1998. Doppler characterization for LEO satellites. IEEE Transactions on Communications 46, 3 (1998), 309–313. https: //doi .org/10 .1109/26 .662636 [6] Philip Arnold, Jochen Moll, and Viktor Krozer. 2017. Design of a sparse antenna array for radar-based structural health monitoring of wind turbine blades. IET Radar, Sonar & Navigation 11, 8 (2017), 1259–1265. [7] Aditya Arun, Shunsuke Saruwatari, Sureel Shah, and Dinesh Bharadia. 2023. XRLoc: Accurate UWB localization to realize XR deployments. In Proceedings of the 21st ACM Conference on Embedded Networked Sensor Systems . 459–473. [8] Constantine A Balanis. 2015. Antenna theory: analysis and design . John wiley & sons. [9] Yifeng Cao, Ashutosh Dhekne, and Mostafa Ammar. 2021. ITrackU: Tracking a pen-like instrument via UWB-IMU fusion. In Proceedings of the 19th Annual International Conference on Mobile Systems, Applications, and Services . 453–466. [10] Stephen Chen. 2022. “Starlink breaks space traffic safety rules and China may follow: study”. South China Morning Post (29 nov 2022). https://www .scmp .com/news/china/science/article/3201365/starlink-breaks-space-traffic-safety-rules-and-china-may-follow-study [11] Vincent Cruz. 2023. LEO, MEO & GEO Satellite Systems: A Comparison. (2023). https://durofy .com/leo-meo-geo-satellite-systems/ Accessed: 2024-12-10. [12] Epsilon3. 2025. Products. (2025). https://www .epsilon3 .io/products [13] European Space Policy Institute. 2023. ESPI Space Spectrum Policy Report, Version 5. https://www .espi .or .at/wp-content/uploads/2023/10/ESPI-Space-Spectrum-Policy-Report_v5 .pdf (Oct. 2023). [14] Tim Flohrer, Holger Krag, and Heiner Klinkrad. 2008. Assessment and catego-rization of TLE orbit errors for the US SSN catalogue. risk 8, 9 (2008), 10–11. [15] Cyrus Foster, Henry Hallam, and James Mason. 2015. Orbit Determination and Differential-drag Control of Planet Labs Cubesat Constellations. (2015). arXiv:physics.space-ph/1509.03270 https://arxiv .org/abs/1509 .03270 [16] Benjamin Fuchs. 2012. Synthesis of sparse arrays with focused or shaped beam-pattern via sequential convex optimizations. IEEE Transactions on Antennas and Propagation 60, 7 (2012), 3499–3503. 
+
+> 12
+
+[17] Vic Gardner and Andre Candido. 2023. Coverage of the Southern Hemisphere is critical for Space Domain Awareness. Here’s why. (2023). https://leolabs .space/ article/southern-hemisphere-coverage/ Accessed: 2024-12-10. [18] Feng Ge and Yuan Shen. 2021. Single-anchor ultra-wideband localization system using wrapped PDoA. IEEE Transactions on Mobile Computing 21, 12 (2021), 4609–4623. [19] Jean-Francois Guimond, Simon Henault, and Kathia Levis. 2022. One-way Doppler and interferometry: Space domain awareness. In 2022 16th European Conference on Antennas and Propagation (EuCAP) . IEEE, 1–5. [20] Anant Gupta, Upamanyu Madhow, Amin Arbabian, and Ali Sadri. 2019. Design of large effective apertures for millimeter wave systems using a sparse array of subarrays. IEEE Transactions on Signal Processing 67, 24 (2019), 6483–6497. [21] Joseph A Haimerl and Gregory P Fonder. 2015. Space fence system overview. In Proceedings of the Advanced Maui Optical and Space Surveillance Technology Conference . Curran Associates, Inc, 1–3. [22] B Hazra, AJ Roffel, S Narasimhan, and MD Pandey. 2010. Modified cross-correlation method for the blind identification of structures. Journal of En-gineering Mechanics 136, 7 (2010), 889–897. [23] Steven Siying Hong and Sachin Rajsekhar Katti. 2011. DOF: a local wireless information plane. In Proceedings of the ACM SIGCOMM 2011 Conference . 230– 241. [24] Todd E. Humphreys, Peter A. Iannucci, Zacharias M. Komodromos, and An-drew M. Graff. 2023. Signal Structure of the Starlink Ku-Band Downlink. 
+
+IEEE Trans. Aerospace Electron. Systems (2023), 1–16. https://doi .org/10 .1109/ TAES .2023 .3268610 [25] Mohd Noor Islam, Tim Spitzer, Jeremy Hallett, and Md Asikuzzaman. 2020. Doppler estimation for passive RF sensing method in space domain awareness. In 2020 Military Communications and Information Systems Conference (MilCIS) .IEEE, 1–4. [26] Mohd Noor Islam, Thomas Q Wang, Samuel Wade, Travis Bessell, Tim Spitzer, and Jeremy Hallett. 2021. Doppler and angle of arrival estimation from digitally modulated satellite signals in passive RF space domain awareness. In Advanced Maui Optical and Space Surveillance Technologies Conference .[27] N. Jardak and Ronan Adam. 2023. Practical Use of Starlink Downlink Tones for Positioning. Sensors (Basel, Switzerland) 23 (2023), null. https://doi .org/10 .3390/ s23063234 [28] Kiran Joshi, Steven Hong, and Sachin Katti. 2013. {PinPoint }: Localizing In-terfering Radios. In 10th USENIX Symposium on Networked Systems Design and Implementation (NSDI 13) . 241–253. [29] T. S. Kelso. 2025. Space Surveillance. (27 Jan 2025). https://celestrak .org/columns/ v04n01/ [30] Nadim Khairallah and Zaher M Kassas. 2021. Ephemeris closed-loop tracking of LEO satellites with pseudorange and Doppler measurements. In Proceedings of the 34th international technical meeting of the satellite division of the Institute of Navigation (ION GNSS+ 2021) . 2544–2555. [31] Nadim Khairallah and Zaher M Kassas. 2023. Ephemeris tracking and error prop-agation analysis of LEO satellites with application to opportunistic navigation. 
+
+IEEE Trans. Aerospace Electron. Systems 60, 2 (2023), 1242–1259. [32] Sharbel Kozhaya, Haitham Kanj, and Zaher M. Kassas. 2023. Multi-Constellation Blind Beacon Estimation, Doppler Tracking, and Opportunistic Positioning with OneWeb, Starlink, Iridium NEXT, and Orbcomm LEO Satellites. In 2023 IEEE/ION Position, Location and Navigation Symposium (PLANS) . IEEE, Monterey, CA, USA, 1184–1195. https://doi .org/10 .1109/PLANS53410 .2023 .10139969 [33] Kratos Defense & Security Solutions. 2025. Tracking & Maneuver — Space Domain Awareness. (2025). https://www .kratosspace .com/defense-and-government/space-domain-awareness/tracking-and-maneuver [34] LeoLabs. 2023. LeoLabs Expands Southern Hemisphere Coverage. (2023). https: //leolabs .space/article/southern-hemisphere-coverage/ [35] Yi Li, Hanying Zhao, Yiman Liu, Tianyu Wang, Jincheng Yu, and Yuan Shen. 2024. High-Accuracy 2-D AoA Estimation Using Lightweight UWB Arrays. In 
+
+2024 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) .IEEE, 3312–3317. [36] Wei Liu, Yuanjie Li, Jingyi Lan, Hewu Li, Yimei Chen, Lixin Liu, Jiabo Yang, Xi Long, Li Ouyang, Minghao Tang, et al . 2025. Direct-to-Cell Satellite Net-work without Satellite Navigation. In Proceedings of the ACM SIGCOMM 2025 Conference . 932–947. [37] Mini-Circuits. 2024. RC-4SPDT-A18 Absorptive SPDT, Mechanical Switch, DC - 18000 MHz, 50 Ω. https://www .minicircuits .com/WebStore/ dashboard .html?model =RC-4SPDT-A18 (2024). [38] Mini-Circuits. 2024. ZN4PD-4R722+ 4 Ways DC Pass Power Splitter, 400 - 7200 MHz, 50 Ω. https://www .minicircuits .com/WebStore/dashboard .html?model =
+
+ZN4PD-4R722%2B (2024). [39] Movella. 2024. Xsens MTi-670 GNSS/INS. https://www .movella .com/products/ sensor-modules/xsens-mti-670-gnss-ins (2024). [40] NASA Earth Observatory. 2024. Catalog of Earth Satellite Orbits. (2024). https: //earthobservatory .nasa .gov/features/OrbitsCatalog Accessed: 2024-12-04. [41] Mengguan Pan, Jinlong Hu, Jinhong Yuan, Jianfeng Liu, and Yongtao Su. 2020. An efficient blind Doppler shift estimation and compensation method for LEO satellite communications. In 2020 IEEE 20th International Conference on Commu-nication Technology (ICCT) . IEEE, 643–648. [42] Pasternack. 2024. WR-75 Waveguide Antenna, 10-15 GHz Frequency Range, 15 dBi Gain. https://www .pasternack .com/wr-75-waveguide-gain-horn-antenna-15db-square-flange-pewan075-15-p .aspx (2024). [43] Jason Rainbow. 2024. Connecting the Dots | Incoming illegal NGSO service crackdown. https://spacenews .com/connecting-the-dots-incoming-illegal-ngso-service-crackdown/ (2024). [44] Ettus Research. 2024. OctoClock CDA-2990. https://ettus .com/all-products/ octoclock/ (2024). [45] Ettus Research. 2024. UBX 10-6000 MHz Rx/Tx (160 MHz, X Series only). https: //ettus .com/all-products/ubx160/ (2024). [46] Ettus Research. 2024. USRP N210. https://www .ettus .com/all-products/un210-kit/ (2024). [47] Ettus Research. 2024. USRP X310. https://www .ettus .com/all-products/x310-kit/ (2024). [48] Orbital Research. 2024. 5400X Off-the-Shelf External Reference Ku-Band LNB. https://orbitalresearch .net/product/ku-band-lnb-external-reference-off-the-shelf/ (2024). [49] Orbital Research. 2024. Orbital Research “Mux Tee” (MT-25/40). https:// orbitalresearch .net/product/orbital-mt2540-mux-tee/ (2024). [50] David Richmond and Katrina Raichle. 2018. Doppler curves in satellite track-ing and characterization. In The Advanced Maui Optical and Space Surveillance Technologies Conference . 58. [51] Hossein Rouzegar, Mehrzad Nasirian, and Mohammad Ghanbarisabagh. 2017. Novel algorithm for tracking LEO satellites using doppler frequency shift tech-nique. Wireless Personal Communications 96, 2 (2017), 2161–2178. [52] Satellite Wiki, IIT Bombay. 2018. Beacon. (2018). https://www .aero .iitb .ac .in/ satelliteWiki/index .php/Beacon [53] SatNOGS DB. 2025. FOSSASAT-2. (2025). https://db .satnogs .org/satellite/TMYM-1828-3150-9512-1217 [54] Vaibhav Singh, Tusher Chakraborty, Suraj Jog, Om Chabra, Deepak Vasisht, and Ranveer Chandra. 2024. Spectrumize: spectrum-efficient satellite networks for the internet of things. In 21st USENIX Symposium on Networked Systems Design and Implementation (NSDI 24) . 825–840. [55] SpaceX. 2025. Satellite Operators. https://starlink .com/satellite-operators (2025). Accessed: 2025-11-26. [56] R. Sridharan and Antonio F. Pensa. 1998. U.S. Space Surveillance Network capabilities. Proceedings of SPIE 3434 (1998), 1–12. https://doi .org/10 .1117/ 12 .331225 [57] Orbit Communication Systems. 2025. Orbit Communication Systems. (2025). https://orbit-cs .com/ [58] David Vallado, Paul Crawford, Ricahrd Hujsak, and TS Kelso. 2006. Revisiting spacetrack report# 3. In AIAA/AAS Astrodynamics Specialist Conference and Exhibit . 6753. [59] Jue Wang, Deepak Vasisht, and Dina Katabi. 2014. RF-IDraw: virtual touch screen in the air using RF signals. In Proceedings of the 2014 ACM conference on SIGCOMM .Chicago Illinois USA, 235–246. https://doi .org/10 .1145/2619239 .2626330 [60] Bo-Heng Yeh, Jen-Ming Wu, and Ronald Y Chang. 2024. Efficient doppler com-pensation for LEO satellite downlink OFDMA systems. IEEE Transactions on Vehicular Technology (2024). [61] Xiaodong Zhuge and Alexander G Yarovoy. 2012. Study on two-dimensional sparse MIMO UWB arrays for high resolution near-field imaging. IEEE transac-tions on antennas and propagation 60, 9 (2012), 4173–4182. 
+
+## A Deriving the 2D Angle of Arrival 
+
+The 2D angle of arrival can also be calculated using the phase dif-ferences received by three antennas, with the calculation formulas as follows: 
+
+𝜓 = atan2 (− Δ𝜙 0−1, −Δ𝜙 1−2) ,𝜃 = arccos 
+
+ 𝜆 
+
+2𝜋𝑑 √︃ Δ𝜙 20−1 + Δ𝜙 21−2
+
+
+
+. (14) 
+
+Proof. Consider a Cartesian coordinate system with RX1 posi-tioned at the origin. Define the direction from RX1 to RX0 as the pos-itive 𝑥 -axis, the direction from RX1 to RX2 as the positive 𝑦 -axis, and the plane above the antenna array as the positive 𝑧 -axis. The coordi-nates of the three antennas are given by: RX0 [− 𝑑, 0, 0], RX1 [0, 0, 0],and RX2 [0, 𝑑, 0]. Let the distance from the satellite to RX1 be 𝑟 1,then its coordinates are S [− 𝑟 1 cos 𝜃 cos 𝜓, 𝑟 1 cos 𝜃 cos 𝜓, 𝑟 1 sin 𝜃 ].
+
+> 13
+
+The distances from the satellite to RX0 and RX2 are 
+
+𝑟 0 =√︁ (𝑑 + 𝑟 1 cos 𝜃 cos 𝜓 )2 + ( 𝑟 1 cos 𝜃 sin 𝜓 )2 + ( 𝑟 1 sin 𝜃 )2,𝑟 2 =√︁ (𝑟 1 cos 𝜃 cos 𝜓 )2 + ( 𝑑 − 𝑟 1 cos 𝜃 sin 𝜓 )2 + ( 𝑟 1 sin 𝜃 )2. (15) Since the antenna spacing 𝑑 is significantly smaller than the distance 𝑟 1 from the satellite to the antenna, 𝑟 0 and 𝑟 2 can be ap-proximated. Taking 𝑟 0 as an example, we have 
+
+𝑟 0 =√︁ (𝑑 + 𝑟 1 cos 𝜃 cos 𝜓 )2 + ( 𝑟 1 cos 𝜃 sin 𝜓 )2 + ( 𝑟 1 sin 𝜃 )2
+
+=√︃ 𝑟 21 + 𝑑 2 + 2𝑑𝑟 1 cos 𝜃 cos 𝜓 
+
+= 𝑟 1√︄ 1 + 2𝑑𝑟 1 cos 𝜃 cos 𝜓 + 𝑑 2
+
+𝑟 21
+
+∼ 𝑟 1 1 + 𝑑𝑟 1 cos 𝜃 cos 𝜓 + 12 𝑑 2
+
+𝑟 21
+
+!
+
+∼ 𝑟 1
+
+
+
+1 + 𝑑 cos 𝜃 cos 𝜓 𝑟 1
+
+
+
+= 𝑟 1 + 𝑑 cos 𝜃 cos 𝜓, 
+
+(16) where the first equivalence uses the first-order Taylor expansion of √1 + 𝑥 , and the second equivalence neglects second-order small quantities. By similar derivation, we get the approximation of 𝑟 2
+
+𝑟 2 = 𝑟 1 − 𝑑 cos 𝜃 sin 𝜓 . (17) Therefore, the range differences of the incident signal to RX0-RX1 and RX1-RX2 are 
+
+Δ𝑟 0−1 = 𝑟 0 − 𝑟 1 = 𝑑 cos 𝜃 cos 𝜓, 
+
+Δ𝑟 1−2 = 𝑟 1 − 𝑟 2 = 𝑑 cos 𝜃 sin 𝜓 . (18) Since 𝜃 ∈ [− 90 ◦, 90 ◦], 𝑑 cos 𝜃 ≥ 0, we have Δ𝑟 1−2 ∝ sin 𝜓 , Δ𝑟 0−1 ∝
+
+cos 𝜓 , so 
+
+𝜓 = atan2 (Δ𝑟 0−1, Δ𝑟 1−2) . (19) Plugging in Δ𝜙 0−1 = −2𝜋 Δ𝑟 0−1 
+
+> 𝜆
+
+and Δ𝜙 1−2 = −2𝜋 Δ𝑟 1−2 
+
+> 𝜆
+
+, we get the relationship between the azimuth angle 𝜓 and the phase difference: 
+
+𝜓 = atan2 (− Δ𝜙 0−1, −Δ𝜙 1−2) . (20) Adding the squares of the two phase differences, we have 
+
+Δ𝜙 20−1 + Δ𝜙 21−2 = 4𝜋 2
+
+𝜆 2
+
+ Δ𝑟 20−1 + Δ𝑟 21−2
+
+
+
+= 4𝜋 2
+
+𝜆 2 𝑑 2 cos 2 𝜃, 
+
+(21) therefore, the relationship between the elevation angle 𝜃 and the phase difference is: 
+
+𝜃 = arccos 
+
+ 𝜆 
+
+2𝜋𝑑 √︃ Δ𝜙 20−1 + Δ𝜙 21−2
+
+
+
+. (22) This completes the proof. □
+
+## B Deriving the Relation between Range and Elevation 
+
+𝑟 = −𝑅 𝑒 sin (𝜃 ) + √︃ 𝑅 2 
+
+> 𝑒
+
+sin 2 (𝜃 ) + 2𝑅 𝑒 ℎ + ℎ2 (23) 
+
+Proof. Let Earth center be 𝐶 , observer on the Earth be 𝑂 and satellite be 𝑆 , we have |𝑂𝐶 | = 𝑅 𝑒 , |𝑂𝑆 | = 𝑟 and 𝑆𝐶 = 𝑅 𝑒 + ℎ and 
+
+∠𝐶𝑂𝑆 = 𝜃 + 90 ◦. Consider Δ𝐶𝑂𝑆 , by law of cosines 
+
+|𝑂𝐶 |2 + | 𝑂𝑆 |2 − | 𝑆𝐶 |2 = 2|𝑂𝐶 || 𝑂𝑆 | cos (𝜃 + 90 ◦) (24) which can be rewritten as a quadratic equation of 𝑟 𝑟 2 + 2𝑅 𝑒 sin (𝜃 )𝑟 − 2𝑅 𝑒 ℎ − ℎ2 = 0 (25) and 𝑟 is obtained from the positive solution. □
+
+## C StarLoc’s location estimation algorithm 
+
+Algorithm 1 summarizes the pseudocode for estimating the azimuth, elevation and slant range of a LEO transmitter, as discussed in § 3. 
+
+Algorithm 1: StarLoc Pseudocode for azimuth, elevation and range estimation   
+
+> 1: Input:
+
+𝑡 -domain signal 𝑥 ℓ (𝑡 ) from RX ℓ , ℓ = 0, 1, 2; Antenna spacing 𝑑 ; Wave-length 𝜆 ; StarLoc latitude 𝑙𝑎𝑡 , longitude 𝑙𝑜𝑛 and altitude 𝑎𝑙𝑡 .2: Output: Satellite’s 3D trajectory [𝑥 (𝑡 ), 𝑦 (𝑡 ), 𝑧 (𝑡 ) ] .3: 𝑘 ← 2𝑑 /𝜆 // # of 1D ambiguities 4: Calculate Δ𝜙 0−1 (𝑡 ), Δ𝜙 1−2 (𝑡 ) using Eq. 13 5: Track Doppler shift 𝑓 Doppler (𝑡 ) as described in Sec. 4.3 6: // Iterate over all grating lobes 7: for 𝑖 = 1 : 𝑘 do   
+
+> 8: for
+
+𝑗 = 1 : 𝑘 do   
+
+> 9: // Generate phase candidates 10:
+
+𝜙 𝑖  
+
+> 0−1
+
+(𝑡 ) ← 𝜙 0−1 (𝑡 ) + 2𝜋 × ( 𝑖 − 𝑘 /2) 
+
+> 11:
+
+𝜙 𝑗  
+
+> 1−2
+
+(𝑡 ) ← 𝜙 1−2 (𝑡 ) + 2𝜋 × ( 𝑗 − 𝑘 /2)  
+
+> 12: // Calculate AoA candidates using Eq. 4 13:
+
+𝜓 𝑖 𝑗 (𝑡 ), 𝜃 𝑖 𝑗 (𝑡 ) ← AoA_est (𝜙 𝑖  
+
+> 0−1
+
+(𝑡 ), 𝜙 𝑗  
+
+> 1−2
+
+(𝑡 ), 𝑑, 𝜆 )       
+
+> 14: if Passing radiation pattern filtering and Passing maximum elevation time requirement then
+> 15: // Estimate orbit height using Eq .8 16:
+
+ℎ𝑖 𝑗 ← orbit_height_est (𝜓 𝑖 𝑗 (𝑡 ), 𝜃 𝑖 𝑗 (𝑡 ), 𝑙𝑎𝑡, 𝑙𝑜𝑛, 𝑎𝑙𝑡 )   
+
+> 17: // Calculate loss to resolve ambiguity (DSAR) 18: loss 𝑖 𝑗
+
+= DSAR (𝑓 Doppler (𝑡 ), ℎ 𝑖 𝑗 ,𝜓 𝑖 𝑗 (𝑡 ), 𝜃 𝑖 𝑗 (𝑡 ) )     
+
+> 19: end if
+> 20: end for
+> 21: end for
+> 22:
+
+𝑖, 𝑗 = arg min loss 𝑖 𝑗 // Best candidate 23: 𝑟 (𝑡 ) = −𝑅 𝑒 sin (𝜃 (𝑡 ) ) + √︁ 𝑅 2 
+
+> 𝑒
+
+sin 2 (𝜃 (𝑡 ) ) + 2𝑅 𝑒 ℎ + ℎ2 // Eq. 6 24: [𝑥 (𝑡 ), 𝑦 (𝑡 ), 𝑧 (𝑡 ) ] = 𝑟 (𝑡 ) [ cos 𝜃 𝑖 𝑗 (𝑡 ) cos 𝜓 𝑖 𝑗 (𝑡 ), 
+
+> 25:
+
+cos 𝜃 𝑖 𝑗 (𝑡 ) sin 𝜓 𝑖 𝑗 (𝑡 ), sin 𝜃 𝑖 𝑗 (𝑡 ) ]    
+
+> 26: return satellite trajectory
+
+[𝑥 (𝑡 ), 𝑦 (𝑡 ), 𝑧 (𝑡 ) ]
