@@ -1,0 +1,667 @@
+Title: Robust Angles-Only Initial Relative Orbit Determination Using Polynomial Optimization
+
+URL Source: https://arxiv.org/pdf/2604.24451v1
+
+Published Time: Tue, 28 Apr 2026 02:12:29 GMT
+
+Number of Pages: 22
+
+Markdown Content:
+# Robust Angles-Only Initial Relative Orbit Determination Using Polynomial Optimization 
+
+Xingyu Zhou ∗
+
+Beijing Institute of Technology, 100081 Beijing, People’s Republic of China 
+
+Malcolm Macdonald †
+
+University of Strathclyde, Glasgow, Scotland G1 1XJ, United Kingdom 
+
+Roberto Armellin ‡
+
+University of Auckland, Auckland 1010, New Zealand 
+
+Dong Qiao § and Xiangyu Li ¶
+
+Beijing Institute of Technology, 100081 Beijing, People’s Republic of China 
+
+# I. Introduction 
+
+# Relative orbit determination (ROD) is a key capability for space surveillance, autonomous proximity operations, rendezvous, and non-cooperative servicing missions [ 1, 2 ]. It is commonly divided into two stages: initial relative orbit determination (IROD) [ 3], which provides an initial estimate of the relative state over a finite observation arc, and orbit refinement, which sequentially improves this estimate as new measurements become available [ 4]. Among the available measurement types, angle-only observations are particularly attractive because passive optical sensors provide low-cost line-of-sight (LOS) measurements without requiring target cooperation [ 5, 6 ]. However, angles-only IROD suffers from a fundamental range ambiguity: under linearized dynamics, a body-centered sensor, and no maneuvers, the relative distance is unobservable [ 7]. Existing methods mitigate this difficulty mainly through four routes: exploiting richer dynamical information, such as nonlinear motion or perturbations [ 8]; introducing maneuvers as excitation inputs [ 9]; creating geometric parallax through sensor offsets, attitude motion, or multi-sensor/multi-platform configurations [7 ]; and augmenting LOS measurements with additional observables, such as apparent target size or other visual features [ 10 , 11 ]. Among these, nonlinear-dynamics-based methods are attractive because they enhance observability without additional resources [12]. Several nonlinear-dynamics-based approaches have been developed, including second-order models in Cartesian coordinates [ 12 ], curvilinear formulations in cylindrical or spherical frames [ 13 ], methods based on relative orbital elements [ 14 , 15 ], and data-driven mappings from LOS histories to relative states [ 16 ]. A particularly general and efficient framework is the overdetermined eigenvector approach (OEA) [ 17 ]. It constructs a cross-product-based           
+
+> ∗Ph.D. Candidate, School of Aerospace Engineering; zhouxingyu@bit.edu.cn .
+> †Professor, Department of Electronic and Electrical Engineering; malcolm.macdonald.102@strath.ac.uk (Associate Fellow AIAA).
+> ‡Professor, Te P ¯unaha ¯Atea - Space Institute, 20 Symonds Street, Auckland Central; roberto.armellin@auckland.ac.nz (Member AIAA).
+> §Professor, School of Aerospace Engineering; qiaodong@bit.edu.cn (Corresponding Author).
+> ¶Associate Professor, School of Aerospace Engineering; lixiangy@bit.edu.cn .
+> arXiv:2604.24451v1 [astro-ph.IM] 27 Apr 2026
+
+objective from LOS observations and approximates the relative motion using second-order state transition tensors (STTs). The relative-state direction is first estimated using the linear term of the STTs, and the scale is then recovered by incorporating second-order terms. This enables angles-only IROD under arbitrary nonlinear dynamics without requiring maneuvers, sensor offsets, or prior range information. Nevertheless, its accuracy and robustness may degrade when the measurement noise or relative distance is large. This limitation mainly stems from three factors. First, the second-order STT approximation is itself limited in accuracy, while the direction estimate still relies on the linear term. Second, the inherent structure of the cross-product-based objective function makes the zero solution a local optimum, which may attract the optimization under unfavorable conditions. Third, the OEA does not explicitly incorporate measurement weighting. A related weighted strategy has been explored for orbit refinement, where noticeable accuracy improvement was observed, but LOS measurements intrinsically contain only two degrees of freedom (DoF), making the resulting weighting matrix prone to numerical singularity and poor robustness under large-noise conditions. [18]. To this end, this Note develops an accurate and robust angles-only IROD method applicable to arbitrary nonlinear dynamics. The main contributions are threefold. First, the relative motion is approximated by high-order Taylor polynomials, thereby improving the approximation accuracy. Based on the LOS cross-product residual, the angles-only IROD problem is formulated as a polynomial optimization problem, which can then be solved efficiently using a recursive polynomial optimization (RPO) procedure. Second, a reduced-order weighting strategy is developed to avoid the numerical singularity induced by the limited DoF of LOS measurements. Third, a zero-solution-avoidance constraint is introduced together with an adaptive threshold selection mechanism, enabling robust suppression of the undesired zero solution under different observation geometries and noise levels. The proposed method is assessed against several representative approaches in terms of IROD accuracy, robustness, and computational cost. The remainder of this paper is organized as follows. Section II introduces the preliminaries. The IROD methodology, together with the three contributions, are detailed in Sec. III. Simulation examples are given in Sec. IV, and conclusions are provided in Sec. V. 
+
+# II. Preliminary 
+
+A. Problem Statement 
+
+Consider a passive IROD scenario involving an observer and a target, with orbital states 𝒙 Δ (𝑡 ) = [𝒓 Δ (𝑡 ); 𝒗 Δ (𝑡 )] ∈ R6,
+
+Δ ∈ { 𝑂, 𝑇 }, governed by 
+
+¤𝒙 Δ (𝑡 ) = 𝒇 (𝑡, 𝒙 Δ (𝑡 )) , (1) where 𝒇 represents the nonlinear orbital dynamics. Assuming short-range, maneuver-free motion, the same dynamics are used for both spacecraft. The state at time 𝑡 is then written as 𝒙 Δ (𝑡 ) = 𝑭 (𝒙 Δ (𝑡 0), 𝑡 0, 𝑡 ), where 𝑭 is the nonlinear flow map associated with Eq. (1). 2Assuming angle-only sensing, the nominal measurement is the LOS unit vector 
+
+˜𝒍 (𝑡 ) = 𝒓 𝑇 (𝑡 ) − 𝒓 𝑂 (𝑡 )∥ 𝒓 𝑇 (𝑡 ) − 𝒓 𝑂 (𝑡 )∥ ∈ R3. (2) The goal of IROD is to estimate the target state, or equivalently the relative state, from a set of LOS measurements, with the initial epoch aligned with the first observation. Let 𝜺 (𝑡 ) ∈ R3 denote the LOS measurement error. According to the QUEST model [19], E{𝜺 (𝑡 )} = 03×1 and 
+
+E{𝜺 (𝑡 )𝜺 𝑇 (𝑡 )} = 𝜎 2
+
+2
+
+h
+
+𝑰 3 − ˜𝒍 (𝑡 ) ˜𝒍 𝑇 (𝑡 )
+
+i
+
+≡ 𝑹 (𝑡 ), (3) where 𝜎 is the sensor noise standard deviation (STD). The measured LOS vector is then written as 
+
+𝒍 (𝑡 ) = ˜𝒍 (𝑡 ) + 𝜺 (𝑡 ) = [𝑙 𝑥 (𝑡 ), 𝑙 𝑦 (𝑡 ), 𝑙 𝑧 (𝑡 )] 𝑇 ∈ R3. (4) For brevity, time-dependent variables are abbreviated hereafter, e.g., 𝒍 𝑖 ≡ 𝒍 (𝑡 𝑖 ).
+
+B. High-Order Taylor Polynomial 
+
+Let 𝛿 𝒙 0 = 𝒙 𝑇 (𝑡 0) − 𝒙 𝑂 (𝑡 0) denote the initial relative state. The relative state at epoch 𝑡 𝑖 can be approximated by a high-order Taylor expansion as 
+
+𝛿 𝒙 𝑖 ≡ 𝛿 𝒙 (𝑡 𝑖 ) = 𝒙 𝑇 (𝑡 𝑖 ) − 𝒙 𝑂 (𝑡 𝑖 ) ≈ T 𝛿 𝒙 𝑖 (𝛿 𝒙 0) =
+
+> 𝑁
+
+∑︁ 
+
+> 𝑝 =1
+
+1
+
+𝑝 ! 𝜙 𝑖,𝑘 1 ··· 𝑘 𝑝    
+
+> (𝑡 0,𝑡 𝑖 )
+
+𝛿𝑥 𝑘 1 
+
+> 0
+
+· · · 𝛿𝑥 𝑘 𝑝  
+
+> 0
+
+, (5) where 𝑁 is the truncation order and 𝜙 𝑖,𝑘 1 ··· 𝑘 𝑝    
+
+> (𝑡 0,𝑡 𝑖 )
+
+denotes the coefficient of the 𝑝 th-order term. No constant term appears because 𝛿 𝒙 𝑖 = 0 when 𝛿 𝒙 0 = 0. Compared with linearized dynamics, the high-order polynomial captures richer nonlinear behaviors and improves observability, while remaining much more efficient than numerical propagation. The polynomial coefficients in Eq. (5) can be obtained using variational techniques such as STTs [ 20 , 21 ], or algorithmic differentiation frameworks such as differential algebra (DA) [ 22 ] and jet transport (JT) [ 23 ]. Unlike STT-based methods, which require explicit derivation of high-order variational equations, DA and JT generate these coefficients automatically through algebraic differentiation. In this work, DA is adopted because it enables flexible and efficient computation of high-order Taylor expansions without symbolic derivation. 
+
+C. Orbit Refinement Approaches 
+
+Orbit refinement is used in this work only to assess the quality of the IROD solution, rather than as a methodological contribution. Since a better initial estimate generally leads to faster convergence, lower computational cost, and higher 3refinement accuracy, the refinement performance provides an indirect but quantitative indicator of IROD quality. Two refinement methods are considered for this purpose: nonlinear least squares (NLS) [ 24 ], which iteratively minimizes angular residuals, and optimal linear orbit determination (OLOD) [ 18 ], which solves a linearized cross-product formulation analytically. Their performance under different IROD outputs will be compared in Sec. IV. 
+
+# III. Methodology 
+
+A. Formulation of the Initial Relative Orbit Determination Problem 
+
+1. Measurement-Residual Objective 
+
+In angles-only IROD, the measurement residual can be modeled either by directly comparing the observed and predicted LOS directions or by enforcing the collinearity constraint between the relative position and the measured LOS. In this work, the latter is adopted because the resulting cross-product residual is algebraically simple and integrates naturally with the polynomial approximation in Eq. (5). The corresponding objective function is written as 
+
+min  
+
+> 𝛿 𝒙 0
+
+𝐽 =∑︁ 
+
+> 𝑖
+
+[( 𝒍 𝑖 × 𝛿 𝒓 𝑖 )𝑇 (𝒍 𝑖 × 𝛿 𝒓 𝑖 )] 𝑛  
+
+> 2
+
+=∑︁ 
+
+> 𝑖
+
+[( 𝒍 × 
+
+> 𝑖
+
+𝛿 𝒓 𝑖 )𝑇 𝑖 (𝒍 × 
+
+> 𝑖
+
+𝛿 𝒓 𝑖 )]  
+
+> 𝑛
+> 2
+
+=∑︁ 
+
+> 𝑖
+
+𝒍 × 
+
+> 𝑖
+
+𝛿 𝒓 𝑖 𝑛 , (6) where 𝛿 𝒓 𝑖 ≡ 𝛿 𝒓 (𝑡 𝑖 ) is the position component of 𝛿 𝒙 𝑖 , 𝑛 is the residual order, and 𝒍 × 
+
+> 𝑖
+
+is the matrix form of the cross-product operator. Despite its advantages, the cross-product formulation has two important limitations. First, because 𝒍 × 
+
+> 𝑖
+
+0 = 0 for all 
+
+𝑖 , the zero relative state trivially yields zero residual and may therefore appear as a spurious local optimum. Second, the unweighted form in Eq. (6) does not account for the fact that the cross-product residual is heteroscedastic: even under the same angular noise level, its statistical scale depends on the observation geometry and relative distance. As a result, measurements from different epochs should not, in general, contribute equally to the cost. At the same time, direct weighting is nontrivial because LOS measurements intrinsically contain only two DoF, which can make the corresponding weighting matrix rank-deficient or numerically ill-conditioned. These two issues motivate the reduced-order weighting strategy and zero-solution-avoidance mechanism introduced later. 
+
+2. Zero-Avoidance Constraint 
+
+A critical issue of the cross-product-based formulation is the existence of a spurious zero solution, i.e. , 𝛿 𝒙 0 = 06.In this case, 𝛿 𝒓 𝑖 = 03 for all 𝑖 , and thus the objective in Eq. (6) is identically zero because 𝒍 × 
+
+> 𝑖
+
+03 = 03. As illustrated in Fig. 1, this zero solution remains a minimizer regardless of the measurement noise level. In contrast, although the desired solution also gives zero cost in the noise-free case, its objective value increases once measurement noise is present, whereas the zero solution still yields zero residual. As a result, direct minimization of Eq. (6) becomes strongly biased toward the spurious zero solution under noisy conditions. 4Fig. 1 An illustration of the desired and undesired solution. 
+
+To exclude this solution, a zero-avoidance constraint is introduced as ∥𝛿 𝒓 0 ∥ ≥ 𝛿 , where 𝛿 > 0 is a prescribed threshold. Only the position component is constrained, because identical velocities are physically admissible, whereas coincident positions are not. The resulting constrained optimization problem is 
+
+min  
+
+> 𝛿 𝒙 0
+
+𝐽 = Í𝑖 ∥𝒍 × 
+
+> 𝑖
+
+𝛿 𝒓 𝑖 ∥𝑛 
+
+s.t. ∥𝑯 𝛿 𝒙 0 ∥ ≥ 𝛿 , (7) with 𝑯 = [𝑰 3, 03×3] ∈ R3×6.However, Eq. (7) still has two drawbacks. First, both the objective and the constraint are nonlinear, and evaluating 
+
+𝛿 𝒓 𝑖 through numerical propagation leads to a computationally expensive nonlinear program. Second, the threshold 𝛿 is user-defined and difficult to choose: a small value may fail to avoid the zero solution, whereas a large value may overly distort the feasible set and degrade the estimation accuracy. 
+
+3. Recursive Polynomial Optimization 
+
+The constrained IROD problem in Eq. (7) can be solved using an existing RPO framework [ 25 , 26 ]. Since the RPO methodology itself is not the focus of this work, only the problem-specific implementation is summarized below. First, by replacing the numerically propagated relative position with its high-order Taylor approximation, one has 
+
+𝛿 𝒓 𝑖 ≈ T 𝛿 𝒓 𝑖 (𝛿 𝒙 0), where T𝛿 𝒓 𝑖 is the position component of Eq. (5) . Then, around a current estimate 𝛿 ˆ𝒙 0, the polynomial model is locally linearized as 
+
+𝒍 × 
+
+> 𝑖
+
+𝛿 𝒓 𝑖 ≈ 𝑨 𝑖 Δ𝒙 0 + 𝒃 𝑖 , (8) where Δ𝒙 0 = 𝛿 𝒙 0 − 𝛿 ˆ𝒙 0, 𝑨 𝑖 = 𝒍 × 
+
+> 𝑖
+
+∇T 𝛿 𝒓 𝑖 𝛿 ˆ𝒙 0 and 𝒃 𝑖 = 𝒍 × 
+
+> 𝑖
+
+T𝛿 𝒓 𝑖 (𝛿 ˆ𝒙 0).5Introducing auxiliary variables 𝜒 𝑖 and linearizing the zero-avoidance constraint at 𝛿 ˆ𝒙 0 yields the following power cone optimization (PCO) subproblem: 
+
+min  
+
+> Δ𝒙 0, 𝜒 𝑖
+
+𝐽 = Í𝑖 𝜒 𝑖 
+
+s.t. ∥ 𝑨 𝑖 Δ𝒙 0 + 𝒃 𝑖 ∥𝑛 ≤ 𝜒 𝑖 
+
+(𝑯 𝛿 ˆ𝒙 0)𝑇 𝑯 (𝛿 ˆ𝒙 0 + Δ𝒙 0) ≥ 𝛿 , (9) When 𝑛 = 2, Eq. (9) reduces to a very common second-order cone optimization problem. At each iteration, Eq. (9) is solved with MOSEK, and the estimate is updated as 𝛿 ˆ𝒙 0 ← 𝛿 ˆ𝒙 0 + Δ𝒙 ∗
+
+> 0
+
+, where Δ𝒙 ∗ 
+
+> 0
+
+is the optimal increment. The procedure is repeated until ∥Δ𝒙 ∗ 
+
+> 0
+
+∥ ≤ 𝜂 . The main computational advantage of the RPO is that, by locally linearizing the polynomial and convexifying the zero-avoidance constraint, each iteration reduces to a convex optimization subproblem. 
+
+B. Reduced-Order Weighting Strategy 
+
+The objective in Eq. (6) assigns equal weights to all cross-product residuals. This is generally suboptimal, because the residual statistics depend not only on the sensor noise level but also on the observation geometry and the relative range. A natural way to introduce weighting is therefore to derive the covariance of the cross-product residual and use its inverse as the weighting matrix, as in Ref. [18]. Define the residual at epoch 𝑡 𝑖 as 𝒆 𝑖 ≡ 𝒍 × 
+
+> 𝑖
+
+𝛿 𝒓 𝑖 ∈ R3. At the true solution, ˜𝒍 × 
+
+> 𝑖
+
+𝛿 𝒓 𝑖 = 0, and with 𝒍 𝑖 = ˜𝒍 𝑖 + 𝜺 𝑖 , one has 
+
+𝒆 𝑖 = 𝜺 × 
+
+> 𝑖
+
+𝛿 𝒓 𝑖 = −𝛿 𝒓 × 
+
+> 𝑖
+
+𝜺 𝑖 . (10) Using the QUEST measurement model in Eq. (3), the covariance of the conventional three-dimensional residual is 
+
+𝑸 𝑖 ≡ E{𝒆 𝑖 𝒆 𝑇 𝑖 } = 𝛿 𝒓 × 
+
+> 𝑖
+
+𝑹 𝑖 𝛿 𝒓 ×𝑇 𝑖 . (11) A conventional weighted formulation would then use 𝑸 −1 
+
+> 𝑖
+
+as the weighting matrix. However, this covariance is intrinsically singular: LOS measurements contain only two independent DoF, whereas 𝑸 𝑖 ∈ R3×3 is constructed in a redundant three-dimensional space. Hence, 𝑸 𝑖 is rank-deficient. In Ref. [ 18 ], this issue is handled numerically by replacing the zero eigenvalue with a small positive constant. While effective in practice, such regularization remains a numerical remedy rather than a structural resolution. To remove this intrinsic singularity, a reduced-order weighting strategy is introduced here. Instead of weighting the redundant three-dimensional residual directly, the residual is projected onto the two-dimensional tangent subspace of 6the LOS. Let 𝑬 𝑖 ∈ R3×2 be an orthonormal basis satisfying 
+
+𝑬 𝑇 𝑖 𝑬 𝑖 = 𝑰 2, 𝑬 𝑇 𝑖 𝒍 𝑖 = 0, (12) and define the reduced residual as 
+
+¯𝒆 𝑖 = 𝑬 𝑇 𝑖 𝒆 𝑖 = 𝑬 𝑇 𝑖 𝒍 × 
+
+> 𝑖
+
+𝛿 𝒓 𝑖 ∈ R2. (13) Since 𝒍 × 
+
+> 𝑖
+
+𝛿 𝒓 𝑖 is always orthogonal to 𝒍 𝑖 , this projection removes only the redundant direction and preserves all informative components of the cross-product residual. The corresponding reduced-order covariance becomes 
+
+¯𝑸 𝑖 ≡ E{ ¯𝒆 𝑖 ¯𝒆 𝑇 𝑖 } = 𝑬 𝑇 𝑖 𝑸 𝑖 𝑬 𝑖 ∈ R2×2, (14) which is nonsingular as long as the observation geometry is not degenerate. The reduced-order weighting matrix is then naturally defined as ¯𝑾 𝑖 = ¯𝑸 −1 
+
+> 𝑖
+
+.Let ¯𝑼 𝑖 be a factorization of ¯𝑾 𝑖 such that ¯𝑼 𝑇 𝑖 ¯𝑼 𝑖 = ¯𝑾 𝑖 . Then, the reduced-order weighted objective for a general residual order 𝑛 is defined as 
+
+𝐽 𝑤 =∑︁ 
+
+> 𝑖
+
+¯𝑼 𝑖 𝑬 𝑇 𝑖 𝒍 × 
+
+> 𝑖
+
+𝛿 𝒓 𝑖  
+
+> 𝑛
+
+. (15) When 𝑛 = 2, Eq. (15) reduces to the standard Mahalanobis quadratic form, 
+
+𝐽 𝑤 =∑︁ 
+
+> 𝑖
+
+¯𝒆 𝑇 𝑖 ¯𝑾 𝑖 ¯𝒆 𝑖 . (16) This reduced-order formulation is the proposed weighting scheme. It is consistent with the two-DoF nature of LOS measurements and avoids constructing an artificial information direction in the redundant three-dimensional space. A useful closed-form approximation can be further obtained under the QUEST noise model and small-angle assumptions. Let 
+
+𝛿 𝒓 𝑖 ≈ 𝜌 𝑖 ˜𝒍 𝑖 , 𝜌 𝑖 = ∥𝛿 𝒓 𝑖 ∥. (17) Substituting Eq. (3) and Eq. (17) into Eq. (14) yields 
+
+¯𝑸 𝑖 ≈ 𝜎 2 𝜌 2
+
+> 𝑖
+
+2 𝑰 2, (18) and thus 
+
+¯𝑾 𝑖 ≈ 2
+
+𝜎 2 𝜌 2
+
+> 𝑖
+
+𝑰 2, ¯𝑼 𝑖 ≈√︄ 2
+
+𝜎 2 𝜌 2
+
+> 𝑖
+
+𝑰 2. (19) 7Therefore, Eq. (15) reduces to 
+
+𝐽 𝑤 ≈∑︁ 
+
+> 𝑖
+
+ √︄ 
+
+2
+
+𝜎 2 𝜌 2
+
+> 𝑖
+
+𝑬 𝑇 𝑖 𝒍 × 
+
+> 𝑖
+
+𝛿 𝒓 𝑖 
+
+!𝑛 
+
+. (20) Because 𝒍 × 
+
+> 𝑖
+
+𝛿 𝒓 𝑖 already lies in the tangent subspace, the projection does not change its norm, and Eq. (20) can be further simplified as 
+
+𝐽 𝑤 ≈∑︁ 
+
+> 𝑖
+
+2
+
+𝜎 2 𝜌 2
+
+> 𝑖
+
+! 𝑛 
+
+> 2
+
+𝒍 × 
+
+> 𝑖
+
+𝛿 𝒓 𝑖 𝑛 . (21) In practice, the true range 𝜌 𝑖 is unknown and is replaced by the current estimate, ˆ𝜌 𝑖 = T𝛿 𝒓 𝑖 (𝛿 ˆ𝒙 0) . It should be emphasized that the proposed method is fundamentally a reduced-order covariance weighting scheme constructed in the two-dimensional tangent subspace of the LOS. The inverse-range weighting in Eq. (21) is only a closed-form approximation of this scheme under the QUEST model and small-angle assumptions. It should also be noted that the weighted objective in Eqs. (15) and (21) remains compatible with the RPO in Sec. III.A.3. Specifically, at each RPO iteration, the weighting matrices are evaluated using the current estimate 𝛿 ˆ𝒙 0 and are therefore treated as constants within the corresponding convex subproblem. As a result, the weighted residual still has the form of a norm of an affine function of the decision variable, so that the weighted optimization problem can be reformulated as a PCO problem and solved within the same RPO framework. Table 1 summarizes the core ideas of the three weighting strategies and compares their main advantages and limitations. Among them, the developed reduced-order weighting method is the most theoretically complete, since it eliminates the numerical singularity issue at the structural level while preserving the full statistical meaning of covariance-based weighting. It is therefore expected to provide the highest estimation accuracy among the three methods. 
+
+Table 1 Comparison of different weighting strategies 
+
+ID Method Core idea Advantage Limitation 1 3-D weighting (Ref. [18]) Construct the weighting ma-trix directly in the 3-D cross-product residual space, with numerical treatment for sin-gularity – The covariance matrix is intrin-sically singular; the existing sin-gularity treatment is essentially a numerical remedy and may lead to accuracy loss 2 Reduced-order weighting (Eq. (15)) Project the residual onto the two-dimensional LOS tan-gent subspace and construct the weighting matrix in that subspace Eliminates the singular-ity issue at the structural level and is consistent with the two-DoF nature of LOS measurements Requires an additional matrix factorization step compared with the simplified formulation 3 Simplified reduced-order weighting (Eq. (21)) Further approximate the reduced-order weighting by a closed-form scalar weight Simple to implement and free of singularity Involves the strongest approxi-mation and therefore suffers the largest accuracy loss 8C. Adaptive Threshold Selection 
+
+Although the RPO in Sec. III.A.3 greatly improves computational efficiency, two practical issues remain unresolved: the zero-avoidance threshold 𝛿 in Eq. (7) is still user-defined, and the RPO procedure requires a nonzero initial guess. These two issues are closely coupled in the present problem, because the zero solution is a spurious local optimum of the cross-product objective (as discussed in Sec. III.A.2). As a result, using the zero vector as the initial guess is not feasible, and an excessively large threshold may exclude the desired optimum from the feasible domain. To address this issue, an adaptive thresholding strategy is introduced herein. Note that this adaptive thresholding strategy applies to both the unweighted and weighted formulations in Sec. III.A and Sec. III.B. Let 𝑘 denote the index of the adaptive threshold iteration, and let 𝛿 (𝑘 ) be the threshold used at the 𝑘 th trial. For a given 𝛿 (𝑘 ) , the constrained problem in Eq. (7) is solved first. The resulting solution is then used as the initial guess for the corresponding unconstrained refinement problem. For the unweighted formulation, this problem is written as 
+
+min  
+
+> Δ𝒙 0, 𝜒 𝑖
+
+𝐽 = Í𝑖 𝜒 𝑖 
+
+s.t. ∥ 𝑨 𝑖 Δ𝒙 0 + 𝒃 𝑖 ∥𝑛 ≤ 𝜒 𝑖 
+
+, (22) For the weighted formulation, the same constrained-to-unconstrained transition is applied, with the objective replaced by its weighted counterpart. The rationale behind this constrained-to-unconstrained transition is to use the unconstrained refinement as a diagnostic test for the effectiveness of the current threshold. The constrained solve first forces the iterate away from the spurious zero solution, but this alone does not guarantee that the obtained point lies in the attraction region of the desired solution. If the threshold is still too small, the constrained solution may remain inside the attraction region of the zero solution, in which case the subsequent unconstrained refinement will collapse back to zero. By contrast, if the unconstrained refinement no longer returns to the zero solution, then the current threshold is regarded as sufficiently large. In this sense, the proposed procedure searches for the smallest effective threshold that moves the iterate out of the zero-solution attraction region without introducing an unnecessarily restrictive feasible set. After solving the unconstrained problem, the solution is classified as a zero solution if ∥𝛿 𝒓 0 ∥ ≤ 𝜀 , where 𝜀 is a prescribed small positive constant. If this condition is satisfied, then the current threshold is deemed insufficient, indicating that the constrained solution has not been pushed far enough away from the zero-solution attraction region. Otherwise, the current threshold is accepted. In this way, the threshold is not prescribed a priori, but adaptively increased until it becomes large enough to steer the solution away from the undesired zero solution. The adaptive procedure is initialized from a minimum threshold 𝛿 (0) = 𝛿 min . For each threshold trial, the initial 9guess of the constrained problem is constructed along the first LOS direction as 
+
+𝛿 ˆ𝒙 (𝑘, 0) 
+
+> 0
+
+= 𝛿 (𝑘 ) 𝒍 1; 03×1
+
+ , (23) where the superscript (𝑘, 0) denotes the initial guess used for the constrained solve at the 𝑘 th adaptive threshold iteration. This choice is both nonzero and feasible for the constrained problem. If the current threshold fails the above unconstrained test, it is updated as 
+
+𝛿 (𝑘 +1) = 𝜆𝛿 (𝑘 ) , 𝜆 > 1, (24) and the procedure is repeated. This strategy seeks the smallest effective threshold that avoids the zero solution without introducing an unnecessarily restrictive feasible set. 
+
+D. Overall Procedure 
+
+Let 𝛿 (𝑘 ) ∈ R1, 𝛿 ˆ𝒙 (𝑘 ) 
+
+> 0
+
+∈ R6, 𝛿 𝒙 (𝑘 ) 
+
+> 0
+
+∈ R6, and 𝛿 ˜𝒙 (𝑘 ) 
+
+> 0
+
+∈ R6 denote the zero-avoidance threshold, the initial guess of the constrained optimization problem, the optimal solution of the constrained optimization problem, and the optimal solution of the unconstrained optimization problem in the kth adaptive-threshold loop, respectively. Then, the pseudo-code of the developed ARPO method is given in Algorithm 1. Starting from 𝛿 min , the method solves the constrained problem and then performs an unconstrained refinement initialized by the constrained solution. If the refined solution still satisfies 
+
+∥𝑯 𝛿 ˜𝒙 (𝑘 ) 
+
+> 0
+
+∥ ≤ 𝜀 , the current threshold is regarded as insufficient and is enlarged by a factor 𝜆 . The procedure is repeated until a nonzero refined solution is obtained or the threshold reaches 𝛿 max .
+
+Algorithm 1 Pseudo-code of the ARPO method 
+
+Require: LOS measurements 𝒍 𝑖 at epochs 𝑡 𝑖 , observer initial state 𝒙 𝑂 (𝑡 0), polynomial order 𝑁 , thresholds 𝛿 min and 
+
+𝛿 max , scaling factor 𝜆 , zero-solution tolerance 𝜀 , and RPO tolerance 𝜂  
+
+> 1:
+
+Derive the 𝑁 th-order polynomial model using Eq. (5); ⊲ using Eq. (5) within the DA framework  
+
+> 2:
+
+Initialize 𝑘 ← 0 and 𝛿 (0) ← 𝛿 min ; 
+
+> 3:
+
+while 𝛿 (𝑘 ) ≤ 𝛿 max do  
+
+> 4:
+
+Initialize the constrained solve with 𝛿 ˆ𝒙 (𝑘 ) 
+
+> 0
+
+= [𝛿 (𝑘 ) 𝒍 1; 0]; ⊲ Eq. (23)  
+
+> 5:
+
+Construct the weighting matrices using the current estimate 𝛿 ˆ𝒙 (𝑘 ) 
+
+> 0
+
+; ⊲ Eqs. (12)-(14)  
+
+> 6:
+
+Solve the constrained problem to obtain 𝛿 𝒙 (𝑘 ) 
+
+> 0
+
+; ⊲ Eq. (9)  
+
+> 7:
+
+Update the weighting matrices based on 𝛿 𝒙 (𝑘 ) 
+
+> 0
+
+; ⊲ Eqs. (12)-(14)  
+
+> 8:
+
+Solve the corresponding unconstrained refinement problem initialized at 𝛿 𝒙 (𝑘 ) 
+
+> 0
+
+to obtain 𝛿 ˜𝒙 (𝑘 ) 
+
+> 0
+
+; ⊲ Eq. (22)  
+
+> 9:
+
+if ∥𝑯 𝛿 ˜𝒙 (𝑘 ) 
+
+> 0
+
+∥ > 𝜀 then  
+
+> 10:
+
+Return 𝛿 ˜𝒙 (𝑘 ) 
+
+> 0
+
+; Exit while loop  
+
+> 11:
+
+else  
+
+> 12:
+
+Record the constrained solution 𝛿 𝒙 (𝑘 ) 
+
+> 0
+
+; 
+
+> 13:
+
+𝛿 (𝑘 +1) ← 𝜆𝛿 (𝑘 ) and 𝑘 ← 𝑘 + 1; ⊲ Eqs. (23)-(24)  
+
+> 14:
+
+end if  
+
+> 15:
+
+end while  
+
+> 16:
+
+Return the recorded candidate with the smallest measurement residual. ⊲ All threshold trials fail 10 If all threshold trials fail, an empirical fallback strategy is adopted. Specifically, all constrained solutions are recorded, and the final output is selected as the candidate that minimizes the measurement residual, 
+
+𝑘 ∗ = arg min 
+
+> 𝑘
+
+∑︁ 𝑖 
+
+𝒍 𝑖 − ˆ𝒍 𝑖 (𝛿 𝒙 (𝑘 ) 
+
+> 0
+
+) , (25) where ˆ𝒍 𝑖 (·) denotes the predicted LOS corresponding to the candidate solution. Although this strategy does not guarantee the exact desired optimum, it provides a practical nonzero estimate that can still serve as a useful initialization for subsequent orbit refinement. 
+
+# IV. Numerical Results 
+
+A. Scenario Design and Analysis 
+
+The simulations are performed under ideal two-body dynamics in a nondimensional inertial frame, such that Eq. (1) becomes 
+
+𝒇 (𝑡, 𝒙 Δ (𝑡 )) =
+
+
+
+𝒗 Δ (𝑡 )−𝜇 𝒓 Δ (𝑡 )∥ 𝒓 Δ (𝑡 )∥ 3
+
+
+
+, Δ ∈ { 𝑂, 𝑇 }, (26) with 𝜇 = 1. The initial states of the observer and target are listed in Table 2. 
+
+Table 2 Initial conditions (nondimensional inertial frame) 
+
+Spacecraft Position Velocity 
+
+𝑥 𝑦 𝑧 ¤𝑥 ¤𝑦 ¤𝑧 
+
+Observer 1 0 0 0 1 0Target 1.01 0.01 0 0.01 1 0One orbital period ( 𝑇 = 2𝜋 ) is considered, with 10 equally spaced LOS measurements. Unless otherwise stated, the sensor noise standard deviation is set to 𝜎 = 10 −4, corresponding to approximately 1 arcmin at the 3𝜎 level [ 6, 17 ]. This noise level is used for the nominal case only; its impact will be further examined in the robustness analysis (Sec. IV.C). A fifth-order Taylor polynomial ( 𝑁 = 5) is used in the proposed method. Figure 2 illustrates the projected landscape of the (unweighted) objective function in Eq. (6) for the noise-free case with 𝑛 =1. To facilitate visualization, the coordinates are transformed such that the first axis is aligned with the observer-to-target direction at the initial epoch. The figure shows that the objective function exhibits two local minima, corresponding to the desired solution and the spurious zero solution, separated by a ridge. This structure implies that the optimization is sensitive to initialization: if the initial guess lies on the wrong side of the ridge, a gradient-based solver may converge to the undesired zero solution. These results further motivate the introduction of the zero-avoidance constraint in the introduced method. 11 (a) (b) (c)  
+
+> (d) (e)
+
+Fig. 2 Projected landscape of the unweighted objective function. (a) Projection on ˜𝑥 1- ˜𝑥 2. (b) Projection on ˜𝑥 1- ˜𝑥 3.(c) Projection on ˜𝑥 1- ˜𝑥 4. (d) Projection on ˜𝑥 1- ˜𝑥 5. (e) Projection on ˜𝑥 1- ˜𝑥 6.
+
+To simplify the presentation, abbreviations are used throughout this section, as summarized in Table 3. Although Ref. [ 17 ] proposed both pseudoinverse eigenvalue algorithm (PEA) and quadratic eigenvalue algorithm (QEA), only PEA is reported here, since QEA was found to be less accurate in the scenarios considered. Besides PEA, several RPO-based variants are included to isolate the effects of RPO, fixed thresholding, and adaptive thresholding. In particular, P-RPO and P-RPO-𝛿 assess the roles of RPO and fixed zero-avoidance constraints, respectively, while ARPO is the proposed method. Two ablation variants, L-RPO and U-ARPO, are further introduced to separate the effects of large-threshold initialization and adaptive constrained solving. Finally, OLOD and NLS are used as orbit refinement methods for downstream comparison. 
+
+Table 3 Abbreviations for different methods 
+
+ROD Abbr. Description Reference IROD stage Non-adaptive methods PEA Pseudoinverse eigenvalue algorithm Ref. [17] P-RPO Single RPO: (a) without the zero-avoidance constraint; (b) using PEA to provide an initial guess to activate the RPO Eq. (22) P-RPO-𝛿 Single RPO: (a) with the zero-avoidance constraint; (b) using PEA to provide an initial guess to activate the RPO Eq. (9) L-RPO RPO using a very large zero-avoidance threshold Eq. (9) Adaptive methods ARPO Adaptive recursive polynomial optimization Algorithm 1 U-ARPO ARPO with only unconstrained optimization problem Eq. (22) Orbit refinement stage OLOD Optimal linear orbit determination Ref. [18] NLS Nonlinear least squares Ref. [24] 12 B. Performance Analysis on Nominal Case 
+
+Three hundred Monte Carlo (MC) runs are performed for each IROD method. In each run, LOS measurement noise is generated according to the QUEST model, and the same set of pre-generated noisy measurements is used for all methods to ensure a fair comparison. Unless otherwise stated, the user-defined parameters in Algorithm 1 are set as follows: 𝑁 = 5, 𝜂 = 10 −6, 𝜀 = 10 −4, 𝛿 min = 10 −3, 𝛿 max = 10 −1, and 𝜆 = 2. In addition, for P-RPO-𝛿 , the fixed zero-avoidance threshold is set to 𝛿 = 10 −3.The following nondimensional relative error is used to evaluate both the IROD and refinement results: 
+
+𝑒 (𝛿 𝒙 0) = ∥𝛿 𝒙 0 − 𝛿 ˆ𝒙 0 ∥∥𝛿 𝒙 0 ∥ , (27) where 𝛿 𝒙 0 and 𝛿 ˆ𝒙 0 denote the true and estimated relative states at the initial epoch, respectively. The mean relative error (MRE) is defined as the average of Eq. (27) over the 300 MC runs. Table 4 compares the accuracy of the non-adaptive methods (unweighted), except for L-RPO, whose results will be discussed separately in Sec. IV.C. The column “CR” denotes the convergence rate of the orbit refinement method. Two failure modes are considered in this work: convergence to the undesired zero solution, which mainly occurs in OLOD, and numerical divergence, which is more common in NLS when inaccurate IROD solutions lead to unreliable gradient information. A run is classified as divergent if the estimated relative position exceeds ten times the true relative distance during any refinement iteration. For the nominal case in Table 4, the measurement noise is moderate and all IROD methods provide sufficiently accurate initial estimates. Consequently, both OLOD and NLS achieve a convergence rate of 100% in all runs. The dependence of refinement convergence on IROD accuracy becomes more evident in the robustness analysis presented later. Table 4 shows that the RPO-based methods significantly improve the IROD accuracy over the baseline PEA and also reduce the number of iterations required by the subsequent refinement methods. For example, compared with PEA, P-RPO reduces the MRE from 1.4566 to 1.7868 × 10 −3 and decreases the average number of OLOD iterations from 6.00 to 2.14. Under this nominal case, the fixed zero-avoidance constraint has little effect on the final results, because the observation noise is low and the PEA initialization is already sufficiently far from the zero solution. Its benefit becomes more apparent in the robustness analysis. Table 5 reports the computational costs of the non-adaptive methods, except for L-RPO. The four columns correspond to the CPU times of the entire IROD stage, the RPO iterations within IROD, the refinement stage, and the total runtime per MC run. The results show that, within the IROD stage, the RPO iterations account for only a small fraction of the total cost (about 0.02 s), whereas the dominant cost comes from DA-based polynomial propagation (about 0.5 s). Although RPO slightly increases the IROD time, this extra cost is modest, and the improved IROD accuracy significantly reduces the refinement burden. As a result, the total runtime decreases, showing that the RPO-based methods improve both estimation accuracy and overall computational efficiency. 13 Table 4 Accuracy performance of non-adaptive methods (unweighted) 
+
+Method Residual order 𝑛 
+
+MRE (-) Averaged iteration for refinement CR for refinement IROD Refinement IROD Refinement PEA OLOD - 1.4566 1.9644 ×10 −3 6.0000 1P-RPO OLOD 1 1.7868 ×10 −3 1.9644 ×10 −3 2.1400 1P-RPO OLOD 2 1.9631 ×10 −3 1.9644 ×10 −3 2.0000 1P-RPO-𝛿 OLOD 1 1.7869 ×10 −3 1.9644 ×10 −3 2.1400 1P-RPO-𝛿 OLOD 2 1.9625 ×10 −3 1.9644 ×10 −3 2.0000 1PEA NLS - 1.4566 9.4247 ×10 −4 5.0000 1P-RPO NLS 1 1.7868 ×10 −3 9.4247 ×10 −4 2.5700 1P-RPO NLS 2 1.9631 ×10 −3 9.4247 ×10 −4 2.7567 1P-RPO-𝛿 NLS 1 1.7869 ×10 −3 9.4247 ×10 −4 2.5700 1P-RPO-𝛿 NLS 2 1.9625 ×10 −3 9.4247 ×10 −4 2.7600 1
+
+Table 5 Computational costs of non-adaptive methods (unweighted) 
+
+Method Residual order 𝑛 
+
+Averaged CPU time (s) IROD Refinement IROD RPO in IROD Refinement Total PEA OLOD - 0.4315 - 2.2923 2.7238 P-RPO OLOD 1 0.5166 0.0177 0.8052 1.3218 P-RPO OLOD 2 0.5216 0.0172 0.7617 1.2833 P-RPO-𝛿 OLOD 1 0.5182 0.0197 0.8056 1.3237 P-RPO-𝛿 OLOD 2 0.5199 0.0204 0.7538 1.2737 PEA NLS - 0.4304 - 1.8845 2.3149 P-RPO NLS 1 0.5160 0.0177 0.9625 1.4784 P-RPO NLS 2 0.5146 0.0170 1.0293 1.5439 P-RPO-𝛿 NLS 1 0.5191 0.0198 0.9642 1.4833 P-RPO-𝛿 NLS 2 0.5198 0.0204 1.0355 1.5554 Table 6 and Table 7 report the estimation errors and computational costs of ARPO, respectively. Although ARPO requires multiple RPO calls, the resulting cost increase is modest. In this nominal case, ARPO attains the same accuracy as the non-adaptive RPO methods, whereas its main advantage becomes evident in the robustness analysis presented in Sec. IV.C. 
+
+Table 6 Accuracy performance of the introduced ARPO method (unweighted) 
+
+Method Residual order 𝑛 
+
+MRE (-) Averaged iteration for refinement CR IROD Refinement IROD Refinement IROD Refinement ARPO OLOD 1 1.7868 ×10 −3 1.9644 ×10 −3 2.1400 1 1ARPO OLOD 2 1.9631 ×10 −3 1.9644 ×10 −3 2.0000 1 1ARPO NLS 1 1.7868 ×10 −3 9.4247 ×10 −4 2.5700 1 1ARPO NLS 2 1.9631 ×10 −3 9.4247 ×10 −4 2.7567 1 114 Table 7 Computational costs of the introduced ARPO method (unweighted) 
+
+Method Residual order 𝑛 Averaged CPU time (s) IROD Refinement IROD RPO in IROD Refinement Total ARPO OLOD 1 0.5888 0.1062 0.7979 1.3867 ARPO OLOD 2 0.5870 0.1052 0.7437 1.3307 ARPO NLS 1 0.5895 0.1061 0.9563 1.5458 ARPO NLS 2 0.5905 0.1060 1.0247 1.6152 In addition to the unweighted scheme, 300 MC runs were also performed for the weighted formulations. In the nominal case considered here, the weighted versions of P-RPO, P-RPO-𝛿 , and ARPO yield identical estimation results; therefore, for brevity, only the ARPO results are reported in Table 8. Table 8 includes the unweighted scheme together with the three weighting strategies listed in Table 1, namely the 3-D weighting, the reduced-order weighting, and its simplified version. For the 3-D weighting strategy, to alleviate the numerical singularity of 𝑸 𝑖 (i.e. , Eq. (11) ), all eigenvalues below 10 −14 are replaced by 10 −14 ; if 𝑸 𝑖 is still numerically singular, the threshold is further increased to 
+
+10 −12 . Following Ref. [ 18 ], both covariance and bias metrics are evaluated. Specifically, from the 300 MC solutions, the sample covariance 𝑷 ∈ R6×6 and bias 𝒅 ∈ R6 are first computed and partitioned into position and velocity components as 
+
+𝑷 =
+
+
+
+𝑷 𝑟𝑟 𝑷 𝑟 𝑣 
+
+𝑷 𝑣𝑟 𝑷 𝑣𝑣 
+
+
+
+, 𝒅 =
+
+
+
+𝒅 𝑟 
+
+𝒅 𝑣 
+
+
+
+(28) The covariance metrics are then defined as the square roots of the largest eigenvalues of 𝑷 𝑟𝑟 and 𝑷 𝑣𝑣 , denoted by 𝜍 𝑟 and 
+
+𝜍 𝑣 , respectively, while the bias metrics are given by the norms ∥ 𝒅 𝑟 ∥ and ∥ 𝒅 𝑣 ∥.
+
+Table 8 A comparison between weighted and unweighted schemes (ARPO, 𝑛 =1) 
+
+Weighting strategy IROD results Bias metrics (nd) Covariance metrics (nd) Averaged CPU time (s) Position Velocity Position Velocity Unweighted (Eq. (9)) 1.3375 ×10 −6 1.2755 ×10 −6 3.1513 ×10 −5 2.0772 ×10 −5 0.1062 Weighted-1 (Ref. [18]) 1.7628 ×10 −6 1.5867 ×10 −6 1.7050 ×10 −5 1.1855 ×10 −5 0.1972 Weighted-2 (Eq. (15)) 1.7628 ×10 −6 1.5867 ×10 −6 1.7050 ×10 −5 1.1855 ×10 −5 0.2312 Weighted-3 (Eq. (21)) 1.4407 ×10 −6 1.3528 ×10 −6 2.0409 ×10 −5 1.3836 ×10 −5 0.1315 As shown in Table 8, all three weighted schemes outperform the unweighted one in terms of covariance. Compared with the unweighted scheme, the 3-D and reduced-order weighting strategies reduce the position and velocity covariance metrics from 3.1513 × 10 −5 and 2.0772 × 10 −5 to 1.7050 × 10 −5 and 1.1855 × 10 −5, corresponding to reductions of about 45 .9% and 42 .9% , respectively. The simplified weighting strategy also improves the covariance metrics, but to a lesser extent, with reductions of about 35 .2% in position and 33 .4% in velocity. Among the three weighted schemes, the 15 reduced-order and 3-D weighting methods are nearly identical and both outperform the simplified one. This is because, in the nominal case, the 3-D weighting does not suffer from numerical singularity, whereas the simplified weighting introduces additional approximation error due to model reduction. Weighted solutions also show larger bias metrics, consistent with Ref. [ 18 ]. In terms of computational cost, all weighted schemes are more expensive than the unweighted case, while the simplified weighting is the least expensive among the three weighted methods. 
+
+C. Robustness Analysis 
+
+This subsection first investigates the accuracy and convergence of different methods under different levels of measurement noise, characterized by the measurement error standard deviation 𝜎 , under the unweighted scheme. Three hundred MC runs are performed for each noise level. Only the first-order residual norm ( i.e. , 𝑛 =1) is considered for the P-RPO, P-RPO-𝛿 and ARPO, since the results in Sec. IV.B show that it provides higher accuracy than the second-order form. Figure 3 summarizes the performance results under different measurement noise levels. As shown in Fig. 3(a), the P-RPO, P-RPO-𝛿 and ARPO significantly outperform PEA in the IROD stage over the entire noise range. Among them, ARPO becomes the most accurate when the noise level is relatively high, especially for 𝜎 > 10 −3.  
+
+> (a) (b)
+> (c) (d)
+
+Fig. 3 Performance under different measurement noise levels (unweighted). (a) IROD MRE; (b) NLS convergence rate; (c) NLS averaged iterations; (d) NLS MRE. 
+
+16 Figures 3(b)-3(d) further show the performance of NLS refinement initialized by different IROD solutions under the unweighted scheme. For failed NLS runs, the iteration count in Fig. 3(c) is set to 100. The improvement in IROD accuracy directly translates into better refinement performance, including higher convergence rates, fewer iterations, and lower refinement errors. In particular, ARPO achieves the highest convergence rate, the smallest averaged iteration number, and the lowest MRE after refinement. Similar trends are also observed for OLOD and are omitted for brevity. Based on the above discussion, a particularly challenging case with 𝜎 = 10 −2 is further considered. Note that 
+
+𝜎 = 10 −2 corresponds to approximately 1.5◦ of error at the 3𝜎 level. Table 9 compares the performance of ARPO, L-RPO, and U-ARPO in this case. ARPO achieves the best IROD accuracy, reducing the MRE from 0.4489 and 0.4985 to 0.1876, i.e., by more than 50% relative to the other two variants. This improvement also leads to markedly better downstream refinement performance. For example, in the NLS refinement, ARPO attains a 100% convergence rate, whereas L-RPO converges in only 69% of the trials, and the averaged number of refinement iterations is reduced from 34.78 to 5.49. These results show that both adaptive thresholding and constrained initialization play essential roles in achieving robust and accurate performance under severe noise conditions. 
+
+Table 9 Performance of the ARPO, L-RPO, and U-ARPO in the challenging case (unweighted) 
+
+Performance IROD Orbit refinement OLOD NLS MRE MRE Average iteration CR MRE Average iteration CR ARPO 0.1876 0.5650 49.0266 0.5833 0.0972 5.4900 1L-RPO 0.4489 0.6030 53.9800 0.5166 0.3781 34.7833 0.69 U-ARPO 0.4985 0.5663 49.1666 0.5833 0.0972 5.9066 1The effect of the initial relative distance is further investigated under the unweighted scheme. A scaling factor 𝜆 𝑑 is introduced such that the initial relative state is replaced by 𝛿 𝒙 0 ← 𝜆 𝑑 𝛿 𝒙 0. The value of 𝜆 𝑑 varies from 0.25 to 2.00 with an interval of 0.25. For each 𝜆 𝑑 , 300 MC runs are performed with the measurement noise fixed at 𝜎 = 10 −4. Figure 4 summarizes the corresponding robustness results. As shown in Fig. 4(a), the three RPO-based methods exhibit similar IROD accuracy when 𝜆 𝑑 ≤ 1.25 . However, when 𝜆 𝑑 ≥ 1.25 , the non-adaptive methods P-RPO and P-RPO-𝛿 can no longer reliably recover the desired solution, whereas ARPO remains accurate over the entire range of 𝜆 𝑑 .Figures 4(b)-4(d) further show the performance of NLS refinement initialized by the different IROD solutions. The degradation of the non-adaptive IROD methods at large 𝜆 𝑑 leads to lower convergence rates, more refinement iterations, and larger refinement errors. By contrast, ARPO maintains a 100% convergence rate throughout the tested range and consistently achieves the smallest averaged iteration number and refinement error. Similar trends are also observed for OLOD and are omitted for brevity. These results indicate that the adaptive adjustment of the zero-avoidance threshold is essential for maintaining robustness as the initial relative distance increases. Figure 5 compares the robustness of ARPO under the unweighted and weighted schemes. As shown in Fig. 5(a), all 17 (a) (b)  
+
+> (c) (d)
+
+Fig. 4 Performance under different initial-distance scaling factors 𝜆 𝑑 (unweighted). (a) IROD MRE; (b) NLS convergence rate; (c) NLS averaged iterations; (d) NLS MRE. 
+
+three weighted strategies outperform the unweighted one when 𝜎 ≤ 10 −3. For larger noise levels, however, the 3-D weighting strategy becomes markedly less stable, whereas the introduced reduced-order weighting and its simplified version remain stable and continue to outperform the unweighted scheme. Between the two introduced strategies, the reduced-order weighting is consistently more accurate, while the simplified one remains slightly less accurate due to the additional approximation (as discussed in Table 1). This difference is most evident at 𝜎 = 10 −2, where the IROD MREs of the unweighted, 3-D weighting, reduced-order weighting, and simplified reduced-order weighting schemes are 0.1876, 0.5527, 0.1053, and 0.1542, respectively. Relative to the other three schemes, the reduced-order weighting reduces the IROD MRE by about 43 .9% , 81 .0% , and 31 .7% , respectively. Figure 5(b) further shows the effect of the initial-distance scaling factor 𝜆 𝑑 with the noise level fixed at 𝜎 = 10 −4.In this case, all three weighted strategies outperform the unweighted one, while the 3-D and reduced-order weighting methods are nearly identical and both slightly outperform the simplified weighting. This indicates that, under low-noise conditions, varying 𝜆 𝑑 mainly challenges the zero-avoidance mechanism rather than the singularity handling of the weighting matrix; since ARPO can already adaptively select an appropriate threshold, the remaining differences among 18 (a) (b) 
+
+Fig. 5 Robustness analysis results of ARPO under weighted and unweighted schemes. (a) Effects of 𝜎 . (b) Effects of 𝜆 𝑑 .
+
+the weighting strategies are primarily due to their modeling accuracy. The effect of the observation-arc length is also investigated. The observation arc varies from 0.1 𝑇 to 1 𝑇 , with 10 measurements and a fixed noise level of 𝜎 = 10 −4 in each case. Three hundred MC runs are performed for each case. As shown in Fig. 6(a), within the unweighted scheme, ARPO consistently outperforms PEA, P-RPO, and P-RPO-𝛿 , and remains stable over the entire range of observation-arc lengths. Its advantage is particularly evident in two regimes. First, for very short observation arcs, ARPO provides a clear accuracy improvement. For example, at 0.1𝑇 , the MRE of ARPO is about 2.27% , whereas the other three methods all have MREs of about 10% . Second, PEA exhibits pronounced error growth for some intermediate observation arcs (particularly around 0.5𝑇 ), which is consistent with the geometric sensitivity related to cross-track motion transfer noted in Ref. [ 17 ]. Since P-RPO and P-RPO-𝛿 use the PEA solution for initialization, their errors increase accordingly in these cases. Figure 6(b) further shows that, among the three weighting strategies, the reduced-order weighting and the 3-D weighting achieve nearly identical accuracy and both outperform the simplified and unweighted schemes. The reduced-order weighting does not show a clear advantage over the 3-D weighting in this comparison, because the measurement-noise level is not sufficiently severe for the singularity issue of the 3-D strategy to become dominant. Its main advantage is manifested under large-noise conditions, as shown in Fig. 5(a). 
+
+# V. Conclusion 
+
+Accurate angles-only initial relative orbit determination (IROD) solutions can be obtained by combining high-order Taylor polynomial approximation with cross-product-residual minimization, while the spurious zero solution can be effectively avoided through constrained optimization and adaptive thresholding. Compared with the baseline methods, the introduced method improves the IROD accuracy by about three orders of magnitude and also reduces the downstream refinement cost by providing substantially more accurate initial estimates. In addition, it consistently 19 (a) (b) 
+
+Fig. 6 Performance under different observation-arc lengths. (a) Unweighted methods. (b) Weighted and unweighted ARPOs. 
+
+delivers high-quality IROD solutions and enables nonlinear refinement to maintain a 100% convergence rate in the robustness analysis, outperforming the baseline methods and the non-adaptive variants under severe noise, large initial distances, short observation arcs, and sensitive geometric configurations. A reduced-order weighting strategy is further shown to improve estimation accuracy while structurally removing the singularity of the conventional 3-D weighting scheme. Compared with the unweighted scheme, the introduced weighting strategy improves the IROD accuracy by about 43% in the nominal case. Under large-noise conditions, it remains stable and outperforms the conventional 3-D weighting by about 81%. 
+
+# Acknowledgments 
+
+This work was supported by the National Natural Science Foundation of China (No. 62394353 and No. 124B2049) and the High-level Talent Support Program (No. T2023191). Xingyu Zhou also thanks Zeno Pavanello for his helpful discussion on recursive polynomial optimization. 
+
+# References        
+
+> [1] Song, J., Rondao, D., and Aouf, N., “Deep learning-based spacecraft relative navigation methods: A survey,” Acta Astronautica ,Vol. 191, 2022, pp. 22–40. https://doi.org/10.1016/j.actaastro.2021.10.025. [2] Sun, X., Geng, C., Deng, L., and Chen, P., “Geolocation of Formation-Flying Spacecraft Using Relative Position Vector Measurements,” Journal of Guidance, Control, and Dynamics , Vol. 45, No. 4, 2022, pp. 764–773. https://doi.org/10.2514/1. G006377. [3] LeGrand, K. A., DeMars, K. J., and Pernicka, H. J., “Bearings-Only Initial Relative Orbit Determination,” Journal of Guidance, Control, and Dynamics , Vol. 38, No. 9, 2015, pp. 1699–1713. https://doi.org/10.2514/1.G001003. [4] Zhou, X., Qiao, D., Malcolm, M., and Li, X., “Efficient Orbit Determination Using Measurement-Directional State
+
+20 Transition Tensor,” IEEE Transactions on Aerospace and Electronic Systems , Vol. 61, No. 3, 2025, pp. 8014–8027. https://doi.org/10.1109/TAES.2025.3527410. [5] Liu, X., Armellin, R., Pirovano, L., and Hou, X., “Initial Orbit Determination of Periodic Orbits in the Earth-Moon System with Ground-based Optical Observations,” IEEE Transactions on Aerospace and Electronic Systems , Vol. 1, 2024, pp. 1–15. https://doi.org/10.1109/TAES.2024.3435634. [6] Zhou, X., Qin, T., Macdonald, M., and Qiao, D., “Observability analysis of cooperative orbit determination using inertial inter-spacecraft angle measurements,” Acta Astronautica , Vol. 210, 2023, pp. 289–302. https://doi.org/10.1016/j.actaastro.2023. 05.019. [7] Geller, D. K., and Klein, I., “Angles-Only Navigation State Observability During Orbital Proximity Operations,” Journal of Guidance, Control, and Dynamics , Vol. 37, No. 6, 2014, pp. 1976–1983. https://doi.org/10.2514/1.G000133. [8] Ardaens, J.-S., and Gaias, G., “A numerical approach to the problem of angles-only initial relative orbit determination in low earth orbit,” Advances in Space Research , Vol. 63, No. 12, 2019, pp. 3884–3899. https://doi.org/10.1016/j.asr.2019.03.001. [9] Wijayatunga, M. C., Armellin, R., and Holt, H., “Robust trajectory design and guidance for far-range rendezvous using reinforcement learning with safety and observability considerations,” Aerospace Science and Technology , Vol. 159, 2025, p. 109996. https://doi.org/10.1016/j.ast.2025.109996. [10] Takahashi, S., and Scheeres, D. J., “Autonomous Exploration of a Small Near-Earth Asteroid,” Journal of Guidance, Control, and Dynamics , Vol. 44, No. 4, 2021, pp. 701–718. https://doi.org/10.2514/1.G005733. [11] Zhou, X., Qiao, D., Macdonald, M., and Li, X., “Optical Orbit Determination for Asteroid Approach with Vision-Based Range Information,” Journal of Guidance, Control, and Dynamics , Vol. 48, No. 7, 2025, pp. 1492–1510. https://doi.org/10.2514/1. G008522. [12] Willis, M., and D’Amico, S., “Fast angles-only relative navigation using polynomial dynamics,” Advances in Space Research ,Vol. 73, No. 11, 2024, pp. 5484–5500. https://doi.org/10.1016/j.asr.2023.07.043. [13] Geller, D. K., and Lovell, T. A., “Angles-Only Initial Relative Orbit Determination Performance Analysis using Cylindrical Coordinates,” The Journal of the Astronautical Sciences , Vol. 64, No. 1, 2017, pp. 72–96. https://doi.org/10.1007/s40295-016-0095-z. [14] Gaias, G., D’Amico, S., and Ardaens, J.-S., “Angles-Only Navigation to a Noncooperative Satellite Using Relative Orbital Elements,” Journal of Guidance, Control, and Dynamics , Vol. 37, No. 2, 2014, pp. 439–451. https://doi.org/10.2514/1.61494. [15] Sullivan, J., Koenig, A. W., Kruger, J., and D’Amico, S., “Generalized Angles-Only Navigation Architecture for Autonomous Distributed Space Systems,” Journal of Guidance, Control, and Dynamics , Vol. 44, No. 6, 2021, pp. 1087–1105. https://doi.org/10.2514/1.G005439. 
+
+21 [16] Gong, B., Ma, Y., Zhang, W., Li, S., and Li, X., “Deep-neural-network-based angles-only relative orbit determination for space non-cooperative target,” Acta Astronautica , Vol. 204, 2023, pp. 552–567. https://doi.org/10.1016/j.actaastro.2022.09.024. [17] Kulik, J., Oertell, O., and Savransky, D., “Overdetermined Eigenvector Approach to Passive Angles-Only Relative Orbit Determination,” Journal of Guidance, Control, and Dynamics , Vol. 47, No. 5, 2024, pp. 986–994. https://doi.org/10.2514/1. G007744. [18] Sinclair, A. J., and Alan Lovell, T., “Optimal Linear Orbit Determination,” Journal of Guidance, Control, and Dynamics ,Vol. 43, No. 3, 2020, pp. 628–632. https://doi.org/10.2514/1.G004182. [19] Shuster, M. D., and Oh, S. D., “Three-axis attitude determination from vector observations,” Journal of Guidance and Control ,Vol. 4, No. 1, 1981, pp. 70–77. https://doi.org/10.2514/3.19717. [20] Park, R. S., and Scheeres, D. J., “Nonlinear mapping of Gaussian statistics: Theory and applications to spacecraft trajectory design,” Journal of Guidance, Control, and Dynamics , Vol. 29, No. 6, 2006, pp. 1367–1375. https://doi.org/10.2514/1.20177. [21] Zhou, X., Armellin, R., Qiao, D., and Li, X., “Time-Varying Directional State Transition Tensor for Orbit Uncertainty Propagation,” 
+
+Journal of Guidance, Control, and Dynamics , Vol. 49, No. 3, 2026, pp. 656–672. https://doi.org/10.2514/1.G009000. [22] Armellin, R., Di Lizia, P., Topputo, F., Lavagna, M., Bernelli-Zazzera, F., and Berz, M., “Gravity assist space pruning based on differential algebra,” Celestial Mechanics and Dynamical Astronomy , Vol. 106, No. 1, 2009, p. 1. https://doi.org/10.1007/s10569-009-9235-0. [23] Pérez-Palau, D., Masdemont, J. J., and Gómez, G., “Tools to detect structures in dynamical systems using Jet Transport,” Celestial Mechanics and Dynamical Astronomy , Vol. 123, No. 3, 2015, pp. 239–262. https://doi.org/10.1007/s10569-015-9634-3. [24] Crassidis, J., and Junkins, J., “Least Squares Approximation,” Optimal Estimation of Dynamic Systems (2nd ed.) , Chapman and Hall/CRC, 2011, Chap. 1, 2 nd ed., pp. 1–62. https://doi.org/10.1201/b11154. [25] Pavanello, Z., Pirovano, L., and Armellin, R., “Recursive Polynomial Method for Fast Collision Avoidance Maneuver Design,” 
+
+IEEE Transactions on Aerospace and Electronic Systems , Vol. 61, No. 2, 2024, pp. 2914–2925. https://doi.org/10.1109/TAES. 2024.3480041. [26] Zhou, X., Armellin, R., Pirovano, L., Qiao, D., and Li, X., “Maneuver Detection via a Confidence Dominance Maneuver Indicator,” , 2025. URL https://arxiv.org/abs/2507.08234. 
+
+22

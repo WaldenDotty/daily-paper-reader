@@ -1,0 +1,543 @@
+Title: SNGR: Selective Non-Gaussian Refinement for Ambiguous SLAM Factor Graphs
+
+URL Source: https://arxiv.org/pdf/2604.22065v1
+
+Published Time: Mon, 27 Apr 2026 00:14:23 GMT
+
+Number of Pages: 6
+
+Markdown Content:
+# SNGR: Selective Non-Gaussian Refinement for Ambiguous SLAM Factor Graphs 
+
+Anushka Kulkarni, Sarthak Dubey 
+
+Northeastern University, Boston, MA, USA 
+
+kulkarni.anushka@northeastern.edu, dubey.sart@northeastern.edu 
+
+Abstract —We present Selective Non-Gaussian Refinement (SNGR), a SLAM framework that augments iSAM2 with targeted nested sampling on windows where Gaussian approximations are likely to fail. We detect such regions using the condition number of joint marginal covariances and selectively refine them using the full nonlinear factor graph likelihood, with a gating mechanism to avoid degradation in multimodal cases. Experiments on range-only SLAM with wrong data association show that SNGR achieves high-precision failure detection and consistent local likelihood improvements while reducing compu-tational cost relative to exhaustive non-Gaussian inference. These results highlight both the promise and the limitations of selective refinement for approximate SLAM posteriors. 
+
+Index Terms —SLAM, nested sampling, non-Gaussian infer-ence, factor graphs, degeneracy detection 
+
+I. I NTRODUCTION 
+
+Simultaneous localization and mapping (SLAM) estimates a robot’s trajectory and environment map from sensor measure-ments. The leading formulation represents the joint posterior as a factor graph and solves for the MAP estimate by minimizing squared Mahalanobis errors [1]. Incremental solvers such as iSAM2 [2] maintain a Bayes tree that re-linearizes only affected cliques when new measurements arrive, enabling real-time deployment. These methods rely on a Gaussian approximation of the posterior. When this assumption breaks, most notably under range-only sensing and wrong data association, the MAP estimate can be both incorrect and overconfident. Under range-only sensing, a measurement r = ∥xt − lk∥2 constrains the robot to a circle; when a landmark is observed from similar directions, the posterior is bimodal and iSAM2 converges to the saddle between modes. Under wrong data association, an inconsistent factor biases the MAP while the covariance remains small, producing a confident but incorrect estimate. Huang, Papalia, and Leonard [3] showed nested sampling accurately characterizes non-Gaussian SLAM posteriors, but position it as an offline reference tool unsuitable for online deployment. Applying nested sampling to every window is computation-ally unjustified when most regions of the factor graph are well-conditioned and their Gaussian posteriors are accurate. We adapt the condition-number degeneracy analysis of Tuna et al. [4] from point-cloud registration to the iSAM2 marginal covariance: a high condition number indicates a poorly con-ditioned local landscape where the linearized solver is likely to fail and nested sampling may recover a better estimate. Windows exceeding threshold τ receive nested sampling via dynesty [5]; others retain iSAM2 estimates. There are two key aspects to our work: the use of factor graphs to improve the underlying inference algorithm and the use of nested sampling to perform approximate stochastic inference. We will first survey inference techniques in SLAM with a focus on those leveraging factor graph structures. We will then discuss general stochastic inference techniques which have not yet been applied to SLAM. The contributions of this work are a condition-number trigger for detecting non-Gaussian failure regions in SLAM factor graphs, a selective nested sampling framework compatible with iSAM2, and an empirical analysis of when selective non-Gaussian inference succeeds and fails. All code and experimental results are available at https:// github.com/anushkakulk/sngr-slam. II. R ELATED WORK 
+
+A. Deterministic SLAM Inference 
+
+iSAM [6] introduced incremental updates to avoid refactor-ization of the SLAM factor graph; iSAM2 [2] refined this with the Bayes tree and fluid relinearization. The g2o framework [7] offers an alternative solver [8]. Switchable constraints [9], dynamic covariance scaling [10], and the max-mixture model [11] add robustness to wrong associations but produce a single robust MAP rather than the full posterior. 
+
+B. Stochastic Non-Gaussian SLAM 
+
+Particle filter SLAM [12] tracks arbitrary distributions but scales exponentially with state dimension. Rao-Blackwellized filtering [13] reduces dimensionality but landmark count limits scalability. 
+
+C. Nested Sampling for SLAM 
+
+Nested sampling maintains live points contracting to-ward higher-likelihood regions, terminating when evidence converges. Unlike MCMC, it explores multimodal distribu-tions without chains becoming stuck. Speagle [5] developed dynesty, which our implementation uses. NSFG [3] splits the factor graph into prior and likelihood sets, draws samples via ancestral sampling, and outperforms NUTS and SMC by over an order of magnitude. SNGR differs: we use the iSAM2 MAP as sampling prior and apply sampling selectively on triggered windows. 
+
+> arXiv:2604.22065v1 [cs.RO] 23 Apr 2026
+
+D. Degeneracy Detection 
+
+Tuna et al. [4] showed that λmax /λ min of the registration Hessian identifies weakly constrained directions in point-cloud alignment. The Hessian of the negative log-posterior evaluated at the MAP is the inverse of the Gaussian approximation covariance, so a high condition number on the Hessian is equivalent to a high condition number on the marginal covari-ance. Both indicate an elongated, pencil-shaped uncertainty ellipsoid where the Gaussian approximation is most likely to be a poor representation of the true posterior: the flat directions of the cost surface are precisely where nonlinear curvature, secondary modes, and outlier-induced bias accumulate. We adapt this insight to the SLAM setting by operating on the iSAM2 marginal covariance rather than the registration Hessian. This is advantageous because iSAM2 maintains the Bayes tree factorisation of the joint covariance, making per-window marginals available at low cost via back-substitution without recomputing the full Hessian after each update. A window whose marginal covariance has a high condition number is therefore one where the Gaussian solver is operating in a poorly conditioned landscape, and where targeted non-Gaussian refinement is likely to recover a better estimate. III. M ETHODS 
+
+A. Problem Formulation 
+
+Let xt ∈ SE (2) denote robot pose and lk ∈ R2 land-mark k. Joint state Θ = {x0, . . . , x T −1, l 0, . . . , l K−1} is encoded in factor graph G with: prior on x0; odometry factors f odom  
+
+> t
+
+(xt−1, x t) = N (xt; xt−1 ⊕ut, Σu); range factors 
+
+ft,k (xt, l k) = N (zt,k ; xpos  
+
+> t
+
+− lk 2 , σ 2 
+
+> r
+
+); and weak landmark priors after three observations. The joint posterior relates to all factors as: 
+
+p(Θ |Z ) ∝ Y
+
+> f
+
+f (Θ f ) (1) and iSAM2 finds the MAP estimate: 
+
+ˆΘ = arg min 
+
+> Θ
+
+X
+
+> f
+
+∥hf (Θ) − zf ∥2Σf (2) where hf is the measurement function of factor f and ∥ · ∥ Σf
+
+is the Mahalanobis norm. Wrong-association noise corrupts fraction pnoise of measure-ments by replacing correct index k with incorrect j̸ = k.The factor is geometrically irreconcilable but iSAM2 has no rejection mechanism. For window w(t) = {xt, x t+1 , x t+2 }, ground-truth failure is defined at ε = 0 .5 m: 
+
+ϕ(w) = 1
+
+"
+
+> 13
+> t+2
+
+X
+
+> s=t
+
+ˆx[x,y ] 
+
+> s
+
+− xgt  
+
+> s2
+
+> ε 
+
+#
+
+(3) 
+
+B. Condition-Number Trigger 
+
+For each window: 
+
+sw = log 10 (λmax (Σ w) / λ min (Σ w)) (4) 
+
+Algorithm 1 Selective Non-Gaussian Refinement (SNGR) 
+
+Require: G, Z, τ , W , c
+
+Ensure: ˆΘ 
+
+> 1:
+
+for each pose t do  
+
+> 2:
+
+ˆΘ ← iSAM2.update (G, Zt) 
+
+> 3:
+
+end for  
+
+> 4:
+
+pending ← ∅  
+
+> 5:
+
+for each w = {t, . . . , t + W − 1}, t ≥ W − 1 do  
+
+> 6:
+
+sw ← log 10 (λmax /λ min ) (4)  
+
+> 7:
+
+if sw > τ then  
+
+> 8:
+
+compute Cw, Fw 
+
+> 9:
+
+{(Θ (i), w (i))} ← NestedSampling (Fw, π, ℓ ) (5)  
+
+> 10:
+
+˜Θw ← P 
+
+> i
+
+w(i)Θ(i) 
+
+> 11:
+
+if gate (6) holds then  
+
+> 12:
+
+pending ← pending ∪ { (w, ˜Θw)} 
+
+> 13:
+
+end if  
+
+> 14:
+
+end if  
+
+> 15:
+
+end for  
+
+> 16:
+
+apply pending updates to ˆΘ 
+
+> 17:
+
+return ˆΘ
+
+where Σw ∈ R9×9 is the joint marginal covariance. Large 
+
+sw signals elongated uncertainty: one direction tightly con-strained, the orthogonal nearly unconstrained. Window w triggers when sw > τ and t ≥ W −1. Threshold 
+
+τ is calibrated by selecting the largest value producing zero triggers at p = 0 .0 while maximizing recall at p = 0 .3.
+
+C. Variable Closure and Sampling 
+
+Closure Cw includes all variables in factors connected to the window, computed to fixed point. Variables in Cw \ w are fixed at iSAM2 MAP values, keeping d = 9 .Likelihood evaluates nonlinear GTSAM factor error: 
+
+log L(Θ (i) 
+
+> w
+
+) = − 12
+
+X 
+
+> f∈F w
+
+f. error 
+
+
+
+Θ(i) 
+
+> w
+
+∪ ˆΘC\ w
+
+
+
+(5) Prior maps [0 , 1] d to N ( ˆΘw, c Σw) via Cholesky and probit transform. From weighted samples, posterior mean ˜Θw = P 
+
+> i
+
+w(i)Θ(i)
+
+is computed and applied if: 
+
+log p( ˜Θw|Z ) ≥ log p( ˆΘw|Z ) − 10 −3 (6) Passing windows are applied simultaneously. Algorithm 1 presents the full SNGR pipeline. IV. I MPLEMENTATION 
+
+A. Trigger-Only Baseline 
+
+To isolate trigger from refinement quality, we implement a baseline trigger-only pipeline with a no-op rejection sampler: 500 samples from N ( ˆΘw, 0.52I) weighted under the iSAM2 marginal. Since both are Gaussians at the same MAP, no refinement occurs. Log importance weights average −73 nats at p = 0 .3, confirming the no-op character quantitatively. 4 2 0 2 4
+
+> x (m)
+> 4
+> 2
+> 0
+> 2
+> 4
+> y (m)
+> Ground truth
+> Estimated pose
+> Landmark (GT)
+> Landmark (est)
+
+(a) p = 0.0, seed 0. The es-timated trajectory closely tracks the ground truth. No windows trigger. 8 6 4 2 0 2 4
+
+> x (m)
+> 4
+> 2
+> 0
+> 2
+> 4
+> 6
+> 8
+> y (m)
+> Ground truth
+> Estimated pose
+> Triggered window pose
+> Landmark (GT)
+> Landmark (est)
+
+(b) p = 0.3, seed 0. Red poses are triggered windows. Long cross-graph factor edges reveal that poses are associated with geometrically distant wrong landmarks. 
+
+Fig. 1: Factor graph visualization at two noise levels ( τ =3.96 ). Gold stars: ground-truth landmarks. Orange crosses: estimated landmarks. The visual difference in factor graph density between clean and noisy cases corresponds directly to the difference in condition number scores seen in Fig. 3. 
+
+B. Nested Sampling SNGR Configuration 
+
+The full pipeline uses dynesty [5] with rwalk sampler, 
+
+nlive = 100 , nwalks = max( d, 9) , and ∆ log Z = 0 .5 con-vergence. rwalk handles non-ellipsoidal likelihoods without enlargement warnings. 
+
+C. Software and Hardware 
+
+Experiments use GTSAM 4.2.0, dynesty 3.0.0, Python 3.11, running on Apple M1 with 8 GB unified memory. V. B ENCHMARKING 
+
+A. Experimental Design 
+
+SNGR is evaluated on a synthetic 2-D range-only SLAM scenario. We choose a synthetic setting deliberately: it pro-vides exact ground truth for all poses and landmarks, allows precise control over the type and degree of failure injected, and makes the evaluation fully reproducible across seeds without dependence on a specific real-world dataset or sensor platform. The robot follows a circular trajectory of radius 5.0 msampled at T = 30 uniformly spaced poses. A circular path is chosen because it is a canonical stress test for range-only SLAM: the robot observes each landmark from a continuously changing direction, which is the geometry most likely to produce well-conditioned range constraints under clean data, and therefore provides a fair baseline against which failures introduced by wrong association stand out clearly. Six land-marks are drawn uniformly at random from [−4, 4] 2 m and all six are observed from every pose, ensuring the factor graph is fully connected and that any degradation in estimate quality is attributable to the injected noise rather than sparse coverage. Odometry is corrupted by additive Gaussian noise with translational standard deviation σt = 0 .05 m and rotational standard deviation σr = 0.01 rad per step, representing a moderately accurate odometer where drift accumulates slowly enough that range corrections are meaningful. Range mea-surements are corrupted by zero-mean Gaussian noise with 
+
+σrange = 0 .1 m, consistent with a short-range ultrasonic or UWB ranging sensor. Wrong-association noise is the primary experimental vari-able. It is applied independently to each measurement with probability pnoise : a corrupted measurement replaces the true landmark index k with an index j̸ = k drawn uniformly at random from the remaining K − 1 landmarks, producing a factor that is geometrically irreconcilable with the true trajectory. This models the failure mode where a data associa-tion front-end produces hard assignments without uncertainty, a common assumption in practical SLAM pipelines. Five noise levels pnoise ∈ {0.0, 0.1, 0.2, 0.3, 0.4} are evaluated, spanning the range from a clean baseline through moderate contamination to a heavily corrupted regime where nearly half of all measurements are wrong. Each level is evaluated across five random seeds to account for variability in landmark geometry, which we show has a material effect on trigger behaviour. RMSE is reported as mean ± std across seeds; NEES, trigger counts, ∆log p, and timing are reported from seed 0 for conciseness. 
+
+B. Evaluation Strategy 
+
+The benchmarking is structured in three stages, each isolat-ing a different component of SNGR. The first stage is a trigger evaluation using the trigger-only baseline, which runs the full condition-number detection pipeline but replaces the nested sampler with a no-op impor-tance sampler. This isolates trigger precision and recall from any effect of the refinement quality, allowing us to characterise the detector independently. The second stage is the full SNGR pipeline evaluation ,which adds dynesty nested sampling to every triggered win-dow and applies the gating rule. Comparing RMSE and NEES between this and iSAM2 alone measures whether local refinement translates into global trajectory improvement, and 
+
+∆log p quantifies the quality of the local posterior correction regardless of global effect. The third stage is the bimodal proof-of-concept , a delib-erately minimal two-anchor scenario that tests whether nested sampling can recover a bimodal posterior that iSAM2 is struc-turally incapable of representing. This is evaluated analytically rather than statistically since the ground truth is known exactly. 
+
+C. Metrics 
+
+Four complementary metrics are used, each targeting a different aspect of the system. 
+
+RMSE [14], [15] measures global trajectory accuracy: r
+
+> 1
+> T
+
+P 
+
+> t
+
+ˆx[x,y ] 
+
+> t
+
+− xgt 
+
+> t
+> 22
+
+. It is the primary measure of whether SNGR improves the estimate that a downstream planner or mapper would consume. 
+
+NEES [16] measures estimator consistency, i.e. whether the reported covariance matches the actual error: (xt −2 0 2 4 6
+
+> Landmark x
+> 4
+> 2
+> 0
+> 2
+> 4
+> Landmark y
+> True modes
+> iSAM2 MAP
+> Anchors
+> 0.0000
+> 0.0002
+> 0.0004
+> 0.0006
+> 0.0008
+> 0.0010
+> 0.0012
+> Importance weight
+
+(a) Weighted samples over L(0) .iSAM2 MAP (blue ×) at saddle 
+
+(2 , 0) ; true modes (red ⋆) re-ceive equal mass. 10 5 0 5 10 
+
+> Landmark y
+> 0.00
+> 0.05
+> 0.10
+> 0.15
+> 0.20
+> 0.25
+> 0.30
+> 0.35
+> Weighted count
+> True mode y=+2.236
+> True mode y=-2.236
+
+(b) Marginal histogram of L(0) y .Two peaks at y ≈ ± 2.236 ; MAP at y = 0 receives negligible weight. 
+
+Fig. 2: Bimodal proof-of-concept. Anchors at A = (0 , 0) ,
+
+B = (4 , 0) observe L(0) at r = 3 .0 m. Constraint manifold bimodal at (2 , ±√5) . iSAM2 converges to saddle; nested sampling recovers both modes. TABLE I: Bimodal Experiment: iSAM2 vs Nested Sampling 
+
+iSAM2 Nested Sampling 
+
+L(0) estimate (m) (2 .000 , 0.000) (1 .984 , −2.232) 
+
+Log-likelihood (nats) −12 .50 −0.01 
+
+Error from mode (m) 2.236 0.004 
+
+∆log p — +12 .49 
+
+Weighted σy (m) — 2.21 
+
+Bimodality coefficient — 0.62 
+
+ˆxt)⊤P−1
+
+t (xt − ˆxt), where Pt is the 2 × 2 marginal position covariance. For a consistent estimator this quantity follows 
+
+χ22 with mean 2; values far above 2 indicate overconfidence. NEES is critical here because wrong-association failures of-ten produce small covariances alongside large errors, which RMSE alone cannot characterize. 
+
+Trigger precision and recall against ground-truth failure windows Φ (3) measure the detection quality of the condition-number trigger independently of the sampler. Precision quanti-fies false-positive rate (wasted sampling cost); recall quantifies coverage of true failures. 
+
+∆log p measures the improvement in local posterior log-likelihood of the nested sampling mean over the iSAM2 MAP on the triggered window’s factor subgraph. A positive value confirms the sampler found a genuinely better local solution; a value near zero confirms the gate is correctly suppressing no-op updates on false-positive triggers. 
+
+Wall-clock time is reported separately for iSAM2 pro-cessing and for nested sampling refinement, and is compared against the hypothetical cost of running nested sampling on all 28 windows exhaustively. VI. R ESULTS 
+
+A. Bimodal Experiment 
+
+Two anchors at A = (0 , 0) , B = (4 , 0) each observe L(0) 
+
+at r = 3 .0 m. The constraint manifold is {L : ∥L − A∥2 =3} ∩ { L : ∥L − B∥2 = 3 } = {(2 , ±√5) }.0 5 10 15 20 25 
+
+> Window start index
+> 0
+> 1
+> 2
+> 3
+> 4
+> Ambiguity score  log  ( _max/ _min)
+> Triggered
+> Not triggered
+> = 3.96
+
+(a) p = 0 .0: all windows score below τ = 3 .96 .0 5 10 15 20 25 
+
+> Window start index
+> 0
+> 1
+> 2
+> 3
+> 4
+> Ambiguity score  log  ( _max/ _min)
+> Triggered
+> Not triggered
+> = 3.96
+
+(b) p = 0 .3: most windows ex-ceed threshold. 
+
+Fig. 3: Per-window scores sw (seed 0, τ = 3 .96 ). Distributions at p = 0 .0 and p = 0 .1 are identical, confirming the blind spot is structural. 0.0 0.1 0.2 0.3 0.4 
+
+> Wrong-association noise fraction
+> 10 0
+> 10 1
+> 10 2
+> Mean NEES (log scale)
+> Consistent (NEES = 2)
+> mean ± std
+
+(a) NEES (log scale) vs noise. At 
+
+p = 0 .1, NEES = 148 with zero triggers. 0.0 0.1 0.2 0.3 0.4 
+
+> Wrong-association noise fraction
+> 3.25
+> 3.50
+> 3.75
+> 4.00
+> 4.25
+> 4.50
+> 4.75
+> 5.00
+> Score  log  ( _max /  _min)  = 3.96
+
+(b) Score distributions per noise level. p = 0 .0 and p = 0 .1 boxes overlap. 
+
+Fig. 4: Trigger-only baseline diagnostics ( τ = 3 .96 , 5 seeds). Overconfidence grows with noise; trigger remains blind at low contamination. TABLE II: Threshold Sensitivity (Seed 0) 
+
+τ Clean Noisy ( p = 0 .3)3.92 0/28 21/28 3.96 0/28 14/28 4.0 0/28 8/28 
+
+TABLE III: Baseline Results (5-Seed RMSE; Seed 0 NEES, 
+
+τ = 3 .96 )
+
+p RMSE (m) NEES Prec. Recall Trig./Fail 0.0 0.15 ± 0.06 0.36 — — 0/0 0.1 1.27 ± 1.20 148.52 — 0.00 0/25 0.2 1.64 ± 0.90 210.15 1.00 0.15 4/26 0.3 1.82 ± 1.21 458.26 1.00 0.54 14/26 0.4 4.14 ± 1.24 745.23 0.96 0.89 24/26 
+
+iSAM2 initializes at (2 , 0) and converges there by gradient cancellation: range factor gradients from A and B point in opposite directions. This saddle is 12.49 nats below either mode. Nested sampling ( c = 50 ) discovers both modes. Best sample at (1 .984 , −2.232) , within 0.004 m of true mode, with 
+
+∆log p = +12 .49 nats. Weighted σy = 2.21 m confirms equal mass on both modes (true: √5 = 2 .24 m). Bimodality coefficient 0.62 exceeds the 0.555 threshold [17]. 
+
+B. Trigger Analysis 
+
+Tables II–IV and Figs. 3–4 summarize baseline results. TABLE IV: Per-Seed Breakdown at p = 0 .3, τ = 3 .96 
+
+Seed Trig. TP FP FN Prec. Recall 0 14/28 14 0 12 1.00 0.54 1 8/28 8 0 16 1.00 0.33 2 0/28 0 0 17 — 0.00 3 10/28 10 2 13 0.83 0.44 4 0/28 0 0 20 — 0.00 
+
+TABLE V: SNGR Results (Seed 0, τ = 3 .9)
+
+p Pose LM NEES Trig. Prec. Recall 0.0 0.13 0.10 0.36 4/28 0.00 —0.1 2.81 3.31 148.52 0/28 — 0.00 0.2 2.65 2.30 209.88 14/28 1.00 0.54 0.3 3.81 2.91 454.14 22/28 1.00 0.85 
+
+TABLE VI: Cost: Selective vs Exhaustive (Seed 0) 
+
+p Trig. iSAM2 Refine Exhaust. Saving 0.0 4/28 0.02 s 44 s 336 s 7.6×
+
+0.1 0/28 0.02 s 0 s 336 s —0.2 14/28 0.02 s 175 s 336 s 1.9×
+
+0.3 22/28 0.02 s 245 s 336 s 1.4×12 14 16 18 20 22 24 26   
+
+> Window start index
+> 0
+> 1
+> 2
+> 3
+> 4
+> 5
+> logp  (posterior mean  iSAM2 MAP)
+> +1.21
+> +1.53 +1.46
+> +1.21
+> +1.90
+> +5.23
+> +4.21
+> +3.42
+> +0.95
+> +1.42
+> +2.06
+> +1.59 +1.51
+> +2.36
+> Sampling noise threshold (~0.2 nats)
+
+(a) ∆log p per window, p = 0 .2,seed 0. All values exceed 0.2 nat noise floor. Peak +5 .04 nats at window 17. 12 14 16 18 20 22 24 26   
+
+> Window start index
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> Effective Sample Size  (%  of total samples)  ESS=20% bimodality threshold
+> ESS=50% approximately Gaussian
+
+(b) ESS per window, p = 0 .2,seed 0. Values near 50% confirm Gaussian local posteriors. 
+
+Fig. 5: SNGR diagnostics at p = 0.2. All improvements genuine; ESS indicates within-mode corrections. At p = 0 .1, NEES = 148 with zero triggers: covariance shape and accuracy are independent properties. At 10% con-tamination, corrupted factors spread uniformly and their MAP displacements partially cancel, leaving isotropic covariance despite trajectory bias. At p ≥ 0.2, enough corruption accumulates to produce elongation and the trigger fires with precision = 1 .0. Table IV shows seeds 2 and 4 produce zero triggers despite 17–20 failures; landmark geometry keeps displacements isotropic in these instances. 
+
+C. Full SNGR Pipeline 
+
+Table V and Fig. 5 show full pipeline results. At p = 0 .0, four windows trigger (false positives at τ =3.9). ESS ≈ 50% and ∆log p ≈ 0; the gate retains MAP in all cases. At p = 0 .1, the blind spot persists: zero triggers despite NEES = 148 .At p = 0.2, all 14 windows show ∆log p > 0 (+1 .0
+
+to +5 .04 nats), exceeding the noise floor. ESS near 50% indicates Gaussian local posteriors; the sampler finds within-mode corrections. Despite ∆log p > 0 on every window, global RMSE does not improve. Wrong-association errors distribute throughout the odometry chain; correcting a window leaves surrounding odometry factors unchanged. This identifies SNGR’s scope: effective when failures are localized, not when contamination is globally distributed. Per-window cost is constant at 11–12 s (Table VI). Selective triggering provides 7.6× savings at p = 0 .0, 1.9× at p = 0 .2.At p = 0 .3, 22/28 windows trigger and selectivity is lost. VII. C ONCLUSION AND FUTURE WORK 
+
+We presented Selective Non-Gaussian Refinement, a method that wraps iSAM2 with a triggered nested sampling layer to address the specific failure modes where Gaussian posterior approximations break down by construction. By exploiting the marginal covariance structure available from the iSAM2 Bayes tree, SNGR applies non-Gaussian inference selectively on the windows where it is most likely to help rather than uniformly across the entire trajectory. The condition-number trigger achieves precision = 1 .0 above 20% wrong-association contamination with no false positives on clean data. The nested sampler finds genuine local improvements of +1 .0
+
+to +5 .842 nats per triggered window at p = 0 .2, and the bimodal experiment yields a +12 .49 nat improvement in a setting where iSAM2 is structurally incapable of finding the correct answer. Selective triggering provides 7.6× cost savings at moderate noise; per-window cost is constant at 11 to 12 s regardless of noise level. The p = 0 .1 results are as informative as the positive ones. NEES = 148 with zero triggers demonstrates concretely that covariance shape and covariance accuracy are independent properties, and that a shape-based detector cannot see all the failures that matter. The global RMSE finding shows that windowed local refinement is orthogonal to trajectory drift transmitted through the odometry chain, and is therefore appropriate only when failures are spatially isolated. SNGR is effective when failures are geometrically localised and produce detectable covariance elongation; it does not detect isotropically distributed wrong-association noise and cannot correct globally distributed trajectory drift. Three specific extensions address the current limitations of SNGR. 
+
+Residual-based complementary trigger. Since the condition-number trigger cannot detect failures that do not produce covariance elongation, the natural complement is a per-window residual test. The mean squared normalized residual ¯r2 
+
+> w
+
+= |F w|−1 P 
+
+> f
+
+(zf − hf ( ˆΘ)) 2/σ 2 
+
+> f
+
+follows a χ2
+
+distribution under the correct Gaussian model, and a value significantly exceeding its expected value identifies windows where the Gaussian model is a poor fit, regardless of whether the covariance is elongated or isotropic. Combining both criteria with a logical OR would close the blind spot at low contamination rates while preserving precision at higher noise. Principled threshold calibration. The current threshold τ
+
+is tuned on the same scenario used for evaluation, which is a limitation. The 0.08-unit operating range makes it fragile to changes in trajectory geometry, landmark density, or sensor parameters. A more robust approach would derive τ analyti-cally from the null distribution of sw under correct Gaussian assumptions, or estimate this distribution from a short clean-data calibration run, yielding a threshold with a controlled false-positive rate that transfers across scenarios. 
+
+Ancestral prior sampling for distant modes. With c =1.0, the Gaussian prior restricts the sampler to the MAP neighborhood. The ESS near 50% observed across all triggered windows at p = 0.2 confirms that the sampler is finding within-mode corrections, not discovering topologically distant alternative hypotheses. For loop-closure scenarios where alter-native trajectory hypotheses are far from the current MAP, the ancestral prior sampling approach of NSFG [3] would provide coverage of the full prior volume without requiring manual tuning of the inflation parameter c. Integrating this into the SNGR framework and evaluating on real-world datasets with genuine loop-closure ambiguity is the most direct path toward handling multimodal posteriors in an online selective setting. SNGR in its current form is most useful as an offline accuracy evaluation tool for approximate SLAM posteriors and as a building block for more complete selective non-Gaussian inference pipelines. ACKNOWLEDGMENT 
+
+The authors thank Prof. S. Hutchinson for guidance on factor graph SLAM and M. Potter for support. REFERENCES [1] F. Dellaert and M. Kaess, “Factor graphs for robot perception,” Found. Trends Robot. , vol. 6, no. 1/2, pp. 1–139, 2017. [2] M. Kaess, H. Johannsson, R. Roberts, V. Ila, J. J. Leonard, and F. Dellaert, “iSAM2: Incremental smoothing and mapping using the Bayes tree,” Int. J. Robot. Res. , vol. 31, no. 2, pp. 216–235, 2012. [3] Q. Huang, A. Papalia, and J. J. Leonard, “Nested sampling for non-Gaussian inference in SLAM factor graphs,” IEEE Robot. Autom. Lett. ,vol. 7, no. 4, pp. 9232–9239, Oct. 2022. [4] T. Tuna, J. Nubert, P. Pfreundschuh, C. Cadena, S. Khattak, and M. Hut-ter, “Informed, constrained, aligned: A field analysis on degeneracy-aware point cloud registration in the wild,” arXiv:2408.11809, 2024. [5] J. S. Speagle, “dynesty: A dynamic nested sampling package for estimating Bayesian posteriors and evidences,” Mon. Not. R. Astron. Soc. , vol. 493, no. 3, pp. 3132–3158, 2020. [6] M. Kaess, A. Ranganathan, and F. Dellaert, “iSAM: Incremental smooth-ing and mapping,” IEEE Trans. Robot. , vol. 24, no. 6, pp. 1365–1378, 2008. [7] R. K¨ ummerle, G. Grisetti, H. Strasdat, K. Konolige, and W. Burgard, “g2o: A general framework for graph optimization,” in Proc. IEEE ICRA , 2011, pp. 3607–3613. [8] C. Cadena et al. , “Past, present, and future of simultaneous localization and mapping,” IEEE Trans. Robot. , vol. 32, no. 6, pp. 1309–1332, 2016. [9] N. S¨ underhauf and P. Protzel, “Towards a robust back-end for pose graph SLAM,” in Proc. IEEE ICRA , 2012, pp. 1254–1261. [10] P. Agarwal, G. D. Tipaldi, L. Spinello, C. Stachniss, and W. Burgard, “Robust map optimization using dynamic covariance scaling,” in Proc. IEEE ICRA , 2013, pp. 62–69. [11] E. Olson and P. Agarwal, “Inference on networks of mixtures for robust robot mapping,” Int. J. Robot. Res. , vol. 32, no. 7, pp. 826–840, 2013. [12] S. Thrun, W. Burgard, and D. Fox, Probabilistic Robotics . MIT Press, 2005. [13] M. Montemerlo, S. Thrun, D. Koller, and B. Wegbreit, “FastSLAM: A factored solution to simultaneous localization and mapping,” in Proc. AAAI , 2002, pp. 593–598. [14] J. Sturm, N. Engelhard, F. Endres, W. Burgard, and D. Cremers, “A benchmark for the evaluation of RGB-D SLAM systems,” in Proc. IEEE/RSJ IROS , 2012, pp. 573–580. [15] Z. Zhang and D. Scaramuzza, “A tutorial on quantitative trajectory evaluation for visual(-inertial) odometry,” in Proc. IEEE/RSJ IROS ,2018, pp. 7244–7251. [16] Y. Bar-Shalom, X.-R. Li, and T. Kirubarajan, Estimation with Applica-tions to Tracking and Navigation . Wiley, 2001. [17] J. B. Freeman and R. Dale, “Assessing bimodality to detect the presence of a dual cognitive process,” Behav. Res. Methods , vol. 45, no. 1, pp. 83–97, 2013.

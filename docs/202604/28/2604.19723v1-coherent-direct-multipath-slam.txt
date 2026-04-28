@@ -1,0 +1,4376 @@
+Title: Coherent Direct Multipath SLAM
+
+URL Source: https://arxiv.org/pdf/2604.19723v1
+
+Published Time: Wed, 22 Apr 2026 01:30:06 GMT
+
+Number of Pages: 14
+
+Markdown Content:
+> 1
+
+# Coherent Direct Multipath SLAM 
+
+Benjamin J. B. Deutschmann, Klaus Witrisal, Erik Leitinger Institute of Comm. Networks and Satellite Comms., Graz University of Technology, Austria 
+
+Abstract —Challenging indoor and urban environments with severe multipath propagation and obstructed LoS (OLoS) de-grade classical radio frequency (RF) positioning. Multipath-based simultaneous localization and mapping (MP-SLAM) is a promis-ing remedy, building and exploiting a map of the propagation environment to enhance the robustness. Emerging distributed multiple-input multiple-output (D-MIMO)/extremely large-scale MIMO (XL-MIMO) infrastructures, with single XL antenna arrays or distributed subarrays, offer large spatial apertures and enable high-resolution sensing, in particular, when phase coherence is maintained across base stations (BSs), subarrays, or distributed arrays. In this work, we propose a scalable Bayesian direct MP-SLAM method for coherent data fusion in D-MIMO/XL-MIMO systems that jointly infers the environment while performing robust, high-accuracy localization directly from raw RF signals. The key idea is a phase-preserving nonzero-mean Type-II likelihood function in which a complex mean is shared across BSs or subarrays and enables coherent fusion, while the variance captures noncoherent signal power. This formulation preserves the global phase struc-ture and retains aperture gain when phase coherence is available across subarrays, while gracefully degrading to noncoherent operation otherwise. The likelihood function is combined with a surface feature vector (SFV)-based model that enables map-feature fusion across the distributed infrastructure and supports near-field propagation and visibility effects. Bayesian inference is performed, using belief propagation (BP) by means of the sum-product algorithm (SPA) on a factor graph with particle-based messages. A GPU-parallel implementation enables highly scalable processing across a distributed infrastructure and par-ticles, possibly allowing real-time calculations for large antenna arrays. Simulation results demonstrate performance gains over existing noncoherent approaches and approach the corresponding posterior CRLB (PCRLB), highlighting the potential of coherent distributed arrays for high-resolution sensing and localization. 
+
+Index Terms —D-MIMO, XL-MIMO, coherence, direct posi-tioning, mapping, SLAM, ICAS, JCAS, GPU-parallelization 
+
+I. I NTRODUCTION 
+
+Accurate localization and mapping using radio signals is becoming a key component for future wireless systems, supporting applications such as autonomous navigation, land robotics, indoor localization, and 6G integrated sensing and communications [1]. In challenging indoor and urban sce-narios, classical positioning methods suffer from severe per-formance degradation due to obstructed LoS (OLoS), i.e., blockage of line-of-sight (LoS) paths, and rich multipath prop-agation. Rather than treating multipath components (MPCs) as an impairment, multipath-based simultaneous localization and mapping (MP-SLAM) methods exploit reflected and scattered signal components to infer both the mobile terminal (MT) state and geometric properties of the environment [2], [3]. 
+
+> ∗The AMBIENT-6G project has received funding from the Smart Networks and Services Joint Undertaking under the European Union’s Horizon Europe research and innovation programme under Grant Agreement No. 101192113.
+
+This paradigm is particularly attractive for emerging dis-tributed multiple-input multiple-output (D-MIMO) [4]–[7] and extremely large-scale MIMO (XL-MIMO) infrastructures [8]– [11], where many spatially distributed antenna panels can jointly act as an extremely large aperture. 
+
+A. State of the Art 
+
+Recent progress in radio-based simultaneous localization and mapping (SLAM) methods can broadly be divided into two methodological families. Two-stage approaches first ex-tract parametric channel estimates—such as delays, angles, and complex amplitudes of MPCs—from the received signals [12]–[14], and subsequently perform Bayesian mapping and tracking [3], [15]–[17]. Early radio SLAM methods typically represented individual MPCs as virtual anchors (VAs) or point scatterers and estimated them using random finite sets [15], [17], [18] or factor graph-based inference [3], [16], [19]. While the two-stage paradigm simplifies computation, the intermediate parametric channel estimation step inevitably dis-cards information contained in the complex baseband signals-particularly phase relations across anchors—and introduces measurement-origin uncertainty. In contrast, direct approaches 
+
+[5], [20]–[24] operate directly on the raw received signals and embed the physical channel model within the statistical inference engine. By jointly performing detection, estimation, and data association in a unified probabilistic model, these methods avoid information loss and enable principled exploita-tion of low-signal-to-noise ratio (SNR) signal components. Direct MP-SLAM based on belief propagation (BP) message passing [21], [24] has recently demonstrated significant robust-ness improvements in challenging geometries. Moreover, this method provides a “natural” foundation for Bayesian fusion directly at the raw-signal level suitable for coherent processing. The emergence of D-MIMO [4], [5], [7] and XL-MIMO systems [25]–[27] opens the possibility of transforming spa-tially distributed panels into a virtual aperture comparable to a large array, provided that phase coherence across anchors can be preserved. Exploiting this potential requires statistical models capable of handling several realistic propagation ef-fects, including near-field spherical wavefronts, spatial non-stationarity, partial visibility of MPCs, and heterogeneous noise levels across physical anchors (PAs). In practice, most existing SLAM methods avoid these challenges by performing noncoherent fusion of delay- or angle-based features, thereby losing the potential aperture gain. From a statistical perspective, coherent fusion requires like-lihood models that preserve the complex mean values of MPCs (and the LoS paths) across base stations (BSs), subarrays or distributed arrays termed PAs from now on. Classical Type-I concentrated likelihood functions [28] retain phase information 
+
+> arXiv:2604.19723v1 [eess.SP] 21 Apr 2026 2
+
+but require explicit estimation of path complex amplitudes, while zero-mean Type-II likelihood functions obtained by ana-lytical marginalization over the complex amplitudes assuming a hierarchical prior [14], [29], [30] have proven to provide robust estimation results, but make the phase information not directly accessible. Consequently, commonly used likelihood models either discard phase information a priori or rely on simple stacking of observations, which is incompatible with partial coherence and realistic channel effects. Designing a robust Type-II likelihood model that preserves the phase in-formation for D-MIMO/XL-MIMO systems therefore remains an open problem. Key unresolved challenges include (i) joint modeling of coherent and noncoherent PAs within a unified inference framework, (ii) incorporation of spherical wavefront effects and spatially non-stationary array responses (partial obstructions of MPCs), and (iii) scalable inference algorithms capable of processing large antenna arrays in real time. 
+
+B. Contributions and Paper Organization 
+
+We propose a scalable direct MP-SLAM method for coher-ent data fusion in D-MIMO/XL-MIMO systems that jointly estimates a geometric environment map via features while per-forming robust, high-accuracy sensing and localization for 3Dscenarios, termed coherent direct MP-SLAM. The proposed algorithm builds on the direct MP-SLAM method in [24]. Our key idea is a nonzero-mean Type-II likelihood whose variance accounts for “noncoherent” signal power, while a complex mean value shared among distributed synchronized PAs (sub-arrays or distributed arrays) enables coherent fusion as well as noncoherent fusion of MPCs and the LoS paths over non-synchronized PAs (different BSs). This construction preserves the global phase structure and retains aperture gain whenever coherence is available across the entire array (making spherical wavefront processing possible and significantly increasing the effective aperture of the entire array), yet “smoothly” degrades to noncoherent operation otherwise. At the same time, computational complexity is significantly reduced by processing the raw radio signals only per PA. The method is combined with the recently developed surface feature vector (SFV) surface model [16], [31], [32], which enables the fusion of map features across PAs (as well as propagation paths) and accounts for partial visibility of features over subarrays. Bayesian inference is performed via particle-based BP message passing by means of the sum-product algorithm (SPA) rules on a factor graph. A graphics processing unit (GPU)-accelerated implementation enables parallel processing across PAs and particles, making real-time operation feasible. The main contributions are summarized as follows.  
+
+> •
+
+We introduce a phase-preserving nonzero-mean Type-II likelihood function for coherent D-MIMO/XL-MIMO processing that retains aperture gain and accommodates spherical wavefront processing.  
+
+> •
+
+We extend direct MP-SLAM [24] with the SFV model to enable map-feature fusion across distributed PAs and across propagation paths that account for partial obstruc-tions of MPCs using MPC existences at the PA-level (partial obstructions) as well as global SFV existences [31].  
+
+> •
+
+We develop a new proposal density for potential feature births that exploits coherent PAs and improves early detection of map features.  
+
+> •
+
+We present a fully GPU-parallel implementation achiev-ing an order-of-magnitude speedup.  
+
+> •
+
+We compare the proposed coherent algorithm to a non-coherent version and to the posterior CRLB (PCRLB). The remainder of the paper is organized as follows. Sec-tion III introduces the signal and statistical models underlying the proposed multipath-based SLAM formulation. Section IV describes the proposed BP-based inference algorithm and its particle-based implementation. Section V derives the PCRLB used as a performance benchmark. Section VI presents nu-merical experiments and performance evaluations. Finally, Section VII concludes the paper. 
+
+Notation: Scalars are denoted by lowercase letters x,column vectors by bold lowercase letters x, and matrices by bold uppercase letters X. Regular upright font is used for deterministic constants. Random variables (RVs) are typeset in sans serif, upright font, e.g., x and x, and their realizations in serif, italic font, e.g., x and x. f (x), shorthand for fx(x),denotes the probability density function (PDF) of continuous RV x, while p(x), shorthand for px(x), denotes a probability mass function (PMF) of discrete RV x. f (x|y) is the condi-tional PDF of x given y, a shorthand notation of fx|y(x|y).Calligraphic uppercase letters denote sets, except N , CN , G,and U. The cardinality of a set X is |X | . We use xT and 
+
+xH to denote the transpose and Hermitian transpose of x,respectively. The Euclidean norm of vector x is ∥x∥, and the determinant of matrix X is |X|. The magnitude of a complex number z is denoted by |z|, its complex conjugate by z∗, and its phase by ∠z. The Hadamard product is denoted by ⊙ and the Kronecker product is denoted by ⊗. The N × N identity matrix is denoted by IN , while 1i×j denotes a (i × j)-matrix of all ones. With X being an (M × N ) matrix, X† denotes its (N × M ) Moore-Penrose pseudoinverse. The binary set is denoted by B := {0, 1}.II. S IGNAL MODEL AND GEOMETRICAL MODEL 
+
+In this work, we consider a multipath channel that consists of the sum of the LoS component with up to K specular MPCs originating from single-bounce paths, which often dominate multipath in indoor channel measurements [33]. 1 MPCs are reflections of the MT’s signal at large flat surfaces. Due to channel reciprocity, a reflection can either be modeled (i) as if it is virtually impinging at a VA that is the image of PA 
+
+j at positions p(j)pa ∈ R3 mirrored across surface k, or (ii) as if it is virtually transmitted from a virtual mobile (VM) position that is an image of the MT at position pn ∈ R3 at time n mirrored across surface k. A VA is a popular type of point-map-feature in MP-SLAM [2], [3], [15], [24]. It is a PA-local feature, meaning that a single surface k gives rise to a separate VA position p(j)va ,k ∈ R3 for each PA j. In this work, however, we use the SFV model described by its feature positions psfv ,k ∈ R3 [16]. 
+
+> 1In line with [31], the model can also be extended to account for double-bounce paths. 3
+
+A. Geometric Model 
+
+A SFV position psfv ,k ∈ R3 \ { 0} is computed by mirroring the origin 0 of the global Cartesian coordinate system across a specular surface k. It is a global point-map-feature, meaning that it is equal across the entire infrastructure of PAs, allowing data fusion across PAs and across multiple-bounce paths [31], [34]. A more detailed description of this geometric MPC model can be found in Supplementary Material, Sec. S-I. For 
+
+k > 0, the vector 
+
+´r(j)
+
+> k,n
+
+(pn, psfv ,k , p(j)pa , Mj ) = M−1 
+
+> j
+
+Hk (pn − p(j)va ,k ) ∈ R3 (1) with M−1 
+
+> j
+
+= MT 
+
+> j
+
+points from the PA j to the VM position in 
+
+local Cartesian PA coordinates, i.e., the signal source position perceived by the PA taking its orientation Mj into account. In what follows it is shown that all involved terms in (1) can be described by a function. Note that the vector pn − p(j)va ,k in (1) points from the PA to the VM in global Cartesian coordinates. It is computed by mirroring the vector pn −p(j)va ,k , which points from the VA position p(j)va ,k to the MT position pn in global Cartesian coordinates, across surface k using the Householder matrix Hk , which is given by 
+
+Hk = I3 − 2 psfv ,k psfv ,k 
+
+> T
+
+∥psfv ,k ∥2 . (2) The VA position p(j)va ,k is given by a transformation of SFV to VA [16], i.e., 
+
+p(j)va ,k = p(j)pa − 2p(j)pa 
+
+> T
+
+psfv ,k 
+
+∥psfv ,k ∥2 −1
+
+!
+
+psfv ,k . (3) For k = 0, i.e., the LoS component, (1) simplifies to 
+
+´r(j)0,n (pn, psfv ,0, p(j)pa , Mj ) = M−1
+
+> j
+
+ pn − p(j)pa 
+
+ since H0 = I3
+
+and p(j)va ,0 = p(j)pa .
+
+B. Signal Model 
+
+We consider a single-antenna MT 2 moving on a trajectory of unknown positions pn. At each time step n, an MT transmits an uplink pilot signal with spectrum S(f ) and bandwidth B at carrier frequency fc which are received by a set J := {1 . . . J }
+
+of identical PAs equipped with uniform rectangular arrays (URAs), with M antenna elements at known positions p(j)pa 
+
+and orientations (modeled by a rotation matrix Mj ∈ SO (3) )3.After Nyquist filtering, Nf samples of the received signal waveform are recorded by PA j. In the frequency domain, the resulting Nf = B/ ∆f + 1 samples have a frequency spacing of 
+
+∆f. The stacked vector z(j) 
+
+> n
+
+∈ Nz with Nz = N f M collecting all signal samples of all antenna elements reads 
+
+z(j) 
+
+> n
+
+=
+
+> K
+
+X
+
+> k=0
+
+ϱ(j)
+
+> k,n
+
+ψ(j)(pn, psfv ,k ) + n(j) 
+
+> n
+
+(4) where the index k = 0 indicates the LoS component and the indices 1 ⩽ k ⩽ K indicate the specular MPCs orig-inating from SFVs. Here, ϱ(j) 
+
+> k,n
+
+∈ C denotes an amplitude 4,
+
+ψ(j)(pn, psfv ,k ) ∈ CNz denotes a steering vector depending on             
+
+> 2The proposed signal and system model and the direct-MP-SLAM method can be straightforwardly extended to a MIMO setup, i.e., a MT with an array.
+> 3Rotation matrices are from the special orthogonal group SO (3) = {M∈
+> R3×3|M M T=MTM=I3,det( M) = 1 }.
+> 4We assume that antenna gain patterns, polarization losses, and reflection losses of MPCs are lumped together into the amplitudes ϱ(j)
+> k,n .
+
+the MT position and point map feature positions psfv ,k intro-duced in Section II-C. The noise n(j) 
+
+> n
+
+represents different noise sources potentially including a diffuse multipath component (DMC) [5]. Components k that are not visible at PA j at time 
+
+n are modeled through ϱ(j) 
+
+> k,n
+
+= 0 .
+
+C. Array Steering Vector 
+
+We define steering vectors ψ(j)(pn, psfv ,k ) := ψ(´ r(j)
+
+> k,n
+
+) as elements of the array manifold M := ψ(´ r)|´r ∈ R3 \ { 0} ⊂
+
+CNz , obtained by parameterizing the steering vector in (5) with ´r(j)
+
+> k,n
+
+(pn, psfv ,k , p(j)pa , Mj ) as defined in (1). This vector is expressed in the local Cartesian coordinate system of PA j and points from the PA to a (possibly virtual) signal source associated with MPC k. By absorbing the PA position 
+
+p(j)pa and orientation Mj , the PA-dependent steering vectors 
+
+ψ(j)(pn, psfv ,k ) depend only on the MT position pn and the SFV position psfv ,k .For each PA j, we assume a URA, plane-wave propagation and a narrowband antenna model (i.e., the incidence direction depends only on the carrier frequency fc). Nevertheless, the proposed method readily extends to arbitrary array geome-tries, spherical wavefronts, wideband signal models, and full multiple-input multiple-output (MIMO) formulations for each PA j; for details see Supplementary Material, Sec. S-II. The key to phase-coherent D-MIMO processing with a Type-II likelihood function model is the coherent fusion of complex amplitudes across PAs, thereby building up the effective array aperture over all PAs. This enables near-field (spherical wave-front) processing across the entire array including the coherent fusion of subarrays in large-scale or distributed arrays. Let ´r = [´ rx ´ry ´rz ]T denote one arbitrary vector in local 
+
+Cartesian coordinates, i.e., the local frame of reference, of one specific PA. For data fusion about the amplitude magnitudes, we define a path-loss compensated array steering vector 
+
+ψ(´ r) = λ
+
+√4π
+
+1
+
+√4π∥´r∥
+
+eψ(´ r) (5) with wavelength λ = cfc and propagation velocity c, and for data fusion about amplitude phases, the carrier phase-based unit-modulus steering vector is given by 
+
+eψ(´ r) =  b(τ (´ r)) ⊗ a(θ(´ r), ϑ (´ r))  exp 
+
+
+
+−j 2π
+
+c fc∥´r∥
+
+
+
+(6) which is from the Nz-torus TNz := ( S1)Nz with S1 := {x ∈
+
+C : |x| = 1 } denoting the 1-sphere, i.e., the unit-circle. The steering vectors are parameterized by the local PA position via (1), i.e., τ (´ r) = ∥´r∥/c denoting the propagation delay, 
+
+θ(´ r) = arccos(´ rz /∥´r∥) denoting the elevation angle, and 
+
+ϑ(´ r) = arctan2(´ ry , ´rx) denoting the azimuth angle. The steering vector in (6) is given by the Kronecker product of the frequency steering vector in delay τ
+
+b(τ ) = S(f ) ⊙ exp  −j2 πf τ  ∈ TNf (7) where f = [ −(N f − 1) /2∆ f · · · (N f − 1) /2∆ f] ∈ RNf denotes the baseband frequency vector, and the spatial array steering vector in angle of arrival (AoA) [12], [35] is choosen to be 5
+
+a(θ, ϑ ) = ay (θ, ϑ ) ⊗ az (θ) each being itself a Kronecker 
+
+> 5Note that other array structures can also be used. 4
+
+product, due to the URA layout, of the “horizontal” steering vector 
+
+ay (θ, ϑ ) = exp 
+
+
+
+j 2πλ py sin( θ) sin( ϑ)
+
+
+
+∈ TMy (8) and “vertical” steering vector 
+
+az (θ) = exp 
+
+
+
+j 2πλ pz cos( θ)
+
+
+
+∈ TMz (9) where py ∈ RMy is a vector containing the horizontal positions and pz ∈ RMz a vector containing vertical positions of the an-tenna array elements. With this model we have Nz ≜ Nf My Mz.Without loss of generality the center of gravity of the antenna array is set to coincide with the PA position. III. S YSTEM MODEL AND PROBLEM FORMULATION 
+
+In what follows, we introduce the proposed system model and discuss the problem formulation of the considered coher-ent MP-SLAM problem. 
+
+A. State Vectors and Measurement Model 
+
+At each time n, the MT state is defined as xn := [ pT 
+
+> n
+
+vT 
+
+> n
+
+]T ∈
+
+R6, comprising the MT position pn and velocity vn. The sequence of MT states up to time n is denoted by x0: n := [xT 
+
+> 0
+
+· · · xT 
+
+> n
+
+]T. Since the number of visible MPCs, K, is gen-erally unknown, time-varying, and dependent on both the MT state and the PA, we adopt a two-level hierarchical existence model. Following [3], [31], [36], the first layer accounts for the unknown number of SFVs at time n by introducing potential features (PFs) indexed by s ∈ S n := {1 . . . Sn}. The (maxi-mum) number of PFs, Sn, is jointly inferred by the D-MIMO infrastructure and is therefore a global (i.e., PA-independent) variable. The complete set is given by eSn := Sn ∪ { 0}, where 
+
+s = 0 corresponds to the LoS path. Following [24], the PF state is defined as ys,n := [ 
+
+ϕT 
+
+> s,n
+
+rs,n ]T,where 
+
+ϕs,n := [ psfv 
+
+> s,n
+> T
+
+γs,n 
+
+μs,n ]T ∈ R4×C denotes the continuous state. In contrast to [24], the amplitude is parameterized by a variance 
+
+γs,n ∈ R⩾0 and a complex mean 
+
+μs,n ∈ C, shared across distributed PAs j to enable phase-coherent processing. The existence of the PF s is modeled by a binary random variable rs,n ∈ { 0, 1}, where rs,n = 1 indicates presence. In line with [31], the second layer accounts for the unknown and time-varying number of LoS- and PF-related propagation paths (e.g., due to partial obstructions or geometric constraints) by introducing, for each PA, a potential ray (PR) with binary existence variable r(j) 
+
+> s,n
+
+∈ { 0, 1}. For later use, we define the joint PF state yn := [ yT 
+
+> 0,n
+
+· · · yT
+
+> Sn,n
+
+]T, the joint PR state r(j) 
+
+> n
+
+:= [r(j)0,n · · · r(j)
+
+> Sn,n
+
+]T and further rn := [ r(1)  
+
+> n
+> T
+
+· · · r(J)
+
+> n
+> T
+
+]T. The vector of stacked observations is zn := [ z(1)  
+
+> n
+> T
+
+. . . z(J)
+
+> n
+> T
+
+]T.Based on this model, the measurement model in (4) for PA 
+
+j can be reformulated as 
+
+z(j) 
+
+> n
+
+= X 
+
+> s∈eSn
+
+rs,n r(j) 
+
+> s,n
+
+ρ(j)
+
+> s,n
+
+ψ(j) 
+
+> s,n
+
++ n(j) 
+
+> n
+
+∈ CNz (10) where ψ(j) 
+
+> s,n
+
+:= ψ(j)(xn, psfv 
+
+> s,n
+
+), and the complex amplitudes ρ(j)
+
+> s,n
+
+are modeled as complex Gaussian random variables with PF-specific variance 
+
+γs,n and mean 
+
+μs,n , i.e., 
+
+ρ(j) 
+
+> s,n
+
+∼ CN (
+
+μs,n ,γs,n ).Conditioned on their prior parameters, the amplitudes ρ(j)
+
+> s,n
+
+are independent across s and n and i.i.d. across PAs j. For simplicity, we assume circularly-symmetric complex AWGN, i.e., n(j) 
+
+> n
+
+∼ CN (0,η(j) 
+
+> n
+
+INz ) with noise variance η(j) 
+
+> n
+
+, which is temporally and spatially uncorrelated. Conditioned on xn, the joint PF state yn, the joint PR state 
+
+r(j) 
+
+> n
+
+, and the noise variance 
+
+η(j) 
+
+> n
+
+, the measurement z(j) 
+
+> n
+
+is also complex Gaussian-distributed, i.e., 
+
+f (z(j) 
+
+> n
+
+|xn, yn, r(j) 
+
+> n
+
+, η (j) 
+
+> n
+
+) = CN (z(j) 
+
+> n
+
+; μ(j) 
+
+> n
+
+, C(j) 
+
+> n
+
+) (11) with nonzero mean μ(j) 
+
+> n
+
+= P  
+
+> s∈eSn
+
+rs,n r(j) 
+
+> s,n
+
+μs,n ψ(j) 
+
+> s,n
+
+and co-variance matrix C(j) 
+
+> n
+
+= η(j) 
+
+> n
+
+INz + P  
+
+> s∈eSn
+
+rs,n r(j) 
+
+> s,n
+
+γs,n ψ(j) 
+
+> s,n
+
+ψ(j)
+
+> s,n
+> H
+
+.Note that (11) closely resembles a Type-II likelihood model; however, since it is not zero-mean, we refer to it as a nonzero-mean Type-II likelihood function. 
+
+B. State-Transition Factors 
+
+All states evolve independently according to first-order Markov models, i.e., the MT state evolves with transition PDF 
+
+f (xn|xn−1), the noise variance with f (η(j) 
+
+> n
+
+|η(j)
+
+> n−1
+
+), the PFs with 
+
+f (ys,n |ys,n −1), and the PRs with p(r(j) 
+
+> s,n
+
+|r(j)
+
+> s,n −1
+
+).
+
+1) Legacy PFs: The state-transition PDF of a legacy PF 
+
+s from time step n − 1 to time n, when conditioned on the nonexistence of PF s at the previous time step n − 1, i.e., 
+
+rs,n −1 = 0 , is 
+
+f (ϕs,n , r s,n |ϕs,n −1, 0) = 
+
+(
+
+0, rs,n = 1 
+
+fd(ϕs,n ), rs,n = 0 (12) where fd(ϕs,n ) is a “dummy” PDF [36] ensuring that P
+
+> rs,n ∈{ 0,1}
+
+R f (ϕs,n , r s,n |ϕs,n −1, r s,n −1)d ϕs,n = 1. Equa-tion (12) implies that a PF that has not existed at time step 
+
+n−1 cannot exist as legacy PF at time n. However, if it existed at time step n−1, it continues to exist at time n with a survival probability pS. The state-transition PDF from time step n−1
+
+to time n, when conditioned on the existence of the feature s
+
+at the previous time step n−1, i.e., rs,n −1 = 1 , is [16, eq. (8)] 
+
+f (ϕs,n , r s,n |ϕs,n −1, 1) = 
+
+(
+
+pSf (ϕs,n |ϕs,n −1), rs,n = 1 (1 −pS)fd(ϕs,n ), rs,n = 0 . (13) 
+
+2) New PFs: Following [37], the births of new PFs in a considered region of interest (ROI) P ⊂ R3 are modeled according to a Poisson point process. That is, each time step 
+
+n, the number of newly appearing PFs is Poisson-distributed. Partition P = SQq=1 Pq into disjoint sets Pq with volumes 
+
+Vq := Vol( Pq ) in m3. The number of newly appearing features 
+
+tq per partition Pq is likewise Poisson-distributed [38] accord-ing to a Poisson PMF P(tq = tq ) = (ςV q )tq exp( −ςV q )/tq ! with mean μB 
+
+> q
+
+≜ ςV q and ς a spatial intensity in 1/m3. We assume 
+
+ς spatially uniform. For a nonuniform intensity see [37]. Let 
+
+Q be large enough to have approximately at most 1 new PF per partition Pq , we can approximate the Poisson birth model with a Bernoulli birth model with PMF 
+
+P(tq = tq ) = 
+
+(
+
+p(q)B , tq = 1 1 − p(q)B , tq = 0 (14) by equating ratios of both PMFs 
+
+P(tq = 1) 
+
+P(tq = 0) = μB 
+
+> q
+
+exp( −μB 
+
+> q
+
+)exp( −μB 
+
+> q
+
+) = μB 
+
+> q
+
+= p(q)B
+
+1 − p(q)B
+
+, (15) hence tq ˙∼ Bernoulli( p(q)B ) with p(q)B = μB 
+
+> q
+
+/1+ μB 
+
+> q
+
+= ςV q/1+ ςV q .The mean number of newly appearing PFs in the ROI is μB := 5
+
+ς V , where V := Vol( P). We draw exactly one PF per partition 
+
+Pq . Let the set of new PFs be Sn := {|S n| + 1 . . . |S n| + Q}
+
+and define an appropriate mapping from new PFs to partitions 
+
+q(s) := s −|S n|. The resulting PDF for newly appearing PFs 
+
+s ∈ S n is f (ys,n ) = f (ϕs,n , r s,n ) = f (ϕs,n |rs,n )p(rs,n ) with 
+
+f (ϕs,n |1) = fB(ϕs,n ) and f (ϕs,n |0) = fd(ϕs,n ) and p(rs,n ) = Bernoulli( p(q)B ) from which follows 
+
+f (ϕs,n , r s,n ) = 
+
+(
+
+p(q)B fB(ϕs,n ), rs,n = 1 (1 − p(q)B )fd(ϕs,n ), rs,n = 0 . (16) We assume the birth PDF fB(ϕs,n ) := f (psfv 
+
+> s,n
+
+)f (γs,n )f (μs,n ) to factorize into a spatial birth PDF f (psfv 
+
+> s,n
+
+) := U(psfv 
+
+> s,n
+
+; Pq ), and hyperpriors f (γs,n ) and f (μs,n ).
+
+3) PRs: The birth of a new PF introduces J new PRs according to a Bernoulli birth PMF 
+
+p(r(j) 
+
+> s,n
+
+) = 
+
+(
+
+pPR B , r(j) 
+
+> s,n
+
+= 1 1 − pPR B , r(j) 
+
+> s,n
+
+= 0 (17) with PR birth probability pPR B . Conditioned on r(j) 
+
+> s,n −1
+
+= 1 the state transition PMF of legacy PRs follows the Bernoulli PMF 
+
+p(r(j) 
+
+> s,n
+
+|r(j) 
+
+> s,n −1
+
+= 1) = 
+
+(
+
+pPR S , r(j) 
+
+> s,n
+
+= 1 1 − pPR S , r(j) 
+
+> s,n
+
+= 0 (18) meaning that a PR that existed at time n−1 remains to exist at time n with PR survival probability pPR S . Conditioned on 
+
+r(j) 
+
+> s,n −1
+
+= 0 the state transition PMF of legacy PRs is 
+
+p(r(j) 
+
+> s,n
+
+|r(j) 
+
+> s,n −1
+
+= 0) = 
+
+(
+
+pPR R , r(j) 
+
+> s,n
+
+= 1 1 − pPR R , r(j) 
+
+> s,n
+
+= 0 (19) meaning that a PR that did not exist (e.g., due to obstruction or limited surface extent) at time n−1 can exist again at time 
+
+n with PR recovery probability pPR R .
+
+C. Estimation and Declaration 
+
+As described in Sec. II, the goal of multipath-based SLAM is to jointly estimate the MT state xn, the map captured by PF states ys,n of all PFs s ∈ Sn, and the PR state 
+
+r(j) 
+
+> n
+
+for all PAs j ∈ {1 . . . J } based on the observed (thus fixed) measurements z1: n := [ zT 
+
+> 1
+
+. . . zT 
+
+> n
+
+]T. In Bayesian inference, the problem is solved by determining the marginal posterior PDFs of the MT state f (xn|z1: n), of all PF states 
+
+f (ϕs,n |rs,n = 1 , z1: n) = f (ϕs,n , r s,n = 1 |z1: n)/p (rs,n = 1 |z1: n)
+
+with p(rs,n = 1 |z1: n) for s ∈ S n, of the noise variance 
+
+f (η(j) 
+
+> n
+
+|z1: n) for j ∈ J , and the marginal posterior PMF of all PR states p(r(j) 
+
+> s,n
+
+= 1 |z1: n) for s ∈ S n and j ∈ J . The MT state and noise variances are estimated by means of the minimum mean square error (MMSE) estimator [39], i.e., 
+
+bxMMSE  
+
+> n
+
+= E(xn|z1: n = z1: n) = 
+
+Z
+
+xnf (xn|z1: n)d xn (20) 
+
+bη MMSE (j) 
+
+> n
+
+= E(
+
+η(j) 
+
+> n
+
+|z1: n = z1: n) = 
+
+Z
+
+η(j) 
+
+> n
+
+f (η(j) 
+
+> n
+
+|z1: n)d η(j) 
+
+> n
+
+. (21) A PF is declared to exist, i.e., detected, if ps,n := 
+
+p(rs,n = 1 |z1: n) > T dec , where Tdec is a declaration threshold. Similarly, the visibility of a PR between PA j and PF s can be confirmed by p(r(j) 
+
+> s,n
+
+= 1 | z1: n) > T dec . For existing PFs, their states are again calculated by the MMSE, i.e., 
+
+bϕMMSE  
+
+> s,n
+
+= E(
+
+ϕs,n |rs,n = 1 , z1: n = z1: n)=
+
+Z
+
+ϕs,n f (ϕs,n |rs,n = 1 , z1: n)d ϕs,n . (22) Note that the use of both PA-local existence variables r(j)
+
+> s,n
+
+and infrastructure-global PF existence variables rs,n supports partial obstruction, a propagation phenomenon common in D-MIMO, which we discuss in Supplementary Material, Sec. S-III. Furthermore, we assume that new PFs appear according to a Poisson point process. To avoid unbounded growth of the set cardinality |S n| of PFs, any features s for which ps,n <Tpru are removed from the PF set Sn, where Tpru denotes a pruning threshold. That is, the set of legacy PFs Sn at time n
+
+is computed as Sn = Sn−1 \ { s ∈ S n−1|ps,n −1 < T pru }. Let Sn
+
+denote the set of new PFs appearing at time n, the complete set of PFs at time step n is Sn = Sn ∪ S n.Following the statistical model and assumptions in Sec-tions III-A and III-B, the joint posterior PDF of x0: n, y0: n,
+
+η0: n,and r0: n conditioned on the measurements z1: n can be factor-ized as shown in (23). A single time step of the corresponding factor graph [40] is depicted in Fig. 1. This factorization enables the development of an efficient method for computing approximate marginal posterior PDFs/PMFs, referred to as beliefs, i.e., ef (xn) ≈ f (xn|z1: n), ef (η(j) 
+
+> n
+
+) ≈ f (η(j) 
+
+> n
+
+|z1: n),
+
+ef (ys,n ) ≈ f (ys,n |z1: n), and ep(r(j) 
+
+> s,n
+
+) ≈ p(r(j) 
+
+> s,n
+
+|z1: n), as described in the following. IV. T HE PROPOSED BP M ETHOD 
+
+In this section, we derive the BP message passing algorithm for the proposed direct MP-SLAM method using the SPA rules [40], [41]. BP message passing is an efficient approach for solving high-dimensional Bayesian inference problems. It performs local operations, referred to as “messages”, along the edges of the factor graph [40], [41], which represents the statistical model of the Bayesian estimation problem. If the factor graph is a tree, the resulting BP solutions, called “beliefs”, are equal to the true marginal posterior PDFs required for computing optimum estimates. For graphs with loops, there is some flexibility in the order in which messages are computed, and different message-passing schedules may lead to different beliefs [42]. Since the factor graph in Fig. 1 contains loops, inspired by [16], [24], we specify the following message schedule [41]: Messages are sent only forward in time from n − 1 to n and every message is calculated once only. Within this schedule, we have the following message-passing 
+
+phases :(i) State-transition factor node to variable node prediction messages ( β, ξ(j), αs, ζ(j) 
+
+> s
+
+) from time n − 1
+
+(ii) Variable node to likelihood factor node prior messages (β, ξ(j), αs, ζ(j) 
+
+> s
+
+)(iii) Likelihood factor node to variable node update messages (ι(j), ν(j), κ(j) 
+
+> s
+
+, ω(j) 
+
+> s
+
+)The phases are executed in series according to the phase order specified above, i.e., each node waits to send its messages until it has received a message from the previous phase. Within each phase, we choose flooding , i.e., each node that has received 6PA j = 1 PA j = J
+
+ι(1) 
+
+β
+
+ι(J)
+
+β
+
+β 
+
+> ·
+
+· · · hidden variables.  
+
+> ·
+
+· · · observed variables.  
+
+> ·
+
+· · · factor nodes. 
+
+s ∈ ˜Sn
+
+Legacy 
+
+PFs s ∈ S n
+
+New 
+
+PFs 
+
+s ∈ ˜SnPRs at PA 1 s ∈ ˜SnPRs at PA J
+
+κ(1) 
+
+> s
+
+αs
+
+αs
+
+κ(1) 
+
+> s
+
+αs
+
+κ(J)
+
+> s
+
+αs
+
+αs
+
+κ(J)
+
+> s
+
+αs
+
+ξ(1) 
+
+ζ(1) 
+
+> s
+
+ζ(1) 
+
+> s
+
+ω(1) 
+
+> s
+
+ξ(J)
+
+ζ(J)
+
+> s
+
+ζ(J)
+
+> s
+
+ω(J)
+
+> s
+
+ξ(1) 
+
+ν(1) 
+
+ξ(J)
+
+ν(J)
+
+n+1 
+
+n+1 n+1 
+
+n−1
+
+n−1
+
+n−1
+
+n−1
+
+n+1 n+1 
+
+n−1
+
+n+1 
+
+n−1
+
+n+1 
+
+## xn
+
+## f
+
+# . . . 
+
+## f (1) 
+
+z
+
+## z(1) 
+
+n
+
+## f (J)
+
+z
+
+## z(J)
+
+n
+
+## ys,n ys,n 
+
+## r(1) 
+
+s,n p(1) 
+
+s r(J)
+
+s,n p(J)
+
+s
+
+## η(1) 
+
+n η(J)
+
+nf (1) 
+
+η f (J)
+
+η
+
+## f B
+
+sfs
+
+Fig. 1: Factor graph representing the joint posterior PDF from (23). Light blue boxes indicate J PAs. The following shorthand notations are used. State-transition PDFs/PMFs: f (j) 
+
+> η
+
+:= f (η(j) 
+
+> n
+
+|η(j)
+
+> n−1
+
+), f := f (xn|xn−1), fs := f (ys,n |ys,n −1) for s ∈ eSn, f B 
+
+> s
+
+:= f (ys,n ) for s ∈ S n,
+
+p(j) 
+
+> s
+
+:= p(r(j) 
+
+> s,n
+
+) for s ∈ eSn. Likelihood: f (j) 
+
+> z
+
+:= f (z(j) 
+
+> n
+
+|xn, yn, r(j) 
+
+> n
+
+, η (j) 
+
+> n
+
+). Prediction messages: β := β(xn), αs := α(ys,n ), ξ(j) := ξ(η(j) 
+
+> n
+
+),
+
+ζ(j) 
+
+> s
+
+:= ζ(r(j) 
+
+> s,n
+
+). Update messages: ι(j) := ι(xn; z(j) 
+
+> n
+
+), κ(j) 
+
+> s
+
+:= κ(ys,n |z(j) 
+
+> n
+
+), ν(j) := ν(η(j) 
+
+> n
+
+; z(j) 
+
+> n
+
+), ω(j) 
+
+> s
+
+:= ω(r(j) 
+
+> s,n
+
+; z(j) 
+
+> n
+
+).
+
+f (x0: n, y0: n, η0: n, r0: n|z1: n) ∝ f (x0)
+
+ Y 
+
+> j∈J
+
+f (η(j)0 )
+
+ S0Y
+
+> s=0
+
+f (ys,0) Y
+
+> j∈J
+
+p(r(j) 
+
+> s, 0
+
+)
+
+!| {z }
+
+> Initial prior PDFs/PMFs
+> n
+
+Y
+
+> n′=1
+
+Y
+
+> s∈eSn′
+
+f (ys,n ′ |ys,n ′−1) Y
+
+> j∈J
+
+p(r(j) 
+
+> s,n ′
+
+|r(j)
+
+> s,n ′−1
+
+)
+
+!| {z }
+
+> Legacy PF and PR transition PDFs/PMFs
+
+×
+
+ Y 
+
+> j∈J
+
+f (η(j) 
+
+> n′
+
+|η(j)
+
+> n′−1
+
+)
+
+
+
+f (xn′ |xn′−1)
+
+| {z }
+
+> Noise variance and MT state transition PDFs
+
+Y
+
+> s∈S n′
+
+f (ys,n ′ ) Y
+
+> j∈J
+
+p(r(j) 
+
+> s,n ′
+
+)
+
+!| {z }
+
+> New PF and PR PDFs/PMFs
+
+Y
+
+> j∈J
+
+f (z(j) 
+
+> n′
+
+|xn′, yn′, r(j) 
+
+> n′
+
+, η (j) 
+
+> n′
+
+)
+
+| {z }
+
+> Likelihood functions
+
+(23) a message on one edge from the previous phase transmits pending messages on all other edges in parallel. 6
+
+Once all messages at time step n have been computed, marginal posterior PDFs are approximated by beliefs. 
+
+A. Belief Calculation 
+
+Beliefs about variables are computed from the product of all received messages at their respective variable nodes: 
+
+ef (xn) ∝ β(xn) Y
+
+> j∈J
+
+ι(xn; z(j) 
+
+> n
+
+) (24) 
+
+ef (ys,n ) ∝ α(ys,n ) Y
+
+> j∈J
+
+κ(ys,n ; z(j) 
+
+> n
+
+) (25) 
+
+ef (η(j) 
+
+> n
+
+) ∝ ξ(η(j) 
+
+> n
+
+)ν(η(j) 
+
+> n
+
+; z(j) 
+
+> n
+
+) (26) 
+
+ep(r(j) 
+
+> s,n
+
+) ∝ ζ(r(j) 
+
+> s,n
+
+)ω(r(j) 
+
+> s,n
+
+; z(j) 
+
+> n
+
+) (27) The beliefs above are nonnegative, and we require that they are normalized to integrate and sum to one over their support, making them PDFs/PMFs. As a consequence, our prediction messages will likewise be PDFs. Approximating marginal 
+
+> 6
+
+The proposed parallel processing is adopted for computational efficiency. However, when message computations must be distributed across different BSs, the proposed BP method can be naturally adapted to a sequential processing scheme, consistent with [16], [31]. 
+
+posterior PDFs, these beliefs can be used for state estimation and declaration according to Sec. III-C. For their computation, the received messages need to be derived by means of the SPA rules. First, we derive the prediction and birth messages in Sec. IV-B. Then, we derive the update messages in Sec. IV-C. 
+
+B. Prediction and Birth Messages 
+
+In sequential Bayesian filtering, the prediction step is de-scribed by the Chapman-Kolmogorov equation. In BP message passing, prediction messages are described by factor node to variable node messages sent from state-transition (prior) factors to respective state variables [41, eq. (6)]. Assuming first-order Markovity, i.e., xn ⊥⊥ xn−2|xn−1, and the conditional independence xn ⊥⊥ z1: n−1|xn−1 of the state from past measure-ments, both of which the factor graph in Fig. 1 makes explicit, the Chapman-Kolmogorov equation becomes 
+
+f (xn|z1: n−1) = 
+
+Z
+
+f (xn|x0: n−1, z1: n−1)f (xn−1|z1: n−1)d xn−1
+
+=
+
+Z
+
+f (xn|xn−1)f (xn−1|z1: n−1)d xn−1 . (28) Under the same assumptions for the noise variances 
+
+η(j) 
+
+> n
+
+and the PF states ys,n , as likewise implied by the factor graph in Fig. 1, prediction messages depend only on the state-transition PDFs and the 7
+
+“old” marginal posterior PDFs, i.e., f (η(j) 
+
+> n
+
+|z1: n−1) =R f (η(j) 
+
+> n
+
+|η(j)
+
+> n−1
+
+)f (η(j)
+
+> n−1
+
+|z1: n−1)d η(j)
+
+> n−1
+
+, f (ys,n |z1: n−1) =P
+
+> rs,n −1
+
+R f (ys,n |ys,n −1)f (ys,n −1|z1: n−1)d ϕs,n −1 and 
+
+p(r(j) 
+
+> s,n
+
+|z1: n−1) = P
+
+> r(j)
+> s,n −1
+
+p(r(j) 
+
+> s,n
+
+|r(j)
+
+> s,n −1
+
+)p(r(j)
+
+> s,n −1
+
+|z1: n−1). Due to the loops in the factor graph in Fig. 1, BP message passing merely approximates marginal posterior PDFs, e.g., 
+
+ef (xn−1) ≈ f (xn−1|z1: n−1). Hence, in our approximate BP method, prediction messages approximate prediction PDFs, e.g., β(xn) ≈ f (xn|z1: n−1).
+
+1) MT State and Noise Variance: Prediction messages are 
+
+β(xn) = 
+
+Z
+
+f (xn|xn−1) ef (xn−1)d xn−1 (29) 
+
+ξ(η(j) 
+
+> n
+
+) = 
+
+Z
+
+f (η(j) 
+
+> n
+
+|η(j)
+
+> n−1
+
+) ef (η(j)
+
+> n−1
+
+)d η(j) 
+
+> n−1
+
+(30) for the MT state and for the noise variance, respectively. 
+
+2) Legacy PFs s ∈ S n ∪ { 0} =: eSn: The PF prediction messages from time step n−1 to nα(ys,n ) = X
+
+> rs,n −1∈B
+
+Z
+
+f (ys,n |ys,n −1) ef (ys,n −1)d ϕs,n −1 . (31) Inserting (12) and (13), for rs,n = 1 we obtain 
+
+α(ϕs,n , 1) = pS
+
+Z
+
+f (ϕs,n |ϕs,n −1) ef (ϕs,n −1, 1)d ϕs,n −1 (32) and for rs,n = 0 we obtain 
+
+α(ϕs,n , 0) = (1 −pS)
+
+Z
+
+fd(ϕs,n ) ef (ϕs,n −1, 1)d ϕs,n −1
+
++
+
+Z
+
+fd(ϕs,n ) ef (ϕs,n −1, 0)d ϕs,n −1 . (33) 
+
+3) New PFs s ∈ S n: The PF birth messages at time n
+
+are readily given by (16), i.e., α(ϕs,n , 1) = p(q)B fB(ϕs,n ) and 
+
+α(ϕs,n , 0) = (1 − p(q)B )fd(ϕs,n ) .
+
+4) PRs: The prediction messages for PRs are 
+
+ζ(r(j) 
+
+> s,n
+
+) = X
+
+> r(j)
+> s,n −1∈B
+
+p(r(j) 
+
+> s,n
+
+|r(j)
+
+> s,n −1
+
+)ep(r(j)
+
+> s,n −1
+
+) . (34) Inserting (18) and (19), for r(j) 
+
+> s,n
+
+= 1 we obtain 
+
+ζ(r(j) 
+
+> s,n
+
+= 1) = pPR S ep(r(j) 
+
+> s,n −1
+
+= 1)+ pPR R (1 − ep r(j) 
+
+> s,n −1
+
+= 1)  (35) and for r(j) 
+
+> s,n
+
+= 0 we obtain 
+
+ζ(j) 
+
+> s
+
+(0) = (1 −pPR S )ep(r(j) 
+
+> s,n −1
+
+= 1)+(1 −pPR R )(1 − ep r(j) 
+
+> s,n −1
+
+= 1)  .
+
+C. Update Messages and Moment-Matched Approximations 
+
+After observations zn are made, beliefs are updated through update messages. In sequential Bayesian filtering, the update 
+
+step is described by the Bayesian update equation. 7 In BP message passing, update messages are described by factor node to variable node messages sent from likelihood factors to respective state variables. In BP, such messages sent from a factor node to a neighboring variable node are computed by multiplying the factor with all incoming messages from the other neighboring variable nodes and marginalizing over those variables [41]. 
+
+> 7
+
+Strictly speaking, the Bayesian update equation directly computes the marginal posterior PDFs from Sec. IV-A described as the product of pre-diction PDF and observation likelihood. 
+
+Update messages sent from likelihood factor nodes 
+
+f (z(j) 
+
+> n
+
+|xn, yn, r(j) 
+
+> n
+
+, η (j) 
+
+> n
+
+) to the MT state variable node xn are 
+
+ι xn; z(j)
+
+> n
+
+ = X
+
+{rs,n } eSn∈B eSn
+
+X
+
+{r(j) 
+
+> s,n
+
+} eSn∈B eSn
+
+Z
+
+. . . 
+
+Z
+
+f (z(j) 
+
+> n
+
+|xn, yn, r(j) 
+
+> n
+
+, η (j) 
+
+> n
+
+)
+
+×ξ(η(j) 
+
+> n
+
+) Y
+
+s∈ eSn
+
+α(ϕs,n , r s,n )ζ(r(j) 
+
+> s,n
+
+)d ϕs,n dη(j) 
+
+> n
+
+. (36) Update messages sent to the noise variance η(j) 
+
+> n
+
+are 
+
+ν η(j) 
+
+> n
+
+; z(j)
+
+> n
+
+ = X
+
+{rs,n } eSn∈B eSn
+
+X
+
+{r(j) 
+
+> s,n
+
+} eSn∈B eSn
+
+Z
+
+. . . 
+
+Z
+
+f (z(j) 
+
+> n
+
+|xn, yn, r(j) 
+
+> n
+
+, η (j) 
+
+> n
+
+)
+
+×β(xn)Y
+
+s∈ eSn
+
+α(ϕs,n , r s,n )ζ(r(j) 
+
+> s,n
+
+)d ϕs,n dxn .
+
+(37) Update messages sent to the PF state variable node ys,n are 
+
+κ ys,n ; z(j)
+
+> n
+
+ = X
+
+{rs,n } eSn\{ s}∈BSn
+
+X
+
+{r(j) 
+
+> s,n
+
+} eSn∈B eSn
+
+Z
+
+. . . 
+
+Z
+
+f (z(j) 
+
+> n
+
+|xn, yn, r(j) 
+
+> n
+
+, η (j) 
+
+> n
+
+)
+
+×β(xn)ξ(η(j) 
+
+> n
+
+) Y
+
+`s∈ eSn\{ s}
+
+α(ϕ`s,n , r `s,n )d ϕ`s,n 
+
+Y
+
+´s∈ eSn
+
+ζ(r(j)´s,n )d xndη(j) 
+
+> n
+
+.
+
+Update messages sent to the PR state variable node r(j) 
+
+> s,n
+
+are 
+
+ω r(j) 
+
+> s,n
+
+; z(j)
+
+> n
+
+ = X
+
+{rs,n } eSn∈B eSn
+
+X
+
+{r(j) 
+
+> s,n
+
+} eSn\{ s}∈BSn
+
+Z
+
+. . . 
+
+Z
+
+f (z(j) 
+
+> n
+
+|xn, yn, r(j) 
+
+> n
+
+, η (j) 
+
+> n
+
+)
+
+×β(xn)ξ(η(j) 
+
+> n
+
+)Y
+
+`s∈ eSn
+
+α(ϕ`s,n , r `s,n )d ϕ`s,n 
+
+Y
+
+´s∈ eSn\{ s}
+
+ζ(r(j)´s,n )d xndη(j) 
+
+> n
+
+.
+
+(38) Since the likelihood factor (11) is complex Gaussian, (36)–(38) involve marginalizations over a complex Gaussian mixture for all 2Sn+1 or 2Sn variations of PF existences rs,n and PR existences r(j) 
+
+> s,n
+
+. Hence, this exact message computation according to the SPA rules does not lead to a scalable solution in the number of PFs Sn.To arrive at a scalable solution, the authors of [24], [37], [43] were inspired by the moment-matching approach of [44]. We follow their approach and approximate the complex Gaussian mixtures in (36)–(38) with unimodal, nonzero-mean complex Gaussian PDFs with mean and covariance matrix moment-matched to the complex Gaussian mixtures. That is, we formulate the approximate messages eι(xn; z(j) 
+
+> n
+
+) := 
+
+CN  z(j) 
+
+> n
+
+; μ(j)
+
+> ι,n
+
+, C(j)
+
+> ι,n
+
+, eν(η(j) 
+
+> n
+
+; z(j) 
+
+> n
+
+) := CN  z(j) 
+
+> n
+
+; μ(j)
+
+> ν,n
+
+, C(j)
+
+> ν,n
+
+,
+
+eκ(ys,n ; z(j) 
+
+> n
+
+) := CN  z(j) 
+
+> n
+
+; μ(j)
+
+> κ,s,n
+
+, C(j)
+
+> κ,s,n
+
+, and eω(r(j) 
+
+> s,n
+
+; z(j) 
+
+> n
+
+) := 
+
+CN  z(j) 
+
+> n
+
+; μ(j)
+
+> ω,s,n
+
+, C(j)
+
+> ω,s,n
+
+.
+
+Proposition 1. The first raw moments of each message are 
+
+μ(j)
+
+> ι,n
+
+(xn) := Eι(z(j) 
+
+> n
+
+|xn) = X
+
+s∈ eSn
+
+μ(j)1,s,n (xn) (39) 
+
+μ(j) 
+
+> ν,n
+
+:= Eν (z(j) 
+
+> n
+
+|
+
+η(j) 
+
+> n
+
+) = X
+
+s∈ eSn
+
+μ(j)3,s,n (40) 
+
+μ(j)
+
+> κ,s,n
+
+(ys,n ) := Eκ
+
+ z(j) 
+
+> n
+
+|ys,n 
+
+ = rs,n μ(j)2,s,n (ϕs,n )+ X
+
+s′∈ eSn\{ s} μ(j)3,s ′,n (41) 
+
+μ(j)
+
+> ω,s,n
+
+(r(j) 
+
+> s,n
+
+) := Eω
+
+ z(j) 
+
+> n
+
+|r(j)
+
+> s,n
+
+ = r(j) 
+
+> s,n
+
+μ(j)4,s,n 
+
++ X
+
+s′∈ eSn\{ s} μ(j)3,s ′,n (42) 
+
+and the second central moments of each message are 
+
+C(j)
+
+> ι,n
+
+(xn) := Eι
+
+
+
+z(j) 
+
+> n
+
+z(j)
+
+> n
+
+H|xn
+
+
+
+−Eι(z(j) 
+
+> n
+
+|xn) Eι(z(j) 
+
+> n
+
+|xn)H (43) 8
+
+= INz η(j) 
+
+> ξ,n
+
++X
+
+s∈ eSn
+
+C(j)1,s,n (xn)+ K(j)
+
+> ι,n
+
+(xn)−μ(j)
+
+> ι,n
+
+μ(j)
+
+> ι,n
+
+H(xn)
+
+C(j)
+
+> ν,n
+
+(η(j) 
+
+> n
+
+) := Eν
+
+
+
+z(j) 
+
+> n
+
+z(j)
+
+> n
+
+H|
+
+η(j)
+
+> n
+
+
+
+−Eν (z(j) 
+
+> n
+
+|
+
+η(j) 
+
+> n
+
+)Eν (z(j) 
+
+> n
+
+|
+
+η(j) 
+
+> n
+
+)H
+
+= INz η(j) 
+
+> n
+
++ X
+
+s∈ eSn
+
+C(j)3,s,n +K(j)
+
+> ν,n
+
+(η(j) 
+
+> n
+
+)−μ(j)
+
+> ν,n
+
+μ(j)
+
+> ν,n
+
+H (44) 
+
+C(j)
+
+> κ,s,n
+
+(ys,n ) := Eκ
+
+
+
+z(j) 
+
+> n
+
+z(j)
+
+> n
+
+H|ys,n 
+
+
+
+−Eκ
+
+ z(j) 
+
+> n
+
+|ys,n 
+
+Eκ
+
+ z(j) 
+
+> n
+
+|ys,n 
+
+H
+
+= rs,n C(j)2,s,n (ϕs,n ) + INz η(j) 
+
+> ξ,n
+
++ X
+
+s′∈ eSn\{ s} C(j)3,s ′,n (45) 
+
++K(j)
+
+> κ,s,n
+
+(ys,n )−μ(j)
+
+> κ,s,n
+
+μ(j)
+
+> κ,s,n
+
+H(ys,n )
+
+C(j)
+
+> ω,s,n
+
+(r(j) 
+
+> s,n
+
+) := Eω
+
+
+
+z(j) 
+
+> n
+
+z(j)
+
+> n
+
+H|r(j)
+
+> s,n
+
+
+
+−Eω (z(j) 
+
+> n
+
+|rs,n )Eω (z(j) 
+
+> n
+
+|rs,n )H
+
+= r(j) 
+
+> s,n
+
+C(j)4,s,n + INz η(j) 
+
+> ξ,n
+
++ X
+
+s′∈ eSn\{ s} C(j)3,s ′,n (46) 
+
++K(j)
+
+> ω,s,n
+
+(r(j) 
+
+> s,n
+
+)−μ(j)
+
+> ω,s,n
+
+μ(j)
+
+> ω,s,n
+
+H(r(j) 
+
+> s,n
+
+)
+
+with the noise variance prior mean η(j) 
+
+> ξ,n
+
+:= R η(j) 
+
+> n
+
+ξ(η(j) 
+
+> n
+
+)d η(j)
+
+> n
+
+and abbreviated mean and second noncentral moment terms [24], [43] 
+
+μ(j)1,s,n (xn) := 
+
+Z
+
+μs,n ψ(j) 
+
+> s,n
+
+α(ϕs,n , 1)d ϕs,n ζ(j) 
+
+> s
+
+(1) (47) 
+
+μ(j)2,s,n (ϕs,n ) := μs,n 
+
+Z
+
+ψ(j)(xn, ϕs,n )β(xn)d xnζ(j) 
+
+> s
+
+(1) (48) 
+
+μ(j)3,s,n := 
+
+Z Z 
+
+μs,n ψ(j) 
+
+> s,n
+
+β(xn)α(ϕs,n , 1)d ϕs,n dxnζ(j) 
+
+> s
+
+(1) 
+
+μ(j)4,s,n := 
+
+Z Z 
+
+μs,n ψ(j) 
+
+> s,n
+
+β(xn)α(ϕs,n , 1)d ϕs,n dxn (49) 
+
+C(j)1,s,n (xn) := 
+
+Z
+
+γs,n ψ(j) 
+
+> s,n
+
+ψ(j)
+
+> s,n
+
+Hα(ϕs,n , 1)d ϕs,n ζ(j) 
+
+> s
+
+(1) 
+
+(50) 
+
+C(j)2,s,n (ϕs,n ) := γs,n 
+
+Z
+
+ψ(j) 
+
+> s,n
+
+ψ(j)
+
+> s,n
+
+Hβ(xn)d xnζ(j) 
+
+> s
+
+(1) (51) 
+
+C(j)3,s,n := 
+
+Z Z 
+
+γs,n ψ(j) 
+
+> s,n
+
+ψ(j)
+
+> s,n
+
+Hβ(xn)α(ϕs,n , 1)d ϕs,n dxnζ(j) 
+
+> s
+
+(1) 
+
+C(j)4,s,n := 
+
+Z Z 
+
+γs,n ψ(j) 
+
+> s,n
+
+ψ(j)
+
+> s,n
+
+Hβ(xn)α(ϕs,n , 1)d ϕs,n dxn (52) 
+
+K(j)
+
+> ι,n
+
+ xn
+
+ = X
+
+{rs,n } eSn∈B eSn
+
+X
+
+{r(j) 
+
+> s,n
+
+} eSn∈B eSn
+
+Z
+
+. . . 
+
+Z
+
+μ(j) 
+
+> n
+
+μ(j)
+
+> n
+
+H
+
+×ξ(η(j) 
+
+> n
+
+) Y
+
+s∈ eSn
+
+α(ϕs,n , r s,n )ζ(r(j) 
+
+> s,n
+
+)d ϕs,n dη(j) 
+
+> n
+
+(53) 
+
+K(j)
+
+> ν,n
+
+ η(j)
+
+> n
+
+ = X
+
+{rs,n } eSn∈B eSn
+
+X
+
+{r(j) 
+
+> s,n
+
+} eSn∈B eSn
+
+Z
+
+. . . 
+
+Z
+
+μ(j) 
+
+> n
+
+μ(j)
+
+> n
+
+H
+
+×β(xn)Y
+
+s∈ eSn
+
+α(ϕs,n , r s,n )ζ(r(j) 
+
+> s,n
+
+)d ϕs,n dxn (54) 
+
+K(j)
+
+> κ,s,n
+
+ ys,n 
+
+ = X
+
+{rs,n } eSn\{ s}∈BSn
+
+X
+
+{r(j) 
+
+> s,n
+
+} eSn∈B eSn
+
+Z
+
+. . . 
+
+Z
+
+μ(j) 
+
+> n
+
+μ(j)
+
+> n
+
+H (55) 
+
+×β(xn)ξ(η(j) 
+
+> n
+
+) Y
+
+`s∈ eSn\{ s}
+
+α(ϕ`s,n , r `s,n )d ϕ`s,n 
+
+Y
+
+´s∈ eSn
+
+ζ(r(j)´s,n )d xndη(j)
+
+> n
+
+K(j)
+
+> ω,s,n
+
+ r(j)
+
+> s,n
+
+ = X
+
+{rs,n } eSn∈B eSn
+
+X
+
+{r(j) 
+
+> s,n
+
+} eSn\{ s}∈BSn
+
+Z
+
+. . . 
+
+Z
+
+μ(j) 
+
+> n
+
+μ(j)
+
+> n
+
+H (56) 
+
+×β(xn)ξ(η(j) 
+
+> n
+
+)Y
+
+`s∈ eSn
+
+α(ϕ`s,n , r `s,n )d ϕ`s,n 
+
+Y
+
+´s∈ eSn\{ s}
+
+ζ(r(j)´s,n )d xndη(j)
+
+> n
+
+again using the shorthand notation ψ(j) 
+
+> s,n
+
+= ψ(j)(xn, ϕs,n ).Proof. See Supplementary Material Sec. S-IV. ■
+
+At this point, we have defined all prediction messages in Sec. IV-B and all update messages in Sec. IV-C together with their moment-matched approximations. Using the moment-matched approximate messages eι(xn; z(j) 
+
+> n
+
+), eν(η(j) 
+
+> n
+
+; z(j) 
+
+> n
+
+),
+
+eκ(ys,n ; z(j) 
+
+> n
+
+), and eω(r(j) 
+
+> s,n
+
+; z(j) 
+
+> n
+
+), we can approximate the beliefs in (24)–(27), which, inserted in (20)–(22), allow us to compute the state estimates desired to solve the SLAM problem. These continuous derivations serve as the blueprint for the particle-based implementation described next. 
+
+D. Particle-Based Implementation 
+
+In general, the beliefs ef (xn), ef (ys,n ), and ef (η(j) 
+
+> n
+
+) can be arbitrary, non-Gaussian PDFs, so will be the prediction messages in Sec. IV-B, even under linear Gaussian state-transition PDFs. Consequently, the marginalization integrals for computing BP messages do not have a closed-form solution in general. In the following, we introduce a numerically feasible particle-based implementation of our BP method, where PDFs are approximated by particle-based representa-tions (PBRs) [3], [24], which are sets of P weighted particles. That is, we approximate the beliefs in (24) and (26) using their PBRs ef (xn) ≈: PPp=1 w(p)
+
+> x,n
+
+δ(xn − x(p) 
+
+> n
+
+) and ef (η(j) 
+
+> n
+
+) ≈:
+
+PPp=1 w(j,p ) 
+
+> η,n
+
+δ(η(j) 
+
+> n
+
+−η(j,p ) 
+
+> n
+
+). To represent PDFs, we require their weights to sum to one, i.e., PPp=1 w(p) 
+
+> x,n
+
+= 1 and PPp=1 w(j,p ) 
+
+> η,n
+
+= 1 .For the belief ef (ys,n ) in (25), we keep a PBR ef (ϕs,n , 1) ≈:PPp=1 w(p)
+
+> y,s,n
+
+δ(ϕs,n −ϕ(p) 
+
+> s,n
+
+) only under the alternative hypothesis 
+
+H1 : rs,n = 1 , while ef (ϕs,n , 0) is represented by a constant probability density [36, Sec. VI]. This is the case because we require the dummy PDF to be constant in the ROI P and zero outside, i.e., fd(ϕs,n ) = U(ϕs,n ; P×R γ×R μ), with Rγ ⊂ R and 
+
+Rμ ⊂ C denoting the supports of γs,n and μs,n , respectively, which implies that fd carries no Fisher information about ϕs,n .Consequently, the weights w(p) 
+
+> y,s,n
+
+do not sum to 1 but instead they approximate marginal posterior PF existence probabilities 
+
+ps,n := p(rs,n = 1 |z1: n) ≈
+
+Zef (ϕs,n , 1)d ϕs,n ≈
+
+PX
+
+p=1 
+
+w(p)
+
+> y,s,n
+
+. (57) The beliefs ep(r(j) 
+
+> s,n
+
+) are a PMFs of which we only store the 
+
+ep(r(j) 
+
+> s,n
+
+= 1) branches, which approximate the marginal posterior PR existence probabilities p(j) 
+
+> s,n
+
+:= p(r(j) 
+
+> s,n
+
+= 1 |z1: n) ≈ ep(r(j) 
+
+> s,n
+
+= 1) .
+
+1) Prediction and Birth Messages: Approximating marginal posterior PDFs at time n−1 with the PBRs of their beliefs, evaluating the marginalization integral 
+
+f (xn|z1: n−1) = 
+
+Z
+
+f (xn|xn−1)f (xn−1|z1: n−1)d xn−1
+
+≈
+
+Z
+
+f (xn|xn−1)
+
+> P
+
+X
+
+> p=1
+
+w(p)
+
+> x,n −1
+
+δ(xn−1 − x(p)
+
+> n−1
+
+)d xn−1
+
+= XPp=1 
+
+w(p)
+
+> x,n −1
+
+f (xn|x(p)
+
+> n−1
+
+) , (58) we obtain a prediction PDF parameterized by particles. As is done in sequential importance resampling (SIR) [45], for each particle x(p) 
+
+> n−1
+
+we now draw one particle x(p) 
+
+> n
+
+from the state-transition PDF f (xn|x(p)
+
+> n−1
+
+) used as proposal PDF to obtain a PBR for the prediction PDF f (xn|z1: n−1) ≈ β(xn) ≈PPp=1 w(p)
+
+> β,n
+
+δ xn −x(p)
+
+> n
+
+ where w(p) 
+
+> β,n
+
+= w(p) 
+
+> x,n −1
+
+if we can directly 9
+
+sample from f (xn|x(p)
+
+> n−1
+
+). We likewise compute the noise vari-ance prediction message ξ(η(j) 
+
+> n
+
+) ≈ PPp=1 w(j,p ) 
+
+> ξ,n
+
+δ η(j) 
+
+> n
+
+− η(j,p )
+
+> n
+
+
+
+with w(j,p ) 
+
+> ξ,n
+
+= w(j,p ) 
+
+> η,n −1
+
+and η(j,p ) 
+
+> n
+
+sampled from f (ηn|η(j,p ) 
+
+> n−1
+
+)
+
+using (30). The prediction message ζ(r(j) 
+
+> s,n
+
+= 1) is com-puted from ep(r(j) 
+
+> s,n −1
+
+= 1) according to (35). PBRs of pre-diction messages for legacy PFs s ∈ eSn are α(ϕs,n , 1) ≈PPp=1 w(p)
+
+> α,s,n
+
+δ(ϕs,n − ϕ(p) 
+
+> s,n
+
+) with w(p) 
+
+> α,s,n
+
+= pSw(p) 
+
+> y,s,n −1
+
+and ϕ(p)
+
+> s,n
+
+sampled from f (ϕs,n |ϕ(p)
+
+> s,n −1
+
+) using (32). As described in Sec. III-B2, we introduce one new PF per partition Pq per time step n. PBRs of birth messages for these new PFs s ∈ S n are α(ϕs,n , 1) ≈ PPp=1 w(p)
+
+> α,s,n
+
+δ(ϕs,n − ϕ(p) 
+
+> s,n
+
+)
+
+where weights would be w(p) 
+
+> α,s,n
+
+= p(q)B /P if particles ϕ(p)
+
+> s,n
+
+were sampled from fB(ϕs,n ) per (16). However, we choose to sample from a different proposal PDF f pB (ϕs,n |zn) which improves early detection of map features and introduces importance weights ew(p) 
+
+> α,s,n
+
+= fB(ϕ(p) 
+
+> s,n
+
+)
+
+f pB(ϕ(p) 
+
+> s,n
+
+|zn)
+
+p(q)B
+
+P normalized as 
+
+w(p) 
+
+> α,s,n
+
+= p(q)B ew(p)
+
+> α,s,n
+
+/P ew(p)
+
+> α,s,n
+
+.
+
+2) An Efficient Birth Proposal PDF: For each new PF 
+
+q(s) = s − |S n| with s ∈ Sn, our choice of proposal PDF is f pB (ϕs,n |zn) := f p(psfv 
+
+> s,n
+
+|zn)f (γs,n )f (μs,n ), where 
+
+f p(psfv 
+
+> s,n
+
+|zn) := N (psfv 
+
+> s,n
+
+; μsfv 
+
+> q,n
+
+, Csfv 
+
+> q,n
+
+) is a Gaussian spatial pro-posal PDF parameterized with mean μsfv  
+
+> q,n
+
+∈ R3 and covariance matrix Csfv  
+
+> q,n
+
+∈ R3×3. We obtain these parameters as follows: First, we define an observation “residual” ez(j) 
+
+> n
+
+:= Π⊥ 
+
+> j
+
+z(j)
+
+> n
+
+using the projector Π⊥ 
+
+> j
+
+:= INz − Ψj Ψ† 
+
+> j
+
+onto the residual-subspace orthogonal to the signal-subspace spanned by the col-umn vectors of the steering matrix Ψj (bxMMSE 
+
+> n|n−1
+
+, { bϕMMSE 
+
+> s,n −1
+
+}Sn ) := 
+
+ψ(bxMMSE 
+
+> n|n−1
+
+, bϕMMSE 
+
+> 0,n −1
+
+) . . . ψ(bxMMSE 
+
+> n|n−1
+
+, bϕMMSE 
+
+> |S n|,n −1
+
+) ∈ CNz×(|S n|+1) ,which captures the residual of the signal not captured by the LoS s = 0 or legacy PFs Sn. Here, we used the predicted state estimate bxMMSE  
+
+> n|n−1
+
+:= R xnβ(xn)d xn ≈ PPp=1 w(p)
+
+> β,n
+
+x(p) 
+
+> n
+
+.We further stack ezn := ez(1) T 
+
+> n
+
+. . . ez(J)T
+
+> n
+
+T. Then we draw 
+
+Ng candidate positions psfv  
+
+> i
+
+uniformly from the partition 
+
+Pq , i.e., from U(Pq ). Next, we evaluate a cost function 
+
+PB(psfv  
+
+> i
+
+, ezn) =: ewi to obtain weights wi = ewi/ PNg
+
+¨ı=1 ew¨ı. For its computational efficiency and robustness, our choice of a cost function is the coherent Bartlett spectrum PB(psfv  
+
+> i
+
+, ezn) := 
+
+PJj=1 
+
+1Nz ez(j)
+
+> n
+
+H ψ(bxMMSE 
+
+> n|n−1
+
+, psfv  
+
+> i
+
+) 2. Finally, we mode-match the mean of our Gaussian proposal PDF f p(psfv 
+
+> s,n
+
+|zn) with the empirical maximum estimate of the Bartlett spectrum, i.e., 
+
+μsfv  
+
+> q,n
+
+:= psfv  
+
+> i⋆
+
+with i⋆ := arg max i PB(psfv  
+
+> i
+
+, ezn), and moment-match the covariance matrix with an empirical second central moment estimate, i.e., Csfv  
+
+> q,n
+
+:= PNg 
+
+> i=1
+
+wi
+
+ psfv  
+
+> i
+
+− μsfv 
+
+> q,n
+
+  psfv  
+
+> i
+
+−
+
+μsfv 
+
+> q,n
+
+T. This choice of proposal PDF results in particles psfv (p)
+
+> s,n
+
+of new PFs s ∈ S n being drawn from f p(psfv 
+
+> s,n
+
+|zn) such that most of them are located in a spatial region where the residual 
+
+ez(j) 
+
+> n
+
+has most power, and weights ew(p) 
+
+> α,s,n
+
+∝ 1
+
+f p(psfv (p) 
+
+> s,n
+
+|zn) .
+
+3) Update Messages: Now that PBRs of prediction messages have been introduced, we can compute the approximate update messages. In particular, the moments in (39)–(46) are approximated using the terms in (47)–(56), where we insert PBRs of prediction messages to evaluate the marginalization integrals therein. In particular, we evaluate eι(x(p) 
+
+> n
+
+; z(j) 
+
+> n
+
+) =
+
+CN  z(j) 
+
+> n
+
+; μ(j)
+
+> ι,n
+
+(x(p) 
+
+> n
+
+), C(j)
+
+> ι,n
+
+(x(p) 
+
+> n
+
+), eκ(ϕ(p) 
+
+> s,n
+
+, r s,n ; z(j) 
+
+> n
+
+) =
+
+CN  z(j) 
+
+> n
+
+; μ(j)
+
+> κ,s,n
+
+(ϕ(p) 
+
+> s,n
+
+, r s,n ), C(j)
+
+> κ,s,n
+
+(ϕ(p) 
+
+> s,n
+
+, r s,n ), eν(η(j,p ) 
+
+> n
+
+; z(j) 
+
+> n
+
+) = 
+
+CN  z(j) 
+
+> n
+
+; μ(j)
+
+> ν,n
+
+, C(j)
+
+> ν,n
+
+(η(j,p ) 
+
+> n
+
+), and eω(r(j) 
+
+> s,n
+
+; z(j) 
+
+> n
+
+) =
+
+CN  z(j) 
+
+> n
+
+; μ(j)
+
+> ω,s,n
+
+(r(j) 
+
+> s,n
+
+), C(j)
+
+> ω,s,n
+
+(r(j) 
+
+> s,n
+
+) with PBRs of mean and covariance terms derived in Supplementary Material, Sec. S-V-A. 
+
+4) Beliefs: With PBRs of both prediction and update messages, PBRs of the beliefs (24)–(26) are ef (xn) ≈PPp=1 w(p)
+
+> x,n
+
+δ(xn − x(p) 
+
+> n
+
+) for the agent state ef (ϕs,n , 1) ≈
+
+PPp=1 w(p)
+
+> y,s,n
+
+δ(ϕs,n − ϕ(p) 
+
+> s,n
+
+) for PF states, and ef (η(j) 
+
+> n
+
+) ≈PPp=1 w(j,p ) 
+
+> η,n
+
+δ(ηn − η(j,p ) 
+
+> n
+
+) for the noise variance with weights 
+
+w(p) 
+
+> x,n
+
+= ew(p)
+
+> x,n
+
+Cx,n 
+
+, w(p) 
+
+> y,s,n
+
+= ew(p)
+
+> y,s,n
+
+Cy,s,n 
+
+, and w(j,p ) 
+
+> η,n
+
+= ew(j,p )
+
+> η,n
+
+C(j)
+
+> η,n
+
+with 
+
+ew(p) 
+
+> x,n
+
+= w(p)
+
+> β,n J
+
+Y
+
+> j=1
+
+CN 
+
+
+
+z(j) 
+
+> n
+
+; μ(j)
+
+> ι,n
+
+(x(p) 
+
+> n
+
+), C(j)
+
+> ι,n
+
+(x(p) 
+
+> n
+
+)
+
+
+
+(59) 
+
+ew(p) 
+
+> y,s,n
+
+= w(p)
+
+> α,s,n J
+
+Y
+
+> j=1
+
+CN  z(j) 
+
+> n
+
+; μ(j)
+
+> κ,s,n
+
+(ϕ(p) 
+
+> s,n
+
+, 1) , C(j)
+
+> κ,s,n
+
+(ϕ(p) 
+
+> s,n
+
+, 1) ew(j,p ) 
+
+> η,n
+
+= w(j,p ) 
+
+> ξ,n
+
+CN 
+
+
+
+z(j) 
+
+> n
+
+; μ(j)
+
+> ν,n
+
+, C(j)
+
+> ν,n
+
+(η(j,p ) 
+
+> n
+
+)
+
+
+
+(60) as derived in Supplementary Material, Sec. S-V-A, and nor-malized with constants Cx,n = PPp=1 ew(p)
+
+> x,n
+
+, C(j) 
+
+> η,n
+
+= PPp=1 ew(j,p ) 
+
+> η,n
+
+,and 
+
+Cy,s,n =
+
+ P
+
+X
+
+> p=1
+
+ew(p)
+
+> y,s,n
+
+
+
++
+
+
+
+1−
+
+> P
+
+X
+
+> p=1
+
+ew(p)
+
+> α,s,n
+
+ Y 
+
+j∈J 
+
+eκ ϕs,n , 0; z(j)
+
+> n
+
+
+
+which is derived in Supplementary Material, Sec. S-VI. The PF normalization constant Cy,s,n demands to compute 
+
+eκ ϕs,n , 0; z(j)
+
+> n
+
+ = CN  z(j) 
+
+> n
+
+; μ(j)
+
+> κ,s,n
+
+(ϕs,n , 0) , C(j)
+
+> κ,s,n
+
+(ϕs,n , 0)  un-der the null hypothesis H0 : rs,n = 0 once, which is constant for all particles. Using the weights w(p)
+
+> y,s,n
+
+, the marginal posterior PF existence probabilities are calculated by evaluating (57). The moment-matched approximation for the r(j) 
+
+> s,n
+
+= 1 branch of the PR belief in (27) is normalized as 
+
+ep(r(j) 
+
+> s,n
+
+= 1) = ζ(j) 
+
+> s
+
+(1) eω(1; z(j) 
+
+> n
+
+)
+
+ζ(j) 
+
+> s
+
+(1) eω(1; z(j) 
+
+> n
+
+) + (1 −ζ(j) 
+
+> s
+
+(1)) eω(0; z(j) 
+
+> n
+
+) . (61) After computing the belief of each state, we perform sys-tematic resampling [45, Alg. 2] which reduces particle degen-eracy and implies equal weights of resampled particles. To counteract particle impoverishment, each particle is convolved with a Gaussian regularization kernel with covariance matrix moment-matched with the second central moment of the belief and scaled by the optimal kernel bandwidth hopt [46, p. 253]. 
+
+E. Computational Complexity and GPU Acceleration 
+
+Let eSn := Sn + 1 denote the number of PFs including the LoS. Liang et al. [24] presented a direct SLAM method that scales with O P J eSnN3
+
+> z
+
+ and an “alternative approximation” that scales with O N2 
+
+> z
+
++ P  J(N z eS2 
+
+> n
+
++ eS4 
+
+> n
+
+) according to [47]. The dominating term of the latter is P J Nz eS2 
+
+> n
+
+in practical settings, i.e., P ≫ Nz and Nz ≫ eS2 
+
+> n
+
+, hence the algorithm scales linearly in the number of particles P , the number of PAs J, and the length of observed data Nz in practice. Both implementations showed almost identical performance [47]. In Supplementary Material, Sec. S-VII we follow the al-ternative approximation from [47] which was originally im-plemented on a CPU. The arguably largest potential of this algorithm is that it is naturally parallel. Reflecting the current zeitgeist, our BP method is implemented to run on a GPU, 10 
+
+parallelizing over both P particles and J PAs. In Sec. VI, we show that this achieves an order of magnitude faster computation than the preceding CPU-based implementation when parameterized at equal system parameters, hinting at real-time capability. The computation of update weights in our algorithm scales with O J(N zS3 
+
+> n
+
++ S4 
+
+> n
+
+) + P  J(N z eS2 
+
+> n
+
++ eS3 
+
+> n
+
+) ,while our new birth proposal PDF comes at complexity 
+
+O J(N z eS2 
+
+> n
+
++ eS3 
+
+> n
+
+) + QJN g Nz
+
+, leaving us with a total com-putational complexity of O QJN g Nz + J(N zS3 
+
+> n
+
++ S4 
+
+> n
+
+) + 
+
+P  J(N z eS2 
+
+> n
+
++ eS3 
+
+> n
+
+) per time step n. The last term is dominant in practical implementations, where the per-particle, per-PA cost is O Nz eS2 
+
+> n
+
++ eS3
+
+> n
+
+ after parallelization. V. P OSTERIOR CRAM ´ER –R AO LOWER BOUND 
+
+Following [34], we derive two PCRLBs for the D-MIMO SLAM problem. Let eK := K +1 . First, we decompose ampli-tudes 8 into moduli a(j) 
+
+> k,n
+
+∈ R and phases 
+
+φ(j) 
+
+> k,n
+
+and stack them into vectors a(j) 
+
+> n
+
+:= a(j)0,n . . . a(j)
+
+> K,n
+
+T and 
+
+φ(j) 
+
+> n
+
+per PA, and into vectors 
+
+an := a(1)  
+
+> n
+> T
+
+. . . a(J)
+
+> n
+> T
+
+T ∈ R eKJ and 
+
+φn := 
+
+φ(1)  
+
+> n
+> T
+
+. . . 
+
+φ(J)
+
+> n
+> T
+
+T ∈
+
+RDφ for all components k. The (i) noncoherent PCRLB is obtained by treating each component phase as a separate RV per PA, i.e., 
+
+φ(j) 
+
+> n
+
+= 
+
+φ(j)0,n . . . φ(j)
+
+> K,n
+
+T and Dφ = eKJ ,while the (ii) coherent PCRLB is obtained by treating the phase 
+
+φ(j) 
+
+> k,n
+
+=: 
+
+φk,n ∀j ∈ J as a single RV common among distributed PAs j, j ′ ∈ J , i.e., 
+
+φ(j) 
+
+> n
+
+= 
+
+φ0,n . . . φK,n 
+
+T ≜
+
+φn
+
+and Dφ = eK. We stack all parameters into a joint state vector 
+
+θg 
+
+> n
+
+:= xT 
+
+> n
+
+psfv 
+
+> n
+> T
+
+φn 
+
+> T
+
+an
+
+> T
+
+ηn
+
+T ∈ RDg of dimension 
+
+Dg = 6+3 K+D φ+J eK+1 , where the map is captured by a vector 
+
+psfv  
+
+> n
+
+:= [ psfv  
+
+> 1,n
+> T
+
+. . . psfv 
+
+> K,n
+> T
+
+]T ∈ R3K×1 of stacked SFV positions. For this PCRLB derivation and the following experiments, we assume a common noise variance across all PAs, i.e., 
+
+η(j) 
+
+> n
+
+=: ηn ∀j ∈ J .We are ultimately interested in obtaining the global PCRLB 
+
+Pn|n =  Ig 
+
+> n
+
++ In|n−1
+
+−1 ∈ RDg×Dg (62) that is a lower bound on the mean squared error (MSE) matrix [48, eq. (29)] of any estimator 9 E (ˆ
+
+θg
+
+> n
+
+−
+
+θg
+
+> n
+
+)( ˆ
+
+θg
+
+> n
+
+−
+
+θg
+
+> n
+
+)T ≽
+
+Pn|n. The PCRLB matrix Pn|n is the inverse of the posterior information matrix In|n := Ig
+
+> n
+
++In|n−1 that is computed through the information fusion of the information matrix Ig 
+
+> n
+
+about the global parameters of interest 
+
+θg 
+
+> n
+
+obtained from a snapshot of observations zn at the current time step n with the predicted information matrix In|n−1. Under a linear Gaussian state-transition PDF f (θg
+
+> n
+
+|θg
+
+> n−1
+
+) = N (θg
+
+> n
+
+; Φθg
+
+> n−1
+
+, Q) the predicted information matrix is [49, eq. (16)] 
+
+In|n−1 =  Φ I−1 
+
+> n−1|n−1
+
+ΦT + Q−1 , (63) with the (D g × Dg) state-transition matrix Φ and pro-cess noise covariance matrix Q. Using the PCRLB matrix in (62), we define the position error bound (PEB) as σpn := q
+
+tr   Pn|n
+
+
+
+> 1:3 ,1:3
+
+ and the mapping error bound (MEB) as 
+
+> 8
+
+For deriving the PCRLB, amplitudes e
+
+ϱ(j) 
+
+> k,n
+
+absorb the pathloss instead of the steering vectors ψ(j) as well as the carrier-phase term exp( −j 2π 
+
+> c
+
+fc∥ ´r∥)
+
+from (6). For details, see Supplementary Material, Sec. S-IX. 
+
+> 9
+
+The expectation is to be taken under the joint PDF f (θg
+
+> n
+
+, zn|z1: n−1). The notation X ≽ 0 is to be interpreted as X being positive semidefinite [39]. 
+
+σpsfv 
+
+> k,n
+
+:= 
+
+q
+
+tr   Pn|n
+
+
+
+> ik ,ik
+
+ with index range ik = 6+3( k−1) : 6+3 k for SFV k.
+
+A. Global Snapshot FIM 
+
+The Bayesian snapshot information matrix 
+
+Ig 
+
+> n
+
+= E
+
+> θg
+> n|z1: n−1
+
+(IF
+
+> n
+
+) is computed as expectation under the prior PDF f (θg
+
+> n
+
+|z1: n−1) of the “classic” snapshot Fisher information matrix (FIM) [50]. Assuming that each anchor 
+
+j contributes independent information on 
+
+θg
+
+> n
+
+, i.e., assuming conditionally independent observations z(j) 
+
+> n
+
+, the classic snapshot FIM [4] 
+
+IF 
+
+> n
+
+= XJj=1 
+
+J(j) 
+
+> n
+
+I(j)
+
+> ch ,n
+
+J(j) 
+
+> n
+> T
+
+∈ RDg×Dg (64) is computed as sum of the local channel FIMs I(j) 
+
+> ch ,n
+
+∈ RDch ×Dch 
+
+contributed by all J PAs, and propagated via the Jacobian matrices J(j) 
+
+> n
+
+:= ∂θ(j)
+
+> ch ,n
+> T
+
+/∂θg 
+
+> n
+
+∈ RDg×Dch from local channel pa-rameter level to global parameter level. The Jacobian matrices in (64) are derived in Supplementary Material, Sec. S-IX-B. 
+
+B. Local Per-Anchor Channel FIM 
+
+The PA-local channel parameter vector 
+
+θ(j) 
+
+> ch ,n
+
+:= 
+
+
+
+θ(j)
+
+> n
+> T
+
+ϑ(j)
+
+> n
+> T
+
+τ(j)
+
+> n
+> T
+
+φ(j) 
+
+> n
+> T
+
+a(j) 
+
+> n
+> T
+
+ηn
+
+T ∈ RDch is of dimension 
+
+Dch = 5 eK+1 , which contains the stacked elevation and azimuth angles, delays, and amplitude phases and moduli of all eK
+
+components. The local channel FIM at PA j is defined as [48, eq. (10)] I(j) 
+
+> ch ,n
+
+= −Ezn|
+
+θ(j)
+
+> ch ,n
+
+ ∇θ(j)
+
+> ch ,n
+
+(∇θ(j)
+
+> ch ,n
+
+ln f (zn|θ(j)
+
+> ch ,n
+
+)) T,which corresponds to 
+
+I(j)
+
+> ch ,n
+
+ 
+
+> `ı, ´ı
+
+=
+
+ 
+
+> Nz
+> ηn2
+
+, [θ(j)
+
+> ch ,n
+
+]`ı ≡ [θ(j)
+
+> ch ,n
+
+]´ı ≡ ηn 
+
+> 2
+> ηn
+
+ℜ
+
+ ∂ eϱ(j)∗  
+
+> k,n ψ(j)
+> k,n
+> H
+> ∂[θ(j)
+> ch ,n ]`ı
+> ∂eϱ(j)
+> k,n ψ(j)
+> k,n
+> ∂[θ(j)
+> ch ,n ]´ı
+
+
+
+, else (65) under a complex Gaussian likelihood f (zn|θ(j)
+
+> ch ,n
+
+) [39, Sec. 15.7]. The individual local channel FIM entries in (65) are derived in Supplementary Material, Sec. S-IX-A. In the following, we introduce two variants of our method: The unmodified method described in Sec. IV will be referred to as nonzero-mean (NZM) method. The same method but assuming a zero-mean amplitude prior 
+
+ρ(j) 
+
+> s,n
+
+∼ CN (0 ,γs,n )
+
+leading to (47)–(49) and (53)–(56) becoming zero will be referred to as zero-mean (ZM) method. VI. E XPERIMENTS AND RESULTS 
+
+The proposed NZM coherent direct MP-SLAM is validated using synthetic measurements and compared to its ZM version which only performs noncoherent processing between PAs as well as to the PCRLBs introduced in Section V. 
+
+A. Common Simulation Setup 
+
+MT state particles {x0}Pp=1 are drawn from f (x0) =
+
+U(x0; pmin , pmax ) with a Cartesian, axis-aligned cuboidal sup-port, bounded by pmin = −[3 .5 1 1] T and pmax = [4 .5 4 .5 1] T.Noise variance particles are drawn from a uniform prior 
+
+f (η(j)0 ) = U(η(j)0 ; ηmin , η max ) with ηmin = 10 −9 and ηmax = 10 −4.We choose S0 = 0 , i.e., we initialize only the LoS s = 0 , the same way as we introduce new PFs described below. 11                           
+
+> −2024
+> 0
+> 2
+> 4
+> −1
+> 0
+> 1
+> xin m
+> yin m
+> z in  m
+> j= 1
+> j= 2
+> j= 3
+> j= 4
+> 1
+> 23
+> 4
+> a) Experiment 1
+> LoS paths expected trajectory SB paths realized trajectories
+> −2024
+> 0
+> 2
+> 4
+> −1
+> 0
+> 1
+> xin m
+> yin m
+> z in  m
+> j= 1
+> j= 2
+> j= 3
+> j= 4
+> 1
+> 23
+> 4
+> b) Experiment 2
+
+Fig. 2: Scenario for synthetic data generation with K = 4 surfaces from left to right, and random realizations of MT trajectories. 
+
+MT state evolution: The MT state-transition PDF 
+
+f (xn|xn−1) = N (xn; Φaxn−1, Qa) is defined according to a nearly constant velocity (NCV) state-transition model [51, Sec. 6.3.2] with state transition matrix 
+
+[Φa]`ı, ´ı =
+
+
+
+1, `ı = ´ ı
+
+T, (` ı, ´ı) = (1 , 4) ∨ (` ı, ´ı) = (2 , 5) ∨ (` ı, ´ı) = (3 , 6) 0, else with T being the time interval between time steps n and n−1,and kinematic process noise covariance matrix Qa = σ2 
+
+> v
+
+ΓΓ T
+
+with gain matrix Γ =  T2 
+
+> 2
+
+I3, TI3
+
+T and where σ2 
+
+> v
+
+is the process noise variance of the kinematic MT state. 
+
+Noise variance evolution: Following [24], the noise vari-ance evolution is described by a Gamma PDF f (ηn|ηn−1) = 
+
+G ηn; c η , ηn−1
+
+> cη
+
+ with mean ηn−1 and variance η2 
+
+> n−1
+> cη
+
+, parame-terized by a chosen constant cη = 10 .
+
+PF state time-evolution: We assume that the temporal state-transition PDF of the continuous PF state factorizes as 
+
+f (ϕs,n |ϕs,n −1) = f (psfv 
+
+> s,n
+
+|psfv 
+
+> s,n −1
+
+)f (μs,n |μs,n −1)f (γs,n |γs,n −1). We model the temporal evolution of the amplitude prior variance with a Gamma PDF f (γs,n |γs,n −1) = G γs,n ; c γ , γs,n −1/cγ
+
+,parameterized by a constant cγ = 1000 . We model the time evolution of the amplitude prior mean with a complex Gaus-sian PDF f (μs,n |μs,n −1) = CN (μs,n ; μs,n −1, σ 2
+
+> μ
+
+) with constant noise variance σμ = 0 .03 . The temporal evolution of SFVs is described by a Gaussian state-transition PDF f (psfv 
+
+> s,n
+
+|psfv 
+
+> s,n −1
+
+) = 
+
+N (psfv 
+
+> s,n
+
+; psfv 
+
+> s,n −1
+
+, I3σ2
+
+> sfv
+
+) with constant standard deviation σsfv =4 mm . We choose survival probabilities pS = 0 .8 and pPR S = 0 .9,and a recovery probability pPR R = 0 .1. Declaration and pruning thresholds are set to Tdec = 0 .5 and Tpru = 0 .1, respectively. 
+
+Births of new PFs: For new PFs, we choose f (γs,n ) = 
+
+U(γs,n ; 0 , γ max ) and f (μs,n ) = U(μs,n ; Rμ). For simplicity, we choose 10 Q = 1 , and f (psfv 
+
+> s,n
+
+) = U(psfv 
+
+> s,n
+
+; 2 pmin , 2pmax ). The      
+
+> 10 This choice leads to Nbirths and N−SNdeaths along the track.
+
+Poisson mean is μB = 0 .5. We choose γmax = 5 and Rμ := {μ ∈
+
+C : |μ| ≤ μmax }, with μmax = 0 .001 chosen intentionally small to promote robust noncoherent convergence after initialization and coherent tracking thereafter along the track. New PRs are introduced with PR birth probability pPR B = 0 .9,
+
+System Parameters: We choose Nf = 10 frequency bins equally spaced over a bandwidth of B = 100 MHz and centered at fc = 3 .5 GHz . We use J = 4 URAs with (M y ×Mz) = (4 ×4) 
+
+antennas equally spaced at λ/2. This leads to an observation length Nz = 160 . The environment in Fig. 2 consists of 
+
+K = 4 surfaces 1 – 4 , which—assuming correct model order estimation—leads to eSn = 5 . All experiments are conducted on an NVIDIA RTX PRO ™ 4000 Blackwell GPU with a peak memory bandwidth of 672 GB /s. We choose a time-constant noise variance ηn s.t. the SNR = P ch 1 
+
+> ηn
+
+is 20 dB 
+
+with sum-channel power P ch  
+
+> n
+
+:= 1NzJ
+
+PJj=1 ∥PKk=0 ϱ(j)
+
+> k,n
+
+ψ(j)
+
+> k,n
+
+∥2
+
+evaluated at time n = 1 . In two experiments with trajectories of N = 200 steps we conducted Monte Carlo (MC) analyses of 100 estimation runs of ZM and NZM. 
+
+B. Experiment 1: Synthetic Data, Random Trajectory 
+
+Random measurements are generated according to (4) and realizations of random states {xn, psfv 
+
+> k,n
+
+}Nn=0 are generated according to the specified state-transition PDFs (see Supple-mentary Material, Sec. S-IX for details), leading to the NCV trajectory realizations shown in Fig. 2 a). The MC-averaged root mean square errors (RMSEs) of ZM approach both the 
+
+noncoherent PEB in Fig. 3 a) and MEBs in Fig. 4. NZM clearly outperforms ZM in terms of agent position RMSE as shown in Fig. 3 b) using the cumulative frequency of position errors. The mapping RMSE of NZM approaches the coherent MEB, which leverages the full aperture of the D-MIMO infrastructure. This highlights the aperture-retaining properties of NZM, which outperforms ZM that is lower-bounded by the noncoherent PCRLB and fails to retain aperture. In all figures, ˆI50% denotes the interval between the first and third sample-quartiles of the empirical error distribution. In this experiment, we used 
+
+P = 30 000 , and σv = 0 .5 m /s2.
+
+C. Experiment 2: Synthetic Data, Deterministic Trajectory 
+
+The agent state follows the deterministic trajectory in Fig. 2 b) on which the PCRLB is not a lower bound. Both the MC-averaged position RMSE in Fig. 3 c) and their cumulative frequencies in Fig. 3 d) show that NZM performs more accu-rately than ZM. The surface in the center of the scenario in Fig. 2 b) causes PA-local ray obstructions. Fig. 5 shows the true number of visible paths per PA j vs. the sum of their estimated existence probabilities P  
+
+> s∈eSn
+
+p(j) 
+
+> s,n
+
+The position and existence estimates show that robust tracking is possible with our BP method even under partial OLoS in a challenging multipath scenario. In this experiment, we used a more economic number of particles P = 15 000 , and σv = 5 .2 m /s2 is chosen as twice the maximum agent acceleration. 
+
+D. Run Time Analysis 
+
+Our BP method is memory-bound rather than math-bound, hence its execution time approximately scales inversely with 12               
+
+> 0
+> 0.5
+> 1
+> ∥pn − ˆpn∥ in  cm
+> a) 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> 1
+> Cumulative frequency
+> b)
+> RMSE ˆI50%
+> ZM NZM PEB classic PEB noncoh. PEB coherent
+> 50 100 150 200
+> 0
+> 0.5
+> 1
+> Step n
+> ∥pn − ˆpn∥ in  cm
+> c)
+> 0120
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> 1
+> ∥pn−ˆpn∥in cm
+> Cumulative frequency
+> d)
+
+Fig. 3: Position RMSE ∥pn − ˆpn∥ vs. PEB evaluated on synthetic data (left). Cumulative frequency of the position RMSE (right). 
+
+the GPU’s memory bandwidth. At the above system parame-ters {P, J, Nz, K 2} with which it practically scales linearly, the GPU-accelerated M ATLAB -implementation of our BP method has average runtimes of 230 ms and 400 ms , in experiments 2 and 1, respectively, demonstrating possible real-time capa-bility. Scaled to the same system parameters and compared with the timing of the original algorithm in [47, Table 1], our algorithm runs 14 times faster. 
+
+Discussion: Fig. 3 a) and Fig. 4 demonstrate that distributed processing using a zero-mean Type-II likelihood (i.e., ZM) inevitably results in the loss of aperture, and hence estimation performance. Using a nonzero-mean Type-II likelihood (i.e., NZM) can restore coherence and hence retain aperture and performance in D-MIMO systems. Note that the proposed system model assumes frequency synchronization (but not phase calibration) between the MT clock and the D-MIMO infrastructure. While this is a strong assumption, it can be achieved in practice (cf. [23]). If it is violated, the estimator can still operate noncoherently , thereby accommodating phase asynchrony, provided that the amplitude prior means μs,n are estimated as zero. In this case, the NZM effectively reduces to the ZM model, as confirmed by experiments. An additional advantage of the proposed BP framework is its flexibility: the factor graph can be readily extended to include unknown timing and phase offsets of the PAs as latent parameters (similar to noise variances) [5]. Since these parameters are shared across SFVs, they can be jointly inferred provided that the number of measurement equations induced by common features exceeds the number of unknowns [5], [53]. This concept potentially also enables robust over-the-air calibration [54]. VII. C ONCLUSION 
+
+In this work, we proposed a scalable direct MP-SLAM method based on particle-based BP for coherent sensing and localization in D-MIMO/XL-MIMO systems. Motivated by the increasing availability of spatially distributed arrays in future wireless infrastructures, the method enables coherent data fusion directly at the raw-signal level while jointly estimating the MT state and geometric properties of the environment. The key element is a phase-preserving nonzero-mean Type-II likelihood that maintains a shared complex mean across distributed PAs, thereby preserving the global phase structure required for coherent aperture processing. At the same time, the variance term captures residual noncoherent signal power, allowing the model to naturally accommodate PA/subarray-specific phase errors or partial coherence by shifting unmod-eled power into the variance. This construction retains full aperture gain whenever coherence is available, while smoothly degrading to noncoherent operation otherwise. Combined with the SFV surface model, the proposed method enables con-sistent fusion of map features across distributed arrays and propagation paths, while accounting for near-field propagation and visibility effects. In addition, the achieved estimation performance is close to the corresponding PCRLB, indicating that the proposed framework efficiently exploits the available spatial aperture and coherent signal information. Promising directions for future research include extensions of the proposed framework toward hybrid inference-deep learning architectures [55], [56], extensions to multiple-bounce paths [31], to incorporate multiple feature types such as point scatterers [15], [19], or to incorporate timing and phase synchronization parameters for PAs [5], [54]. REFERENCES [1] N. Gonz´ alez-Prelcic, M. Furkan Keskin, O. Kaltiokallio, M. Valkama, D. Dardari, X. Shen, Y. Shen, M. Bayraktar, and H. Wymeersch, “The integrated sensing and communication revolution for 6G: Vision, techniques, and applications,” Proc. IEEE , vol. 112, no. 7, pp. 676–723, May 2024. [2] C. Gentner, T. Jost, W. Wang, S. Zhang, A. Dammann, and U. C. Fiebig, “Multipath assisted positioning with simultaneous localization and mapping,” IEEE Trans. Wireless Commun. , vol. 15, no. 9, pp. 6104– 6117, Sept. 2016. [3] E. Leitinger, F. Meyer, F. Hlawatsch, K. Witrisal, F. Tufvesson, and M. Z. Win, “A belief propagation algorithm for multipath-based SLAM,”                                              
+
+> IEEE Trans. Wireless Commun. , vol. 18, no. 12, pp. 5613–5629, Dec. 2019. [4] A. Fascista, B. J. B. Deutschmann, M. F. Keskin, T. Wilding, A. Coluc-cia, K. Witrisal, E. Leitinger, G. Seco-Granados, and H. Wymeersch, “Uplink joint positioning and synchronization in cell-free deployments with Radio Stripes,” in 2023 IEEE International Conference on Com-munications Workshops (ICC Workshops) , 2023, pp. 1330–1336. [5] A. Fascista et al. , “Joint localization, synchronization and mapping via phase-coherent distributed arrays,” IEEE J. Sel. Topics Signal Process. ,pp. 1–16, Jan. 2025. [6] V. Tentu, H. Wymeersch, M. F. Keskin, S. Dey, and T. Svensson, “Phase-coherent D-MIMO ISAC: Multi-target estimation and spectral efficiency trade-offs,” in Proc. IEEE JC&S 2026 , Feb. 2026, pp. 1–6. [7] Y. Xu, M. Sandra, X. Cai, S. Willhammar, and F. Tufvesson, “Interacting object-enabled clustering and characterization of distributed MIMO channels,” IEEE Trans. Wireless Commun. , vol. 25, pp. 12 376–12 390, Feb. 2026. [8] W. Xu, A. Liu, M.-j. Zhao, and G. Caire, “Joint visibility region detection and channel estimation for XL-MIMO systems via alternating MAP,” IEEE Trans. Signal Process. , vol. 72, pp. 4827–4842, Oct. 2024. [9] W. Xu, A. Liu, M. jian Zhao, G. Caire, and Y.-C. Wu, “Exploiting dynamic sparsity for near-field spatial non-stationary XL-MIMO channel tracking,” arXiv e-prints ,2025. [Online]. Available: https: //arxiv.org/abs/2412.19475 [10] H. Huang, A. Pourafzal, H. Chen, M. F. Keskin, M. Li, Y. Ge, F. Tufvesson, H. Wymeersch, and X. Cai, “Joint near-field sensing and visibility region detection with extremely large aperture arrays,” in Proc. EUSIPCO 2025 , Sept. 2025, pp. 965–969. 13
+
+50 100 150 200 
+
+0
+
+2
+
+4
+
+6
+
+8
+
+10 
+
+12 
+
+14 1
+
+Step n
+
+> ∥psfv
+> k,n  − bp sfv
+> s,n ∥ in  cm  RMSE ZM noncoherent MEB RMSE NZM coherent MEB
+> ˆI50%
+
+50 100 150 200 
+
+> 2
+
+Step n
+
+> RMSE ZM noncoherent MEB RMSE NZM coherent MEB
+> ˆI50%
+
+50 100 150 200 
+
+> 3
+
+Step n
+
+> RMSE ZM noncoherent MEB RMSE NZM coherent MEB
+> ˆI50%
+
+50 100 150 200 
+
+> 4
+
+Step n
+
+> RMSE ZM noncoherent MEB RMSE NZM coherent MEB
+> ˆI50%
+
+Fig. 4: Mapping error ∥psfv  
+
+> k,n
+
+− bpsfv 
+
+> s,n
+
+∥ for k ∈ { 1 . . . 4} (left to right) vs. MEB evaluated on synthetic data of experiment 1. Estimates bpsfv 
+
+> s,n
+
+and ground truth psfv  
+
+> k,n
+
+were associated using the Hungarian method [52], missed detections and false alarms not evaluated. 
+
+0
+
+1
+
+2
+
+3
+
+4
+
+5
+
+a) j = 1 
+
+> Num. paths
+
+b) j = 2 
+
+50 100 150 200 
+
+0
+
+1
+
+2
+
+3
+
+4
+
+c) j = 3 
+
+Step n
+
+> Num. paths
+
+50 100 150 
+
+d) j = 4 
+
+Step n
+
+true num. vis. paths existence prob. sum 
+
+Fig. 5: True number of visible paths in experiment 2 vs. the sum of the estimated existence probabilities at each PA j ∈ J .
+
+[11] X. Wu, J. Qiu, J. Sun, W. Liu, H. Zhang, and Y. C. Eldar, “Source localization for extremely large-scale antenna arrays under spatial non-stationarity and near-field effects,” IEEE Trans. Signal Process. , pp. 1– 16, Jan. 2026. [12] A. Richter, “Estimation of radio channel parameters: Models and algo-rithms,” Ph.D. dissertation, Technische Universit¨ at Ilmenau, Germany, February 2005. [13] H. Chu, L. Zheng, and X. Wang, “Super-resolution mmWave channel estimation for generalized spatial modulation systems,” IEEE J. Sel. Topics Signal Process. , vol. 13, no. 6, pp. 1336–1347, Oct. 2019. [14] S. Grebien, E. Leitinger, K. Witrisal, and B. H. Fleury, “Super-resolution estimation of UWB channels including the dense component – An SBL-inspired approach,” IEEE Trans. Wireless Commun. , vol. 23, no. 8, pp. 10 301–10 318, Feb. 2024. [15] H. Kim, K. Granstrom, L. Svensson, S. Kim, and H. Wymeersch, “PMBM-based SLAM filters in 5G mmWave vehicular networks,” IEEE Trans. Veh. Technol. , pp. 1–1, May 2022. [16] E. Leitinger, A. Venus, B. Teague, and F. Meyer, “Data fusion for multipath-based SLAM: Combining information from multiple propa-gation paths,” IEEE Trans. Signal Process. , vol. 71, pp. 4011–4028, 2023. [17] Y. Ge, O. Kaltiokallio, Y. Xia, A. F. Garcia-Fernandez, H. Kim, J. Talvitie, M. Valkama, H. Wymeersch, and L. Svensson, “Batch SLAM with PMBM data association sampling and graph-based optimization,” 
+
+IEEE Trans. Signal Process. , vol. 73, pp. 2139–2153, May 2025. [18] Y. Ge, O. Kaltiokallio, H. Kim, F. Jiang, J. Talvitie, M. Valkama, L. Svensson, S. Kim, and H. Wymeersch, “A computationally efficient EK-PMBM filter for bistatic mmWave radio SLAM,” IEEE J. Sel. Areas Commun. , pp. 1–1, Mar. 2022. [19] X. Li, X. Cai, E. Leitinger, and F. Tufvesson, “A belief propaga-tion algorithm for multipath-based SLAM with multiple map features: A mmwave MIMO application,” in Proc. IEEE ICC 2024 , Den-ver,CO,USA, June 2024, pp. 269–275. [20] S. Zhang, E. Staudinger, T. Jost, W. Wang, C. Gentner, A. Dammann, H. Wymeersch, and P. A. Hoeher, “Distributed direct localization suit-able for dense networks,” IEEE Trans. Aerosp. Electron. Syst. , vol. 56, no. 2, pp. 1209–1227, July 2020. [21] M. Liang, E. Leitinger, and F. Meyer, “A belief propagation approach for direct multipath-based SLAM,” in Proc. Asilomar-23 , Pacific Grove, CA, USA, Nov. 2023. [22] M. Liang and F. Meyer, “An approach of directly tracking multiple objects,” in Proc. Asilomar-24 , Oct. 2024, pp. 995–999. [23] B. Deutschmann, C. Nelson, M. Henriksson, G. Marti, A. Kosasih, N. Tervo, E. Leitinger, and F. Tufvesson, “Accurate direct positioning in distributed MIMO using delay-Doppler channel measurements,” in 2024 IEEE 25th International Workshop on Signal Processing Advances in Wireless Communications (SPAWC) , 2024, pp. 606–610. [24] M. Liang, E. Leitinger, and F. Meyer, “Direct multipath-based SLAM,” 
+
+IEEE Trans. Signal Process. , 2025. [25] F. Rusek, D. Persson, B. K. Lau, E. G. Larsson, T. L. Marzetta, O. Edfors, and F. Tufvesson, “Scaling up MIMO: Opportunities and challenges with very large arrays,” IEEE Signal Process. Mag. , vol. 30, no. 1, pp. 40–60, Jan. 2013. [26] S. Hu, F. Rusek, and O. Edfors, “Beyond massive MIMO: The potential of positioning with large intelligent surfaces,” IEEE Trans. Wireless Commun. , vol. 66, no. 7, pp. 1761–1774, 2018. [27] A. Guerra, F. Guidi, D. Dardari, and P. M. Djuri´ c, “Near-field tracking with large antenna arrays: Fundamental limits and practical algorithms,” 
+
+IEEE Trans. Signal Process. , vol. 69, pp. 5723–5738, Aug. 2021. [28] H. Krim and M. Viberg, “Two decades of array signal processing research: the parametric approach,” IEEE Signal Process. Mag. , vol. 13, no. 4, pp. 67–94, 1996. [29] M. E. Tipping and A. C. Faul, “Fast marginal likelihood maximisation for sparse Bayesian models,” in Proc. AISTATS-2003 , C. M. Bishop and B. J. Frey, Eds., 2003, pp. 3–6. [30] J. M¨ oderl, A. M. Westerkam, A. Venus, and E. Leitinger, “A block-sparse Bayesian learning algorithm with dictionary parameter estimation for multi-sensor data fusion,” in Proc. Fusion-2025 , Brasil, Rio De Janeiro, Jul. 2025. [31] X. Li, B. J. B. Deutschmann, E. Leitinger, and F. Meyer, “Adaptive multipath-based SLAM for distributed MIMO systems,” 2025. [Online]. Available: https://arxiv.org/abs/2506.21798 [32] X. Li, E. Leitinger, F. Tufvesson, and F. Meyer, “Probabilistic occupancy grid for radio-based SLAM,” arXiv , 2026. [Online]. Available: https://arxiv.org/abs/2603.03559 [33] B. J. B. Deutschmann, U. Muehlmann, A. Kaplan, G. Callebaut, T. Wild-ing, B. Cox, L. V. der Perre, F. Tufvesson, E. G. Larsson, and K. Witrisal, “Physically large apertures for wireless power transfer: Performance and regulatory aspects,” IEEE Wireless Commun. , 2026, to be published. [34] B. J. B. Deutschmann, X. Li, F. Meyer, and E. Leitinger, “Posterior Cram´ er–Rao bounds on localization and mapping errors in distributed MIMO SLAM,” in Proc. Asilomar-25 , Pacific Grove, CA, USA, Oct. 2025. [35] B. J. B. Deutschmann and P. Vouras, “Spatiotemporal synchronization of distributed arrays using particle-based loopy belief propagation,” in 
+
+IEEE Conference on Computational Imaging Using Synthetic Apertures (CISA) , 2025, pp. 1–5. [36] F. Meyer, T. Kropfreiter, J. L. Williams, R. Lau, F. Hlawatsch, P. Braca, and M. Z. Win, “Message passing algorithms for scalable multitarget tracking,” Proc. IEEE , vol. 106, no. 2, pp. 221–259, Feb. 2018. [37] M. Liang and F. Meyer, “An approach of directly tracking multiple objects,” in Proc. Asilomar-24 , 2024, pp. 995–999. [38] J. F. C. Kingman, Poisson Processes , ser. Oxford Studies in Probability. Oxford, England: Clarendon Press, 1993. [39] S. Kay, Fundamentals of Statistical Signal Processing: Estimation Theory . Prentice-Hall PTR, 1993. [40] H.-A. Loeliger, “An introduction to factor graphs,” IEEE Signal Process. Mag. , vol. 21, no. 1, pp. 28–41, 2004. [41] F. Kschischang, B. Frey, and H.-A. Loeliger, “Factor graphs and the sum-product algorithm,” IEEE Trans. Inf. Theory , vol. 47, no. 2, pp. 498–519, 2001. 14 
+
+[42] B. J. Frey and D. MacKay, “A revolution: Belief propagation in graphs with cycles,” Advances in neural information processing systems ,vol. 10, 1997. [43] M. Liang, T. Kropfreiter, and F. Meyer, “A BP method for track-before-detect,” IEEE Signal Process. Lett. , vol. 30, pp. 1137–1141, 2023. [44] E. S. Davies and A. F. Garc´ ıa-Fern´ andez, “A multi-Bernoulli Gaussian filter for track-before-detect with superpositional sensors,” in 25th Inter-national Conference on Information Fusion (FUSION) , 2022, pp. 01–08. [45] M. Arulampalam, S. Maskell, N. Gordon, and T. Clapp, “A tutorial on particle filters for online nonlinear/non-Gaussian Bayesian tracking,” 
+
+IEEE Trans. Signal Process. , vol. 50, no. 2, pp. 174–188, Feb. 2002. [46] C. Musso, N. Oudjane, and F. Le Gland, Sequential Monte Carlo Methods in Practice . Springer New York, 2001, ch. 12: “Improving regularised particle filters,” pp. 247–271. [47] M. Liang, E. Leitinger, and F. Meyer, “Direct multipath-based SLAM: Supporting document,” 2024, Accessed: Feb 11, 2026. [Online]. Available: https://fmeyer.ucsd.edu/LiaLeiMey-2024-SD.pdf [48] H. L. Van Trees and K. L. Bell, Bayesian Bounds for Parameter Estimation and nonlinear Filtering/Tracking . Hoboken, NJ: Wiley, 2007. [49] M. Hernandez, A. Marrs, N. Gordon, S. Maskell, and C. Reed, “Cram´ er– Rao bounds for non-linear filtering with measurement origin uncer-tainty,” in 2002 5th International Conference on Information Fusion (Fusion) , vol. 1, 2002, pp. 18–25. [50] P. Tichavsk´ y, C. Muravchik, and A. Nehorai, “Posterior Cram´ er–Rao bounds for discrete-time nonlinear filtering,” IEEE Trans. Signal Pro-cess. , vol. 46, no. 5, pp. 1386–1396, 1998. [51] Y. Bar-Shalom, X. Li, and T. Kirubarajan, Estimation with Applications to Tracking and Navigation: Theory Algorithms and Software . New York, NY, USA: Wiley, 2004. [52] H. W. Kuhn, “The Hungarian method for the assignment problem,” 
+
+Naval Research Logistics Quarterly , vol. 2, pp. 83–97, Mar. 1955. [53] A. Venus, E. Leitinger, and K. Witrisal, “Simultaneous source separation, synchronization, localization and mapping for 6G systems,” arXiv , 2026. [54] N. Kolomvakis, E. Bj¨ ornson, B. G¨ oransson, and E. G. Larsson, “Over-the-air amplitude and phase reciprocity calibration for distributed MIMO,” in Proc. IEEE PIMRC 2025 , Dec. 2025, pp. 1–6. [55] S. Wei, M. Liang, and F. Meyer, “Bayesian multiobject tracking with neural-enhanced motion and measurement models,” IEEE Trans. Signal Process. , pp. 1–16, Jan. 2026. [56] A. Venus, B. Deutschmann, A. Fuchs, C. Knoll, and E. Leitinger, “AI-enhanced direct SLAM: A principled approach to unsupervised learning in Bayesian inference,” arXiv , 2026. [Online]. Available: https://arxiv.org/abs/2603.01071
