@@ -6,41 +6,58 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-04-29
-- 运行时间：2026-04-29 20:40:56 UTC
+- 最新运行日期：2026-04-30
+- 运行时间：2026-04-30 20:01:16 UTC
 - 运行状态：成功
-- 本次总论文数：6
-- 精读区：0
-- 速读区：6
+- 本次总论文数：12
+- 精读区：2
+- 速读区：10
 
 ### 今日简报（AI）
-- 今日共生成 6 篇推荐（精读 0 篇，速读 6 篇）
-- 速读：《PoseFM: Relative Camera Pose Estimation Through Flow Matching》（6.0/10）, 《Event-based SLAM Benchmark for High-Speed Maneuvers》（6.0/10）, 《Guiding Vector Field Generation via Score-based Diffusion Model》（6.0/10）
-- 这些结果覆盖了当下较热的方向，建议先看精读区论文的关键问题与方法。
-- 详情：[/202604/29/README](/202604/29/README)
+今日聚焦天体力学重大突破，深度解析了三体问题希尔曲面求解与周期轨道代数近似等 12 篇前沿成果。
+两篇满分论文分别攻克了圆型限制性三体问题的能级曲面难题，并创新性地利用代数曲线优化了轨道逼近。
+推荐优先研读这两篇满分力作，领略经典力学与现代数学工具碰撞
+- 详情：[/202604/30/README](/202604/30/README)
 
 ### 精读区论文标签
-- 本次无精读推荐。
+1. [Hill's level surfaces in the circular restricted three-body problem solved](/202604/30/2604.21426v2-hills-level-surfaces-in-the-circular-restricted-three-body-problem-solved)  
+   标签：评分：10.0/10、query:cislunar-dyn-nav
+   evidence：圆型限制性三体问题中希尔曲面的解析表达式
+2. [Approximating Periodic Orbits with Algebraic Curves and Related Minimal Problems](/202604/30/2604.26332v1-approximating-periodic-orbits-with-algebraic-curves-and-related-minimal-problems)  
+   标签：评分：10.0/10、query:cislunar-dyn-nav
+   evidence：圆型限制性三体问题（CR3BP）与周期轨道
 
 ### 速读区论文标签
-1. [PoseFM: Relative Camera Pose Estimation Through Flow Matching](/202604/29/2604.22350v1-posefm-relative-camera-pose-estimation-through-flow-matching)  
+1. [Star-Fusion: A Multi-modal Transformer Architecture for Discrete Celestial Orientation via Spherical Topology](/202604/30/2604.26582v1-star-fusion-a-multi-modal-transformer-architecture-for-discrete-celestial-orientation-via-spherical-topology)  
+   标签：评分：7.0/10、query:cislunar-dyn-nav
+   evidence：通过天文定向实现航天器自主导航
+2. [Probing Supermassive Black Hole Mergers with Pulsar Timing Arrays](/202604/30/2604.20975v1-probing-supermassive-black-hole-mergers-with-pulsar-timing-arrays)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：适用于特征贫乏环境自主导航的生成式视觉里程计
-2. [Event-based SLAM Benchmark for High-Speed Maneuvers](/202604/29/2604.24033v1-event-based-slam-benchmark-for-high-speed-maneuvers)  
+   evidence：用于引力波探测和定位的脉冲星计时
+3. [On the algebra of Koopman eigenfunctions and on some of their infinities](/202604/30/2604.21825v1-on-the-algebra-of-koopman-eigenfunctions-and-on-some-of-their-infinities)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：高速机动的事件SLAM
-3. [Guiding Vector Field Generation via Score-based Diffusion Model](/202604/29/2604.24487v1-guiding-vector-field-generation-via-score-based-diffusion-model)  
+   evidence：连续时间动力系统的特征空间数值计算
+4. [Closed Form Relations and Higher-Order Approximations of First and Second Derivatives of the Tangent Operator on SE(3)](/202604/30/2604.22287v1-closed-form-relations-and-higher-order-approximations-of-first-and-second-derivatives-of-the-tangent-operator-on-se3)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：复杂拓扑和伪流形的引导向量场生成
-4. [Exploiting Differential Flatness for Efficient Learning-based Model Predictive Control of Constrained Multi-Input Control Affine Systems](/202604/29/2604.24706v1-exploiting-differential-flatness-for-efficient-learning-based-model-predictive-control-of-constrained-multi-input-control-affine-systems)  
+   evidence：多体系统建模与SE(3)上的切算子
+5. [Dual Control of Linear Systems from Bilinear Observations with Belief Space Model Predictive Control](/202604/30/2604.24663v1-dual-control-of-linear-systems-from-bilinear-observations-with-belief-space-model-predictive-control)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：微分平坦性与模型预测控制用于非线性轨迹控制与优化
-5. [VISION-SLS: Safe Perception-Based Control from Learned Visual Representations via System Level Synthesis](/202604/29/2604.24894v1-vision-sls-safe-perception-based-control-from-learned-visual-representations-via-system-level-synthesis)  
+   evidence：信念空间模型预测控制用于状态估计与控制
+6. [Approximations of the Mortensen observer using higher order extended Kalman filters](/202604/30/2604.25643v1-approximations-of-the-mortensen-observer-using-higher-order-extended-kalman-filters)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：针对具有传感器噪声的非线性动力学系统的感知控制与自主导航方法
-6. [Towards Seamless Lunar Mosaics: Deep Radiometric Normalization for Cross-Sensor Orbital Imagery Using Chandrayaan-2 TMC Data](/202604/29/2604.25208v1-towards-seamless-lunar-mosaics-deep-radiometric-normalization-for-cross-sensor-orbital-imagery-using-chandrayaan-2-tmc-data)  
+   evidence：用于状态估计的高阶扩展卡尔曼滤波
+7. [Co-Learning Port-Hamiltonian Systems and Optimal Energy-Shaping Control](/202604/30/2604.26172v1-co-learning-port-hamiltonian-systems-and-optimal-energy-shaping-control)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：月球轨道图像与辐射归一化
+   evidence：物理信息学习用于能量成形控制与稳定性分析
+8. [PiGGO: Physics-Guided Learnable Graph Kalman Filters for Virtual Sensing of Nonlinear Dynamic Structures under Uncertainty](/202604/30/2604.26593v1-piggo-physics-guided-learnable-graph-kalman-filters-for-virtual-sensing-of-nonlinear-dynamic-structures-under-uncertainty)  
+   标签：评分：6.0/10、query:cislunar-dyn-nav
+   evidence：物理引导的卡尔曼滤波用于不确定性下的状态估计
+9. [Lagrangian reduction of symmetric discrete mechanical systems: a survey](/202604/30/2604.26648v1-lagrangian-reduction-of-symmetric-discrete-mechanical-systems-a-survey)  
+   标签：评分：6.0/10、query:cislunar-dyn-nav
+   evidence：离散力学系统的拉格朗日约化
+10. [Invariant Sets and Boundary Systems of Nonautonomous Differential Inclusions](/202604/30/2604.26713v1-invariant-sets-and-boundary-systems-of-nonautonomous-differential-inclusions)  
+   标签：评分：6.0/10、query:cislunar-dyn-nav
+   evidence：研究非自治微分包含中的不变集
 
 
 <div class="dpr-home-promo-card">

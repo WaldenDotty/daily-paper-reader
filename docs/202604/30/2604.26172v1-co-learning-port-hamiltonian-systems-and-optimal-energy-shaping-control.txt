@@ -1,0 +1,1271 @@
+Title: Co-Learning Port-Hamiltonian Systems and Optimal Energy-Shaping Control
+
+URL Source: https://arxiv.org/pdf/2604.26172v1
+
+Published Time: Thu, 30 Apr 2026 00:19:03 GMT
+
+Number of Pages: 18
+
+Markdown Content:
+# Co-Learning Port-Hamiltonian Systems and Optimal Energy-Shaping Control ∗
+
+Ankur Kamboj 1, Biswadip Dey 2, and Vaibhav Srivastava 1 †‡ 
+
+Abstract 
+
+We develop a physics-informed learning framework for energy-shaping control of port-Hamiltonian (pH) systems from trajectory data. The proposed approach co-learns a pH system model and an opti-mal energy-balancing passivity-based controller (EB-PBC) through alternating optimization with policy-aware data collection. At each iteration, the system model is refined using trajectory data collected under the current control policy, and the controller is re-optimized on the updated model. Both components are parameterized by neural networks that embed the pH dynamics and EB-PBC structure, ensuring interpretability in terms of energy interactions. The learned controller renders the closed-loop system inherently passive and provably stable, and exploits passive plant dynamics without canceling the natural potential. A dissipation regularization enforces strict energy decay during training, thereby enhancing robustness to sim-to-real gaps. The proposed framework is validated on state-regulation and swing-up tasks for planar and torsional pendulum systems. 
+
+# 1 Introduction 
+
+Energy-based control has gained significant traction across several disciplines, including robotics, aerospace, and energy systems. Port-Hamiltonian (pH) theory (1) provides a principled framework for modeling such systems as energy-exchanging subsystems, offering modularity and physical interpretability. Passivity-based control (PBC) leverages this structure to ensure closed-loop passivity and stability with respect to a storage function (2), with intuitive design via energy shaping and damping injection (3). However, classical PBC design primarily targets stability and often does not explicitly address performance optimization (4). Designing high-performance controllers for nonlinear systems remains fundamentally challenging due to model uncertainty, complex dynamics, and computational limitations. Classical model-based approaches offer strong guarantees when accurate models are available, but their performance degrades under mismatch and unmodeled effects. At the same time, purely data-driven methods have emerged as a promising alter-native, leveraging trajectory data to synthesize control policies without explicit models. However, generic learning-based approaches often suffer from limited interpretability, weak stability guarantees, unsafe ex-ploration, and slow convergence, limiting their applicability in safety-critical settings. To address these limitations, we propose a physics-informed learning framework that jointly learns structured system mod-els and energy-shaping control policies, combining data-driven adaptability with passivity-based stability guarantees. Recent works have explored optimal control within the class of PBCs. Reinforcement learning-based approaches such as Energy-Balancing Actor-Critic (EB-AC) (5) and its robust extensions (6) incorporate passivity structure to ensure stability and show accelerated convergence when plant model information is incorporated. Neural approaches such as (7, 8) parameterize energy-shaping policies, while (9) and (10) extend these ideas to Bayesian and multi-agent settings. However, these methods either assume known dynamics, operate in model-free settings, or impose restrictive structures (e.g., quadratic potentials and    
+
+> ∗This work has been supported by NSF Award CMMI-1940950
+> †1Electrical and Computer Engineering, Michigan State University, East Lansing, MI 48824. {ankurank, vaibhav }@msu.edu .
+> ‡2Meta Reality Labs, Redmond, WA 98052. biswa-dey@ieee.org
+
+1
+
+> arXiv:2604.26172v1 [eess.SY] 28 Apr 2026
+
+linear damping), limiting the ability to exploit intrinsic passive dynamics. Moreover, they often suffer from the dissipation obstacle (11), that is, the desired Hamiltonian cannot be freely chosen. In parallel, physics-informed learning methods have emerged for learning structured dynamical mod-els. Hamiltonian neural networks (12), SymODEN (13), and their extensions (14–17) incorporate physical structure into learned dynamics. Bayesian approaches such as Gaussian Process port-Hamiltonian sys-tems (GP-PHS) (18) provide uncertainty quantification, (19) enforces global Lyapunov stability via convex-ity constraints, while (20) learn a neural Koopman operator model that learns the dissipativity properties of the true system. However, these works primarily focus on system identification and do not jointly learn control policies (21). More importantly, a critical question that remains largely unaddressed in the literature is: when a passivity-based controller is trained on an approximate (learned) model, can it provably stabilize the true system despite the sim-to-real gap? Existing neural Lyapunov approaches (22, 23) typically assume access to true dynamics during verification. To address these issues, we propose a physics-informed learning framework that jointly learns pH system models and optimal energy-balancing passivity-based control (EB-PBC) policies from trajectory data via alternating optimization. The model is iteratively refined using a combination of exploratory and policy-driven trajectories, while the controller is re-optimized on the updated model. This policy-aware data collection focuses on model accuracy in the closed-loop operating region. Both the system and controller are parameterized using neural networks that embed pH dynamics and EB-PBC structure, ensuring interpretability and passivity at every training iteration. We further show that the resulting controller is provably stable and robust to model approximation errors. The proposed approach offers several advantages. First, the learned controller is inherently passive and stabilizes the system at every point during learning, unlike generic RL algorithms that offer no stability guarantees during exploration (24). Second, the NN-parameterization allows the controller to exploit existing passive dynamics rather than canceling them, a shortcoming identified in (4). Third, the alternating learning scheme improves model fidelity in the policy-relevant region, tightening stability guarantees. Finally, a dissipation regularization enforces strict energy decay during training, improving robustness to sim-to-real gaps. The major contributions of this work are fourfold. First, we develop an alternating optimization frame-work for joint pH system identification and EB-PBC synthesis from trajectory data. Second, we introduce a physics-informed neural architecture that enforces structural passivity and enables expressive energy shap-ing. Third, we establish deterministic stability guarantees for the learned controller on the true system, with explicit bounds on the convergence region in terms of model error. Fourth, we propose a dissipation regularization mechanism that improves robustness to sim-to-real mismatch. The rest of the paper is organized as follows. Section 2 reviews background on pH systems and EB-PBC. Section 3 presents the proposed framework. Section 4 provides stability and robustness analysis. Section 5 presents simulation results, followed by conclusions in Section 6. 
+
+# 2 Background 
+
+In this section, we briefly review Hamiltonian system representations, learning of Hamiltonian dynamics from data, and optimal energy-balancing passivity-based control (EB-PBC). 
+
+2.1 Hamiltonian System Dynamics 
+
+Hamiltonian dynamics are a reformulation of Newtonian mechanics, where the dynamics of physical systems are derived from the Hamiltonian function, a scalar quantity representing the total energy of a system. Let 
+
+q ∈ Rn and p ∈ Rn denote the generalized coordinate and the generalized momentum, respectively, the time evolution of system states in the phase space ( q, p) can be expressed as the symplectic gradient of the Hamiltonian function H(q, p). For a large class of electromechanical systems, the Hamiltonian function admits a separable form with a quadratic kinetic energy, leading to ˙q = ∇pH ˙p = −∇ q H, (1) 2NODESolve()                     
+
+> [𝐮 ]
+> 𝐅
+> ∇zHθ
+> ෝ𝐪
+> ෡ሶ𝐪
+> 𝐟 θො𝐳 ,𝐮
+> 𝐙 0𝐮
+> ෠ሶ𝐙 t
+> PH System Learning Architecture
+> d𝕃
+> dθ
+> ሶ
+> 𝐙 𝐭
+> 𝐟 θ(ො𝐳 ,𝐮 )
+> Vθ2
+> 𝐃 θ3
+> 𝐆 θ4
+> 𝐌 θ1
+> Kϕ
+> 𝐟 θ(𝐳 ,𝐮 )
+> 𝐪
+> ሶ
+> 𝐪
+> 𝐙 0
+> 𝐙 t,𝐮 ϕ
+> 𝐌 θ1
+> ∇qVϕ
+> 𝐆 θ4
+> t
+> 𝐩
+> 𝐮 ϕ(t,𝐳 )
+> 𝐮 ϕ
+> ∗
+> d(lu+ℒdiss )
+> dϕ
+> Optimal EB -PBC Learning Architecture
+> Vϕ
+> NODESolve()
+> Parameterized PH
+> System Real System
+> ℒ2Loss ( 𝕃 )
+> Optimal Policy
+> Learning
+> Parameterized PH
+> System Real System
+> {𝐙 0,𝐮 }
+> ෠ሶ𝐳 tሶ𝐳 t
+> 𝐙 0n=1
+> N
+> ሶ
+> 𝐳 t෠ሶ𝐳 t
+> 𝐮 ϕ
+> ∗
+> Warm Up
+> Alternating Optimization
+> 𝐟 θ(ො𝐳 ,𝐮 )
+> ℒ2Loss ( 𝕃 )𝐟 θ(ො𝐳 ,𝐮 )
+
+Figure 1: Left: The complete computational graph with different subsystems. Pink blocks and arrows represent NN pa-rameterization. Green blocks are various system states. Purple arrows indicate automatic differentiation to obtain gradients. 
+
+Right: The training consists of a warm-up phase for initial pH system learning from step-excited data, followed by alternating optimization iterations that refine the system model using policy-aware trajectory data and re-optimize the EB-PBC on the updated model. Different arrow and block colors are consistent with computational graphs. 
+
+with the following Hamiltonian function 
+
+H(q, p) = 12 p⊤M −1(q)p + V (q), (2) where M (q) is the mass/inertia matrix, and V (q) is the potential energy of the system. Also, since ˙H = ( ∇q H)⊤ ˙q + ( ∇pH)⊤ ˙p = 0 , (3) the total energy of the system is always conserved along the system trajectories. The Hamiltonian formulation extends to the port-Hamiltonian (pH) framework by incorporating inputs and dissipation: 
+
+ ˙q
+
+˙p
+
+
+
+=
+
+ 0 I
+
+−I −D(q)
+
+  ∇q H
+
+∇pH
+
+
+
++
+
+ 0
+
+g(q)
+
+
+
+u, (4) or equivalently, ˙z = F (q)∇z H + G(q)u, (5) where F = J −R ∈ R2n×2n is the system matrix, with J as the canonical symplectic matrix and R = R⊤ ⪰ 0as the natural damping matrix taking into account the dissipative and friction effects, and g(q) ∈ Rn×m
+
+is the input matrix assumed to be full column rank, rank {g(q)} = m. The system is usually affine in the external input u ∈ U ⊂ Rm, and it only affects the generalized momenta. It can be shown that 
+
+F (q) + F ⊤(q) = −2R ⪯ 0. Most robotic systems can be modeled as the system exchanging energy (or matter) with its environment or other systems, thus admitting a port-Hamiltonian formulation (3). 
+
+2.2 Learning Hamiltonian Dynamics from Data 
+
+Using Neural Networks (NNs) to learn a system represented by an ODE, ˙ z = f (z, t ), from observed data has gained significant attention in recent years. Physics-informed approaches, such as (13), learn Hamiltonian 
+
+H (or Lagrangian L) instead of directly parametrizing f , and integrate the resulting dynamics using Neural ODE (NODE) solvers (25). Since L or H are scalar functions, they are easier to learn than vector fields, and their structure promotes energy conservation in the learned dynamics. 3Accordingly, the dynamics in (5) are approximated by 
+
+f θ = F θ (q)∇Hθ + Gθ (q)u. (6) The learned vector field f θ is integrated using a NODE solver to obtain predictions Zθ = NODESolve (zt0 , f θ , t), and ˙Zθ , where Zθ = zθ t 1 , zθ t 2 , . . . , zθ t n . Given observed data {Z, ˙Z}, the parameters θ are updated by minimizing the prediction error L = ∥ ˙Z − ˙Zθ ∥22 using backpropagation through the NODE solver. Incorporating control inputs can be handled by augmenting the system as 
+
+ ˙z
+
+˙u
+
+
+
+=
+
+f θ (z, u)
+
+hθ (z)
+
+
+
+= ˜f θ (z, u), (7) where hθ (z) = 0 if u in the observed data ( zt, ut)tn 
+
+> t=t0
+
+remains constant. This allows the use of separate neural networks to parameterize the system components, namely the mass matrix M θ1 (q), potential Vθ2 (q), input matrix gθ3 (q), and dissipation Dθ4 (q). The resulting dynamics take the structured form 
+
+f θ (z, u) = 
+
+ 0 I
+
+−I −Dθ4 (q)
+
+  ∇q Hθ
+
+∇pHθ
+
+
+
++
+
+ 0
+
+gθ3 (q)
+
+
+
+u, (8) where 
+
+Hθ (z) = 12 p⊤M −1 
+
+> θ1
+
+(q)p + Vθ2 (q). (9) 
+
+Remark 1. Bounded activation functions (e.g., sigmoid, hyperbolic tangent) ensure bounded NN outputs, which in turn guarantee boundedness of Hθ and passivity of the unforced system. 
+
+Prior work (13) demonstrates that such structured parameterizations can learn system dynamics to high accuracy. It should be noted that NNs designed for the mass/inertia matrix M θ1 (q) and the dissipation matrix Dθ4 (q) need to ensure their positive definiteness. Moreover, when p data is unavailable, the learned Hamiltonian may exhibit scaling ambiguities, often appearing as offsets in the mass matrix and learned potential. 
+
+2.3 Optimal Energy-Shaping Control via EB-PBC 
+
+We re-write the pH system (5) with output equation ˙z = F ∇H + Gu , y = G⊤∇H, (10) satisfying the power balance equation ˙H = u⊤y − d, (11) where d = −∇ H⊤F ∇H ≥ 0 is the natural dissipation of the system. The objective of designing a passivity-based control (PBC) with damping injection (DI) is to find a control u = β(z)+ v that renders the closed-loop system passive with respect to the desired stored energy (Hamiltonian) Hd with equilibrium at desired zd
+
+such that it satisfies the power-balance equation ˙Hd = y⊤ 
+
+> d
+
+v − d∗, (12) where yd is the new passive output, and d∗ is the desired dissipation. For energy balancing (EB) PBC, we set the desired dissipation d∗ = d, the natural dissipation of the system. A controller β(z) achieves energy balancing if ˙Ha = −β⊤y, where Ha := Hd − H is the added energy. Such a controller is defined by 
+
+β(z) = −G†F ⊤∇z Ha (13) with G† as the left pseudo-inverse of G and Ha satisfying the following matching PDEs (4): 
+
+G⊥F ⊤
+
+G⊤
+
+
+
+∇z Ha = 0 . (14) 4Here G⊥ is the left full-rank annihilator of G, that is, G⊥G = 0. Damping injection is achieved via 
+
+v = −Ky d = −KG ⊤∇z Hd, (15) where K = K⊤ ≻ 0, the damping matrix, ensures passivity by adding dissipation to the closed-loop system. The choice of a desired energy Hd and damping K is not unique, and an optimal EB-PBC policy chooses optimal Hd and K with respect to some cost function, while satisfying the nonlinear PDE constraint (14). To address this issue, Hd and K are parameterized using neural networks, enabling optimization over a structured policy class that implicitly satisfies the PDE constraints (7). Let V ∗ 
+
+> ϕV
+
+and K∗ 
+
+> ϕK
+
+be parametrized NN representations of the desired constant damping matrix and the added potential, such that 
+
+Hϕd(q, p) = p⊤M −1p/2 + V (q) + V ∗ 
+
+> ϕV
+
+(q),
+
+and the resulting parameterized control policy, with ϕ := ( ϕV , ϕ K ) is 
+
+uϕ(t, z) = −G†(q)F ⊤(q)∇z V ∗ 
+
+> ϕ
+
+(q) − K∗
+
+> ϕ
+
+(t, z)g⊤(q)∇pH(z). (16) The optimal policy u∗ 
+
+> ϕ
+
+is obtained by minimizing a performance cost lu(z0, uϕ) using gradient-based opti-mization, with gradients computed via backpropagation through the system dynamics. 
+
+Remark 2. Control strategies that completely compensate the natural potential V (q) and replace it with the desired Vd(q) suffer from sensitivity to modeling errors and may discard beneficial passive dynamics of the system. Allowing partial shaping enables the controller to exploit intrinsic system structure and reduce control effort. 
+
+2.4 Problem Formulation 
+
+Accurate system models are essential for synthesizing high-performance controllers. However, in many practical settings, the system dynamics are unknown or only partially known and must be learned from data. For port-Hamiltonian systems, this can be achieved using structure-preserving learning methods, as discussed in Section 2.2. We consider the problem of co-learning a port-Hamiltonian system model and synthesizing an optimal energy-shaping controller from trajectory data. The goal is to obtain a control policy of the form (16) that stabilizes the true system while optimizing performance, despite model uncertainty. A key challenge is that model accuracy and control performance are tightly coupled: the quality of the learned model affects the policy, while the policy determines the regions of the state space from which data is collected. To address this, we propose a coupled learning framework that alternates between model refinement using policy-induced trajectories and policy optimization on the updated model. We detail our proposed approach in the next section. 
+
+# 3 Proposed Physics Informed Architecture 
+
+In this section, we present the proposed learning architecture, which jointly learns the port-Hamiltonian system model and the optimal EB-PBC policy through an alternating optimization procedure (Fig. 1). In the absence of a true system model, the learned dynamics (6) are used within the EB-PBC policy, yielding 
+
+uϕ(t, z) = −G† 
+
+> θ
+
+(q)F ⊤ 
+
+> θ
+
+(q)∇z V ∗ 
+
+> ϕ
+
+(q) − K∗
+
+> ϕ
+
+(t, z)g⊤ 
+
+> θ
+
+(q)∇pHθ (z). (17) A naive approach would be to perform end-to-end optimization by jointly updating the system and policy parameters ( θ, ϕ ) using a composite loss ( L + lu). However, this approach is problematic for several reasons. First, the control loss lu induces gradients on θ that prioritize closed-loop performance over dynamical fidelity, potentially violating the physical consistency of the learned model and compromising robustness guarantees. 5Second, randomly initialized models generally do not satisfy the PDE matching constraints (14), rendering the EB-PBC formulation invalid during early training. Third, jointly optimizing identification and control objectives introduces well-known gradient conflicts in multi-objective learning (26, 27), for which no general solution exists. To address these challenges, we adopt an alternating optimization scheme with policy-aware data collection: 
+
+Phase 0 (Warm-up). System trajectories are generated by applying constant excitation inputs u ∈{− 2, −1, 0, 1, 2} to the true system. The system model f θ is trained on this data to obtain an initial pH model that satisfies the structural properties required for EB-PBC synthesis. 
+
+Phase 1 (Alternating Optimization). At each outer iteration k = 1 , 2, · · · :(a) System model update ( θ-step) : The system model f θ is refined using trajectory data from the true system. This data is a mixture of (i) step-excited trajectories that ensure broad coverage of the state space, and (ii) policy-excited trajectories generated under the current EB-PBC uϕ, which focuses model capacity on the region of state space actually traversed by the closed-loop system. During this step, only the system parameters θ are updated, and the policy parameters ϕ are frozen. (b) Policy update ( ϕ-step) : Using the updated model f θ , the EB-PBC parameters ϕ are optimized by integrating a batch of initial conditions z0 ∼ Pz0 through a NODE solver for t ∈ [0 , T ] and minimizing the policy cost 
+
+lu(z0) = L(T, ϕ, zT (z0, uϕ)) + η
+
+Z T
+
+> 0
+
+|uϕ(t, z)| dt, η > 0. (18) During this step, only ϕ is updated, and θ is frozen. The use of policy-excited data in step (a) is the key mechanism coupling model learning and control synthesis: as the controller improves, the data distribution shifts toward the policy-relevant region, which in turn improves the model precisely where closed-loop accuracy matters. This structure ensures that at every iteration, (i) the system model f θ satisfies the pH structure (required by Lemma 1), (ii) the EB-PBC 
+
+uϕ operates on a valid pH manifold and is thus inherently passive (Lemma 3), and (iii) the model training error ϵ = ∥f θ − f ∥ decreases preferentially in the policy-relevant region. The loss gradients are computed via PyTorch automatic differentiation (AD) (28) library and backpropagated using the adjoint method (25). 
+
+Sim-to-real Robustness 
+
+A central question is whether the learned controller (17) stabilizes the true system (5), i.e., whether it is robust to model mismatch, e.g., due to the sim-to-real gap. To address this, we augment the policy loss with a dissipation regularization term 
+
+Ldiss = λdiss Ez
+
+h
+
+ReLU 
+
+ ˙Hθ,ϕ d(z, uϕ) + ρ ∥z − zd∥2i 
+
+. (19) This term enforces a strict energy dissipation in the closed-loop system away from the critical point zd of 
+
+Hθ,ϕ d. Here ˙Hθ,ϕ d = ∇Hθ,ϕ ⊤ 
+
+> d
+
+f θ (z, uϕ), ρ is a tunable dissipation rate, and λdiss is the regularization weight. Our augmented policy loss thus becomes 
+
+Lu = lu(z0) + Ldiss . (20) In the next section, we show how this augmented policy cost helps impart sim-to-real robustness to the learned EB-PBC uϕ.
+
+# 4 Stability Analysis 
+
+In this section, we show that the optimal EB-PBC controller trained on the learned system f θ can stabilize the true system f , thereby providing robustness to model mismatch. We first establish structural properties of the learned port-Hamiltonian model that will be used in the subsequent stability analysis. 6Lemma 1. If f θ is parameterized using neural networks with bounded activation functions, then Hθ is bounded on compact domains, and (8) represents a port-Hamiltonian system. Proof. The proof is straightforward and is omitted for brevity. We now establish the structural and stability properties of the EB-PBC law under the actual model. 
+
+Lemma 2. Consider the port-Hamiltonian system (10) under the parameterized EB-PBC law (16) . Suppose the added potential V ∗ 
+
+> ϕ
+
+∈ C 1, the damping matrix K∗
+
+> ϕ
+
+(t, z) ⪰ κI, κ > 0 uniformly in (t, z) and is bounded, and the matching conditions (14) hold. Then the closed-loop system can be written as 
+
+˙z = F d(t, z)∇Hϕd (z), (21) 
+
+with F d(t, z) := F (z) − G(z)K∗
+
+> ϕ
+
+(t, z)G(z)⊤, Hϕd = H + V ∗ 
+
+> ϕ
+
+, and 
+
+˙Hϕd = −∇ H⊤
+
+> ϕd
+
+
+
+R + GK∗
+
+> ϕ
+
+G⊤
+
+∇Hϕd ≤ 0. (22) 
+
+Moreover, if Hϕd is bounded below along system trajectories and ˙Hϕd is uniformly continuous, then ˙Hϕd (t) →
+
+0 as t → ∞ . If, in addition, R + GK∗
+
+> ϕ
+
+G⊤ ≻ 0, uniformly in t, in a neighborhood of zd, and zd is a strict local minimum of Hϕd , then zd is locally asymptotically stable. Proof. Let Ha := Hϕd − H. From matching conditions (14) 
+
+G⊤∇Hϕa = 0 , G⊥F ⊤∇Hϕa = 0 ,
+
+hence F ⊤∇Hϕa ∈ im( G). With β = −G†F ⊤∇Hϕa , it follows that 
+
+F ⊤∇Hϕa = −Gβ. 
+
+Premultiplying by ∇H⊤ 
+
+> ϕa
+
+and using F = J − R, J⊤ = −J, yields 
+
+∇H⊤ 
+
+> ϕa
+
+R∇Hϕa = 0 ⇒ R∇Hϕa = 0 .
+
+Next, using ∇H = ∇Hϕd − ∇ Hϕa and u = β + v,˙z = F (∇Hϕd − ∇ Hϕa ) + Gβ + Gv .
+
+Using F + F ⊤ = −2R and R∇Hϕa = 0, we obtain 
+
+−F ∇Hϕa = F ⊤∇Hϕa ,
+
+hence ˙z = F ∇Hϕd + F ⊤∇Hϕa + Gβ + Gv .
+
+Using F ⊤∇Hϕa = −Gβ, the terms cancel and ˙z = F ∇Hϕd + Gv .
+
+With v = −K∗
+
+> ϕ
+
+G⊤∇Hϕd ,˙z =
+
+
+
+F − GK∗
+
+> ϕ
+
+G⊤
+
+∇Hϕd ,
+
+which proves (21). Finally, to establish convergence, we note, along trajectories, ˙Hϕd = ∇H⊤ 
+
+> ϕd
+
+˙z = ∇H⊤
+
+> ϕd
+
+
+
+F − GK∗
+
+> ϕ
+
+G⊤
+
+∇Hϕd .
+
+7Using F = J − R and skew-symmetry of J,˙Hϕd = −∇ H⊤
+
+> ϕd
+
+
+
+R + GK∗
+
+> ϕ
+
+G⊤
+
+∇Hϕd ≤ 0.
+
+Hence Hϕd (t) is non-increasing and converges to a finite limit. If ˙Hϕd is uniformly continuous, then by Barbalat’s lemma, lim  
+
+> t→∞
+
+∇H⊤
+
+> ϕd
+
+
+
+R + GK∗
+
+> ϕ
+
+G⊤
+
+∇Hϕd = 0 .
+
+Finally, if R + GK∗
+
+> ϕ
+
+G⊤ ≻ 0 locally, then ∇Hϕd (z(t)) → 0. Since zd is a strict local minimum of Hd, it is the only critical point in a neighborhood, and thus z(t) → zd, proving local asymptotic stability. The following result shows that the EB-PBC structure is preserved under the learned model. 
+
+Lemma 3. Let the parameterized damping K∗
+
+> ϕ
+
+(t, z) ⪰ κI, κ > 0 uniformly in (t, z), and the added potential 
+
+V ∗ 
+
+> ϕ
+
+, be bounded. Additionally, assume that Rθ + Gθ K∗
+
+> ϕ
+
+G⊤ 
+
+> θ
+
+≻ 0, uniformly in t, in a neighborhood of zd, and that zd is a strict local minimum of Hθ,ϕ d . Then the closed-loop learned system 
+
+˙z = F θ,ϕ d ∇Hθ,ϕ d (23) 
+
+is asymptotically stable, with F θ,ϕ d = F θ −Gθ K∗
+
+> ϕ
+
+G⊤ 
+
+> θ
+
+and Hθ,ϕ d satisfying the desired power-balance equation 
+
+(12) .Proof. From Lemma 1, the learned dynamics f θ retain the port-Hamiltonian structure. The result then follows directly by applying Lemma 2 to the learned system. Thus, the optimal EB-PBC controller renders the closed-loop learned system (6) passive with respect to the desired Hamiltonian and consequently renders the equilibrium locally asymptotically stable under the stated conditions. Before moving on to our main result, we introduce the following useful result. 
+
+Lemma 4. Let F = J − R, where J⊤ = −J and R = R⊤ ⪰ 0. If J is invertible, then F is invertible. Proof. Let F v = 0. Then Jv = Rv . Premultiplying by v⊤ gives 
+
+v⊤Jv = v⊤Rv .
+
+Since J is skew-symmetric, the left side is zero, so v⊤Rv = 0. As R ⪰ 0, this implies Rv = 0, hence Jv = 0. Since J is invertible, v = 0. We state the assumptions used in the subsequent analysis. (A1) Model approximation error: There exists a domain D ⊂ R2n such that, for all z ∈ D and admissible inputs u, including u = uϕ(z). 
+
+∥f θ (z, u) − f (z, u)∥ ≤ ϵ, ∥Gθ (z) − G(z)∥ ≤ ϵG.
+
+(A2) Damping approximation: 
+
+∥Rθ (z) − R(z)∥ ≤ ϵR, ∀z ∈ D .
+
+(A3) Gradient boundedness: There exists ¯ αD > 0 such that 
+
+∥∇ Hθ (z)∥ ≤ ¯αD , ∥∇ V ∗ 
+
+> ϕ
+
+(z)∥ ≤ ¯αD , ∀z ∈ D .
+
+(A4) Shared energy shaping: The same learned potential V ∗ 
+
+> ϕ
+
+(q) is applied to both systems, i.e., 
+
+Ha(z) = Hϕa (z) = V ∗ 
+
+> ϕ
+
+(q).
+
+8(A5) Approximate dissipation of the trained learned closed-loop: There exist constants ρ > 0 and εdiss ≥ 0such that, for all z ∈ D ,
+
+∇H⊤
+
+> θ,ϕ d
+
+ Rθ (z) + Gθ (z)K∗
+
+> ϕ
+
+(t, z)Gθ (z)⊤∇Hθ,ϕ d ≥ ρ∥z − zd∥2 − εdiss .
+
+Assumptions A1–A2 quantify the approximation accuracy of the learned port-Hamiltonian model and its dissipation structure, which can be achieved using sufficient data coverage. Assumption A3 is mild and holds on compact domains due to the smoothness of the learned Hamiltonian. Assumption A4 reflects the controller implementation, where the same energy-shaping policy is applied to both the learned and true systems. Assumption A5 characterizes the dissipative behavior of the trained learned closed-loop system. It imposes a lower bound on the learned dissipation up to a residual εdiss , reflecting approximation and optimization errors. This condition is promoted by the dissipation regularization term (19), which penalizes violations of energy decay during training. 
+
+Lemma 5. Let F = J − R and define cF := inf z∈D σmin (F (z)) > 0. Under Assumptions A1–A4, for all 
+
+z ∈ D ,
+
+∥∇ Hd(z) − ∇ Hθ,ϕ d (z)∥ ≤ 1
+
+cF
+
+ ϵ + ϵR ¯αD
+
+ =: δ(ϵ, ϵ R).
+
+In particular, δ → 0 as ϵ, ϵ R → 0.Proof. For u = 0, 
+
+∥F θ ∇Hθ − F ∇H∥ = ∥f θ (z, 0) − f (z, 0) ∥ < ϵ. (24) Writing F θ = F − ˜R with ˜R := Rθ − R,
+
+F ∇H − F θ ∇Hθ = F (∇H − ∇ Hθ ) + ˜R∇Hθ .
+
+Thus, 
+
+∥F h ∥ ≤ ϵ + ϵR ¯αD , h := ∇H − ∇ Hθ .
+
+Using F −1 ≤ 1/c F ,
+
+∥h∥ ≤ 1
+
+cF
+
+(ϵ + ϵR ¯αD ).
+
+Since Hθ,ϕ d − Hθ = Hd − H = V ∗ 
+
+> ϕ
+
+(q), the result follows. We are now ready to state our main result. 
+
+Theorem 1. Consider the true system (5) in closed loop with the EB-PBC controller uϕ trained on the learned model f θ . Let zd be a strict local minimum of Hd.Under Assumptions A1–A4, there exists a neighborhood O ⊂ D of zd and a nonnegative residual ξ =
+
+O(ϵ, ϵ R, ϵ G) such that, for all z ∈ O ,
+
+˙Hd(z) ≤ −∇ Hd(z)⊤ R(z) + G(z)K∗
+
+> ϕ
+
+(z)G(z)⊤∇Hd(z) + ξ. 
+
+Consequently, the true closed-loop system is dissipative with respect to Hd up to the residual ξ.Furthermore, if Assumption A5 holds, then 
+
+˙Hd(z) ≤ − ρ∥z − zd∥2 + ξ + εdiss , ∀z ∈ O .
+
+Hence, the closed-loop system is locally practically asymptotically stable: trajectories are driven to the smallest sublevel set of Hd containing 
+
+(
+
+z ∈ O : ∥z − zd∥ ≤ 
+
+s
+
+ξ + εdiss 
+
+ρ
+
+)
+
+,
+
+and remain in this sublevel set thereafter. 
+
+9Proof. Consider ˙ z = f (z, uϕ) with Lyapunov function Hd. Then ˙Hd = ⟨∇ Hd, f ⟩
+
+= ⟨∇ Hθ,ϕ d , f θ ⟩ + ⟨∇ Hd − ∇ Hθ,ϕ d , f θ ⟩ + ⟨∇ Hθ,ϕ d , f − f θ ⟩ + ⟨∇ Hd − ∇ Hθ,ϕ d , f − f θ ⟩. (25) From Lemma 3, first term satisfies 
+
+⟨∇ Hθ,ϕ d , f θ ⟩ = −∇ H⊤
+
+> θ,ϕ d
+
+ Rθ + Gθ K∗
+
+> ϕ
+
+G⊤
+
+> θ
+
+∇Hθ,ϕ d .
+
+Using ∥Rθ − R∥ ≤ ϵR and ∥Gθ − G∥ ≤ ϵG, and boundedness of G, Gθ , and K∗ 
+
+> ϕ
+
+on O, we have 
+
+∥Gθ K∗
+
+> ϕ
+
+G⊤ 
+
+> θ
+
+− GK ∗
+
+> ϕ
+
+G⊤∥ ≤ C1ϵG.
+
+The second term 
+
+⟨∇ Hd − ∇ Hθ,ϕ d , f θ ⟩ ≤ C2δ(ϵ, ϵ R),
+
+for some constants C1, C 2 < ∞ depending on bounds of f θ , ∇Hθ,ϕ d , and K∗ 
+
+> ϕ
+
+on D. The third and fourth terms satisfy 
+
+⟨∇ Hθ,ϕ d , f − f θ ⟩ ≤ 2ϵ¯αD , and ⟨∇ Hd − ∇ Hθ,ϕ d , f − f θ ⟩ ≤ δ(ϵ, ϵ R)ϵ. 
+
+Combining all terms, ˙Hd ≤ −∇ H⊤ 
+
+> θ,ϕ d
+
+(Rθ + Gθ K∗
+
+> ϕ
+
+G⊤ 
+
+> θ
+
+)∇Hθ,ϕ d + ξ, 
+
+where ξ = O(ϵ, ϵ R, ϵ G). If Assumption A5 holds, we get ˙Hd ≤ − ρ∥z − zd∥2 + ξ + εdiss .
+
+Hence, trajectories are driven to the smallest sublevel set of Hd containing the stated neighborhood and remain in this sublevel set thereafter, establishing local practical asymptotic stability. 
+
+Remark 3 (Role of ρ and practical stability) . The parameter ρ acts as a tunable dissipation gain in the learned closed-loop system and plays a central role in determining the size of the ultimate bound. In particular, increasing ρ tightens the ultimate bound and improves convergence toward the desired equilibrium. 
+
+# 5 Simulation Study 
+
+In this section, we discuss the details of the simulation study and the results. 
+
+5.1 Simulated System and Data Generation 
+
+We validate the proposed learning framework by learning an optimal EB-PBC controller for stabilization and swing-up control of a planar pendulum and a torsional pendulum system from their trajectory data. To show the efficacy and generalization of our approach, we choose the mass, length, and input matrix of the planar pendulum from a uniform distribution U(0 , 2). This is done to ensure the robustness of our approach to the pendulum parameters. Dissipation D is set to 0 for the planar pendulum experiments. The observed trajectory data (true system data) is generated using the true Hamiltonian function (2). 512 initial conditions for training trajectories (for both system and control policy) are sampled from a random uniform distribution of angles and angular velocities q0, ˙q0 as Pz0 ∼ U([ −2π, 2π] × [−π, π ]). 10 −5 0 5q0123 Mass/Inertia      
+
+> M−1
+> θ(q) M−1(q) (a) −505q0.00.51.01.52.0
+
+Input Matrix     
+
+> gθ(q) g(q) (b) −505q
+> −10 010 20 30
+
+Potential      
+
+> Vθ(q) V(q) (c) 0123t(s) 10 −5
+> 10 −4
+> 0.15s
+
+Relative Error (d)           
+
+> Figure 2: Learned system matrices for 1-link planar pendulum: (a),(b), and (c) show that Mθ1, V θ2(q), g θ3(q) match the ground truth with an offset (invariance owing to training on ˙ qinstead of p). (d) The relative error in states shows rollout for 3 swith 95% confidence bands; the y-axis is log-scaled for clearer representation.
+
+5.2 Training Details 
+
+For learning the system model, we minimize the integrated error over training trajectories. For each ini-tial condition ( z0, t 0) in the training dataset, the L2 loss is calculated as L = ∥ ˙Z − ˙ˆZ∥22, where ˆZ =
+
+NODESolve (zt0 , f θ , t ) comes from the learned model f θ , and we obtain ˙ˆZ directly using f θ , and {Z, ˙Z} =(zt, ˙zt, u t)tn 
+
+> t=t0
+
+is the (observed) trajectory data generated from the true system model (equivalent to getting data from the true system). The training trajectories were only T = 0 .15 s long, whereas the learned model is evaluated for 3 s to show the efficacy and generalization well beyond the training trajectory lengths. The cost function used to learn the stabilization control policy is 
+
+Ez0 [lu(z0)] = − 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+logΥ ∗  zT (zi
+
+> 0
+
+, uϕ) + ηN
+
+> N
+
+X
+
+> i=1
+
+Z T
+
+> 0
+
+uϕ(zt(zi
+
+> 0
+
+, uϕ)) dt, (26) where the target system configuration is defined as a probability set Υ ∗(z) centered at ( q∗, p ∗) with variance 
+
+σ2I, and η > 0. The system trajectories are generated by integrating the initial conditions (sampled from 
+
+Pz0 ) through a NODE solver, and the cost gradient d Lu/dϕ was computed by backpropagating using the adjoint method (25). For the swing-up control, we augment the control policy cost function as 
+
+Ez0 [lu(z0)] = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+ (zi 
+
+> 0
+
+− z∗)⊤Q(zi 
+
+> 0
+
+− z∗) + ηN
+
+> N
+
+X
+
+> i=1
+
+Z T
+
+> 0
+
+uϕ(zt(zi
+
+> 0
+
+, uϕ)) 2 dt, (27) where Q was set to diag ([100 , 10]). For the dissipation regularization term, we used λdiss = 1, and ρ = 1 e−3. Unless specified otherwise, the ODE solver used for NODE is the fourth-order Runge-Kutta ( rk4 ), dis-cretization step used is 10 −2 for system training and 2 × 10 −2 for controller training, Adam optimizer used for gradient descent step with the learning rate set to 10 −3 and weight decay to 10 −4. Learning rate cosine annealing (29) is used for training the system model f θ . Other hyperparameter values used are: 
+
+η = 10 −3, σ 2 = 10 −3.
+
+5.3 NN Architectures 
+
+Here, we detail the different NN architectures used. All NNs used are fully connected, and we describe them in the following format. 
+
+din − n1f act 1 − · · · − nN f act  
+
+> N
+
+− dout ,
+
+where din and dout are input and output dimensions, ni is the dimension of layer i and f act  
+
+> i
+
+is the associated activation function. 
+
+• M −1 
+
+> θ1
+
+= L⊤ 
+
+> θ1
+
+Lθ1 : 2 − 300 tanh − 300 tanh − 300 tanh − 111 • gθ2 : 2 − 400 tanh − 400 tanh − 1
+
+• Vθ3 : 2 − 50 tanh − 50 tanh − 1
+
+• V ∗ 
+
+> ϕ
+
+: 1 − 64 softplus − 64 softplus − 64 tanh − 1
+
+• K∗ 
+
+> ϕ
+
+: 3 − 64 softplus − 64 softplus − 1 softplus The softplus activation is appended to the output of K∗ 
+
+> ϕ
+
+to enforce the positive definiteness of the learned desired damping matrix. 
+
+5.4 Stabilization and Swing-up Control of Planar Pendulum System 
+
+To show the convergence of a planar pendulum system parameterized by NNs, we compare learned system matrices: M −1 
+
+> θ1
+
+(q), V θ2 (q), g θ3 (q) with the ground truth in Fig. 2. The learned Mθ , gθ (q), and Vθ (q) match the ground truth with a constant offset, which is not an issue for control as we still learn the q dynamics correctly. The offset in the learned Vθ (q) is not an issue either since the potential is a relative notion and only the derivative of Vθ plays a role in the dynamics of the system. Error in prediction trajectories (simulated for a much longer time than the training trajectories) is computed as a relative error defined by Err( t) = ∥z(t) − ˆz(t)∥2 / ∥z(t) + ˆ z(t)∥2. Fig. 2d shows the relative error in states averaged over 512 initial conditions sampled from Pz0 . The shaded regions are 95% confidence intervals, and the dotted line (at 0.15s) shows the length of the training trajectories. It can be seen that the trained model can accurately predict trajectories for a much longer horizon than the duration of training trajectories. Phase plots in Fig. 3 show that the resulting closed-loop system is stabilized by the proposed controller for the target configuration ( q∗, p ∗) = (0 , 0) (here the pendulum angle q is measured relative to the negative y-axis).         
+
+> Figure 3: State-Regulation by Optimal EB-PBC on 1-link Planar Pendulum: Phase plots of the learned system trajectories regulated to z= [0 ,0] for 512 initial conditions sampled from the distribution Pz0.
+
+Fig. 4a shows the time evolution of states ( q, p ) for 100 initial conditions sampled from Pz0 to stabilize the learned pendulum system at the inverted position, whereas Fig. 4b shows the optimal EB-PBC performance on the true pendulum model. These phase plots show that the proposed framework drives the pendulum to the inverted position from a wide range of initial conditions. Fig. 5 shows that the learned added potential 
+
+V ∗ 
+
+> ϕ
+
+reshapes the total energy landscape so that the resulting potential has its minimum at ±π, the upright position. Although the training data has trajectory samples in the range ( −π, π ), V ∗ 
+
+> ϕ
+
+extrapolates well. 12 0.0 0.5 1.0 1.5 2.0Time              
+
+> −202q(t)
+> Theta (q)
+> 0.00.51.01.52.0Time
+> −4
+> −20246p(t)
+> Momentum (p) (a) 0.00.51.01.52.0Time
+> −202q(t)
+> Theta (q)
+> 0.00.51.01.52.0Time
+> −4
+> −2024p(t)
+> Momentum (p) (b)
+
+Figure 4: Swing-up Optimal EB-PBC for 1-link Planar Pendulum: Optimal EB-PBC controlled system trajectories for 
+
+(a) learned system, and (b) true system for 100 initial conditions sampled from Pz0−6 −4 −2 0 2 4 6
+
+q
+
+−20 020 
+
+Optimal EB-PBC Potential Shaping 
+
+V∗
+
+> φ
+
+(q) V(q) V(q) + V ∗
+
+> φ
+
+(q) 
+
+Figure 5: Energy Shaping for Swing-up Control of 1-link Planar Pendulum: The proposed framework learns the added desired potential V ∗ 
+
+> ϕ
+
+to place the minimum at ±π for pendulum swing-up. 
+
+5.5 Comparing Optimal EB-PBC with PD + Potential Compensation for Swing-up Control of Torsional Pendulum 
+
+We now show the performance of the optimal EB-PBC controller for the swing-up of a torsional pendulum. The Hamiltonian of this system is 
+
+H(q, ˙q) = 12 J ˙q2 + mgr (1 − cos q) + 12 kq 2, (28) with J = 1, m = 1 , r = 1 , k = 0 .5, and the damping coefficient D = 0 .01. Fig. 6a shows the learned system parameters and the natural gravitational potential landscape. The constant offset in learned model parameters is resolved by assuming knowledge of the system potential at q = 0 and anchoring the learned 
+
+Vθ . We then compare our proposed optimal EB-PBC control to the classic PD with potential compensation controller (PD+). We optimized the hyperparameters of the PD+ controller for a fair comparison. The PD+ control law is given by 
+
+uϕ(t, z) = −mgr sin q − kq + kp(q − q∗) − kd ˙q, (29) where we optimize ( kp, k d) with the swing-up cost (27). All the other hyperparameters were the same as for the optimal EB-PBC case. The optimal parameters for PD+ controller were obtained as kp = 12 .29 , k d =6.30. Fig. 6b shows how optimal EB-PBC learns to take advantage of the spring potential and gravity to considerably lower the control effort for swing-up as compared to PD+ case, which simply cancels the natural system potential and adds a quadratic potential around q∗ = π. Fig. 6c shows the phase plot, total control effort (binned across various initial conditions across the complete trajectory), and terminal position error for 13 −5.0 −2.5 0.0 2.5 5.0       
+
+> q(rad)
+> 0
+> 10
+> 20
+> 30 Gravitational Potential
+> Vθ(learned)
+> V(true)
+> J−1kD
+> 0.00.20.40.60.81.00.0% 0.0% 0.1%
+> Learned vs True Parameters
+> Learned True
+
+(a) 0.0 2.5 5.0 7.5                   
+
+> q(rad)
+> 0
+> 50
+> 100
+> Energy
+> Optimized PD+ Potential
+> Natural ( V)Added ( Vd−V)Total ( Vd)Target q∗
+> 0.02.55.07.5
+> q(rad)
+> 0
+> 50
+> 100
+> Energy
+> Optimal EB-PBC Potential
+> Natural ( V)Added ( V∗
+> φ)Total ( V+V∗
+> φ)Target q∗
+> Potential Energy Landscapes: PD+ vs. Optimal EB-PBC
+
+(b) −5 0 5          
+
+> q(rad)
+> 0
+> 10
+> ˙q (rad/s)
+> Optimized PD+ Phase Plot
+> −505
+> q(rad)
+> 0
+> 10
+> ˙q (rad/s)
+> Optimal EB-PBC Phase Plot
+> 010 20
+> Total Effort Squared
+> 0
+> 10
+> 20
+> Frequency
+> Control Effort Comparison: ∫‖u‖2dt
+> Optimized PD+ Optimal EB-PBC
+> Optimized PD+ Optimal EB-PBC
+> q(rad)
+> 0.000
+> 0.005
+> |q(T ) − π|
+> Terminal Position Error (rad)
+
+Torsional Pendulum: PD+ vs Optimal EB-PBC 
+
+(Evaluated on True Dynamics) 
+
+(c) 
+
+Figure 6: Optimal EB-PBC on 1-link Torsional Pendulum: (a) shows the learned pH system with perfectly converged system parameters. Reshaped potential landscape in (b) shows how optimal EB-PBC learns to utilize the natural potential to achieve the minimum at q∗ = π compared to the PD+ controller that cancels and adds a quadratic potential. (c) The performance of optimal EB-PBC versus the optimized PD+ control for swing-up of the torsional pendulum shows how optimally reshaped potential leads to massive savings in control effort at the expense of slightly larger terminal position error. −5 0 5
+
+q
+
+−505
+
+> ˙q
+
+t = 0 .0s 
+
+−5 0 5
+
+q
+
+−505
+
+> ˙q
+
+t = 0 .75s 
+
+−5 0 5
+
+q
+
+−505
+
+> ˙q
+
+t = 1 .5s 
+
+−5 0 5
+
+q
+
+−505
+
+> ˙q
+
+t = 2 .25s 
+
+−5 0 5
+
+q
+
+−505
+
+> ˙q
+
+t = 3 .0s 
+
+0510 15 
+
+0510 15 
+
+0510 15 
+
+0510 15 
+
+0510 15 
+
+Learned Damping K∗
+
+> φ
+
+(t, q, ˙q)
+
+Figure 7: Snapshots of the learned state-dependent damping K∗
+
+> ϕ
+
+(t, q, ˙q) over time for swing-up control of torsional pendulum: Rather than applying a constant uniform damping, the optimal EB-PBC dynamically adapts the dissipation profile, allowing the system to build momentum where necessary, and selectively increasing damping near the target equilibrium ( q∗ = π, ˙q∗ = 0) to ensure smooth asymptotic stabilization. 
+
+both controllers. The mean effort expended by PD+ control was 7 .10 compared to 4 .03 for optimal EB-PBC for swing-up control of the torsional pendulum system. However, the proposed controller exhibits a slightly larger terminal position error, possibly owing to the flatter total potential landscape. The learned damping injection coefficient also has a non-trivial distribution as a function of system states and time. Contrary to the PD+ control, which assumes constant damping, the optimal EB-PBC controller damping depends on time (giving a feedforward control component), the sign of the velocity (asymmetric around ˙q = 0), and the position, which is guided by the learned potential landscape, as shown in Fig. 7. This substantially generalizes the damping-injection implementation in PD+ and vanilla EB-PBC controllers. 
+
+5.6 Comparing Optimal EB-PBC with PD + Potential Compensation for Swing-up Control of 2-Link Torsional Pendulum 
+
+To evaluate the proposed framework on a higher-dimensional system with rich passive elements, we compare the optimal EB-PBC controller against an optimized standard EB-PBC for a 2-link rigid pendulum with parallel joint elasticity. The standard EB-PBC baseline is constructed by strictly compensating the natural 14 gravitational and elastic potentials and imposing a quadratic desired potential, with its derivative and proportional gains optimized to minimize the same target cost function (27). The Hamiltonian of this system, expressed in terms of the generalized coordinates q = [ q1, q 2]⊤ and velocities ˙ q = [ ˙ q1, ˙q2]⊤, is given by 
+
+H(q, ˙q) = 12 ˙q⊤M (q) ˙ q + Vg (q) + Ve(q), (30) where the kinetic energy is characterized by the symmetric positive-definite inertia matrix M (q) ∈ R2×2
+
+with elements 
+
+M 11 (q) = m1l2 
+
+> c1
+
++ m2(l21 + l2 
+
+> c2
+
+) + I1 + I2 + 2 m2l1lc2 cos( q2), (31) 
+
+M 12 (q) = M 21 (q) = m2l2 
+
+> c2
+
++ I2 + m2l1lc2 cos( q2), (32) 
+
+M 22 (q) = m2l2 
+
+> c2
+
++ I2, (33) where mi, l i, l ci , and Ii denote the mass, length, center of mass position, and moment of inertia of link 
+
+i ∈ { 1, 2}, respectively. The gravitational potential energy Vg (q) is defined as 
+
+Vg (q) = −(m1lc1 + m2l1)g cos( q1) − m2lc2 g cos( q1 + q2). (34) The elastic potential energy Ve(q) introduced by parallel torsional springs is 
+
+Ve(q) = 12 Ks1(q1 − qeq1 )2 + 12 Ks2(q2 − qeq2 )2, (35) where Ksi represents the stiffness of the torsional spring at joint i and qeq i denote the corresponding equilibrium resting angle. Figs. 8a, 8b show the mass/inertia matrix, the natural gravitational potential landscape, and the learned system parameters. The constant offset in learned model parameters is resolved by assuming knowledge of the system potential at q = 0 and anchoring the learned Vθ .We then compare our proposed optimal EB-PBC control to the standard EB-PBC. We optimized the hyperparameters of the standard EB-PBC for a fair comparison. The optimal parameters for the standard EB-PBC were obtained as kp = [28 .9, 12 .8] , k d = [20 .42 , 0.96]. Both controllers successfully stabilize the 2-link torsional pendulum system at the target configuration z∗ = [ π, 0, 0, 0]. However, Figs. 8c, 8d show how the proposed controller is able to exploit the system’s intrinsic passive dynamics to lower the control effort required to achieve the swing-up. This performance disparity highlights the fundamental inefficiency inherent in strict potential compensation techniques. The standard EB-PBC wastes significant motor torque by actively canceling the natural torsional elasticity and gravitational pull of the links to enforce an arbitrary quadratic potential. In contrast, the proposed framework bypasses perfect cancellation. It learns an added potential V ∗ 
+
+> ϕ
+
+(q) that reshapes the total energy landscape to place the global minimum at the target, while naturally cooperating with the stored elastic energy of the torsional springs to “swing” the links toward the target. Notably, mean effort expended for swing-up by our proposed controller is 32 .62 compared to 43 .04 for the standard EB-PBC, achieving a 24 .02% control energy savings. The trade-off is a slightly higher terminal position error for our proposed controller. 
+
+# 6 Conclusions and Future Directions 
+
+In this work, we proposed a physics-informed learning framework for optimal energy-balancing passivity-based control of port-Hamiltonian systems. The system model and control policy are jointly learned through alternating optimization with policy-aware data collection. The pH model is updated using a mixture of step-excited and policy-excited trajectory data, concentrating model capacity on the closed-loop operating region, and the EB-PBC policy is re-optimized on the improved model. Both components are parameterized by NNs, the system via structured pH matrices, and the policy via an added potential and state-dependent 15 −2 0 2
+
+q2 (rad) 
+
+> 0.4
+> 0.6
+> 0.8
+
+M −111 vs q2      
+
+> ˆM−111 (learned)
+> M−111 (true)
+> −202
+
+q2 (rad) 
+
+> 2
+> 4
+> 6
+> 8
+
+M −122 vs q2      
+
+> ˆM−122 (learned)
+> M−122 (true)
+> −202
+
+q2 (rad) 
+
+> −2
+> −1
+> 0
+
+M −112 vs q2      
+
+> ˆM−112 (learned)
+> M−112 (true)
+> −505
+
+q1 (rad) 
+
+> 0
+> 20
+> 40
+> Vg
+
+Gravitational Potential: q2 = 0     
+
+> ˆVg(learned)
+> Vg(true)
+> −505
+
+q2 (rad) 
+
+> 45
+> 50
+
+Gravitational Potential: q1 = π  
+
+> ˆVg(learned)
+> Vg(true)
+
+(a) Ks1 Ks2 
+
+> 0
+> 2
+> 4
+> 60.1% 0.0%
+
+Spring Stiffness Ks (Nm/rad)    
+
+> Learned True
+> dq1dq2
+> 0.00
+> 0.02
+> 0.04
+> 0.06
+> 0.08 1.7% 0.2%
+
+Joint Damping Dq (Nms/rad) 
+
+> Learned True
+
+(b) −2.5 0.0 2.5                
+
+> q1(rad)
+> −4
+> −2024
+> q2 (rad)
+> Natural Potential Vnat (q)
+> Target Current Min
+> −2.50.02.5
+> q1(rad)
+> −4
+> −2024
+> q2 (rad)
+> Optimal EB-PBC Learned V∗
+> φ(q)
+> Target Current Min
+> −2.50.02.5
+> q1(rad)
+> −4
+> −2024
+> q2 (rad)
+> Shaped Potential Vnat +V∗
+> φ
+> Target Minimum Current Min
+> −80
+> −60
+> −40
+> −20 020 40 60 80
+> −80
+> −60
+> −40
+> −20 020 40 60 80
+> −80
+> −60
+> −40
+> −20 020 40 60 80
+
+(c) −6 −4 −2 0 2 4 6              
+
+> q1(rad)
+> −5
+> 0
+> 5
+> 10
+> ˙q1 (rad/s)
+> Optimized Standard EB-PBC Phase Plot ( q1)
+> −6−4−20246
+> q1(rad)
+> 0.0
+> 2.5
+> 5.0
+> ˙q1 (rad/s)
+> Optimal EB-PBC Phase Plot ( q1)
+> 30 40 50 60
+> Total Effort Squared
+> 0
+> 10
+> 20
+> Frequency
+> Control Effort Comparison: ∫‖u‖2dt
+> Optimized Standard EB-PBC Optimal EB-PBC
+> Optimized Standard Optimal EB-PBC
+> 0.000
+> 0.001
+> 0.002
+> 0.003
+> |q1(T ) − π| + |q2(T )| Terminal Position Error (rad)
+
+Controller Comparison: Optimal EB-PBC vs Optimized Standard EB-PBC (Evaluated on True Physical Dynamics) 
+
+(d) 
+
+Figure 8: Optimal EB-PBC on 2-link Torsional Pendulum: (a) and (b) show the learned pH system with perfectly converged system parameters. Reshaped potential landscape in (c) shows how optimal EB-PBC learns to utilize the natural potential to achieve the minimum at q∗ = [ π, 0]. (d) The performance of optimal EB-PBC versus the optimized standard EB-PBC control for swing-up of the torsional pendulum shows how optimally reshaped potential along with time and state-dependent damping leads to massive savings in control effort at the expense of slightly larger terminal position error. 
+
+damping, yielding an interpretable controller expressed as an interplay between the system’s natural and shaped energies. We established deterministic stability guarantees for the learned controller on the true system, with an explicit estimate of the size of the residual neighborhood as a function of model training error. A dissipation regularization mechanism enforces strict energy decay throughout training, strengthening robustness to sim-to-real gaps. The framework was validated on stabilization and swing-up tasks for a 1-link planar, a 1-link torsional pendulum, and a 2-link torsional pendulum. Future work will investigate sensitivity to hyperparameters and system variations, and extend the framework to higher-dimensional systems such as flexible-joint manipulators and multi-agent systems. Another possible avenue is to integrate our proposed framework with image-based system identification techniques (30, 31). 
+
+# References 
+
+[1] A. Van Der Schaft and D. Jeltsema, “Port-hamiltonian systems theory: An introductory overview,” Foundations and Trends ® in Systems and Control , vol. 1, no. 2-3, pp. 173–378, 2014. [2] R. Ortega, A. J. Van Der Schaft, I. Mareels, and B. Maschke, “Putting energy back in control,” IEEE Control Systems Magazine , vol. 21, no. 2, pp. 18–33, 2002. [3] A. Van der Schaft, L2-Gain and Passivity Techniques in Nonlinear Control . Springer, 2000. [4] R. Ortega, A. van der Schaft, F. Castanos, and A. Astolfi, “Control by interconnection and standard passivity-based control of port-Hamiltonian systems,” IEEE Transactions on Automatic Control , vol. 53, no. 11, pp. 2527–2542, 2008. [5] O. Sprangers, R. Babuˇ ska, S. P. Nageshrao, and G. A. D. Lopes, “Reinforcement learning for port-Hamiltonian systems,” 
+
+IEEE Transactions on Cybernetics , vol. 45, no. 5, pp. 1017–1027, 2015. 
+
+16 [6] A. Gheibi, A. R. Ghiasi, S. Ghaemi, and M. A. Badamchizadeh, “Designing of robust adaptive passivity-based controller based on reinforcement learning for nonlinear port-Hamiltonian model with disturbance,” International Journal of Control ,vol. 93, no. 8, pp. 1754–1764, 2020. [7] S. Massaroli, M. Poli, F. Califano, J. Park, A. Yamashita, and H. Asama, “Optimal energy shaping via neural approxima-tors,” SIAM Journal on Applied Dynamical Systems , vol. 21, no. 3, pp. 2126–2147, 2022. [8] S. S.-E. Plaza, R. Reyes-B´ aez, and B. Jayawardhana, “Total energy shaping with neural interconnection and damping assignment-passivity based control,” in Learning for Dynamics and Control Conference , pp. 520–531, PMLR, 2022. [9] Y. Okura, K. Fujimoto, I. Maruta, A. Saito, and H. Ikeda, “Bayesian inference for path following control of port-Hamiltonian systems with training trajectory data,” SICE Journal of Control, Measurement, and System Integration ,vol. 13, no. 2, pp. 40–46, 2020. [10] E. Sebasti´ an, T. Duong, N. Atanasov, E. Montijano, and C. Sag¨ u´ es, “Physics-informed multi-agent reinforcement learning for distributed multi-robot problems,” IEEE Transactions on Robotics , 2025. [11] M. Zhang, R. Ortega, D. Jeltsema, and H. Su, “Dissipation obstacle hampers control-by-interconnection methodology,” 
+
+IFAC-PapersOnLine , vol. 48, no. 13, pp. 123–128, 2015. 5th IFAC Workshop on Lagrangian and Hamiltonian Methods for Nonlinear Control LHMNC 2015. [12] S. Greydanus, M. Dzamba, and J. Yosinski, “Hamiltonian neural networks,” Advances in Neural Information Processing Systems , vol. 32, 2019. [13] Y. D. Zhong, B. Dey, and A. Chakraborty, “Symplectic ODE-Net: Learning Hamiltonian dynamics with control,” in 
+
+International Conference on Learning Representations , 2020. [14] T. Duong, A. Altawaitan, J. Stanley, and N. Atanasov, “Port-hamiltonian neural ODE networks on Lie groups for robot dynamics learning and control,” IEEE Transactions on Robotics , vol. 40, pp. 3695–3715, 2024. [15] L. Di Persio, M. Ehrhardt, and A. Khedher, “Stochastic port-Hamiltonian neural networks: Universal approximation with passivity guarantees,” arXiv preprint arXiv:2603.10078 , 2025. [16] G. Van Otterdijk, S. Moradi, S. Weiland, R. T´ oth, N. Jaensson, and M. Schoukens, “Learning subsystem dynamics in nonlinear systems via port-hamiltonian neural networks,” in 2025 IEEE 64th Conference on Decision and Control (CDC) ,pp. 2071–2076, IEEE, 2025. [17] T. Beckers, T. Z. Jiahao, and G. J. Pappas, “Learning switching port-hamiltonian systems with uncertainty quantification,” 
+
+IFAC-PapersOnLine , vol. 56, no. 2, pp. 525–532, 2023. [18] T. Beckers, J. Seidman, P. Perdikaris, and G. J. Pappas, “Gaussian process port-hamiltonian systems: Bayesian learning with physics prior,” in 2022 IEEE 61st Conference on Decision and Control (CDC) , pp. 1447–1453, IEEE, 2022. [19] F. J. Roth, D. K. Klein, M. Kannapinn, J. Peters, and O. Weeger, “Stable port-hamiltonian neural networks,” arXiv preprint arXiv:2502.02480 , 2025. [20] Y. Xu, S. Sivaranjani, and V. Gupta, “Learning neural koopman operators with dissipativity guarantees,” in 2025 IEEE 64th Conference on Decision and Control (CDC) , pp. 2064–2070, IEEE, 2025. [21] S. Sivaranjani, Y. Shi, N. Atanasov, T. Duong, J. Feng, T. Martin, Y. Xu, V. Gupta, and F. Allg¨ ower, “Control-oriented system identification: Classical, learning, and physics-informed approaches,” arXiv preprint arXiv:2512.06315 , 2025. [22] H. Dai, B. Landry, L. Yang, M. Pavone, and R. Tedrake, “Lyapunov-stable neural-network control,” arXiv preprint arXiv:2109.14152 , 2021. [23] Y.-C. Chang, N. Roohi, and S. Gao, “Neural lyapunov control,” Advances in neural information processing systems ,vol. 32, 2019. [24] C. Banerjee, K. Nguyen, C. Fookes, and M. Raissi, “A survey on physics informed reinforcement learning: Review and open problems,” Expert Systems with Applications , vol. 287, p. 128166, 2025. [25] R. T. Q. Chen, Y. Rubanova, J. Bettencourt, and D. K. Duvenaud, “Neural ordinary differential equations,” in Advances in Neural Information Processing Systems , vol. 31, 2018. [26] R. Bischof and M. A. Kraus, “Multi-objective loss balancing for physics-informed deep learning,” Computer Methods in Applied Mechanics and Engineering , vol. 439, p. 117914, 2025. [27] S. Wang, Y. Teng, and P. Perdikaris, “Understanding and mitigating gradient flow pathologies in physics-informed neural networks,” SIAM Journal on Scientific Computing , vol. 43, no. 5, pp. A3055–A3081, 2021. 
+
+17 [28] A. G. Baydin, B. A. Pearlmutter, A. A. Radul, and J. M. Siskind, “Automatic differentiation in machine learning: asurvey,” Journal of Machine Learning Research , vol. 18, no. 153, pp. 1–43, 2018. [29] I. Loshchilov and F. Hutter, “SGDR: Stochastic gradient descent with warm restarts,” in International Conference on Learning Representations , 2017. [30] J. J. Mason, C. Allen-Blanchette, N. Zolman, E. Davison, and N. E. Leonard, “Learning to predict 3D rotational dynamics from images of a rigid body with unknown mass distribution,” Aerospace , vol. 10, no. 11, p. 921, 2023. [31] Y. D. Zhong and N. Leonard, “Unsupervised learning of Lagrangian dynamics from images for prediction and control,” 
+
+Advances in Neural Information Processing Systems , vol. 33, pp. 10741–10752, 2020. 
+
+18
