@@ -1,0 +1,230 @@
+Title: Pushing Radar Odometry Beyond the Pavement: Current Capabilities and Challenges
+
+URL Source: https://arxiv.org/pdf/2604.24674v1
+
+Published Time: Tue, 28 Apr 2026 02:22:35 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# Pushing Radar Odometry Beyond the Pavement: Current Capabilities and Challenges 
+
+Shaunak Kolhe 1, Peng Jiang 1, Maggie Wigness 2, Philip Osteen 2,Timothy Overbye 2, Christian Ellis 2 and Srikanth Saripalli 1
+
+Abstract — Radar offers unique advantages for localization in unstructured environments, including robustness to weather, lighting, and airborne particulates. While most prior work has studied radar odometry in urban, largely planar settings, its performance in off-road environments remains less understood. In this paper, we investigate the potential of radar for off-road odometry estimation and identify key challenges that arise from full SE (3) vehicle motion, terrain-induced ground returns, and sparse or unstable features. To address these issues, we introduce two simple baselines: Radar-KISSICP, which applies motion compensation to generate 3D-aware radar pointclouds, and Radar-IMU, which leverages IMU preintegration to stabi-lize scan matching. Experiments on the Great Outdoors (GO) dataset demonstrate that these baselines improve trajectory estimation in challenging routes and provide a reference point for future development of radar odometry in off-road robotics. 
+
+I. INTRODUCTION Robust localization is a fundamental capability for au-tonomous robots operating in diverse and unstructured en-vironments. While cameras and LiDARs have long been the dominant sensing modalities for odometry, their perfor-mance degrades severely under adverse weather or visually degraded conditions such as rain, snow, fog, dust, or smoke. Millimeter-wave radar, with its longer wavelengths and Doppler measurement capability, has recently re-emerged as a compelling alternative [1]. Unlike light-based sensors, radar can penetrate particulates and provide reliable returns at long range, enabling continued operation when other modalities degrade or fail. Encouraged by these properties, a growing body of work has explored radar odometry and mapping in automotive and urban driving scenarios. Recent methods, such as CFEAR [2] and ORORA [3], achieve near LiDAR-level localization performance on benchmark datasets like Oxford Robot-Car [4], MulRan [5] and Boreas [6]. However, these datasets primarily constrain vehicle motion to planar trajectories in 
+
+SE (2). As a result, many state-of-the-art radar odometry systems implicitly rely on the assumption of flat terrain and limited pitch or roll excitation, which does not generalize to off-road conditions. In contrast, off-road environments demand full SO (3)
+
+motion estimation due to rough terrain, elevation changes, and frequent loss of stable landmarks. These conditions expose radar-specific failure modes: ground returns become   
+
+> This paper was created by 1. Texas A&M University and 2. DEV-COM Army Research Laboratory. Texas A&M University is at College Station, TX, USA. DEVCOM Army Research Laboratory is at Adelphi, MD, USA
+
+kolheshaunak@tamu.edu , maskjp@tamu.edu ,
+
+ssaripalli@tamu.edu 
+
+Fig. 1: Motivating scenario for the use of radar in an off-road, degraded environment. A Clearpath Warthog equipped with a Navtech radar operates in a snow covered dense forest. 
+
+confounding rather than outliers, false correspondences accu-mulate in ICP pipelines, and sparse radar pointclouds lead to ill-conditioned registration. To address these challenges, we evaluate existing radar odometry engines in off-road settings and propose two extensions: (i) Radar-KISSICP, which is based on KISS-ICP[7] and incorporates a lightweight SO (3)
+
+motion compensation step to produce sparse but 3D-aware radar pointclouds, and (ii) Radar-IMU, which leverages IMU preintegration to provide a robust initial guess for radar scan-matching in SE (3).Through experiments on the Great Outdoors (GO) dataset [8], we show that our localization methods can match or outperform existing approaches in challenging off-road environments, including scenarios with severe pitch/roll and terrain discontinuities. We further analyze failure cases, such as ravine traversals, where radar-only pipelines accumulate significant drift, and demonstrate how IMU integration helps recover accurate trajectories. Our evaluation and results emphasize both the promise and the limitations of radar odometry in unstructured terrain, laying the groundwork for future robust off-road localization pipelines. II. R ELATED WORK 
+
+Early radar odometry approaches focused on adapting classical registration techniques to handle measurement noise and sparsity. Kung et al. [9] proposed a normal distribu-tions transform (NDT) based RADAR odometry that also accounts for uncertainties through a probabilistic submap, 
+
+> arXiv:2604.24674v1 [cs.RO] 27 Apr 2026
+
+outperforming state-of-the-art automotive and learning-based scanning methods by better handling outliers. Rapp et al. [10] also applied joint doppler-clustering based NDT, weighting each RADAR point by similarity between measured and estimated velocities to reduce outlier effects. To address the sparsity issue in automotive RADAR, Holder et al. [11] proposed submap matching, combining several RADAR scans to construct more information, though this method did not consider the uncertainty of ego-motion or RADAR measurements. More recently, Adolfsson et al. presented the CFEAR approach [2], which uses a feature extraction algorithm to generate filtered surface points that can be reliably scan-matched from frame to frame, demonstrating LIDAR-level localization with RADAR. Lim et al. developed ORORA [3], an outlier-robust RADAR odometry method that demon-strated robust performance even with numerous outliers and was less sensitive to the specific feature extraction method used, particularly in featureless scenes. Direct methods, on the other hand, directly compare or use raw RADAR measurements without explicit feature extraction. Kellner et al. [12] used the angular position and radial velocity of automotive RADAR sensors to estimate ego-motion, classifying stationary targets with RANSAC to fit velocity estimates. Le Gentil et al. [13] introduced a Direct RADAR Odometry (DRO) method that is notable for being the first direct RADAR registration method to account for continuous motion and Doppler-based distortion in a gradient-based optimization, performing well in both struc-tured and unstructured environments, including featureless tunnels. Recent advancements have leveraged deep learning to extract robust features and improve RADAR odometry per-formance, often outperforming hand-crafted methods. Barnes et al. [14] demonstrated a fully differentiable, correlation-based RADAR odometry pipeline that learns a binary mask to remove distractor features, such as objects in motion and RADAR noise. Other approaches use unsupervised learning, such as the HERO method by Burnett et al. [15], which combines probabilistic trajectory estimation and deep learned features without requiring ground truth pose information for training. This unsupervised method approaches the method in [2], outperforms the supervised method in [14] and demonstrates effectiveness under adverse weather conditions. Lisus et al. [16] further advanced RADAR-LIDAR local-ization by presenting a deep-learning-based approach that learns to weight RADAR points for ICP, effectively filtering out harmful RADAR artifacts, noise, and even other vehi-cles, thus improving convergence and reducing localization errors. Lisus et al. [17] investigated whether Doppler velocity measurements are useful for spinning RADAR odometry and presented a novel method to analytically extract these veloci-ties while retaining full angular resolution. Their experiments demonstrated that using Doppler measurements improves performance in easy geometric environments and maintains good performance in geometrically degenerate situations like tunnels or skyways where other methods might fail. 
+
+Fig. 2: Overhead view of routes from the GO dataset [8] (left) and the Warthog sensor setup used for the dataset (right). While the above demonstrate the effectiveness of RADAR as a robust odometry source, rarely are these methods tested in offroad environments. It is hence in our interest to verify if this performance is applicable in more aggressive terrain, and identify the challenges therein. III. B ENCHMARKING FRAMEWORK 
+
+To systematically study radar odometry in off-road envi-ronments, we design a benchmarking framework that evalu-ates state-of-the-art radar odometry engines as well as two diagnostic baselines. Our goal is to reveal the strengths and limitations of existing methods when vehicle motion extends beyond planar SE (2) into full SE (3).
+
+A. Odometry Engines Under Evaluation 
+
+We benchmark two representative feature-based radar odometry methods that have demonstrated competitive performance in automotive datasets: CFEAR [2] and ORORA [3]. In addition, we introduce two lightweight extensions, Radar-KISSICP and Radar-IMU, designed as 
+
+diagnostic baselines to probe failure cases in off-road condi-tions. A brief description of each method is provided below. 
+
+1) CFEAR: The CFEAR pipeline uses a surfel-based feature extraction method and a robust point-to-line error optimization approach for pose estimation. Each radar sweep is filtered to retain the K-strongest intensities per azimuth and projected into Cartesian space. Motion compensation is then applied using the most recent velocity estimates by reprojecting each point into the time t of the sweep center. Oriented surface points are extracted via eigen-decomposition to compute local normals, and registration is performed against a keyframe using a point-to-line error metric with a Cauchy loss using [18]. Following [2], we adopt a configuration of 50 keyframes with the Cauchy loss, which was reported to yield the best performance. 
+
+2) ORORA: The ORORA pipeline addresses outlier sen-sitivity in feature-based radar odometry by introducing a decoupling-based matching strategy. Features are extracted using the Cen2018 detector [19], described with ORB [20], and matched via brute-force search with a ratio test [21]. Doppler compensation is applied to the range measurements, and a maximum clique inlier selection [22] is used to prune Dataset Manufacturer Model Range Resolution Range MulRan [5] Navtech CIR204-H 0.06 m 200 m Boreas [6] Navtech CIR304-H 0.04 m 250 m Oxford Radar Dataset [4] Navtech CTS350-X 0.04 m 163 m GO Dataset [8] Navtech CTS350-X 0.04 m 270 m 
+
+TABLE I: Radar sensor specifications from the datasets under test (all radar have 360 ◦ FOV, 0 .9◦ azimuth resolution) 
+
+spurious correspondences. The final relative transform is estimated by solving for rotation using a graduated non-convexity method, followed by anisotropic component-wise estimation of translation. 
+
+3) Radar-KISSICP: To analyze failures of CFEAR and ORORA in off-road settings, we adapt KISS-ICP [7] to radar data. Radar features detected by Cen2018 are cast into a pointcloud, followed by a rotation-only motion com-pensation step that produces sparse but 3D-aware radar pointclouds. Registration is then performed using point-to-point ICP. While this reduces the planar assumption, the resulting sparsity makes the ICP problem ill-conditioned: incorrect nearest-neighbor associations often dominate, and convergence is highly sensitive to the initial guess. 
+
+4) Radar-IMU: To mitigate the sensitivities of Radar-KISSICP, we extend the approach by incorporating IMU preintegration [23] using GTSAM [24] to provide an ini-tial SE (3) pose estimate for ICP. This inertial prior intro-duces vertical displacement awareness otherwise unobserv-able from radar-only motion models, reducing false map features and improving recovery from drift. Importantly, odometry still updates at radar frame rate, and no bias correction is applied. We refer to this variant as Radar-IMU throughout the paper. 
+
+B. Datasets 
+
+We evaluate across both automotive and off-road datasets to expose the differences between planar SE (2) motion and full SE (3) motion: 
+
+• Automotive datasets: Oxford Radar RobotCar [4], Boreas [6] and MulRan [5] were collected in structured, largely planar urban environments. These datasets serve as baseline environments where current radar odometry has traditionally achieved strong performance. We use the ’2019-01-18-15-20-12’ sequence from Oxford, the ’KAIST03’ sequence from MulRan and the ’2021-06-17-17-52’ sequence from Boreas in our experiments. 
+
+• Off-road dataset: The Great Outdoors (GO) dataset [8], was collected using a Clearpath Warthog UGV [25] (Fig. 2) along forest trails, ravines, and snow-covered terrain with frequent pitch/roll excitation. We focus on three representative routes with increasing difficulty: 
+
+– Route 1: A paved area with few distinctive fea-tures. The robot covered 0.58 km in 3.43 minutes, reaching a peak speed of 4.0 m/s. 
+
+– Route 3: A challenging mix of gravel trails and forested regions, where difficult terrain limited progress to an average speed of 0.98 m/s. 
+
+– Route 4: A trail run with multiple deviations into off-road areas before returning to the main path, resulting in an average speed of 1.59 m/s. 0 1000 2000 3000 4000 5000 Time        
+
+> 0.9980
+> 0.9985
+> 0.9990
+> 0.9995
+> 1.0000 || R(3, 3)|| - unitless
+> σ= 0.00009089
+> Boreas (06-17-17)
+> 020000 40000 60000 80000 Time
+> 5.000
+> 5.556
+> 6.111
+> 6.667
+> 7.222
+> 7.778
+> 8.333
+> 8.889
+> 9.444
+> 10.000 || R(3, 3)|| - unitless 1e −5+9.999e−1
+> σ= 0.00000102
+> MulRan - KAIST03
+
+(a) Overlap on SE (2): Automotive Sequences 0 500 1000 1500 2000 2500 3000 Time                   
+
+> 0.996
+> 0.998
+> 1.000 || R(3, 3)|| - unitless
+> σ= 0.00046687
+> GO: Route 0
+> 01000 2000 3000 4000 5000 6000 7000 Time
+> 0.996
+> 0.998
+> 1.000 || R(3, 3)|| - unitless
+> σ= 0.00109677
+> GO: Route 4
+> 01000 2000 3000 4000 5000 6000 7000 8000 Time
+> 0.996
+> 0.998
+> 1.000 || R(3, 3)|| - unitless
+> σ= 0.00076137
+> GO: Route 3
+
+(b) Overlap on SE (2) Offroad Sequences 
+
+Fig. 3: Overlap of relative transforms in SE (3) on SE (2).
+
+While neither automotive nor offroad sequences exhibit motion restricted to a plane, the deviation from this assumption is greater in the offroad sequences as can be seen from the standard deviation of the data from unity. 
+
+Table I summarizes the radar sensor specifications across datasets. To highlight the difference in motion regimes, we compute the overlap of ground-truth relative transforms with the XY-plane (Fig. 3). While automotive datasets exhibit nearly pure yaw motion, the GO sequences show frequent pitch and roll, underscoring the need for full SE (3) evalua-tion. 
+
+C. Evaluation Metrics and Setup 
+
+We adopt standard odometry metrics following KITTI [26] and EVO [27]: 
+
+• Relative Pose Error (RPE): Captures local drift over fixed-length segments. Sequence Method Avg. trans. Avg. rot. ATE tra. ATE rot.                            
+
+> Oxford CFEAR 1.50 0.01 15.48 0.12
+> ORORA 3.51 0.04 45.06 0.14 MulRan CFEAR 87.77 1.33 72.61 1.28
+> ORORA 52.20 1.06 36.23 1.29 Boreas CFEAR 1.79 0.03 81.84 0.15 ORORA ----
+
+TABLE II: Quantitative results for current algorithms on automotive datasets. 
+
+Relative translational and rotational error are reported using the KITTI [26] metrics. Also shown are absolute trajectory error for translation in % and for rotation in rad/100m. Best value per metric per dataset in bold. Lower error values indicate better performance. We exclude results for ORORA on the Boreas dataset as it is not compatible to run.                                                      
+
+> Sequence Method Avg. trans. Avg. rot. ATE tra. ATE rot.
+> Route 1 CFEAR 9.12 0.80 180.44 1.67 ORORA 5.95 0.52 127.59 1.43 Radar-KISSICP 1.47 0.44 41.17 1.35 Radar-IMU 1.06 0.46 21.69 2.00 Route 3 CFEAR 3.24 1.76 61.08 1.93 ORORA 4.19 1.64 25.88 1.95 Radar-KISSICP 3.59 1.70 50.97 1.97 Radar-IMU 2.89 1.57 15.12 1.56 Route 4 CFEAR 3.10 1.27 232.27 1.66 ORORA 46.66 1.65 ––Radar-KISSICP 1.67 1.53 42.32 2.04 Radar-IMU 12.48 1.46 54.45 1.60
+
+TABLE III: Quantitative results for candidate methods on Offroad Datasets. Relative translational and rotational error are reported using the KITTI [26] metrics. Also shown are absolute trajectory error for translation in % and for rotation in rad/100m. Lower error values indicate better performance. 
+
+• Absolute Trajectory Error (ATE): Measures accumu-lated global trajectory drift. All methods are evaluated in full SE (3), rather than restricting to SE (2), to properly account for terrain-induced vertical motion. Experiments are conducted on an AMD Ryzen 7 7700X CPU at 5.3 GHz with 64 GB RAM, using CPU-only execution to ensure consistent runtime compar-isons. IV. Q UANTITATIVE AND QUALITATIVE RESULTS 
+
+A. Automotive Datasets 
+
+Table II summarizes results on Oxford and MulRan. Both CFEAR and ORORA achieve competitive performance, consistent with prior reports. CFEAR generally produces lower translational error, while ORORA shows robustness to spurious correspondences. These experiments confirm that both methods are well-suited to planar SE (2) motion, providing a baseline for comparison with off-road scenarios. 
+
+B. Off-road Datasets 
+
+Table III presents results for Routes 1, 3, and 4 from the GO dataset. In contrast to automotive datasets, both CFEAR and ORORA show substantial drift under SE (3) excitation. On Route 1, where terrain is relatively flat, performance is comparable to the current automotive approaches. However, on Routes 3 and 4, which involve ravines and trail devia-tions, performance degrades sharply. ORORA in particular fails to complete Route 4, while CFEAR accumulates large trajectory errors despite producing plausible local estimates. Incorporating motion compensation (Radar-KISSICP) re-duces absolute trajectory error in several cases, but the sparse nature of radar pointclouds leads to unstable nearest-neighbor associations. The addition of IMU preintegration (Radar-IMU) further improves robustness, particularly in the ravine section of Route 3, where it successfully recovers vertical displacement that radar-only models cannot observe (Fig. 4). These improvements demonstrate the importance of inertial priors for SE (3) motion, even in radar-dominant pipelines. 0 200 400 600 800 1000  
+
+> X(m)
+> −800
+> −600
+> −400
+> −200 0200
+> Y (m)
+> Ground Truth Radar-KISSICP Radar-IMU CFEAR ORORA
+
+(a) Route 1 −300 −200 −100 0 100 200  
+
+> X(m)
+> −50 050 100 150 200 250 300
+> Y (m)
+> Ground Truth Radar-KISSICP Radar-IMU CFEAR ORORA
+
+(b) Route 3 0 200 400 600 800 1000  
+
+> X(m)
+> −200
+> −100 0100 200 300
+> Y (m)
+> Ground Truth Radar-KISSICP Radar-IMU CFEAR ORORA
+
+(c) Route 4 Fig. 4: Estimated trajectories from current RADAR odometry engines and our alternative methods 
+
+C. Comparative Insights 
+
+From the combined results, several trends emerge: −200 0 200 400 600      
+
+> X(m)
+> −400
+> −200 0200 400 600
+> Y (m)Ground Truth
+> 0.296 .0191 .90200 400 600 800 1000
+> X(m)
+> −100 0100 200 300
+> Y (m)Ground Truth 0.495 .2190 .1
+
+(a) Route 1 with trajectory from ORORA. (b) Route 4 with trajectory from CFEAR. Fig. 5: Trajectory plots with overlayed Relative Pose Error  
+
+> •
+
+Planar vs. non-planar motion: Both CFEAR and ORORA perform strongly in SE (2), but degrade when pitch/roll are introduced.  
+
+> •
+
+Failure cases: Ravine traversals expose the vulnerabil-ity of radar-only pipelines, with ground returns domi-nating scans and producing catastrophic drift.  
+
+> •
+
+Proposed Solutions: Radar-KISSICP highlights the role of motion compensation in reducing planar bias, while Radar-IMU demonstrates that even simple IMU integration significantly stabilizes trajectory estimation in SE (3).Overall, these results emphasize that state-of-the-art radar odometry engines, though effective in structured environ-ments, do not generalize reliably to unstructured terrain. Off-road performance requires either inertial integration or more robust approaches to handle 3D geometry and radar artifacts. V. D ISCUSSION 
+
+A. Urban Success Does Not Transfer to Off-road 
+
+Our experiments confirm that current radar odometry engines achieve strong performance on automotive datasets, where motion is largely constrained to SE (2). In these set-tings, both CFEAR and ORORA estimate relative transforms reliably and produce trajectories with low drift. However, when applied to off-road sequences from the GO dataset, performance drops sharply. To better understand why current RADAR odometry methods show effectiveness while esti-mating relative transforms, but yield unfavorable trajectory estimates and therefore, higher absolute trajectory errors, we plot the relative pose error onto the trajectory in Figure 5. Here we can observe that except for two locations, the relative pose is accurately estimated. However, at these two locations, the error is significant enough to disturb the rest of the trajectory estimate. The RADAR measurements at this location are shown in Figure 6, with Cen2018 as the feature detector. CFEAR shows robustness to a limit in this scenario, likely due to using scan-to-keyframe matching than sequential matching. In a scenario with more foliage and more deviations in to off-road areas like Route 4, these occurrences can be more catastrophic (Figure 5 (b)).The difference stems from frequent pitch and roll excitations caused by rough terrain. In SE (3) conditions, ground returns become a persistent part of the radar measurement rather than removable outliers, breaking the assumptions underlying urban automotive pipelines. The above effect is not isolated to offroad trajectories, and can be found in automotive sequences as well. From figures 3 we can see the differences in the planarness and hence the aggressiveness of motion. A common contribution comes from pitching of the vehicle which is found in both the automotive and offroad sequences. In the offroad sequences, this can occur due to terrain, and with the automotive datasets this can be seen when the vehicle stops or starts due to heave. The difference here lies in the rate and magnitude of this pitching. In the automotive sequences, both current engines incorporate some method to discard the effects of these ground returns. ORORA uses a graph-based pruning approach to discard false matches arising from these ground returns, and CFEAR uses a point-to-line error metric with keyframing to either discard associations and use better matching candidates. Additionally, we find that these methods are effective in offroad scenarios as well, while this pitching motion is within a certain limit. To support this, we show an isolated section from Route 4, with trajectories for CFEAR, Radar-KISSICP and Radar-IMU in Figure 8. 
+
+B. Failure Modes 
+
+The key consequence of SE (3) motion is that ground returns can no longer be safely discarded as outliers. For CFEAR, which depends on consistent feature matching, failure begins when stable features are absent and ICP associations become ill-conditioned. This initiates a cycle of false matches, poor pose updates, and map corruption. ORORA avoids some of these issues by pruning outliers more aggressively, but in practice this can also remove useful matches, limiting robustness. 
+
+C. Mitigation 
+
+Our intention with Radar-KISSICP and Radar-IMU is to explore possible methods by which we can overcome these issues. Radar-KISSICP and Radar-IMU provide additional insight into these failure modes. Radar-KISSICP applies 
+
+SO (3) motion compensation by synchronizing radar sweeps with IMU orientations. This generates sparse but 3D-aware pointclouds that reduce the planar bias of standard pipelines. However, because these features depend on the radar pose, they are not spatially consistent, which leads to false feature accumulation in the map. This effect is visible in Route 3 during a ravine traversal. Before entering the ravine, many features are visible which are both spatially well dispersed and distinct by intensity. However, once the warthog enters the ravine, none of these features are visible, and the intensity returns from the radar are instead populated with reflections from the ravine walls (Fig. 9). Without compensation, these returns project onto the same plane as prior scans and appear valid to ICP, compounding the drift. These would also lie well within the threshold for KNN matching, given the initial guess coming from a constant velocity model. Radar-IMU mitigates this by introducing a full SE (3) prior via IMU preintegration. Even without bias correction, the in-ertial estimate captures vertical displacement that radar alone cannot observe. This additional information helps reject false correspondences and improves recovery in difficult sections. In the same ravine sequence, Radar-IMU is able to recover where Radar-KISSICP diverges (Fig. 7), underscoring the importance of inertial cues in off-road radar odometry. 
+
+D. Lessons Learned 
+
+From these experiments, several lessons emerge. First, radar odometry methods that perform well in planar domains are brittle under SE (3) terrain, where ground returns form an inseparable part of the signal. Second, isolated local errors can propagate to global drift, meaning robustness to rare but severe conditions is as important as average-case accuracy. Finally, our highlight two promising directions: motion compensation to reduce planar assumptions, and in-ertial integration to stabilize trajectory estimation. Together, t = 0 s t + 250 ms t + 500 ms t + 750 ms t + 1000 ms t + 1250 ms 
+
+Fig. 6: Heavy pitching from portion of Route 0 in the GO dataset Ravine 
+
+Fig. 7: Isolated trajectory from Route 3 of the GO dataset. The black arrow shows the location of the ravine. 
+
+Fig. 8: Trajectory plots from Radar-KISSICP, CFEAR, Radar-IMU with groundtruth, inset RGB image of the area traversed in this isolated sequence these findings point to the need for richer sensing (e.g., 3D radar) and tighter multi-sensor fusion to achieve reliable off-road localization. VI. CONCLUSIONS In this paper, we presented a systematic evaluation of radar odometry in off-road environments. While state-of-the-art methods such as CFEAR and ORORA achieve near LiDAR-level accuracy on urban, largely planar datasets, our experiments demonstrate that their assumptions break down when extended to SE (3) terrain. Through experiments on the Great Outdoors (GO) dataset, we showed that pitch/roll ex-citation, terrain-induced ground returns, and sparse features lead to significant trajectory drift, even when relative motion estimates remain locally accurate. To better understand these limitations, we introduced two baselines. Radar-KISSICP incorporates an SO (3) motion compensation step, revealing how planar assumptions con-tribute to false correspondences. Radar-IMU extends this Fig. 9: Camera images and radar pointclouds from Route 3. Left: The Warthog is on level ground at the edge of the ravine and the radar pointcloud is well populated and feature rich with surrounding trees. Right: As the warthog goes further into the ravine, these features are no longer visible until the warthog reaches the deepest point. Here, the radar returns are from the walls of the ravine, and none of the previous features are visible. by adding IMU preintegration, which provides vertical dis-placement awareness and recovers trajectories in cases where radar-only pipelines fail. While neither baseline is intended as a new algorithm, both highlight critical factors for robust radar odometry in unstructured terrain. From this evaluation, we draw several lessons. First, ground returns in off-road scenarios must be treated as integral parts of the measurement rather than removable outliers. Second, robustness to isolated but severe failures is as important as average-case accuracy, since small local errors can propagate to catastrophic global drift. Finally, inertial cues and richer sensing modalities are essential to bridge the gap between radar’s robustness to adverse weather and the geometric complexity of natural environments. We believe this work provides both a benchmark and a diagnostic perspective for future research in off-road radar lo-calization. Promising directions include the use of 3D radar, learned denoising and feature selection, and tighter multi-sensor fusion with IMU, LiDAR and visual/LWIR cameras. By identifying and analyzing the key failure modes of current methods, our study lays the groundwork for more resilient radar-based localization in unstructured environments. ACKNOWLEDGMENT Research reported in this paper was sponsored in part by the DEVCOM Army Research Laboratory under Coop-erative Agreements W911NF-24-2-0023 (SARA CRA) and W911NF-23-2-0211. The views and conclusions contained in this document are those of the authors and should not be in-terpreted as representing the official policies, either expressed or implied, of the DEVCOM Army Research Laboratory or the U.S. Government. The U.S. Government is authorized to reproduce and distribute reprints for Government purposes, notwithstanding any copyright notation herein. REFERENCES [1] K. Harlow, H. Jang, T. D. Barfoot, A. Kim, and C. Heckman, “A New Wave in Robotics: Survey on Recent MmWave Radar Applications in Robotics,” IEEE Transactions on Robotics , vol. 40, pp. 4544–4560, 2024. [Online]. Available: https://ieeexplore.ieee.org/document/10683889 [2] D. Adolfsson, M. Magnusson, A. Alhashimi, A. J. Lilienthal, and H. Andreasson, “Lidar-Level Localization With Radar? The CFEAR Approach to Accurate, Fast, and Robust Large-Scale Radar Odometry in Diverse Environments,” IEEE Transactions on Robotics ,vol. 39, no. 2, pp. 1476–1495, Apr. 2023. [Online]. Available: https://ieeexplore.ieee.org/document/9969174 [3] H. Lim, K. Han, G. Shin, G. Kim, S. Hong, and H. Myung, “ORORA: Outlier-Robust Radar Odometry,” in 2023 IEEE International Conference on Robotics and Automation (ICRA) , May 2023, pp. 2046–2053. [Online]. Available: https://ieeexplore.ieee.org/document/10160997 [4] D. Barnes, M. Gadd, P. Murcutt, P. Newman, and I. Posner, “The Oxford Radar RobotCar Dataset: A Radar Extension to the Oxford RobotCar Dataset,” in 2020 IEEE International Conference on Robotics and Automation (ICRA) ,May 2020, pp. 6433–6438, iSSN: 2577-087X. [Online]. Available: https://ieeexplore.ieee.org/document/9196884 [5] G. Kim, Y. S. Park, Y. Cho, J. Jeong, and A. Kim, “MulRan: Multimodal Range Dataset for Urban Place Recognition,” in 2020 IEEE International Conference on Robotics and Automation (ICRA) ,May 2020, pp. 6246–6253, iSSN: 2577-087X. [Online]. Available: https://ieeexplore.ieee.org/document/9197298 [6] K. Burnett, D. J. Yoon, Y. Wu, A. Z. Li, H. Zhang, S. Lu, J. Qian, W.-K. Tseng, A. Lambert, K. Y. Leung, A. P. Schoellig, and T. D. Barfoot, “Boreas: A multi-season autonomous driving dataset,” The International Journal of Robotics Research ,vol. 42, no. 1-2, pp. 33–42, Jan. 2023. [Online]. Available: https://journals.sagepub.com/doi/10.1177/02783649231160195 [7] I. Vizzo, T. Guadagnino, B. Mersch, L. Wiesmann, J. Behley, and C. Stachniss, “Kiss-icp: In defense of point-to-point icp – simple, accurate, and robust registration if done the right way,” IEEE Robotics and Automation Letters , vol. 8, no. 2, pp. 1029–1036, 2023. [8] P. Jiang, K. Viswanath, A. Nagariya, G. Chustz, M. Wigness, P. Osteen, T. Overbye, C. Ellis, L. Quang, and S. Saripalli, “Go: The great outdoors multimodal dataset,” 2025. [Online]. Available: https://arxiv.org/abs/2501.19274 [9] P.-C. Kung, C.-C. Wang, and W.-C. Lin, “A Normal Distribution Transform-Based Radar Odometry Designed For Scanning and Automotive Radars,” in 2021 IEEE International Conference on Robotics and Automation (ICRA) , May 2021, pp. 14 417–14 423, iSSN: 2577-087X. [Online]. Available: https://ieeexplore.ieee.org/document/9561413 [10] M. Rapp, M. Barjenbruch, M. Hahn, J. Dickmann, and K. Dietmayer, “Probabilistic ego-motion estimation using multiple automotive radar sensors,” Robotics and Autonomous Systems , vol. 89, pp. 136–146, 2017. [Online]. Available: https://www.sciencedirect.com/science/article/pii/S0921889016300525 [11] M. Holder, S. Hellwig, and H. Winner, “Real-time pose graph slam based on radar,” in 2019 IEEE Intelligent Vehicles Symposium (IV) ,2019, pp. 1145–1151. [12] D. Kellner, M. Barjenbruch, J. Klappstein, J. Dickmann, and K. Di-etmayer, “Instantaneous ego-motion estimation using doppler radar,” in 16th International IEEE Conference on Intelligent Transportation Systems (ITSC 2013) , 2013, pp. 869–874. [13] C. L. Gentil, L. Brizi, D. Lisus, X. Qiao, G. Grisetti, and T. D. Barfoot, “DRO: Doppler-Aware Direct Radar Odometry.” [14] D. Barnes and I. Posner, “Under the radar: Learning to predict robust keypoints for odometry estimation and metric localisation in radar,” CoRR , vol. abs/2001.10789, 2020. [Online]. Available: https://arxiv.org/abs/2001.10789 [15] K. Burnett, D. J. Yoon, A. P. Schoellig, and T. D. Barfoot, “Radar odometry combining probabilistic estimation and unsupervised feature learning,” in Robotics: Science and Systems , 2021. [16] D. Lisus, J. Laconte, K. Burnett, Z. Zhang, and T. D. Barfoot, “Pointing the way: Refining radar-lidar localization using learned icp weights,” 2025. [Online]. Available: https://arxiv.org/abs/2309.08731 [17] D. Lisus, K. Burnett, D. J. Yoon, R. Poulton, J. Marshall, and T. D. Barfoot, “Are Doppler Velocity Measurements Useful for Spinning Radar Odometry?” IEEE Robotics and Automation Letters ,vol. 10, no. 1, pp. 224–231, Jan. 2025. [Online]. Available: https://ieeexplore.ieee.org/document/10766427 [18] S. Agarwal, K. Mierle, and T. C. S. Team, “Ceres Solver,” 10 2023. [Online]. Available: https://github.com/ceres-solver/ceres-solver [19] S. H. Cen and P. Newman, “Precise Ego-Motion Estimation with Millimeter-Wave Radar Under Diverse and Challenging Conditions,” in 2018 IEEE International Conference on Robotics and Automation (ICRA) , May 2018, pp. 6045–6052, iSSN: 2577-087X. [Online]. Available: https://ieeexplore.ieee.org/document/8460687 [20] E. Rublee, V. Rabaud, K. Konolige, and G. Bradski, “ORB: An efficient alternative to SIFT or SURF,” in 
+
+2011 International Conference on Computer Vision , Nov. 2011, pp. 2564–2571, iSSN: 2380-7504. [Online]. Available: https://ieeexplore.ieee.org/document/6126544 [21] D. Lowe, “Object recognition from local scale-invariant features,” in Proceedings of the Seventh IEEE International Conference on Computer Vision , vol. 2, Sept. 1999, pp. 1150–1157 vol.2. [Online]. Available: https://ieeexplore.ieee.org/document/790410 [22] R. A. Rossi, D. F. Gleich, A. H. Gebremedhin, and M. M. A. Patwary, “Parallel Maximum Clique Algorithms with Applications to Network Analysis and Storage,” Dec. 2013, arXiv:1302.6256 [cs]. [Online]. Available: http://arxiv.org/abs/1302.6256 [23] C. Forster, L. Carlone, F. Dellaert, and D. Scaramuzza, IMU preinte-gration on Manifold for Efficient Visual-Inertial Maximum-a-Posteriori Estimation , 2015. [24] F. Dellaert and G. Contributors, “borglab/gtsam,” May 2022. [Online]. Available: https://github.com/borglab/gtsam) [25] “Warthog Unmanned Ground Vehicle Robot - Clearpath.” [Online]. Available: https://clearpathrobotics.com/warthog-unmanned-ground-vehicle-robot/ [26] A. Geiger, P. Lenz, C. Stiller, and R. Urtasun, “Vision meets robotics: The KITTI dataset,” The International Journal of Robotics Research ,vol. 32, no. 11, pp. 1231–1237, Sept. 2013. [Online]. Available: https://journals.sagepub.com/doi/10.1177/0278364913491297 [27] M. Grupp, “evo: Python package for the evaluation of odometry and slam.” https://github.com/MichaelGrupp/evo, 2017.
