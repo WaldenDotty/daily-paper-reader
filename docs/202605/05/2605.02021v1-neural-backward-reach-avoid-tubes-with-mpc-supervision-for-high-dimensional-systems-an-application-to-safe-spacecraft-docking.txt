@@ -1,0 +1,366 @@
+Title: Neural Backward Reach-Avoid Tubes with MPC Supervision for High-Dimensional Systems: An Application to Safe Spacecraft Docking
+
+URL Source: https://arxiv.org/pdf/2605.02021v1
+
+Published Time: Tue, 05 May 2026 01:36:14 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# Neural Backward Reach-Avoid Tubes with MPC Supervision for High-Dimensional Systems: An Application to Safe Spacecraft Docking 
+
+Santiago Thorup 1,∗, Luca Castelletto 1,∗, Zeyuan Feng 1, and Somil Bansal 1
+
+Abstract — Autonomous spacecraft docking requires control policies that simultaneously ensure collision avoidance and target reachability under coupled, high-dimensional transla-tional–rotational dynamics. Hamilton–Jacobi (HJ) reachability provides formal reach–avoid guarantees, but classical solvers are limited to low-dimensional systems. Learning-based ap-proaches have begun to scale HJ analysis, yet they struggle in reach-avoid settings, especially where goal and failure sets are tightly coupled, as in docking. We propose a learning-based Backward Reach-Avoid Tube (BRAT) framework that addresses this challenge by tightly integrating HJ structure with MPC-based supervision. In the offline phase, we train a neural approximation of the HJ value function using PDE-based losses augmented with curriculum-driven MPC supervision, which provides informative value targets and stabilizes training in regions where purely PDE-based methods fail. In the online phase, the learned value function is deployed through two real-time controllers: (i) a value gradient-driven controller, and (ii) a value-function-augmented terminal MPC that explicitly enforces reachability at the horizon. We evaluate the proposed method on a 6D planar docking problem against grid-based ground truth and then scale to the full 13D system. Across both settings, our approach outperforms existing methods in success rate and computational efficiency. 
+
+I. I NTRODUCTION 
+
+Autonomous spacecraft docking is a critical capability for on-orbit servicing, debris removal, and space station resup-ply [1]. As missions grow in complexity, guaranteed safety during proximity operations has become a fundamental re-quirement [2]. A successful docking controller must steer the chaser into a small capture window while avoiding a collision with the target body, under tightly coupled translational and rotational dynamics. Classical approaches rely on optimization-based control, including LQR [3], fuel-optimal convex programming [4], and MPC-based trajectory optimization [5]. While effec-tive, these methods incur significant online computational cost, especially for power and compute-gated satellites, and lack global safety guarantees. Reinforcement learning ap-proaches [6], [7] improve execution speed but similarly do not provide formal safety certificates. Safety filter architec-tures [8], [9] can enforce safety constraints on a nominal controller, but do not guarantee task completion and can lead to degraded performance. Hamilton–Jacobi (HJ) reachability provides a principled framework for certifying reach–avoid behaviors [10], [11].       
+
+> ∗Equal contribution
+> 1Department of Aeronautics and Astronautics at Stanford University, USA: {sthorup4, lucacast, zeyuanf, somil }@stanford.edu The implementation can be found on
+> https://github.com/santiagothorup/reachAvoidDocking
+
+The resulting value function characterizes all states from which the system can safely reach the goal – also referred to as the backward reach-avoid tube (BRAT) of the system. The value function gradient yields the optimal feedback policy. While HJ methods have been applied to spacecraft proximity operations in low dimensions [12], [13], classical grid-based solvers suffer from the curse of dimensionality, limiting their practical use to five or six dimensions [10], [14]. This limitation is particularly restrictive for spacecraft docking, where full translational–rotational dynamics lead to a 13D system. Learning-based methods aim to overcome this limitation by approximating the HJ value function with neural net-works [15], [16]. For instance, DeepReach [15] leverages sinusoidal representations [17] to minimize HJ PDE resid-uals, and subsequent work has shown that augmenting this objective with MPC-generated value targets can significantly improve training robustness [18]. However, these approaches have primarily been demonstrated on avoid-only problems and struggle in reach–avoid settings with tightly coupled goal and failure sets. Practically speaking, reach–avoid problems introduce additional learning challenges beyond avoid-only settings. The associated HJ PDE (or variational inequality) involves nested min–max operators that produce flat gradi-ents away from the active boundary, leaving large regions of the state space weakly supervised. Moreover, BRAT typically expands over time, requiring the learned value function to accurately track a moving and growing decision boundary – unlike backward reachable tubes (BRTs), which typically converge within short horizons. These difficulties make na¨ ıve PDE-based training unstable and often lead to suboptimal or unsafe policies. In this work, we address these challenges by tightly integrating MPC-based supervision into the learning of reach–avoid value functions. Our framework combines PDE residual-based training with curriculum-driven MPC-generated value labels and a train–verify–refine procedure to enable stable learning in high-dimensional systems. The learned value function is then deployed through a suite of real-time controllers for safe and efficient docking. To summarize, our contributions are as follows: 1) We extend MPC-supervised DeepReach [18] to reach–avoid problems, introducing a curriculum-based training strategy with a train-verify–refine loop for stable long-horizon value function learning. 2) We develop two real-time controllers from the learned value function for deployment: a BRAT-gradient-driven controller and a value-function-augmented ter-       
+
+> arXiv:2605.02021v1 [cs.RO] 3 May 2026 Fig. 1. Overview of the learning-based BRAT framework. Top-Left (Offline): MPC-generated guidance trajectories provide supervision labels that, combined with the PDE residual loss, train a neural network through a curriculum learning. Right (Online): An online BRAT gradient controller operating in convergence and precision phases, and an online MPC-terminal controller using the value function as a terminal cost are both backed by a least-restrictive safety filter to ensure safety. Bottom-left: Example 13D docking trajectories demonstrating a safe approach to the target.
+
+minal MPC, both supported by a least-restrictive safety filter to ensure safety. 3) We evaluate our approach on spacecraft docking across models of increasing fidelity: (a) a 6D system with grid-based ground truth comparison, and (b) the full 13D system, with goal sets derived from IDSS toler-ances [19]. 4) We show that our method outperforms MPC, Deep-Reach [15], and RL baselines [16] in both success rate and computational efficiency, while achieving faster docking than grid-based solutions. II. P ROBLEM STATEMENT 
+
+Consider a controlled dynamical system ˙x = f (x, u ) with state x ∈ Rn, control u ∈ U , a goal set G = {x : g(x) ≤ 0}
+
+defined by a Lipschitz-continuous reach function g, and a failure set L = {x : ℓ(x) ≤ 0} defined by an avoid function ℓ. Given a problem horizon T > 0, our objectives are twofold. 
+
+1) Compute the Backward Reach-Avoid Tube (BRAT): the set of all initial states from which the system can reach G
+
+while avoiding L within horizon T :
+
+R(T ) = x0 | ∃ u(·) ∈ U [0 ,T ], ∃ s ∈ [0 , T ] : 
+
+ξux0 (s) ∈ G , ξux0 (τ ) /∈ L ∀ τ ∈ [0 , s ] , (1) where ξux0 (·) is the trajectory from x0 under control u(·).
+
+2) Synthesize the optimal reach-avoid policy: Although 
+
+R(T ) is necessarily computed over a finite horizon T , we seek a policy u∗(x) that approximates the infinite-horizon reach-avoid behavior, driving the system along a collision-free trajectory to the goal from initial states x0 ∈ R (∞)
+
+even when they lie outside the T -horizon tube. In this work, we apply these objectives to autonomous spacecraft docking, where a chaser satellite must navigate into a narrow capture window while avoiding collision with a target satellite in a 400 km circular orbit. The goal set encodes simultaneous position, velocity, attitude, and angular rate tolerances for a successful dock, while the failure set is the target body inflated by a collision buffer. This problem is particularly challenging for learning-based reachability because the goal and failure sets are tightly coupled in physical space—the chaser must pass close to the obstacle to reach the docking port—and the coupled translational-rotational dynamics span 13 dimensions, far beyond the reach of grid-based solvers, necessitating the development of more scalable reachability methods for reach-avoid problems. III. P RELIMINARIES 
+
+A. HJ Value Function for BRATs 
+
+Given a trajectory ξux0 (·) from initial state x0 at time t
+
+under control u(·), the reach-avoid cost functional encodes whether the system reaches the goal without entering the failure set: 
+
+J(x, u (·), t ) = min   
+
+> τ1∈[t,T ]
+
+max 
+
+n
+
+g ξ(τ1), max 
+
+> τ2∈[t,τ 1]
+
+−ℓ ξ(τ2) o
+
+.
+
+(2) The outer minimization over τ1 searches for the best time to reach the goal, while the inner maximization over τ2
+
+penalizes any failure-set violation prior to arrival. The value function is the optimal cost achievable over all admissible controls: 
+
+V (x, t ) = min  
+
+> u(·)∈U [t,T ]
+
+J(x, t, u (·)) . (3) The value function satisfies the reach-avoid variational inequality (VI) [20], [21]: 
+
+min 
+
+n
+
+max 
+
+n ∂V ∂t +H(x, ∇xV ), V −g(x)
+
+o
+
+, V +ℓ(x)
+
+o
+
+= 0 ,
+
+(4) for t ∈ [0 , T ), with the boundary condition V (x, T ) =max  g(x), −ℓ(x), which is non-positive if and only if 
+
+x ∈ G and x / ∈ L . The Hamiltonian is given as 
+
+H(x, p ) = min  
+
+> u∈U
+
+p⊤f (x, u ), (5) and p = ∇xV is the costate. The inner max in (4) ensures either the PDE evolution holds or V is capped by the reach function when the goal has already been reached. The outer 
+
+min ensures V ≥ − ℓ, enforcing obstacle avoidance. The zero sub-level set of V recovers the BRAT: R(t) = 
+
+{x : V (x, t ) ≤ 0}, and its gradient yields the optimal control. The optimal reach-avoid policy selects the control that drives the system toward the goal as quickly as possible while remaining safe. For control-affine dynamics f (x, u ) = 
+
+f0(x) + B(x)u, minimizing the Hamiltonian (5) yields a closed-form bang-bang solution: 
+
+u∗ 
+
+> i
+
+= −¯ui · sign  (B(x)⊤∇xV )i
+
+. (6) 
+
+B. DeepReach 
+
+DeepReach [15] approximates the HJ value function with a SIREN neural network [17] ϕθ (x, t ) trained by minimizing the PDE residual of (4) at sampled collocation points. By replacing the exponentially scaling grid with a fixed-size network, DeepReach circumvents the curse of dimensionality and has been demonstrated on systems up to 10 dimensions. However, for reach-avoid problems, the nested min-max structure of the VI produces vanishingly small training gradi-ents in regions far from the active boundary, causing slow and often inaccurate convergence—particularly when the goal and failure sets are geometrically complex or tightly coupled. These limitations motivate the MPC-supervised training and curriculum strategies developed in this work. IV. M ETHOD 
+
+A. Approach Overview 
+
+We build upon DeepReach [15] to train a neural value function that approximates the HJ reach-avoid solution (4) in high dimensions. However, standard DeepReach training fails on the reach-avoid docking problem for two reasons. First, the nested min-max structure of the VI produces vanishingly small training gradients over most of the state space, leaving the network under-constrained far from the active boundary ( spatial challenge ). Second, learning the full-horizon value function from the start causes errors at short horizons to compound into longer-horizon solutions, destabilizing training ( temporal challenge ). Our framework addresses these through two complemen-tary innovations. To solve the spatial challenge, we aug-ment the PDE loss with MPC-generated reach-avoid cost labels that provide direct supervision where the VI residual gives a weak signal, extending the MPC-supervised frame-work of [18] from avoid-only to reach-avoid semantics. To solve the temporal challenge, we introduce a train-verify-refine cycle that gates curriculum advancement on validation against MPC cost estimates and regenerates labels using the current policy as a warm start, creating a feedback loop between network quality and supervision quality. These two innovations are tightly coupled: MPC labels without verification accumulate stale supervision at longer horizons, while the verification cycle without MPC labels has no meaningful signal to validate against. To deploy the learned value function online, we develop two controllers tailored to the reach-avoid structure, discussed in IV-D. 
+
+Algorithm 1 MPC-Supervised Neural BRAT Training 
+
+Require: Dynamics f , target function g(x), avoid function 
+
+l(x), time horizon T 
+
+> 1:
+
+Initialize SIREN network ϕθ 
+
+> 2:
+
+Generate initial MPC cost labels  
+
+> 3:
+
+for epoch = 1 , 2, . . . , N C do  
+
+> 4:
+
+tmax ← curriculum( epoch ) {Eq. (11) } 
+
+> 5:
+
+Sample PDE collocation points and MPC-labeled points  
+
+> 6:
+
+Step optimizer on wpde Lpde + wmpc Lmpc {Eqs. (9– 10) } 
+
+> 7:
+
+if curriculum checkpoint reached then  
+
+> 8:
+
+Validate Vθ on held-out x; advance if converged  
+
+> 9:
+
+Regenerate MPC with policy as warm-start  
+
+> 10:
+
+end if  
+
+> 11:
+
+end for 
+
+B. Offline Training 
+
+We aim to learn the reach-avoid value function with a SIREN network [17] ϕθ (x, t ) and an exact-boundary-condition parameterization [22], [23]: 
+
+Vθ (x, t ) = ϕθ (x, t ) · (T − t) + max  g(x), −ℓ(x). (7) The factor (T − t) guarantees boundary condition satis-faction (i.e., Vθ (x, T ) = max  g(x), −ℓ(x) for any net-work weights, eliminating the boundary condition loss — particularly important when the goal set occupies a vanish-ingly small fraction of the state space. The network is trained by minimizing a combined loss: 
+
+L = wpde · L pde + wmpc · L mpc . (8) The PDE loss penalizes violations of the VI (4): 
+
+Lpde = 1
+
+NpNp
+
+X
+
+> i=1
+
+min 
+
+
+
+max 
+
+ ∂V ∂t + H, V − g
+
+
+
+, V + ℓ
+
+
+
+.
+
+(9) The MPC supervision loss provides direct value-function labels generated via perturbation-based shooting [18]: 
+
+Lmpc = 1
+
+NmNmX
+
+> j=1
+
+|Vθ (xmj , t mj ) − V mpc  
+
+> j
+
+|, (10) with an additional false-positive penalty when V mpc  
+
+> j
+
+> 0
+
+but Vθ ≤ 0, discouraging the network from labeling unsafe states as reachable. The MPC labels are generated using the sampling-based solver from [18], adapted to utilize the reach-avoid cost function defined in (2). Labels are concentrated near the goal via importance sampling across four strata, ranging from near-goal perturbations to broad uniform cov-erage. 
+
+C. Train-Verify-Refine Cycle 
+
+Standard DeepReach employs a linear curriculum that gradually expands the collocation time range from [T, T ] to 
+
+[0 , T ] during training. We retain this schedule: 
+
+tmin (epoch ) = T − T · α · min 
+
+ epoch 
+
+Nc
+
+, 1
+
+
+
+, (11) where α > 1 provides a slight overshoot for stability and Nc
+
+is the total number of training epochs. However, a passive linear schedule is insufficient for reach-avoid problems: the BRAT grows monotonically with the horizon, so errors at short horizons propagate into and corrupt longer-horizon solutions if the curriculum advances prematurely. We replace this passive schedule with an active feedback loop. The horizon is divided into equally spaced checkpoints. At each checkpoint, training pauses and the current value function is evaluated against MPC cost estimates on a held-out set of states. If the validation error exceeds a threshold, training continues at the current horizon until accuracy improves. Only once validation passes does the curriculum advance to the next checkpoint. Crucially, at each checkpoint, we also regenerate the MPC supervision labels. Rather than re-solving from scratch, the MPC trajectories are warm-started from the current learned policy, so that as the network improves, the quality of the supervision labels improves in tandem. This creates a bootstrapping loop: a better value function produces better warm-start trajectories, which yield more accurate MPC labels, which further refine the value function. Without this coupling, supervision labels generated early in training become increasingly stale as the horizon grows, degrading convergence. We find this feedback mechanism critical for stable training at the 13D scale. 
+
+D. Online Controllers 
+
+Because the training horizon T is finite, states outside the learned BRAT ( V (x, 0) > 0) have no formal guarantee of reaching the goal within T . However, the value function gradient still provides useful control information beyond the BRAT boundary. Our controllers exploit this by operating in two phases, augmented by a safety filter. 
+
+1) BRAT Controller: Phase 1 (Convergence): When 
+
+V (x, 0) > 0, the state lies outside the trained BRAT. The controller queries the value function at t = 0 (full horizon) and applies bang-bang control (6) using the gradient direc-tion, steering the chaser toward the BRAT interior. Although the value function does not certify reachability in this region, the gradient still points toward decreasing V , providing a  
+
+> Fig. 2. Positional slice BRAT overlap comparison. The learned zero-level set (solid) closely matches the grid-based solution (dashed).
+
+meaningful descent direction. In regions where the value function is locally flat, PD feedback toward the goal state is blended in to maintain control authority. 
+
+Phase 2 (Precision): Once V (x, 0) ≤ 0, the state has entered the BRAT and safe docking is achievable within T .The controller performs a minimum-time search: it finds the largest t∗ such that V (x, t ∗) ≤ 0 and applies bang-bang control at this tighter time slice. As the chaser approaches docking, t∗ increases toward T , progressively narrowing the effective horizon and yielding more precise terminal guidance. The transition from Phase 1 to Phase 2 is one-way. 
+
+2) Terminal MPC Controller: This controller uses short-horizon MPC with the learned value function V (x, t ) as a differentiable terminal cost. The terminal cost transitions from V (x, 0) in Phase 1 to V (x, t ∗) in Phase 2 via the same minimum-time search, combining the computational tractability of short-horizon planning with the long-horizon reach-avoid information encoded in V .
+
+Least-Restrictive Safety Filter In Phase 1, the chaser operates outside the BRAT where the controller does not guarantee collision-free behavior. A separately trained avoid-only BRT provides a least-restrictive safety layer: when 
+
+Vavoid (x) drops below a margin γ, the nominal control is overridden with bang-bang that maximizes Vavoid , driving the chaser away from the obstacle. The filter intervenes only when necessary, preserving the nominal controller’s authority otherwise. V. R ESULTS 
+
+A. Evaluation Overview & Setup 
+
+The objective of our evaluation is fourfold. First, we evaluate the geometric accuracy of the learned value func-tion against grid-based ground truth. Second, we assess the safety and liveness of the resulting control policy. Third, we quantify the framework’s offline and online computational efficiency. Finally, we compare our approach against existing optimal and learning-based controllers. To answer these questions, we evaluate across two case studies: a 6D planar model and the full 13D orbital model. We evaluate all controllers via closed-loop Monte Carlo simulations. Initial conditions are sampled uniformly from the state space and are filtered to exclude states inside the obstacle or already at the goal. Each simulation runs until docking success, collision, or a timeout of 90s in 6D, and 120s in 13D. We report: docking rate , collision rate , timeout rate , mean docking time , mean control effort (P ∥u∥∆t) over successful trials, mean time per step (single control computation), and 
+
+mean wall time (total simulation duration including all steps). All experiments were performed on a workstation equipped with an AMD Ryzen Threadripper PRO 5965WX (24-core) CPU, 128GB RAM, and two NVIDIA RTX 4090 GPUs. 
+
+Training Setup. The neural value function uses a SIREN  
+
+> Fig. 3. State comparison between grid-based and learned value function controllers for an IC inside the 25 s grid-based BRAT but outside the 10 s learned BRAT.
+
+MLP [17] with 3 hidden layers of 512 units each. The training horizon is T = 10 s for both the 6D and 13D implementations. To ensure robust supervision, the MPC dataset is regenerated periodically. Each regeneration cycle produces 150 ,000 trajectory rollouts for the 6D model and 
+
+200 ,000 rollouts for the 13D model. Since the computational cost of data generation scales with the curriculum refinement horizon, we report the timing for the most expensive step: generating the full 10 s horizon dataset requires an average of 14 minutes for the 6D model and 46 minutes for the 13D model. Overall, the complete offline training process scales with the complexity of the system dynamics, taking approximately 12 hours for the 6D model and 28 hours for the full 13D model. 
+
+Baselines. In addition to the BRAT and Terminal MPC controllers (Sec. IV-D), we evaluate four baselines. MPC Baseline : Receding-horizon MPC without a learned value function. This controller uses multi-start gradient shooting with a reach-avoid cost function over a 2 s planning horizon. 
+
+Vanilla DeepReach : Unmodified DeepReach [15] trained with PDE residual minimization alone, without MPC su-pervision or curriculum refinement. RL Reach-Avoid : The reach-avoid reinforcement learning controller from Hsu et al. [16], which learns a reach-avoid value function via model-free RL with safety and liveness guarantees. Grid-Based Controller (6D only): Numerical ground truth via the 
+
+hj reachability library [24]. The 6D problem is de-composed into a 4D translational and a 2D rotational subsys-tem, with combined value function V6D = max( V4D , V 2D )
+
+solved backward over 30 s. This decomposition is feasible because the CW translational and single-axis rotational dy-namics are decoupled in the planar model. A BRT safety filter, as defined in Sec IV-D, was used to supplement all baseline controllers. 
+
+B. Case Study 1: 6D Planar Docking 
+
+The 6D state is x = [ px, p y , v x, v y , θ, ω ]⊤, with Clohessy– Wiltshire translational dynamics [25] and single-axis rota-tional kinematics, under planar forces |ux,y | ≤ 20 N and torque |uθ | ≤ 1.5 N·m. The target body is a 6 × 3 mrectangle with a docking port extending below it. The goal set consists of states where the chaser is (i) positioned just below the docking port, (ii) nearly stationary relative to it, and (iii) aligned in orientation and angular rate for capture (goal attitude θg = π/ 2). Formally, this is encoded via the reach function g(x) = max( dpos , d vel , d att , d rate ), where each di ≤ 0 indicates satisfaction of the corresponding tolerance ( εp = 0 .1 m, εv = 0 .1 m/s, εθ = 0 .04 rad, εω =0.05 rad/s). The failure set is the target body and port, each inflated by the chaser’s bounding-circle radius rc ≈ 0.707 m. Since the CW dynamics are control-affine with constant B,the bang-bang control (6) is read directly from the value function gradient. We validate the learned 6D value function against the decomposed grid-based solution and compare closed-loop performance through four complementary analyses. 
+
+1) Volumetric Accuracy. Before evaluating closed-loop control performance, we assess the geometric fidelity of the learned value function. Visually, Fig. 2 compares a positional slice of the learned and grid-based BRATs, showing that the learned zero sub-level set closely approximates the grid-based boundary. To quantify this, we treat the zero sub-level set as a binary classifier: a state is labeled safe (positive) if it lies inside the BRAT ( V ≤ 0) and unsafe (negative) otherwise. We draw 5×10 5 states uniformly from a focused 6D evaluation region centered on the BRAT. This focused region ensures adequate sampling density near the reachable boundary. Table I compares each approximation against the grid-based value Vgrid at t = 0 s and report the True Positive Rate (TPR) and False Positive Rate (FPR). A high TPR indi-cates the learned BRAT is not overly conservative, recovering most of the reachable set. Conversely, a high FPR reveals over-optimism: the method incorrectly claims unreachable states as safe, which can weaken safety guarantees. 
+
+Remark 1: The grid-based baseline suffers from numeri-cal dissipation and discretization errors around sharp geome-tries like the docking port. Consequently, some reported FPs and FNs may actually reflect the continuous network resolv-Fig. 4. 6D controller comparison metrics across all controllers. TABLE I 6D V OLUMETRIC ACCURACY VS . G RID (t = 0 S, N = 5 ×10 5 )Method TPR (%) ↑ FPR (%) ↓      
+
+> Vanilla DeepReach 10.84 0.01
+> RL BRAT 95.58 58.52 Proposed DeepReach (ours) 81.12 0.15
+
+ing gradients that the coarse grid blurs out. We therefore rely on closed-loop Monte Carlo rollouts to definitively evaluate controller safety and liveness.  
+
+> Fig. 5. 6D docking time histogram. The learned BRAT controller achieves faster docking times than the grid-based solution due to discretization errors in the grid-based value function.
+
+2) Trajectory Optimality. Fig. 3 compares closed-loop trajectories from the learned BRAT controller and the grid-based controller, starting from an initial condition inside the 25 s grid-based BRAT but outside the 10 s learned BRAT. Despite operating with a shorter effective horizon, the learned controller closely tracks the grid-based trajectory across most state dimensions, demonstrating that the learned value function gradient produces near-optimal control actions even outside the training horizon. 
+
+3) Rollout Analysis. Table II (6D column) reports 10 ,000 -sample rollout results evaluating the controller from uni-formly sampled initial conditions (ICs). By drawing ICs uniformly from the full evaluation state space with the least-restrictive safety filter enabled, we demonstrate that the proposed controller effectively docks from arbitrary states—including those outside the trained BRAT. Crucially, this approach achieves high success rates without requiring a long training horizon, setting the stage for outperforming both numerical and learning-based baselines.                        
+
+> TABLE II BRAT R OLLOUT RESULTS (N= 10 ,000 UNIFORMLY SAMPLED IC S)Docking Collision Timeout Time/step Effort (%) (%) (%) (ms) (N ·s) 6D 99.94 0.01 0.05 10.74 780.97 13D 98.88 0.58 0.54 16.00 1115.41
+
+4) Controller Comparison. Table III compares all con-trollers over 500 shared initial conditions, and Fig. 4 sum-marizes the results. The proposed BRAT controller achieves a 99 .6% success rate, matching the performance of the grid-based ground truth ( 99 .8% ) while maintaining a strict 0.0% 
+
+collision rate. In contrast, the receding-horizon MPC base-line struggles with the non-convex reach-avoid landscape, yielding a 15 .8% collision rate and only 66 .6% success. The Vanilla DeepReach and RL baselines fail almost entirely (predominantly via timeout), underscoring the necessity of the proposed MPC supervision and curriculum refinement. While the Terminal MPC (T-MPC) achieves the lowest overall control effort ( 650 .47 N·s), it sacrifices online compu-tational efficiency. The pure BRAT controller operates with minimal computational overhead—requiring only a single forward pass through the SIREN network and one backward pass to compute the gradient at each control step—achieving a real-time execution speed of 10 .74 ms per step. In contrast, T-MPC and standard MPC require orders of magnitude more time per step due to online optimization overhead.     
+
+> TABLE III 6D C ONTROLLER COMPARISON (N= 500 ROLLOUTS )
+
+Metric BRAT T-MPC Grid MPC V-DR RL Success (%) 99.6 87.6 99.8 66.6 4.4 0.0 Collision (%) 0.0 0.0 0.0 15.8 1.8 4.0 Timeout (%) 0.4 12.4 0.2 17.6 93.8 96.0 Effort (N ·s) 829.10 650.47 854.89 866.32 1244.97 N/A Time/step (ms) 10.74 2246.85 13.91 5880.90 5.86 0.35 
+
+Dock time (s) 29.17 28.57 30.18 38.30 48.45 N/A Fig. 6. 13D controller comparison metrics across all applicable controllers. 
+
+5) Docking Time Optimality. Fig. 5 compares docking time distributions across all controllers against the grid-based BRAT. Interestingly, the learned BRAT controller achieves marginally faster mean docking times ( 29 .17 s) compared to the numerical ground truth ( 30 .18 s). This superior optimality can be attributed to the continuous nature of the neural value function, which mitigates the artificial dissipation and discretization errors inherent in the grid-based solution, par-ticularly when resolving the tight tolerances of the docking port goal set. 
+
+C. Case Study 2: 13D Orbital Docking 
+
+The full model adds a third spatial axis, unit-quaternion attitude, and three-axis angular velocity, giving x ∈
+
+R13 . Translational dynamics follow the 3D Hill–Clohessy– Wiltshire equations [25], [26] with body-to-LVLH force rotation; rotational dynamics follow Euler’s equations with quaternion kinematics. Control comprises body-frame forces 
+
+|Fi| ≤ 20 N and torques |τi| ≤ 1.5 N·m per axis. The goal set follows IDSS docking tolerances [19]: lateral position 
+
+≤ 0.10 m, lateral velocity ≤ 0.02 m/s, axial approach ve-locity ∈ [0 .03 , 0.10] m/s, attitude error ≤ 8.7◦, and angular rates 0.15 –0.4◦/s depending on axis. The failure set uses orientation-dependent inflation along the docking axis via the chaser cube’s support function, allowing the goal band to sit closer to the port when the chaser is properly aligned. Thrust is applied in the body frame while the value function gradient is expressed in LVLH, so the effective force coefficient is 
+
+R(q) ∇v V /m c and the torque coefficient is I−⊤ ∇ω V , with the bang-bang sign (6) taken on these transformed quantities. 
+
+1) Rollout Analysis. Table II (13D row) reports 10 ,000 -sample rollout results under the same IC regime as in 6D. The grid-based controller is excluded because the 13D state space is computationally intractable—a 51 -point grid per dimension would require 51 13 ≈ 10 22 grid points. The proposed BRAT framework scales successfully to the full translational-rotational coupled system, achieving a 98 .88% 
+
+docking success rate and maintaining a sub-1% collision rate across arbitrary initial conditions. This demonstrates that the learned value function effectively generalizes the reach-avoid guarantees to a high-dimensional state space without requiring exhaustive and computationally intractable grid discretization. 
+
+2) Controller Comparison. Table IV compares all ap-plicable controllers over 500 shared initial conditions, and Fig. 6 summarizes the results. Fig. 7 shows an example 13D trajectory starting outside the learned BRAT, demon-strating successful docking with the least-restrictive safety filter. The results highlight a stark performance gap in high dimensions. While the proposed BRAT controller achieves a near-perfect success rate (99.2%), the baselines struggle significantly to balance safety, liveness, and computation. The Terminal MPC (T-MPC) controller manages an 83.0% success rate but requires over 12 seconds (12690.58 ms) per control step, rendering it impractical for real-time onboard execution. Standard MPC completely fails to solve the highly constrained 13D geometry, colliding in 27.0% of trials and timing out in the rest. Similarly, the Vanilla DeepReach and RL baselines fail to synthesize meaningful progress toward the goal, resulting in 99.4% timeout rates. By contrast, the BRAT controller maintains strict real-time execution, requir-ing only 16.00 ms per control step, providing a computational efficiency and reliability that optimization-based and baseline learning approaches cannot match.                                        
+
+> TABLE IV 13D C ONTROLLER COMPARISON (N= 500 ROLLOUTS )Metric BRAT T-MPC MPC V-DR RL Success (%) 99.2 83.0 0.0 0.0 0.0 Collision (%) 0.4 1.4 27.0 0.6 0.6 Timeout (%) 0.4 15.6 73.0 99.4 99.4 Effort (N ·s) 1112.06 703.51 N/A N/A N/A Time/step (ms) 16.00 12690.58 19569.50 5.93 0.39
+> Dock time (s) 31.96 27.74 N/A N/A N/A
+
+VI. C ONCLUSION 
+
+We presented a learning-based BRAT framework for au-tonomous spacecraft docking in 13 dimensions, combining neural value function approximation with MPC-generated curriculum labels. The framework follows an offline–online deployment strategy: the expensive training and MPC data generation are performed once, producing a compact SIREN network that is queried in real time with only a single forward and backward pass per control step, eliminating the need for onboard optimization. In 6D, the learned BRAT controller closely matches the grid-based ground truth while achieving faster docking times, attributable to discretization errors in the grid-based value function. In 13D the BRAT controller Fig. 7. Example 13D trajectory starting outside the learned BRAT, demonstrating successful docking with the least-restrictive safety filter. 
+
+achieves a 98.88% docking rate with a 0.58% collision rate across 10,000 uniformly sampled initial conditions, outperforming MPC, vanilla DeepReach, and RL baselines at substantially lower online computational cost. 
+
+A. Limitations and Future Work. 
+
+The primary limitation is that the formulation is disturbance-free and the target satellite is stationary (non-tumbling) in the LVLH frame. The grid-based framework supports bounded disturbances via the differential game formulation, but this extension remains to be incorporated into the neural approach. Recent work on adversarial Deep-Reach [27] provides a path toward this by extending MPC-guided training to two-player zero-sum games, and integrat-ing such robustness into the BRAT pipeline is a natural next step. To address the convergence limitation, we plan to investi-gate neural network verification techniques adapted to high-dimensional value functions. Robustness to disturbances can be incorporated by extending the Hamiltonian to include a maximizing adversary, following the standard differential game formulation [10], with the neural training pipeline adapted accordingly. Extension to tumbling targets requires a time-varying goal and failure set, addressable within the HJ framework by coupling target attitude dynamics into the state [13]. REFERENCES [1] W. Fehse, Automated Rendezvous and Docking of Spacecraft . Cam-bridge, U.K.: Cambridge University Press, 2003. [2] C. Petersen, R. J. Caverly, S. Phillips, and A. Weiss, “Safe and constrained rendezvous, proximity operations, and docking,” in 2023 American Control Conference (ACC) , pp. 3645–3661, 2023. [3] C. Jewison and R. S. Erwin, “A spacecraft benchmark problem for hybrid control and estimation,” in 2016 IEEE 55th Conference on Decision and Control (CDC) , pp. 3300–3305, 2016. [4] D. Malyuta, T. P. Reynolds, M. Szmuk, T. Lew, R. Bonalli, M. Pavone, and B. Ac ¸ıkmes ¸e, “Convex optimization for trajectory generation: A tutorial on generating dynamically feasible trajectories reliably and efficiently,” IEEE Control Systems Magazine , vol. 42, no. 5, pp. 40– 113, 2022. [5] U. Eren, A. Prach, B. B. Koc ¸er, S. V. Rakovi´ c, E. Kayacan, and B. Ac ¸ıkmes ¸e, “Model predictive control in aerospace systems: Current state and opportunities,” Journal of Guidance, Control, and Dynamics ,vol. 40, no. 7, pp. 1541–1566, 2017. [6] K. Hovell and S. Ulrich, “Deep reinforcement learning for spacecraft proximity operations guidance,” Journal of Spacecraft and Rockets ,vol. 58, no. 2, pp. 254–264, 2021. [7] J. Broida and R. Linares, “Spacecraft rendezvous guidance in cluttered environments via reinforcement learning,” 01 2019. [8] K. P. Wabersich and M. N. Zeilinger, “A predictive safety filter for learning-based control of constrained nonlinear dynamical systems,” 
+
+Automatica , vol. 129, p. 109597, 2021. [9] A. D. Ames, S. Coogan, M. Egerstedt, G. Notomista, K. Sreenath, and P. Tabuada, “Control barrier functions: Theory and applications,” in 2019 18th European control conference (ECC) , pp. 3420–3431, Ieee, 2019. [10] I. Mitchell, A. Bayen, and C. Tomlin, “A time-dependent hamilton-jacobi formulation of reachable sets for continuous dynamic games,” 
+
+Automatic Control, IEEE Transactions on , vol. 50, pp. 947 – 957, 08 2005. [11] S. Bansal, M. Chen, S. Herbert, and C. J. Tomlin, “Hamilton-jacobi reachability: A brief overview and recent advances,” in 2017 IEEE 56th annual conference on decision and control (CDC) , pp. 2242– 2253, IEEE, 2017. [12] B. HomChaudhuri, M. Oishi, M. Shubert, M. Baldwin, and R. S. Erwin, “Computing reach-avoid sets for space vehicle docking under continuous thrust,” in 2016 IEEE 55th Conference on Decision and Control (CDC) , pp. 3312–3318, 2016. [13] C. Zagaris and M. Romano, Applied Reachability Analysis for Space-craft Rendezvous and Docking with a Tumbling Object .[14] J. Lygeros, “On reachability and minimum cost optimal control,” 
+
+Automatica , vol. 40, no. 6, pp. 917–927, 2004. [15] S. Bansal and C. J. Tomlin, “Deepreach: A deep learning approach to high-dimensional reachability,” in 2021 IEEE International Con-ference on Robotics and Automation (ICRA) , pp. 1817–1824, IEEE, 2021. [16] K.-C. Hsu, V. Rubies-Royo, C. J. Tomlin, and J. F. Fisac, “Safety and liveness guarantees through reach-avoid reinforcement learning,” in Proceedings of Robotics: Science and Systems , (Virtual), July 2021. [17] V. Sitzmann, J. Martel, A. Bergman, D. Lindell, and G. Wetzstein, “Implicit neural representations with periodic activation functions,” vol. 33, pp. 7462–7473, 2020. [18] Z. Feng, L. Qiu, and S. Bansal, “Bridging model predictive control and deep learning for scalable reachability analysis,” 05 2025. [19] NASA, “International docking system standard (IDSS) interface defi-nition document,” Tech. Rep. Rev. F, NASA, 2022. [20] J. F. Fisac, M. Chen, C. J. Tomlin, and S. S. Sastry, “Reach-avoid problems with time-varying dynamics, targets and constraints,” in 
+
+Proceedings of the 18th international conference on hybrid systems: computation and control , pp. 11–20, 2015. [21] K. Margellos and J. Lygeros, “Hamilton–jacobi formulation for reach–avoid differential games,” IEEE Transactions on Automatic Control , vol. 56, no. 8, pp. 1849–1861, 2011. [22] A. Singh, Z. Feng, and S. Bansal, “Exact imposition of safety boundary conditions in neural reachable tubes,” in 2025 IEEE International Conference on Robotics and Automation (ICRA) , 2025. [23] I. Lagaris, A. Likas, and D. Fotiadis, “Artificial neural networks for solving ordinary and partial differential equations,” IEEE Transactions on Neural Networks , vol. 9, no. 5, pp. 987–1000, 1998. [24] Stanford ASL, “hj reachability: Hamilton–jacobi reachability in jax.” 
+
+https://github.com/StanfordASL/hj_reachability ,2021. [25] W. H. CLOHESSY and R. S. WILTSHIRE, “Terminal guidance system for satellite rendezvous,” Journal of the Aerospace Sciences ,vol. 27, no. 9, pp. 653–658, 1960. [26] K. T. Alfriend, S. R. Vadali, P. Gurfil, J. P. How, and L. S. Breger, 
+
+Spacecraft Formation Flying: Dynamics, Control and Navigation .Elsevier, 2010. [27] R. Teoh, S. Tonkens, W. Sharpless, A. Yang, Z. Feng, S. Bansal, and S. Herbert, “MADR: MPC-guided adversarial DeepReach,” arXiv preprint arXiv:2510.18845 , 10 2025.

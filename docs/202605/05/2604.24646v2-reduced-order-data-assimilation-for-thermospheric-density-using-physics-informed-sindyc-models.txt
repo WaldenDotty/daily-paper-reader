@@ -1,0 +1,1243 @@
+Title: Reduced-Order Data Assimilation for Thermospheric Density Using Physics-informed SINDyc Models
+
+URL Source: https://arxiv.org/pdf/2604.24646v2
+
+Published Time: Mon, 04 May 2026 00:57:51 GMT
+
+Number of Pages: 29
+
+Markdown Content:
+manuscript submitted to AGU 
+
+# Reduced-Order Data Assimilation for Thermospheric Density Using Physics-informed SINDy c Models 
+
+Sriram Narayanan 1∗, Daniele Sicoli 1, and Piyush Mehta 1
+
+> 1
+
+Department of Mechanical, Materials and Aerospace Engineering, West Virginia University, Morgantown, WV, USA. 
+
+Key Points:  
+
+> •
+
+A sparse SINDy c-AR reduced-order model propagates thermospheric density in a PCA latent space driven by solar and geomagnetic indices.  
+
+> •
+
+An Extended Kalman Filter assimilates in situ LEO density measurements, cor-recting the reduced-order latent state in real time.  
+
+> •
+
+Multi-satellite assimilation calibrates the latent state across altitudes and local times, improving density beyond single-track forecasts. 
+
+> ∗
+
+Current address: 1306 Evansdale Drive, Morgantown, WV 26506 
+
+Corresponding author: Sriram Narayanan, Email: sriram.narayanan@mail.wvu.edu, ds00146@mix.wvu.edu, piyush.mehta@mail.wvu.edu 
+
+–1–  
+
+> arXiv:2604.24646v2 [eess.SY] 1 May 2026 manuscript submitted to AGU
+
+Abstract 
+
+Accurate estimation of thermospheric mass density is a prerequisite for orbit prediction and space situational awareness, where the upper atmosphere responds nonlinearly to solar and geomagnetic forcing across several orders of magnitude. Physics-based general circulation models resolve this response but are computationally expensive, while em-pirical models run cheaply but lack a time-evolving atmospheric state. This work cou-ples a data-driven reduced-order thermospheric model with a Kalman filter that assim-ilates in situ density observations. An autoregressive Sparse Identification of Nonlinear Dynamics with control (SINDy c-AR) reduced-order model derived from the Thermosphere-Ionosphere-Electrodynamics General Circulation Model (TIE-GCM) captures the dom-inant modes of variability and their dependence on solar and geomagnetic drivers at a fraction of the parent model’s cost. Density observations from CHAMP, GRACE, GRACE-FO, GOCE, and Swarm are assimilated across a range of orbital configurations and ge-omagnetic conditions, with a linear DMDc model evaluated as a reference. Assimilation reduces density estimation error relative to open-loop predictions, most visibly during geomagnetic storms and under single-satellite coverage. SINDy c-AR and DMDc perform comparably on assimilated orbits; on withheld orbits, SINDy c-AR is more accurate in the in-training scenarios while DMDc is better in the out-of-training 2024 Swarm-C case. Benchmarks against NRLMSIS 2.1 and HASDM (2000–2019, where available) show that empirical references can outperform the assimilated model far from the assimilated track, so results are framed as improvements over the open-loop forecast. 
+
+1 Plain Language Summary 
+
+Predicting the density of the thermosphere, the upper layer of Earth’s atmosphere, is important for tracking satellites and managing space operations. The thermosphere responds strongly and rapidly to changes in solar and geomagnetic activity, which makes accurate prediction hard. Physics-based models describe these processes in detail but are too slow for routine use, while simpler empirical models run quickly but track chang-ing space-weather conditions less faithfully. The method described here pairs a simpli-fied, physics-informed atmospheric model with satellite measurements to produce observation-calibrated density estimates. The simplified model represents the main patterns of ther-mospheric behavior and how they change in response to space weather; a data assim-ilation technique updates the model using density observations from satellites such as CHAMP, GRACE, GRACE-FO, GOCE, and Swarm. Incorporating satellite data reduces density errors relative to running the model open-loop, most clearly during disturbed conditions. The approach remains stable when observations are sparse and runs at a small fraction of the cost of full general-circulation propagation, supporting the update cadence used in operational drag prediction. 
+
+2 Introduction 
+
+The thermosphere–ionosphere region of Earth’s atmosphere, extending roughly from 100 to 980 km altitude, sets the drag environment for the bulk of the active satellite pop-ulation (Pr¨ olss, 2004). Variations in thermospheric mass density strongly influence the orbital evolution of objects in low Earth orbit (LEO) through atmospheric drag, directly affecting orbit prediction accuracy and space situational awareness (Vallado, 2001). Since the early years of the space age, thermospheric density has been inferred indirectly from satellite orbital decay measurements (Sterne, 1958; King-Hele, 1987; Picone et al., 2005). Density variability is driven primarily by solar extreme ultraviolet (EUV) irradiance, which causes order-of-magnitude changes near 400 km altitude between solar minimum and max-imum through thermospheric heating and expansion. Additional variability arises on an-nual, semiannual, and diurnal timescales (Paetzold & Zsch¨ orner, 1961; Jacchia, 1959), while geomagnetic activity further affects density, particularly during disturbed storm- 
+
+> –2– manuscript submitted to AGU
+
+time conditions (Jacchia et al., 1967; Liu & L¨ uehr, 2005). Even small errors in thermo-spheric density propagate into kilometer-scale orbital prediction errors over days, degrad-ing conjunction assessment and reentry prediction for LEO spacecraft. Empirical thermospheric density models have been developed to obtain long-term satellite drag observations and other measurements. Representative examples include the Jacchia–70 model (Jacchia, 1970), the Drag-Temperature Model (DTM) family (Barlier et al., 1978; Berger et al., 1998; Bruinsma et al., 2003), NRLMSISE-00 (Picone et al., 2002), and Jacchia–Bowman 2006 (Bowman, Tobiska, Marcos, Huang, et al., 2008). These models capture variations across solar cycles and seasonal timescales and dominate much of the operational orbit prediction chain. Analyses using multi-satellite orbital decay data and work on 27-day solar rotational modulation have further characterized thermospheric variability (Bowman, Tobiska, Marcos, & Valladares, 2008; Lean et al., 2006). Accelerometer-derived density measurements from missions such as CHAMP have resolved thermospheric structure and variability near typical LEO altitudes directly in situ (Liu & L¨ uehr, 2005; Guo et al., 2007, 2008; M¨ uller et al., 2009). Physics-based general circulation models offer a more complete representation of thermospheric dynamics, particularly under geomagnetically disturbed conditions (Sutton, 2018). Models such as the Global Ionosphere–Thermosphere Model (GITM) (Ridley et al., 2006), TIE-GCM (Qian et al., 2014), and the Whole Atmosphere Model (WAM) (T. Fuller-Rowell et al., 2010) solve the coupled continuity, momentum, and energy equations for neutral and ionized species. However, their high-dimensional state spaces often exceed 10 5 variables. Combined with uncertain external drivers and internal parameters, this makes them computationally expensive and challenging to deploy in real time. Reduced-order modeling (ROM) trades a bounded amount of physical fidelity for several orders of magnitude of compute reduction (Qian et al., 2013a; Mehta & Linares, 2017). ROMs compress high-dimensional model output into a low-dimensional latent space that captures the dominant modes of variability. These reduced representations are com-monly constructed using proper orthogonal decomposition (POD) or principal compo-nent analysis (PCA) (Golub & Reinsch, 1970; Rowley et al., 2004; Jolliffe, 2011). POD-based ROMs of thermospheric simulations and observations retain the dominant spatial structure and variability while enabling efficient model propagation (Matsuo & Forbes, 2010; Sutton et al., 2012). Finite-dimensional approximations of nonlinear dynamics can be identified directly from trajectory data using operator-theoretic methods grounded in Koopman theory (Brunton et al., 2021; Mezi´ c, 2005). Dynamic Mode Decomposition (DMD) computes a best-fit linear operator in the original state space and is interpretable as a finite-rank Koopman approximation restricted to a linear observable subspace (Schmid, 2010; Rowley et al., 2009). When external inputs such as solar and geomagnetic forcing are present, DMD with control (DMDc) augments this representation with an explicit input term (Proctor et al., 2016), yielding a reduced-order model of the form zk+1 = Az k + Bu k.The Sparse Identification of Nonlinear Dynamics (SINDy) framework (Brunton et al., 2016a) takes a complementary approach: rather than seeking a globally linear op-erator in the original state space, it identifies a sparse set of coefficients Ξ such that the dynamics are expressed as a linear combination of nonlinear basis functions drawn from a candidate library Θ,˙z = Θ(z, u) Ξ. (1) Therefore, the resulting model is linear in the identified coefficients Ξ, while the non-linearity enters through the choice of library functions in Θ. This distinguishes SINDy from general nonlinear system identification: the dynamics are not arbitrary nonlinear functions of the state, but rather a sparse, interpretable expansion over a user-defined function space. The SINDy with control extension (SINDy c) (Brunton et al., 2016b) aug- 
+
+> –3– manuscript submitted to AGU
+
+ments the library with driver-dependent and cross terms, enabling the model to capture state–driver interactions. The autoregressive extension adopted here, SINDy c-AR, fur-ther enriches the library by including lagged state and driver values, situating the model within the broader class of Koopman-inspired input–output representations in which tem-poral lags serve as lifting coordinates (Arbabi & Mezic, 2017; Pan & Duraisamy, 2020). DMDc is retained alongside SINDy c-AR as a linear reference model. Data assimilation combines model forecasts with observations to reduce state un-certainty in both physics-based and reduced-order models (Shim et al., 2014). In the ther-mosphere, assimilation efforts have focused on estimating neutral density and satellite drag using Kalman filtering and ensemble-based methods (M. V. Codrescu et al., 2004; S. M. Codrescu et al., 2018; T. J. Fuller-Rowell et al., 2004; Matsuo et al., 2012; Mat-suo & Knipp, 2013; Matsuo et al., 2013; Sutton, 2018). Additionally, recent work by Pe-datella (Pedatella et al., 2020) demonstrates the assimilation of ionospheric and ther-mospheric observations in a whole-atmosphere framework (WACCMX+DART), show-ing that simultaneous adjustment of electron density and neutral composition can im-prove short-term forecasts. However, assimilation in high-dimensional models remains computationally demanding, often requiring large ensembles and accurate representa-tions of model uncertainty. Coupling reduced-order models with data assimilation (Mehta & Linares, 2018; Mehta et al., 2018a) has produced efficient state estimation without di-rect manipulation of the external drivers. The framework developed here couples reduced-order dynamics with data assim-ilation for interpretable, compute-efficient thermospheric density estimation. A quasi-physical ROM is constructed using both DMDc and an autoregressive SINDy c formu-lation, trained on TIE-GCM simulations to capture dominant spatial variability and sen-sitivity to solar and geomagnetic forcing. An Extended Kalman Filter (EKF) is employed to assimilate in situ mass density observations from multiple LEO missions, including CHAMP, GRACE, GRACE-FO, GOCE, and Swarm missions. The framework is evaluated across a range of geomagnetic conditions and orbital configurations, including single-, dual-, and multi-satellite assimilation scenarios. Per-formance is assessed using withheld validation orbits and is compared against open-loop reduced-order model predictions, the NRLMSIS 2.1 empirical model (Emmert et al., 2020), and the High Accuracy Satellite Drag Model (HASDM) (Storz et al., 2005) (where its 2000–2019 coverage window permits). The present work builds directly on two lines of prior effort. Reduced-order data assimilation of thermospheric density was established in (Mehta & Linares, 2018; Mehta et al., 2018a), where a linear (DMDc) ROM of TIE-GCM was coupled with a Kalman filter to assimilate accelerometer-derived densities. More recently, (Sicoli & Mehta, 2026) introduced a SINDy c-based nonlinear ROM emulator of TIE-GCM, but without a for-mal data-assimilation layer. The contributions of this paper, relative to that body of work, are: (i) an EKF formulation that operates on the companion-form lifting of the SINDy c-AR emulator, so that the filter propagates cross-lag covariances implied by the autore-gressive structure; (ii) an analytical Jacobian propagation for the sparse nonlinear library that keeps the error covariance consistent with the first-order Taylor expansion of the AR process, so that the process noise is not required to absorb linearization error; (iii) a log-density observation model whose measurement Jacobian is state-independent, yield-ing a well-conditioned update across the full dynamic range of thermospheric density; (iv) a multi-satellite extension that assimilates geometrically distinct tracks simultane-ously in the shared latent space; and (v) a long-term assimilated thermospheric density dataset spanning 2000–2025, released alongside this work in support of reproducibility and broader scientific use. The remainder of this paper is organized as follows. Section 3 presents the math-ematical formulation of the reduced-order models and the data assimilation framework.  
+
+> –4– manuscript submitted to AGU
+
+Section 4 describes the data sources, preprocessing procedures, and filter tuning strat-egy. Section 5 presents evaluation results across multiple assimilation scenarios. Section 6 describes the released long-term assimilated dataset. Section 7 summarizes the main con-tributions and outlines directions for future work. 
+
+3 Mathematical Background 
+
+Accurate thermospheric mass density estimation is a prerequisite for essential or-bital propagation applications such as conjunction assessment and space traffic manage-ment. The thermosphere occupies altitudes between approximately 100 and 600 km, where residual atmospheric drag is the dominant non-gravitational perturbation acting on LEO satellites. Density in this region varies by more than an order of magnitude in response to solar extreme-ultraviolet radiation and geomagnetic storm activity, yet the underly-ing physical state is high-dimensional: a global snapshot on a standard latitude–longitude– altitude grid contains tens of thousands of spatial degrees of freedom. Physics-based gen-eral circulation models such as TIE-GCM (Qian et al., 2013b) capture this complexity, but their compute cost rules out real-time onboard estimation and rapid uncertainty quan-tification. The framework developed below combines three components. PCA compresses the high-dimensional thermospheric state into a low-dimensional latent representation that retains the dominant modes of global density variability. The latent state zk and all as-sociated dynamics operate in this linear reduced-order space throughout. The SINDy c-AR model operates within this latent space to identify a parsimonious representation of the latent-state evolution under external solar and geomagnetic forcing. An EKF oper-ates in the same latent space to assimilate onboard satellite density measurements, cor-recting forecast errors and propagating uncertainty estimates alongside the state. The full thermospheric density field is reconstructed from the filtered latent state at any de-sired time via the inverse PCA projection. The remainder of this section is organized to provide context on the mathemati-cal components underlying the framework, building on prior work (Sicoli & Mehta, 2026). Section 3.1 defines the thermospheric state representation and describes the TIE-GCM training and testing datasets. Section 3.2 details the PCA-based dimensionality reduc-tion. Sections 3.3 and 3.4 develop the SINDy c library construction and the SINDy c-AR discrete-time dynamical model, respectively. Section 3.6 formulates the EKF for single-satellite assimilation, while Section 3.7 extends this to simultaneous multi-satellite as-similation. 
+
+3.1 Thermospheric State and Training Dataset 
+
+Thermospheric density outputs from the TIE-GCM (Qian et al., 2013b) serve as training data, following previous data-driven work (Mehta et al., 2018b; Licata & Mehta, 2023; Mehta & Licata, 2025). The thermospheric state is discretized as a three-dimensional array 
+
+xfull ∈ RnLT ×nLAT ×nALT , (2) where nLT = 72 denotes the number of local time bins, nLAT = 36 the number of lat-itude bins, and nALT = 45 the number of altitude levels spanning 100–980 km. These indices correspond to the ranges LT ∈ [0 , 24) hours , LAT ∈ [−87 .5◦, 87 .5◦], ALT ∈ [100 , 980] km . (3) The thermosphere is primarily forced by two external drivers: the solar 10.7 cm flux F10 .7
+
+(in solar flux units, sfu), which serves as a proxy for solar extreme-ultraviolet radiation, and the planetary geomagnetic index kp, which characterizes the level of geomagnetic  
+
+> –5– manuscript submitted to AGU
+
+activity. Following standard conventions, geomagnetic conditions are classified as quiet (kp < 3), moderate (3 ≤ kp < 5), strong (5 ≤ kp < 7), or storm ( kp ≥ 7). To represent the periodic nature of solar and seasonal forcing, universal time (UT) and day of year (DOY) are encoded as circular features, 
+
+t1 = cos 
+
+ 2π UT 24 
+
+
+
+, t2 = sin 
+
+ 2π UT 24 
+
+
+
+, (4) 
+
+t3 = cos 
+
+ 2π DOY 365 .25 
+
+
+
+, t4 = sin 
+
+ 2π DOY 365 .25 
+
+
+
+. (5) This sine–cosine encoding ensures continuity across the boundaries of each 24-hour day and each calendar year, avoiding artificial discontinuities in the input feature space. Model training spans 1996–2009, a period covering both rising and declining phases of the so-lar cycle. 
+
+3.2 Dimensionality Reduction via PCA 
+
+The full thermospheric state snapshot at each time step resides in a high-dimensional space of dimension d = nLT nLAT nALT . Collecting m such snapshots forms the state matrix Xfull ∈ Rd×m. PCA is employed to project the full state onto an r-dimensional latent subspace. Each snapshot is first mean-centred by subtracting the PCA mean field 
+
+μ0 ∈ Rd computed from the training data, giving 
+
+zk = W⊤(xfull ,k − μ0), zk ∈ Rr , r ≪ d, (6) where W ∈ Rd×r contains the leading r principal components and zk represents de-viations from the mean thermospheric state in the latent basis. In this work, r = 10 principal components are retained, sufficient to represent the large-scale spatial struc-ture of the thermospheric density field while reducing the effective state dimension by several orders of magnitude. The choice of r follows the approach in (Sicoli & Mehta, 2026) and is based on trial-error, balancing compact representation with variance reten-tion. The full-state estimate is recovered via the inverse projection ˆxfull ,k = W ˆzk + μ0. (7) 
+
+3.3 Library Construction and SINDy c-AR 
+
+With the thermospheric state represented in latent coordinates, the dynamics are modeled as ˙z(t) = f (z(t), u(t)) , (8) where z(t) ∈ Rr is the latent state and u(t) ∈ Rndrivers is the vector of external drivers. The SINDy c framework (Brunton et al., 2016a, 2016b) assumes that f can be expressed as a sparse linear combination of candidate basis functions drawn from a user-defined library. As established in the original SINDy formulation (Brunton et al., 2016a), the resulting model is linear in the identified sparse coefficients Ξ, while nonlinearity enters through the choice of library functions. This is distinct from general nonlinear system identification: the dynamics are expressed as ˙ z = Θ(z, u) Ξ, where Θ is a fixed non-linear feature map and Ξ is the sparse coefficient matrix solved for by regression.  
+
+> –6– manuscript submitted to AGU
+
+The library matrix is constructed by evaluating a set of candidate functions over the available data: 
+
+Θ(Z, U) = 
+
+
+
+1
+
+zi
+
+zizj
+
+uk
+
+ukul
+
+ziuk
+
+...
+
+
+
+, Θ(Z, U) ∈ Rp×m, (9) where zi denotes the i-th component of the latent state z evaluated over all time steps, and uk denotes the k-th component of the driver vector u. All pairwise products zizj
+
+and ukul include only distinct combinations with i ≤ j and k ≤ l, avoiding redundant terms. The governing dynamics are then cast as the regression problem ˙Z = Ξ Θ (Z, U), (10) where Ξ ∈ Rr×p is a sparse coefficient matrix to be identified from data. Sparsity is enforced via ridge regression (Marquardt & Snee, 1975), 
+
+Ξ = ˙Z Θ ⊤ Θ Θ ⊤ + αI−1 , (11) where α > 0 is a regularization hyperparameter. 
+
+3.4 Autoregressive Extension (SINDy c-AR) 
+
+The continuous-time formulation above does not natively account for temporal mem-ory effects, which are important in the thermosphere due to the finite relaxation timescales of atmospheric heating and the gradual build-up and decay of storm-time density en-hancements. The framework is therefore extended to a discrete-time autoregressive (AR) model, referred to hereafter as SINDy c-AR. The SINDy c-AR update equation at time step k is 
+
+zk+1 = A z k +
+
+> nAR
+
+X
+
+> j=1
+
+Aj zk−j + B u k +
+
+> nAR
+
+X
+
+> j=1
+
+Bj uk−j + Ξ Θ (zk, uk) + wk, (12) where A ∈ Rr×r is the linear state matrix, Aj captures state-dependent memory at lag j, B and Bj are the corresponding driver matrices for current and lagged driver val-ues, Ξ Θ (zk, uk) is the sparse library term evaluated at the current step, and wk ∼ N (0 , Q)is process noise. The AR terms Aj zk−j and Bj uk−j capture explicit temporal memory; lagged state and driver terms are excluded from Θ whenever nAR > 0 to avoid double-counting memory contributions. The AR order nAR is treated as a hyperparameter. 
+
+3.4.0.1 Companion-form state augmentation. Because the SINDy c-AR model depends on the nAR most recent latent states, propagating an error covariance only for 
+
+zk ∈ Rr would neglect the cross-correlations between the current and lagged states that arise naturally in an AR process. Following standard state-space practice for autoregres-sive systems, the filter is implemented on the companion-form lifting of the SINDy c-AR recursion into a Markov state. A detailed analysis of the predictive capability of Koopman-based DMD algorithms for periodic systems is provided in prior work (Narayanan et al., 2025). In the SINDy c-AR formulation the augmented state vector is defined as 
+
+ζk =
+
+
+
+zk
+
+zk−1
+
+...
+
+zk−nAR 
+
+ ∈ Rnaug , naug = r · (nAR + 1) . (13)  
+
+> –7– manuscript submitted to AGU
+
+In this lifted space the AR recursion (12) is written as, 
+
+ζk+1 = F(ζk, uk) + waug  
+
+> k
+
+, (14) where F(ζk, uk) denotes the full SINDy c-AR step applied to the augmented state. For covariance propagation the EKF requires the Jacobian of F with respect to ζk, which is derived in Section 3.6. The companion matrix 
+
+Aaug =
+
+
+
+A A1 A2 · · · AnAR 
+
+Ir 0 0 · · · 00 Ir 0 · · · 0
+
+... . . . ...
+
+0 · · · Ir 0
+
+
+
+∈ Rnaug ×naug (15) encodes the current-step dynamics in its top block row and shifts the lag history through identity blocks below the diagonal. The augmented process noise covariance injects un-certainty only into the current-step block, 
+
+Qaug =
+
+Q 00 0
+
+
+
+∈ Rnaug ×naug , (16) with Q ∈ Rr×r the process noise covariance of the original latent state. The initial aug-mented covariance Paug 0|0 is block-diagonal, with each r × r block initialized to P0|0.
+
+3.5 Log-Density Measurement Model 
+
+Onboard satellite accelerometers and neutral mass spectrometers provide measure-ments of thermospheric density that span several orders of magnitude. Rather than as-similating these observations in linear density units, which would produce poorly scaled filter gains, measurements are expressed in log 10 density. The latent state zk and all dy-namics remain in the linear PCA latent space; the log-density formulation applies ex-clusively to the observation function that maps zk to the predicted measurement at the satellite location. Log-density is more amenable to statistical analysis and facilitates in-terpretation of relative variations, which best characterize density behavior (Emmert & Picone, 2010). 
+
+Observation operator 
+
+For a satellite at position ( l, τ, a ) (latitude, local time, altitude), let ϕ ∈ Rd de-note the vector of tri-linear interpolation weights at that location. Applying the inter-polation to the PCA-reconstructed field gives 
+
+ρk = ϕ⊤ (W z k + μ0) , (17) where μ0 ∈ Rd is the PCA mean field. Defining the row vector and scalar offset 
+
+H = ϕ⊤W ∈ R1×r , μ = ϕ⊤μ0 ∈ R, (18) the predicted log-density at the satellite location is 
+
+hlog (zk) = H z k + μ, (19) which is affine in the latent state zk. This affine structure arises from the linear PCA reconstruction and tri-linear spatial interpolation. The measurement equation is 
+
+yk = H z k + μ + vk, vk ∼ N (0 , σ 2 
+
+> v
+
+), (20) 
+
+> –8–
+
+manuscript submitted to AGU 
+
+where yk ∈ R is the observed log 10 density. Assuming Gaussian noise in log space cor-responds to multiplicative noise in linear density units, with σ2 
+
+> v
+
+≈ (∆ ρ/ρ )2 providing a scale-invariant characterization of measurement uncertainty. The log-density formu-lation implicitly requires that the reconstructed linear density ϕ⊤(Wz k + μ0) remain positive at the interpolated satellite location. This quantity was checked programmat-ically at every filter step along each assimilated and withheld satellite trajectory in the scenarios evaluated, and was found to remain strictly positive throughout; positivity was therefore verified directly rather than inferred from filter stability, and no clipping was required. In broader application of the filter (e.g., extended propagation into unobserved regions at solar minimum or very high altitude), sporadic non-positive reconstructions would need to be flagged and either clipped to a small positive floor or handled by falling back to a linear-space measurement update. This is a practical consideration outside the scope of the present work. 
+
+Constant Jacobian 
+
+Because hlog is affine in zk, its Jacobian is the constant matrix 
+
+Hk = ∂h log 
+
+∂z ˆzk|k−1
+
+= H, (21) independent of the predicted state. The nonlinear dependence of linear density on zk is absorbed into the log 10 transform, leaving an affine residual that requires no lineariza-tion in the EKF update. 
+
+3.6 EKF Algorithm for Thermospheric Density Estimation 
+
+The EKF operates on the augmented companion state ζk defined in Eq. (13), with the associated augmented covariance Paug  
+
+> k|k
+
+∈ Rnaug ×naug . This formulation correctly prop-agates the cross-covariances between the current and lagged latent states that arise in any AR process. Details on the use of augmented states in the DMD formulation are pro-vided in prior work (Narayanan et al., 2026). Given a prior estimate ˆζk−1|k−1 and co-variance Paug 
+
+> k−1|k−1
+
+, the filter proceeds in two steps. 
+
+Prediction step 
+
+Both the mean state and the covariance are propagated using the full nonlinear ba-sis SINDy c-AR model. The mean prediction follows: ˆzk|k−1 = fSINDy 
+
+ ζk−1|k−1, uk
+
+ , (22) ˆζk|k−1 =
+
+
+
+ˆzk|k−1
+
+ˆzk−1|k−1
+
+...ˆzk−nAR |k−1
+
+ . (23) The covariance is propagated using the analytical Jacobian Fk of the full process F(ζ, u)evaluated at the current state estimate: 
+
+Fk = ∂F
+
+∂ζ ˆζk−1|k−1
+
+= Aaug + Ξnl 
+
+∂ϕ(zk, uk)
+
+∂zk
+
+, (24) 
+
+Paug  
+
+> k|k−1
+
+= Fk Paug  
+
+> k−1|k−1
+
+F⊤ 
+
+> k
+
++ Qaug . (25) Here Ξnl ∈ Rr×pnl is the SINDy coefficient sub-matrix for the nonlinear library block and ϕ(zk, uk) is the normalized feature vector entering that block; the derivative ∂ϕ/∂ zk
+
+is computed analytically by differentiating the polynomial feature map with respect to 
+
+–9– manuscript submitted to AGU 
+
+the current latent state (see Section 3.4). The Jacobian Fk therefore captures the first-order Taylor expansion of the SINDy c-AR process at each step, including the contribu-tion of the nonlinear library term, so that the propagation does not rely on inflating the process noise to absorb linearization error. The process noise Qaug is therefore intended to represent stochastic model uncertainty; empirical validation that the tuned Q is con-sistent with observed innovation statistics is left to future work (Section 7). If no mea-surement is available at step k, the filter retains ˆζk|k−1 and propagates Paug  
+
+> k|k−1
+
+forward without modification. 
+
+Update step 
+
+Because measurements observe only the current latent state zk (the top r compo-nents of ζk), the observation operator is augmented as 
+
+Haug =  H 01×r n AR 
+
+ ∈ R1×naug , (26) where H ∈ R1×r is the log-density observation operator defined in Eq. (18). When a log 10 -density measurement yk is available, the innovation is 
+
+νk = yk − Haug ˆζk|k−1 − μ = yk − H ˆzk|k−1 − μ, (27) with physical interpretation 
+
+νk ≈ log 10 
+
+ ρmeas 
+
+ρpred 
+
+
+
+, (28) providing a scale-invariant measure of forecast discrepancy. The innovation covariance, Kalman gain, and posterior augmented state are 
+
+Sk = Haug Paug  
+
+> k|k−1
+
+H⊤ 
+
+> aug
+
++ σ2
+
+> v,k
+
+, (29) 
+
+Kk = Paug  
+
+> k|k−1
+
+H⊤ 
+
+> aug
+
+S−1 
+
+> k
+
+, (30) ˆζk|k = ˆζk|k−1 + Kk νk. (31) The augmented covariance is updated using the Joseph stabilized form to preserve pos-itive semi-definiteness: 
+
+Paug  
+
+> k|k
+
+= ( I − Kk Haug ) Paug  
+
+> k|k−1
+
+(I − Kk Haug )⊤ + Kk σ2 
+
+> v,k
+
+K⊤ 
+
+> k
+
+. (32) Because Haug is state-independent (it inherits the constant Jacobian property of H, see Eq. (21)), the update is exact for the log-density measurement model with no additional linearization required, provided the reconstructed linear density ϕ⊤(Wz k+μ0) remains positive at the interpolated satellite location. In all assimilation scenarios reported here the reconstructed density was verified programmatically to remain strictly positive along every evaluated satellite track; for completeness, handling of the low-density tail in long-duration propagation is discussed in Section 3.5. The filtered current latent state is ex-tracted from the top block of the augmented posterior, ˆzk|k = ˆζk|k
+
+1 : r, (33) and the associated posterior covariance is the top-left r×r block Pk|k = Paug 
+
+> k|k
+
+1 : r, 1 : 
+
+r. The filtered latent state is then projected back to the full thermospheric density field via the PCA basis: ˆxfull ,k = W ˆzk|k + μ0. (34) Figure 1 illustrates this integrated framework. 
+
+–10– manuscript submitted to AGU Model Reduction via PCA 
+
+> zk = W⊤(xfull ,k  − μ0)
+> System Identification
+> DMD / SINDy c-AR
+> (offline, TIE-GCM)
+> Latent-State Dynamics (AR)
+> ζk+1  = F(ζk , uk ) +  waug
+> k
+> ζk = [z⊤
+> k , z⊤
+> k−1, . . . ,  z⊤
+> k−nAR +1
+> ]⊤
+> OFFLINE TRAINING
+> Onboard Satellite Measurements
+> yk = Haug  ζk + μ + vk
+> Haug  = [  H | 0 ] ∈ R1×naug
+> Kalman Filter — Predict & Update
+> PREDICT
+> ˆζk|k−1 = fSINDy
+> (
+> ζk−1|k−1, uk
+> )
+> Fk = Aaug  + Ξnl
+> ∂ϕ
+> ∂zk
+> ∣∣∣∣ˆzk−1|k−1
+> Paug
+> k|k−1 = Fk Paug
+> k−1|k−1 F⊤
+> k + Qaug
+> UPDATE
+> νk = yk − Haug  ˆζk|k−1 − μ Sk = Haug  Paug
+> k|k−1 H⊤
+> aug  + σ2
+> v,k
+> Kk = Paug
+> k|k−1 H⊤
+> aug  S−1
+> k ˆζk|k = ˆζk|k−1 + Kk νk
+> (Joseph form)
+> Paug
+> k|k = (I − Kk Haug
+> ) Paug
+> k|k−1
+> (I − Kk Haug
+> )⊤ + Kk σ2
+> v,k  K⊤
+> k
+> Full-State Reconstruction
+> Extract:  ˆzk|k = ˆζk|k
+> [1 :  r]
+> Project:  ˆxfull ,k  = W ˆzk|k + μ0
+> ASSIMILATION LOOP
+> Figure  1: Integrated framework for thermospheric density estimation, partitioned into offline training and real-time assimilation phases.
+
+–11– manuscript submitted to AGU 
+
+3.7 Multi-Satellite Assimilation in Reduced-Order Space 
+
+In practice, thermospheric density measurements are simultaneously available from multiple satellites in different orbital planes. The EKF formulation is generalized to han-dle Ns satellites simultaneously. Each satellite i occupies a distinct orbital position at time step k, yielding a per-satellite observation operator and mean offset 
+
+H(i) =
+
+
+
+ϕ(i)⊤
+
+W ∈ R1×r , μ(i) =
+
+
+
+ϕ(i)⊤
+
+μ0 ∈ R. (35) The scalar log-density measurement from satellite i satisfies 
+
+y(i) 
+
+> k
+
+= H(i) zk + μ(i) + v(i) 
+
+> k
+
+, v(i) 
+
+> k
+
+∼ N  0, σ 2
+
+> v,i
+
+ . (36) Assuming conditional independence of measurement errors across satellites, all available observations are stacked into an augmented measurement vector 
+
+yaug  
+
+> k
+
+=
+
+
+
+y(1) 
+
+> k
+
+y(2) 
+
+> k
+
+...
+
+y(Ns)
+
+> k
+
+ ∈ RNs , (37) with diagonal noise covariance Raug  
+
+> k
+
+= diag( σ2
+
+> v, 1
+
+, . . . , σ 2 
+
+> v,N s
+
+). The augmented measurement Jacobian is 
+
+Haug =
+
+
+
+H(1) 
+
+H(2) 
+
+...
+
+H(Ns)
+
+ ∈ RNs×r , (38) and the augmented innovation vector is 
+
+νaug  
+
+> k
+
+= yaug  
+
+> k
+
+− Haug ˆzk|k−1 − μaug , (39) where μaug = [ μ(1) , . . . , μ (Ns)]⊤. The multi-satellite observation operator is lifted to the companion state space by zero-padding beyond the current-step block, 
+
+Haug  
+
+> ζ
+
+=  Haug 0Ns×r n AR 
+
+ ∈ RNs×naug , (40) where Haug ∈ RNs×r is the stacked single-satellite observation matrix. The prediction step uses the analytical-Jacobian covariance propagation (25); the Kalman gain and pos-terior update are 
+
+Sk = Haug  
+
+> ζ
+
+Paug 
+
+> k|k−1
+
+
+
+Haug 
+
+> ζ
+
+⊤
+
++ Raug  
+
+> k
+
+, (41) 
+
+Kk = Paug 
+
+> k|k−1
+
+
+
+Haug 
+
+> ζ
+
+⊤
+
+S−1 
+
+> k
+
+, (42) ˆζk|k = ˆζk|k−1 + Kk νaug  
+
+> k
+
+, (43) with the Joseph-form covariance update 
+
+Paug  
+
+> k|k
+
+=
+
+
+
+I − Kk Haug 
+
+> ζ
+
+
+
+Paug 
+
+> k|k−1
+
+
+
+I − Kk Haug 
+
+> ζ
+
+⊤
+
++ Kk Raug  
+
+> k
+
+K⊤ 
+
+> k
+
+. (44) The updated current latent state ˆ zk|k is extracted from the top r components of ˆζk|k and projected back to the full density field via ˆ xfull ,k = Wˆzk|k + μ0. The computational cost of the EKF update remains tractable: although the augmented state dimension is 
+
+naug = r · (nAR + 1), both r and nAR are small (10 and 5, respectively), so naug = 60 and the dominant cost is the 60 × 60 covariance propagation. 
+
+–12– manuscript submitted to AGU 
+
+Table 1: Orbital parameters of the satellite missions considered in this work.                                         
+
+> Mission Operational period Alt. range (km) Inc. (deg) Ecc. Period (min)
+> CHAMP 2000-07 – 2010-09 456 – 250 87.18 0.004 93.6 GRACE 2002-03 – 2017-10 500 – 330 89.00 0.0025 94.5 GRACE-FO 2018-05 – present 490 – 475 89.00 0.002 94.0 GOCE 2009-03 – 2013-11 255 – 224 96.70 0.001 88.4 Swarm-A 2013-11 – present 462 – 430 87.35 0.001 93.7 Swarm-B 2013-11 – present 511 – 505 87.75 0.001 94.9 Swarm-C 2013-11 – present 462 – 430 87.35 0.001 93.7
+
+4 Methodology 
+
+The satellite datasets, the preprocessing applied to the raw measurements, and the procedure used to tune the EKF parameters are defined below; these choices determine the assimilation results reported in Section 5. 
+
+4.1 Data 
+
+4.1.1 Reference Model: TIE-GCM 
+
+The reduced-order dynamics model is trained entirely on output from the TIE-GCM (Qian et al., 2013b). TIE-GCM output provides the PCA basis W, the mean field μ0,and the SINDy c-AR coefficient matrices A, B, and Ξ. It is not assimilated during fil-ter operation. 
+
+4.1.2 In-Situ Satellite Density Measurements 
+
+Measurements from the following missions are considered: CHAMP, GRACE, GRACE-FO, GOCE, and Swarm A/B/C missions (da Encarna¸ c˜ ao et al., 2018; Visser & van den IJssel, 2016; van den IJssel et al., 2020; Siemes, Christian et al., 2023; TU Delft, n.d.). Each dataset provides density estimates sampled at 60-second intervals along the satel-lite orbit track. Table 1 summarizes the orbital parameters of the satellite missions considered in this work. Because all LEO missions experience altitude decay under atmospheric drag, altitudes are reported as the range spanned over each mission’s operational period rather than a single scalar. 
+
+4.1.3 External Forcing Drivers 
+
+The SINDy c-AR dynamics model requires time series of the solar and geomagnetic forcing indices described in Section 3.1. The solar 10.7 cm flux F10 .7, its 41-day histor-ical average ¯F10 .7, and the planetary geomagnetic index kp are obtained from publicly available datasets ( Laboratory for Atmospheric and Space Physics Interactive Solar Ir-radiance Data Center (LISIRD) , n.d.; Yaya, Philippe et al., 2017; Dudok de Wit, Thierry et al., 2014). Both quantities are available at hourly cadence and are interpolated to the 60-second filter time step using a piecewise cubic Hermite interpolating polynomial (PCHIP), which preserves monotonicity and avoids spurious oscillations near sharp geomagnetic enhancements. The driver vector uk includes the current values of F10 .7, ¯F10 .7, and kp,along with the circular time features t1, . . . , t 4 defined in Section 3.1. 
+
+–13– manuscript submitted to AGU 
+
+4.2 Preprocessing 
+
+Several preprocessing steps are applied to the raw satellite measurements before assimilation. 
+
+4.2.0.1 Negative density removal. A small number of raw accelerometer-derived density estimates are non-physical (negative), typically arising from accelerometer noise during low-drag conditions at high altitude or at solar minimum. These records are re-moved prior to any further processing. 
+
+4.2.0.2 Log-space transformation. Following the measurement model of Section 3.5, all density values are converted to log 10 units before assimilation. An empirical back-ground density from NRLMSIS 2.1 (Emmert et al., 2020) is computed along the satel-lite trajectory and stored alongside each measurement for use in benchmark comparisons. For measurements within 2000–2019, a HASDM (Storz et al., 2005) reference density is additionally interpolated along the satellite trajectory (cubic in longitude and latitude, log-PCHIP in altitude, linear in time) and stored alongside each measurement as a higher-fidelity benchmark. 
+
+4.2.0.3 Temporal alignment. The raw measurement timestamps are rounded to the nearest integer multiple of the 60-second filter step T2, and any measurements that do not fall on the filter time grid after rounding are discarded. 
+
+4.3 Filter Configuration and Parameter Tuning 
+
+4.3.1 Time Step and Resolution 
+
+The SINDy c-AR model is identified at an hourly cadence ( T1 = 3600 s). The EKF operates at the satellite measurement cadence with T2 = 60 s. The discrete-time sys-tem matrices are transformed from T1 to T2 as 
+
+AT2 = AT2/T 1 , (45) 
+
+BT2 = ( AT2 − I) ( A − I)−1 B, (46) subdividing each hourly step into T1/T 2 = 60 sub-intervals. 
+
+4.3.2 Reduced-Order Model 
+
+The reduced-order state is represented by r = 10 PCA components. The SINDy c-AR model is configured with nAR = 5 autoregressive lags, spanning a 5-hour memory window. The SINDy library includes polynomial terms up to second order with cross terms 
+
+ziuk. Ridge regression is used with α = 500 ,000, and all variables are standardized to unit variance prior to regression. The regularization strength was selected by a coarse grid search over α ∈ { 10 3, 10 4, 10 5, 5×10 5, 10 6} on a held-out TIE-GCM forecast win-dow, choosing the value that minimized open-loop reconstruction error while preserv-ing sparsity of the identified coefficients. 
+
+4.3.3 Initial Conditions and Covariance Tuning 
+
+Three covariance matrices govern the balance between model forecast and obser-vational correction: the initial state covariance P0|0, the process noise covariance Q, and the measurement noise covariance R. The first two were set through an iterative man-ual tuning procedure carried out over representative assimilation windows. At each it-eration, candidate P0|0 and Q values were scored against three criteria: (i) stability and non-divergence of the diagonal elements of Pk|k over the assimilation window, (ii) reduc-tion of assimilated MAPE relative to the open-loop forecast on a held-out window, and (iii) innovation magnitudes that remain consistent with the variances implied by R. The  
+
+> –14– manuscript submitted to AGU
+
+procedure is deliberately manual rather than innovation-based adaptive; principled on-line tuning via expectation-maximization or similar methods is deferred to future work (Section 7). The filter is initialized with ˆ z0|0 = 0 and the augmented covariance Paug 0|0 ∈ Rnaug ×naug 
+
+initialized as a block-diagonal matrix with each r×r block set to P0|0 = 10 Ir , reflect-ing broad initial uncertainty across all lag blocks. The process noise covariance of the current-step block is set as a diagonal matrix 
+
+Q = diag 
+
+q1, q 1, q 2, . . . , q 2
+
+| {z }
+
+> r−2
+
+ , (47) where q1 = 10 −2 is assigned to the first two components and q2 = 10 −3 to the remain-ing r−2; the augmented process noise Qaug embeds Q in its top-left block with zeros elsewhere (Eq. (16)). The order-of-magnitude larger value assigned to the dominant PCA modes reflects that these carry the largest-amplitude variability and are therefore sub-ject to the largest stochastic forcing in absolute terms. A spin-up period of several hours is used before assimilated results are evaluated. 
+
+4.3.4 Measurement Noise Covariance 
+
+The measurement noise variance σ2 
+
+> v,k
+
+is estimated per-observation using a Monte Carlo approach (Mehta & Linares, 2018). A relative sensor error of 5% in linear density units is assumed, generating NMC = 100 perturbed samples ˜ρ(s) 
+
+> k
+
+= ρmeas 
+
+> k
+
+
+
+1 + ϵ(s)
+
+, ϵ(s) ∼ U (−0.05 , 0.05) . (48) The variance of log 10 (˜ ρ(s) 
+
+> k
+
+) across samples gives σ2
+
+> v,k
+
+, consistent with σ2 
+
+> v
+
+≈ (∆ ρ/ρ )2/ ln 2(10). 
+
+4.3.5 Experimental Design 
+
+Each assimilation experiment is defined by a start and stop date, a designated as-similation satellite, and a designated validation satellite whose measurements are with-held from the filter and used only for independent verification. The open-loop SINDy c-AR forecast, NRLMSIS 2.1, and HASDM (within its 2000–2019 window) serve as base-line comparisons. Performance is quantified using MAPE as described in Section 5. 
+
+5 Results 
+
+The subsections below report the performance of the SINDy c-AR reduced-order model combined with in situ density measurements through the EKF framework. Five assimilation configurations are evaluated across three geomagnetic periods: two single-satellite cases (CHAMP/GRACE during the 2003 Halloween storm, GRACE-FO/Swarm-C during the May 2024 storm) and three November 2009 configurations of increasing ob-servational coverage (CHAMP only, CHAMP+GRACE, and CHAMP+GRACE+GOCE). The same model structure, reduced-order basis, and filter parameters are used through-out, only the assimilated measurement set varies. Performance is quantified using Mean Absolute Percentage Error (MAPE), MAPE = 100 
+
+N
+
+> N
+
+X
+
+> k=1
+
+ˆρk − ρmeas 
+
+> k
+
+ρmeas 
+
+> k
+
+, (49) where ˆ ρk and ρmeas  
+
+> k
+
+are the estimated and measured densities at time step k. MAPE is selected for its scale-invariant character across the wide dynamic range of thermospheric density. All five configurations are evaluated against both the open-loop SINDy c-AR fore-cast and NRLMSIS 2.1 as a physics-based empirical baseline, and additionally against  
+
+> –15– manuscript submitted to AGU
+
+HASDM (Storz et al., 2005) as a higher-fidelity reference for scenarios within its 2000– 2019 coverage. A linear DMDc model is also evaluated under the same conditions. Re-sults should be interpreted as demonstrating improvement relative to the open-loop fore-cast rather than as a claim of universal superiority over these empirical references, which in some single-satellite cases outperform the assimilated model on withheld orbits when the validation satellite occupies an altitude or local-time regime not well-covered by the assimilated track. Global density maps at 400 km altitude are shown for the two primary scenarios to provide a qualitative evaluation of large-scale spatial consistency. 
+
+5.1 Single-satellite assimilation: Halloween storm 
+
+The primary single-satellite scenario assimilates CHAMP density measurements during the October–November 2003 Halloween storm (26 Oct – 7 Nov 2003, kp ≥ 8) (Tapley et al., 2004; Reigber et al., 2002), with GRACE withheld for independent validation. This configuration tests generalization across differences in orbital altitude, local time, and satellite characteristics during a geomagnetically extreme interval. Figure 3a shows the solar and geomagnetic driver time series. The period is char-acterized by sharp, large-amplitude increases in kp, driving rapid density enhancements (Thomson et al., 2004). Figure 2 compares the reconstructed density with in situ measurements along both the assimilated CHAMP orbit and the withheld GRACE orbit. For clarity, the re-sults are shown over a shorter time interval than the full assimilation period, enabling a zoomed-in view. Despite being calibrated only by CHAMP observations, the assim-ilated model tracks the timing and magnitude of major storm-time density enhancements with limited phase lag, correcting the open-loop overprediction of peak densities. Val-idation against GRACE shows a similar improvement: withheld-orbit MAPE of 22.08% under kp ≥ 8 conditions, compared with 98.80% for the open-loop forecast, 58.72% for NRLMSIS 2.1, and 51.78% for HASDM, confirming cross-orbit generalization during the storm interval. Along the assimilated CHAMP orbit, HASDM yields a MAPE of 36.74% compared with 49.00% for NRLMSIS 2.1. 
+
+Figure 2: Reconstructed thermospheric density during the Halloween storm period com-pared against independent GRACE measurements. CHAMP observations are assimilated, and GRACE data are withheld for validation. 
+
+> –16–
+
+manuscript submitted to AGU 2003-10-27 
+
+> 2003-10-29
+> 2003-10-31
+> 2003-11-01
+> 2003-11-03
+> 2003-11-05
+> 2003-11-07
+
+Time 
+
+> 0
+> 2
+> 4
+> 6
+> 8
+> Kp Index
+> Kp
+> F10.7
+> 100
+> 150
+> 200
+> 250
+> F10.7 [sfu]
+
+(a) Solar and geomagnetic drivers 2003-10-26 
+
+> 00:00
+> 2003-10-27
+> 17:08
+> 2003-10-29
+> 10:16
+> 2003-10-31
+> 03:25
+> 2003-11-01
+> 20:33
+> 2003-11-03
+> 13:42
+> 2003-11-05
+> 06:50
+> 2003-11-06
+> 23:59
+> Time
+> 12345678910
+> State
+> 0.0
+> 0.5
+> 1.0
+> 1.5
+> 2.0
+> 2.5
+> 3.0
+> Normalized change
+
+(b) Assimilated reduced-order state 
+
+Figure 3: External drivers and assimilated reduced-order state during the Halloween storm. The latent-state heatmap (b) is provided for completeness; a full physical interpre-tation of individual latent modes is deferred to future work (Section 7). Quantitative results are reported in Table 2. Assimilation reduces CHAMP MAPE from 85.92% (open-loop) to 9.24%, and GRACE validation MAPE from 98.80% to 22.08%, outperforming both the open-loop model and NRLMSIS 2.1. A second single-satellite scenario (GRACE-FO assimilated, Swarm-C withheld, May 2024 storm) tests cross-orbit transferability outside the model training period; results are included in Table 2 and show consistent improvement, with GRACE-FO MAPE reduced from 94.79% to 8.73% and Swarm-C validation MAPE reduced from 94.04% to 51.65%. 
+
+–17– manuscript submitted to AGU 0 5 10 15 20                
+
+> Local Solar Time (hours)
+> −80
+> −60
+> −40
+> −20
+> 0
+> 20
+> 40
+> 60
+> 80
+> Latitude (deg)
+> TIEGCM Density @ ~400 km
+> 2003-11-07 00:00:00
+> 0510 15 20
+> Local Solar Time (hours)
+> −80
+> −60
+> −40
+> −20
+> 0
+> 20
+> 40
+> 60
+> 80
+> Latitude (deg)
+> Open-Loop Predicted Density @ ~400 km
+> 2003-11-07 00:00:00
+> 0510 15 20
+> Local Solar Time (hours)
+> −80
+> −60
+> −40
+> −20
+> 0
+> 20
+> 40
+> 60
+> 80
+> Latitude (deg)
+> Assimilated Density @ ~400 km
+> 2003-11-07 00:00:00
+> 0510 15 20
+> Local Solar Time (hours)
+> −80
+> −60
+> −40
+> −20
+> 0
+> 20
+> 40
+> 60
+> 80
+> Latitude (deg)
+> Residual: ρassim −ρopen
+> 2 × 10 −12
+> 3 × 10 −12
+> 4 × 10 −12
+> 6 × 10 −12
+> Density (kg/m³)
+> −2
+> 0
+> 2
+> ρassim  − ρopen
+> 1e−12
+
+Figure 4: Global density diagnostics at 400 km (latitude vs. local solar time) for the Halloween storm scenario: TIE-GCM reference, open-loop prediction, assimilated field, and residual ρassim − ρopen . Assimilation adjusts the global density field toward observed values. 
+
+5.2 Dual- and multi-satellite assimilation: November 2009 
+
+This scenario targets November 2009, a moderate-activity interval near the declin-ing phase of solar cycle 23 during which CHAMP, GRACE, and GOCE all provide si-multaneous in situ density coverage. The concurrent availability of three satellites at dis-tinct altitudes and local-time regimes makes this period a natural testbed for dual- and multi-satellite assimilation and for evaluating cross-orbit generalization. CHAMP and GRACE are assimilated simultaneously while GOCE is withheld for validation (dual-satellite case). Figure 6 shows the November 2009 forcing and the as-similated latent state. Figure 5 compares the reconstructed densities with measurements along all three satellite tracks. The time window is shortened relative to the full assim-ilation period to improve plot readability. Assimilation reduces residual errors along both assimilated orbits and substantially improves estimates along the withheld GOCE or-bit, demonstrating cross-orbit and cross-altitude generalization. As shown in Table 2, dual-satellite assimilation reduces CHAMP MAPE from 59.94% to 5.12% and GRACE MAPE from 44.96% to 6.19%, while GOCE validation MAPE im-proves from 73.88% to 24.54%. Adding GOCE to the assimilation set (multi-satellite, three-satellite case) yields a GOCE MAPE of 3.47%, confirming that additional mea-surement streams continue to improve global latent-state calibration with limited redun-dancy. For comparison, a single-satellite baseline (CHAMP only, GOCE withheld) yields GOCE validation MAPE of 29.98%, illustrating the clear benefit of multi-orbit cover-age for cross-orbit generalization. 
+
+5.3 Summary of MAPE across all scenarios 
+
+Table 2 consolidates MAPE results for both the SINDy c-AR and DMDc reduced-order models across all assimilation scenarios. Assimilation yields large reductions rel-ative to open-loop for both models in all scenarios, confirming the effectiveness of the EKF correction. On assimilated orbits the two models are broadly competitive, with DMDc matching or modestly outperforming SINDy c-AR in several cases (e.g., Halloween CHAMP and November 2009 multi-satellite CHAMP/GRACE). On withheld validation orbits within the training period, SINDy c-AR achieves lower MAPE, suggesting that the nonlinear li-brary generalizes more favorably across orbital geometries not directly observed when the evaluation window overlaps the training regime. On the 2024 out-of-training test the ordering reverses (DMDc 43.71% vs SINDy c-AR 51.65% on withheld Swarm-C), indi-cating that this generalization advantage is scenario-dependent. A plausible mechanism is driver-regime extrapolation: the 2024 storm occurred well outside the 1996–2009 SINDy c-
+
+–18– manuscript submitted to AGU 
+
+Figure 5: Reconstructed thermospheric density during November 2009 compared against GOCE measurements (withheld). CHAMP and GRACE are assimilated simultaneously. AR training window, and the polynomial library terms zizj , ziuk, and ukul extrapolate less gracefully than a purely linear operator once the driver statistics fall outside their fitted support. Under such conditions the linear DMDc representation incurs bounded linear extrapolation error, whereas the nonlinear library can amplify deviations, which is consistent with the observed ordering. Adding satellites to the assimilation set does not monotonically reduce every individual orbit’s MAPE: in the November 2009 multi-satellite case, CHAMP and GRACE MAPEs are slightly higher than in the dual-satellite case, reflecting a redistribution of filter corrections as the shared latent state is calibrated by additional, geometrically distinct measurements. The benefit of multi-satellite assim-ilation is global coverage, evident in the order-of-magnitude improvement of GOCE MAPE once it enters the assimilation set (29.98% single-sat validation to 24.54% dual-sat val-idation to 3.47% multi-sat assimilated). The 2024 GRACE-FO to Swarm-C scenario re-mains the most challenging configuration, with Swarm-C validation MAPE of 51.65%, consistent with the difficulty of generalizing across altitude and local-time regimes in an out-of-training-period interval. In some single-satellite cases, NRLMSIS 2.1 and HASDM outperform the assimilated reduced-order model on withheld orbits, particularly when the validation satellite occupies an altitude or local-time regime not well-covered by the assimilated track. HASDM is included as a higher-fidelity reference for all scenarios within its 2000–2019 coverage; values are omitted for the 2024 Swarm-C scenario, which falls outside that window. Results should therefore be interpreted as an improvement rela-tive to the open-loop forecast rather than universal superiority over these empirical ref-erences. 
+
+> –19–
+
+manuscript submitted to AGU 2009-11-15 
+
+2009-11-17 
+
+2009-11-19 
+
+2009-11-21 
+
+2009-11-23 
+
+2009-11-25 
+
+2009-11-27 
+
+Time 
+
+0
+
+1
+
+2
+
+3
+
+> Kp Index
+
+Kp 
+
+F10.7 
+
+71 
+
+72 
+
+73 
+
+74 
+
+75 
+
+> F10.7 [sfu]
+
+(a) Solar and geomagnetic drivers 2009-11-14 
+
+> 00:00
+> 2009-11-15
+> 23:59
+> 2009-11-17
+> 23:59
+> 2009-11-19
+> 23:59
+> 2009-11-21
+> 23:59
+> 2009-11-23
+> 23:59
+> 2009-11-25
+> 23:59
+> 2009-11-27
+> 23:59
+
+Time 
+
+> 12345678910
+> State
+
+Normalized Change in Each State Due to Assimilation 
+
+2
+
+4
+
+6
+
+8
+
+10 
+
+> Normalized change
+
+(b) Assimilated reduced-order state 
+
+Figure 6: External drivers and assimilated reduced-order state during November 2009. The latent-state heatmap (b) is provided for completeness; a full physical interpretation of individual latent modes is deferred to future work (Section 7). 0 5 10 15 20 
+
+> Local Solar Time (hours)
+> −80
+> −60
+> −40
+> −20
+> 0
+> 20
+> 40
+> 60
+> 80
+> Latitude (deg)
+
+TIEGCM Density @ ~400 km 
+
+2009-11-28 00:00:00     
+
+> 0510 15 20
+> Local Solar Time (hours)
+> −80
+> −60
+> −40
+> −20
+> 0
+> 20
+> 40
+> 60
+> 80
+> Latitude (deg)
+
+Open-Loop Predicted Density @ ~400 km 
+
+2009-11-28 00:00:00     
+
+> 0510 15 20
+> Local Solar Time (hours)
+> −80
+> −60
+> −40
+> −20
+> 0
+> 20
+> 40
+> 60
+> 80
+> Latitude (deg)
+
+Assimilated Density @ ~400 km 
+
+2009-11-28 00:00:00     
+
+> 0510 15 20
+> Local Solar Time (hours)
+> −80
+> −60
+> −40
+> −20
+> 0
+> 20
+> 40
+> 60
+> 80
+> Latitude (deg)
+
+Residual: ρassim − ρopen 
+
+> 10 −13
+> 10 −12
+> 2 × 10 −13
+> 3 × 10 −13
+> 4 × 10 −13
+> 6 × 10 −13
+> Density (kg/m³)
+> −5
+> 0
+> 5
+> ρassim  − ρopen
+> 1e−13
+
+Figure 7: Global density diagnostics at 400 km for the dual-satellite November 2009 sce-nario: TIE-GCM reference, open-loop prediction, assimilated field, and residual. 
+
+–20– manuscript submitted to AGU 
+
+> Table 2: MAPE (%) summary across all assimilation scenarios for SINDy c-AR and DMDc reduced-order models. “A” = assimilated orbit, “V” = with-held validation orbit. Open-loop (OL), NRLMSIS 2.1 (MSIS), and HASDM values are shown for reference; HASDM entries are reported as “—” when the scenario lies outside its 2000–2019 coverage window. All November 2009 scenarios share the same open-loop values.
+> Scenario  Orbit  Role  SINDy c-AR  DMDc  Open-loop  MSIS  HASDM
+> Single-satellite — 2003 Halloween storm
+> CHAMP to GRACE  CHAMP  A 9.24  6.07  85.92  49.00  36.74 GRACE  V 22.08  40.09  98.80  58.72  51.78
+> Single-satellite — 2024 geomagnetic storm
+> GRACE-FO to Swarm-C  GRACE-FO  A 8.73  12.44  94.79  58.46  —Swarm-C  V 51.65  43.71  94.04  57.37  —
+> November 2009 — single-satellite baseline
+> CHAMP to GOCE  CHAMP  A 6.40  11.72  59.94  24.54  40.70 GOCE  V 29.98  92.92  73.88  15.67  31.80
+> November 2009 — dual-satellite
+> CHAMP + GRACE to GOCE  CHAMP  A 5.12  18.75  59.94  24.54  40.70 GRACE  A 6.19  12.18  44.96  29.20  48.29 GOCE  V 24.54  67.12  73.88  15.67  31.80
+> November 2009 — multi-satellite (three satellites)
+> CHAMP + GRACE + GOCE  CHAMP  A 10.57  8.46  59.94  24.54  40.70 GRACE  A 13.03  10.78  44.96  29.20  48.29 GOCE  A 3.47  4.61  73.88  15.67  31.80
+
+–21– manuscript submitted to AGU 
+
+6 Long-Term Assimilated Thermospheric Density Dataset 
+
+To support reproducibility and enable broader scientific use, a long-term assimi-lated thermospheric density dataset is released alongside this work. The dataset spans August 2000 through December 2025 and is constructed using all available in situ mass density observations from the candidate LEO satellite missions considered in this work. Satellite availability varies across the 2000–2025 span; the filter ingests whatever sub-set of missions is active at each epoch. The released dataset represents a continuous record composed of single-, dual-, and multi-satellite assimilation periods, reflecting the evolving observational coverage of mis-sions such as CHAMP, GRACE, GRACE-FO, GOCE, and Swarm. When only a single satellite is available, the filter calibrates the reduced-order state using that measurement stream alone. During periods of overlapping missions, multiple satellites are assimilated simultaneously (Figure 8), improving altitude and local-time coverage of the reconstructed density field. In periods with no available measurements, the dataset defaults to the open-loop reduced-order model propagation. The released product supports two primary uses. It provides a dynamically con-sistent, observation-calibrated estimate of thermospheric density that reduces residual bias relative to the open-loop reduced-order model during periods of elevated solar or geomagnetic activity. The multi-satellite assimilation intervals in particular improve cross-orbit and cross-altitude consistency relative to single-satellite calibration. Data are pro-vided in HDF5 format with metadata covering time stamps, satellite availability flags, assimilation configuration indicators, and references to the assimilated measurement sources. The dataset is hosted at (Narayanan, 2026) documenting the complete variable list, spa-tial resolution, temporal cadence, and recommended usage guidance for the released prod-uct. Citation information for the dataset is included in the Zenodo record. CHAMP                    
+
+> GRACE
+> GOCE
+> Swarm-A
+> Swarm-B
+> Swarm-C
+> GRACE-FO
+> 2000 2002 2004 2006 2008 2010 2012 2014 2016 2018 2020 2022 2024 2026
+> 1232434No. active
+> Year
+
+Figure 8: Timeline of satellite missions providing density measurements from August 2000 to December 2025, indicating periods of data availability and overlap for multi-satellite measurement assimilation. 
+
+7 Conclusion and Future Work 
+
+7.1 Summary 
+
+The framework developed here integrates PCA-based dimensionality reduction, sparse autoregressive dynamics identification via SINDy c-AR, and sequential state estimation via an extended Kalman filter. A key clarification of the SINDy c-AR model, informed by the original SINDy formulation (Brunton et al., 2016a), is that the dynamics are lin-ear in the identified sparse coefficients Ξ, with nonlinearity entering through the fixed library map Θ. Because the AR model depends on multiple lagged states, the filter op-
+
+–22– manuscript submitted to AGU 
+
+erates on an augmented companion-form state ζk = [ z⊤ 
+
+> k
+
+, z⊤
+
+> k−1
+
+, . . . , z⊤ 
+
+> k−nAR
+
+]⊤ ∈ Rr(nAR +1) ,whose covariance is propagated through the block-companion matrix Aaug . This aug-mented propagation correctly captures the cross-lag correlations that a reduced-dimension (r×r) propagation would neglect. The analytical Jacobian of the full SINDy c-AR pro-cess, Fk = Aaug + Ξnl ∂ϕ/∂ zk, is computed at each step and used to propagate the error covariance consistently with the first-order Taylor expansion, without absorbing the nonlinear library contribution into an inflated process noise. The process noise Q
+
+is therefore intended to represent stochastic model uncertainty; in this work Q was set via the iterative manual tuning procedure described in Section 4.3, and empirical val-idation that it is consistent with observed innovation statistics is identified as future work. The Joseph stabilized form is used for all covariance updates to guarantee positive semi-definiteness. The log-density observation model yields an affine measurement function whose Ja-cobian is state-independent, making the EKF update exact for the measurement step (subject to positivity of the reconstructed linear density at the satellite location, which was satisfied throughout all reported scenarios) and well-conditioned across the full dy-namic range of thermospheric density. The framework was evaluated across three assim-ilation scenarios during both geomagnetically active and quiet periods. Assimilation con-sistently reduces density estimation errors along assimilated orbit tracks relative to the open-loop SINDy c-AR forecast. Multi-satellite assimilation improves cross-orbit and cross-altitude reconstruction by calibrating the shared latent state from multiple orbital ge-ometries simultaneously, although adding GOCE to the November 2009 assimilation set modestly increased CHAMP and GRACE MAPE (from 5.12% and 6.19% in the dual-satellite case to 10.57% and 13.03% in the three-satellite case), consistent with a redis-tribution of filter corrections across geometrically distinct measurements. The nonlin-ear library formulation and the linear DMDc baseline are broadly competitive on assim-ilated orbits, and SINDy c-AR yields lower errors than DMDc on withheld validation or-bits in the in-training-period scenarios. On the out-of-training 2024 Swarm-C case, DMDc modestly outperforms SINDy c-AR (43.71% vs 51.65% MAPE), indicating that the gen-eralization advantage of the nonlinear library is scenario-dependent rather than univer-sal. A long-term assimilated density dataset spanning 2000–2025 is released alongside this work. 
+
+7.2 Limitations 
+
+Several limitations of the current framework should be noted. First, the reduced-order model is trained on TIE-GCM output; its accuracy is therefore bounded by the fidelity of TIE-GCM and does not directly incorporate observational climatology. Sec-ond, the choice of a fixed r = 10 PCA basis is heuristic and may underrepresent mesoscale and high-latitude density structures during extreme storm conditions. Third, the pro-cess noise covariance Q, the initial covariance P0|0, and the uniform 5% relative measurement-error assumption underlying R were set through the iterative manual tuning procedure described in Section 4.3, which is criterion-driven but not a formal sensitivity study. Per-mission measurement-noise budgets (e.g., based on published per-mission uncertainty characterizations) are likewise not reported here, and both simplifications may affect ab-solute MAPE values. Fourth, while multi-satellite assimilation consistently improves es-timates along assimilated tracks, cross-orbit generalization to withheld orbits remains partial. Localized in situ measurements can pull the shared latent state toward a glob-ally consistent correction, but that correction is inherently biased toward the altitude and local-time regions that the assimilated tracks sample; only with adequate spatial and temporal observational coverage does the assimilated state approach a truly self-consistent global solution. In some cases, the assimilated model does not outperform NRLMSIS 2.1 or HASDM on independent validation orbits, particularly when the withheld satellite occupies a substantially different altitude or local-time regime. Finally, the physical in-terpretation of the normalized latent states and density residuals shown in the diagnos- 
+
+> –23– manuscript submitted to AGU
+
+tic figures is beyond the scope of this manuscript and is deferred to future work. These limitations motivate the future work directions described below. 
+
+7.3 Future Work 
+
+7.3.1 Extension to higher-fidelity reference environments. 
+
+Scenario-level HASDM comparisons are already reported in Section 5 as a higher-fidelity empirical reference. The next phase extends the framework to assimilate HASDM-derived density fields directly within the filter and to incorporate TLE-based energy dis-sipation rate (EDR) density estimates, aligning the inputs with the density products used in operational space situational awareness. TLE-derived densities are attractive because they are available continuously for the full cataloged LEO population across multiple decades, offering the spatial and temporal coverage needed to move from scenario-level assimi-lation toward a continuously assimilated multi-decade thermospheric density record. 
+
+7.3.2 Adaptive covariance tuning. 
+
+Although the analytical Jacobian Fk removes the need for an inflated process noise to compensate for linearization error, the process noise Q still represents genuine stochas-tic uncertainty that was set via the manual tuning procedure of Section 4.3 in this work. Innovation-based adaptive estimation methods such as expectation-maximization would provide principled online tuning of Q, particularly valuable during storm onset when the stochastic model error structure changes rapidly. 
+
+7.3.3 Ensemble extensions. 
+
+An ensemble Kalman filter (EnKF) or unscented Kalman filter (UKF) formulation in the same latent space would provide a more faithful representation of forecast uncer-tainty and would naturally handle the nonlinear relationship between the latent state and physical density in full-space reconstruction. 
+
+7.3.4 Incorporation of additional measurement types. 
+
+The framework is flexible and can be extended to incorporate other measurement types, such as GPS-based measurements or remote sensing observations of thermospheric composition (Michek & Mehta, 2026), provided the measurement can be related to the latent state through a known mapping. 
+
+Open Research Section 
+
+All data and code necessary to reproduce the analyses presented in this manuscript are publicly available on Zenodo at https://doi.org/10.5281/zenodo.19947885 .
+
+Acknowledgments 
+
+This work was supported in part by the Office of the Director of National Intel-ligence (ODNI), Intelligence Advanced Research Projects Activity (IARPA), under con-tract 2023-23060200005. The views and conclusions presented herein are those of the au-thors and do not necessarily reflect the official policies or endorsements of ODNI, IARPA, or the U.S. Government. This work is also supported in part by the University of Col-orado Boulder (OSC via CU CIRES). The authors also thank the members of the As-trodynamics, Space Science & Space Technology (ASSIST) lab at WVU for their sup-port.  
+
+> –24– manuscript submitted to AGU
+
+References 
+
+Arbabi, H., & Mezic, I. (2017). Ergodic theory, dynamic mode decomposition, and computation of spectral properties of the koopman operator. SIAM Journal on Applied Dynamical Systems , 16 (4), 2096–2126. Barlier, F., Berger, C., Falin, J. L., Kockarts, G., & Thuillier, G. (1978). A thermo-spheric model based on satellite drag data. Annales de Geophysique , 34 , 9–24. Berger, C., Biancale, R., Ill, M., & Barlier, F. (1998). Improvement of the empirical thermospheric model dtm: Dtm94—a comparative review of various temporal variations and prospects in space geodesy applications. Journal of Geodesy ,
+
+72 , 161–178. doi: 10.1007/s001900050158 Bowman, B. R., Tobiska, W. K., Marcos, F. A., Huang, C. Y., Lin, C. S., & Burke, W. J. (2008). A new empirical thermospheric density model jb2008 using new solar and geomagnetic indices. In Aiaa/aas astrodynamics specialist conference and exhibit. Honolulu, Hawaii. Bowman, B. R., Tobiska, W. K., Marcos, F. A., & Valladares, C. (2008). The jb2006 empirical thermospheric density model. Journal of Atmospheric and Solar-Terrestrial Physics , 70 , 774–793. doi: 10.1016/j.jastp.2007.10.002 Bruinsma, S., Thuillier, G., & Barlier, F. (2003). The dtm-2000 empirical ther-mosphere model with new data assimilation and constraints at lower bound-ary: Accuracy and properties. Journal of Atmospheric and Solar-Terrestrial Physics , 65 , 1053–1070. doi: 10.1016/S1364-6826(03)00137-8 Brunton, S. L., Budiˇ si´ c, M., Kaiser, E., & Kutz, J. N. (2021). Modern koopman the-ory for dynamical systems. doi: https://doi.org/10.48550/arXiv.2102.12086 Brunton, S. L., Proctor, J. L., & Kutz, J. N. (2016a). Discovering governing equa-tions from data by sparse identification of nonlinear dynamical systems. 
+
+Proceedings of the National Academy of Sciences , 113 (15), 3932–3937. doi: 10.1073/pnas.1517384113 Brunton, S. L., Proctor, J. L., & Kutz, J. N. (2016b). Sparse identification of non-linear dynamics with control (sindyc). In Ifac-papersonline (Vol. 49, pp. 710– 715). (10th IFAC Symposium on Nonlinear Control Systems (NOLCOS 2016)) doi: 10.1016/j.ifacol.2016.10.249 Codrescu, M. V., Fuller-Rowell, T. J., & Minter, C. F. (2004). An ensemble-type kalman filter for neutral thermospheric composition during geomagnetic storms. Space Weather , 2 , S11002. doi: 10.1029/2004SW000088 Codrescu, S. M., Codrescu, M. V., & Fedrizzi, M. (2018). An ensemble kalman fil-ter for the thermosphere-ionosphere. Space Weather , 16 , 57–68. doi: 10.1002/ 2017SW001752 da Encarna¸ c˜ ao, J. T., Arnold, D., Bezdˇ ek, A., Dahle, C., Doornbos, E., van den IJssel, J., . . . Zehentner, N. (2018). Swarm accelerometer data process-ing from raw accelerations to thermospheric neutral densities 2. aeron-omy swarm science results after two years in space.. Retrieved from 
+
+https://api.semanticscholar.org/CorpusID:197551811 
+
+Dudok de Wit, Thierry, Bruinsma, Sean, & Shibasaki, Kiyoto. (2014). Synop-tic radio observations as proxies for upper atmosphere modelling. J. Space Weather Space Clim. , 4 , A06. Retrieved from https://doi.org/10.1051/ swsc/2014003 doi: 10.1051/swsc/2014003 Emmert, J. T., Drob, D. P., Picone, J. M., Siskind, D. E., Jones, M. J., Mlynczak, M. G., . . . Yuan, T. (2020). Nrlmsis 2.0: A whole-atmosphere empirical model of temperature and neutral species densities. Space Weather . doi: 10.1029/2020EA001321 Emmert, J. T., & Picone, J. M. (2010). Climatology of globally averaged thermo-spheric mass density. Journal of Geophysical Research , 115 , A09326. doi: 10 .1029/2010JA015298  
+
+> –25– manuscript submitted to AGU
+
+Fuller-Rowell, T., Wu, F., Akmaev, R., Fang, T.-W., & Araujo-Pradere, E. (2010). A whole atmosphere model simulation of the impact of a sudden stratospheric warming on thermosphere dynamics and electrodynamics. Journal of Geophys-ical Research: Space Physics , 115 (A10). Fuller-Rowell, T. J., Minter, C. F., & Codrescu, M. V. (2004). Data assimilation for neutral thermospheric species during geomagnetic storms. Radio Science , 39 ,RS1S03. doi: 10.1029/2002RS002835 Golub, G. H., & Reinsch, C. (1970). Singular value decomposition and least squares solutions. Numerische Mathematik , 14 (5), 403–420. Guo, J., Wan, W., Forbes, J. M., Sutton, E., Nerem, R. S., & Bruinsma, S. (2008). Interannual and latitudinal variability of the thermosphere den-sity annual harmonics. Journal of Geophysical Research , 113 , A08301. doi: 10.1029/2008JA013056 Guo, J., Wan, W., Forbes, J. M., Sutton, E., Nerem, R. S., Woods, T. N., . . . Liu, L. (2007). Effects of solar variability on thermosphere density from champ accelerometer data. Journal of Geophysical Research , 112 , A10308. doi: 10.1029/2007JA012409 Jacchia, L. G. (1959). Solar effects on the acceleration of artificial satellites (Tech. Rep. No. 29). Cambridge, MA: Smithsonian Astrophysical Observatory. Jacchia, L. G. (1970). New static models of the thermosphere and exosphere with empirical temperature profiles (Tech. Rep. No. 313). Cambridge, MA: Smithso-nian Astrophysical Observatory. Jacchia, L. G., Slowey, J., & Verniani, F. (1967). Geomagnetic perturbations and upper-atmosphere heating. Journal of Geophysical Research , 72 , 1423–1434. doi: 10.1029/JZ072i005p01423 Jolliffe, I. (2011). Principal component analysis. In M. Lovric (Ed.), Interna-tional encyclopedia of statistical science (pp. 1094–1096). Berlin, Heidelberg: Springer. King-Hele, D. (1987). Satellite orbits in an atmosphere: Theory and application .London: Blackie and Son. 
+
+Laboratory for atmospheric and space physics interactive solar irradiance data center (lisird). (n.d.). Retrieved 2026-02-24, from https://lasp.colorado.edu/ lisird/data 
+
+Lean, J. L., Picone, J. M., Emmert, J. T., & Moore, G. (2006). Thermospheric densities derived from spacecraft orbits: Application to the starshine satellites. 
+
+Journal of Geophysical Research , 111 , A04301. doi: 10.1029/2005JA011399 Licata, R. J., & Mehta, P. M. (2023). Reduced order probabilistic emulation for physics-based thermosphere models. Space Weather . doi: https://doi.org/10 .1029/2022SW003345 Liu, H., & L¨ uehr, H. (2005). Strong disturbance of the upper thermospheric den-sity due to magnetic storms: Champ observations. Journal of Geophysical Re-search , 110 , A09S29. doi: 10.1029/2004JA010908 Marquardt, D. W., & Snee, R. D. (1975). Ridge regression in practice. The Ameri-can Statistician , 29 (1), 3–20. Matsuo, T., Fedrizzi, M., Fuller-Rowell, T. J., & Codrescu, M. V. (2012). Data as-similation of thermospheric mass density. Space Weather , 10 , S05002. doi: 10 .1029/2012SW000773 Matsuo, T., & Forbes, J. M. (2010). Principal modes of thermospheric density variability: Empirical orthogonal function analysis of champ 2001–2008 data. 
+
+Journal of Geophysical Research , 115 , A07309. doi: 10.1029/2009JA015109 Matsuo, T., & Knipp, D. J. (2013). Thermospheric mass density specification: Syn-thesis of observations and models (Tech. Rep. No. DTIC ADA592729). Air Force Research Laboratory (AFRL). Matsuo, T., Lee, I.-T., & Anderson, J. L. (2013). Thermospheric mass density specification using an ensemble kalman filter. Journal of Geophysical Research:  
+
+> –26– manuscript submitted to AGU
+
+Space Physics , 118 , 1339–1350. doi: 10.1002/jgra.50162 Mehta, P. M., & Licata, R. J. (2025). Tie-gcm rope - dimensionality reduction: Part i. Space Weather . doi: https://doi.org/10.1029/2024SW004185 Mehta, P. M., & Linares, R. (2017). A methodology for reduced order modeling and calibration of the upper atmosphere. Space Weather , 15 , 1270–1287. doi: 10 .1002/2017SW001642 Mehta, P. M., & Linares, R. (2018). A new transformative framework for data as-similation and calibration of physical ionosphere-thermosphere models. Space Weather , 16 (8), 1086–1100. doi: 10.1029/2018SW001875 Mehta, P. M., Linares, R., & Sutton, E. K. (2018a). A quasi-physical dynamic reduced order model for thermospheric mass density via hermitian space-dynamic mode decomposition. Space Weather . doi: 10.1029/2018SW001840 Mehta, P. M., Linares, R., & Sutton, E. K. (2018b). A quasi-physical dynamic reduced order model for thermospheric mass density via hermitian space-dynamic mode decomposition. Space Weather . Retrieved from https:// agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2018SW001840 doi: https://doi.org/10.1029/2018SW001840 Mezi´ c, I. (2005). Spectral properties of dynamical systems, model reduction and de-compositions. Nonlinear Dynamics , 41 , 309–325. Michek, N., & Mehta, P. (2026). Neutral species rope: Dimensionality reduction. 
+
+Zenodo. Retrieved from https://doi.org/10.5281/zenodo.19489026 doi: 10.5281/zenodo.19489026 M¨ uller, S., L¨ uehr, H., & Rentz, S. (2009). Solar and magnetospheric forcing of the low latitude thermospheric mass density as observed by champ. Annales Geo-physicae , 27 , 2087–2099. doi: 10.5194/angeo-27-2087-2009 Narayanan, S. (2026). Assimilated state dataset. Zenodo. Retrieved from https:// doi.org/10.5281/zenodo.19439308 doi: 10.5281/zenodo.19439308 Narayanan, S., Mohamed, M. N. G., Nayak, I., Chakravorty, S., & Kumar, M. (2025). On the predictive capability of dynamic mode decomposition for periodic solutions of nonlinear systems with focus on orbital mechanics. The Journal of the Astronautical Sciences , 72 (3), 23. Narayanan, S., Mohamed, M. N. G., Paranjape, I., Nayak, I., Chakravorty, S., & Kumar, M. (2026). State forecasting in an estimation framework with surrogate sensor modeling. Retrieved from https://arxiv.org/abs/2604.19442 
+
+Paetzold, H. K., & Zsch¨ orner, H. (1961). An annual and a semiannual variation of the upper air density. Pure and Applied Geophysics , 48 (1), 85–92. doi: 10 .1007/BF01992371 Pan, S., & Duraisamy, K. (2020). On the structure of time-delay embedding in lin-ear models of non-linear dynamical systems. Chaos: An Interdisciplinary Jour-nal of Nonlinear Science , 30 (7). Pedatella, N. M., Anderson, J. L., Chen, C.-H., Raeder, K., Liu, J., Liu, H.-L., & Lin, C. (2020). Assimilation of ionosphere observations in the whole atmosphere community climate model with thermosphere-ionosphere exten-sion (waccmx). Journal of Geophysical Research: Space Physics , 125 (9), e2020JA028251. Picone, J. M., Emmert, J. T., & Lean, J. L. (2005). Thermospheric densities derived from spacecraft orbits: Accurate processing of two-line element sets. Journal of Geophysical Research , 110 , A03301. doi: 10.1029/2004JA010585 Picone, J. M., Hedin, A. E., Drob, D. P., & Aikin, A. C. (2002). Nrlmsise-00 empirical model of the atmosphere: Statistical comparisons and sci-entific issues. Journal of Geophysical Research , 107 (A12), 1468. doi: 10.1029/2002JA009430 Proctor, J. L., Kutz, J. N., & Brunton, S. L. (2016). Dynamic mode decomposition with control. SIAM Journal on Applied Dynamical Systems , 15 (1), 142–161.  
+
+> –27– manuscript submitted to AGU
+
+Pr¨ olss, G. W. (2004). Physics of the earth’s space environment: An introduction .New York: Springer. Qian, L., Burns, A. G., Emery, B. A., Foster, B., Lu, G., Maute, A., . . . Wang, W. (2013a). The ncar tie-gcm: A community model of the coupled thermosphere-ionosphere system. In Geophysical monograph series (Vol. 201, pp. 73–83). Qian, L., Burns, A. G., Emery, B. A., Foster, B., Lu, G., Maute, A., . . . Wang, W. (2013b, January). The ncar tie-gcm: A community model of the coupled thermosphere-ionosphere system. Geophysical Monograph Series , 201 , 73–83. Qian, L., Burns, A. G., Emery, B. A., Foster, B., Lu, G., Maute, A., et al. (2014). The ncar tie-gcm: A community model of the coupled thermo-sphere/ionosphere system. In J. D. Huba, R. W. Schunk, & V. Eccles (Eds.), 
+
+Modeling the ionosphere-thermosphere system (pp. 73–84). Washington: John Wiley & Sons. Reigber, C., L¨ uhr, H., & Schwintzer, P. (2002). Champ mission status. Advances in space research , 30 (2), 129–134. Ridley, A. J., Deng, Y., & Toth, G. (2006). The global ionosphere–thermosphere model. Journal of Atmospheric and Solar-Terrestrial Physics , 68 , 839–864. doi: 10.1016/j.jastp.2006.01.008 Rowley, C. W., Colonius, T., & Murray, R. M. (2004). Model reduction for com-pressible flows using pod and galerkin projection. Physica D: Nonlinear Phe-nomena , 189 (1–2), 115–129. Rowley, C. W., Mezi´ c, I., Bagheri, S., Schlatter, P., & Henningson, D. S. (2009). Spectral analysis of nonlinear flows. Journal of fluid mechanics , 641 , 115–127. Schmid, P. J. (2010). Dynamic mode decomposition of numerical and ex-perimental data. Journal of Fluid Mechanics , 656 , 5–28. doi: 10.1017/ S0022112010001217 Shim, J. S., Kuznetsova, M., Rast¨ atter, L., Bilitza, D., Butala, M., Codrescu, M., et al. (2014). Systematic evaluation of ionosphere/thermosphere (it) models. In Modeling the ionosphere-thermosphere system (pp. 145–160). Washington: John Wiley & Sons, Ltd. doi: 10.1002/9781118704417.ch13 Sicoli, D., & Mehta, P. (2026, 02). Nonlinear reduced order probabilistic emulation for high-dimensional thermospheric density using sindyc. doi: 10.13140/RG.2.2 .21489.95846 Siemes, Christian, Borries, Claudia, Bruinsma, Sean, Fernandez-Gomez, Isabel, Hladczuk, Natalia, den IJssel, Josevan, . . . Visser, Pieter (2023). New thermosphere neutral mass density and crosswind datasets from champ, grace, and grace-fo. J. Space Weather Space Clim. , 13 , 16. Retrieved from 
+
+https://doi.org/10.1051/swsc/2023014 doi: 10.1051/swsc/2023014 Sterne, T. E. (1958). An atmospheric model, and some remarks on the inference of density from the orbit of a close earth satellite. Astronomical Journal , 63 , 81– 87. doi: 10.1086/107696 Storz, M. F., Bowman, B. R., Branson, M. J. I., Casali, S. J., & Tobiska, W. K. (2005). High accuracy satellite drag model (hasdm). Advances in Space Re-search , 36 (12), 2497–2505. Sutton, E. K. (2018). A new method of physics-based data assimilation for the quiet and disturbed thermosphere. Space Weather , 16 , 736–753. doi: 10.1002/ 2017SW001785 Sutton, E. K., Cable, S. B., Lin, C. S., Qian, L., & Weimer, D. R. (2012). Ther-mospheric basis functions for improved dynamic calibration of semi-empirical models. Space Weather , 10 , S10001. doi: 10.1029/2012SW000827 Tapley, B. D., Bettadpur, S., Watkins, M., & Reigber, C. (2004). The gravity re-covery and climate experiment: Mission overview and early results. Geophysi-cal research letters , 31 (9). Thomson, N. R., Rodger, C. J., & Dowden, R. L. (2004). Ionosphere gives size of greatest solar flare. Geophysical Research Letters , 31 (6). Retrieved  
+
+> –28– manuscript submitted to AGU
+
+from https://agupubs.onlinelibrary.wiley.com/doi/abs/10.1029/ 2003GL019345 doi: https://doi.org/10.1029/2003GL019345 TU Delft. (n.d.). Orbit: Thermosphere density and wind data. https://orbits .tudelft.nl/ . (Accessed: 2025/2026) Vallado, D. A. (2001). Fundamentals of astrodynamics and applications . El Segundo, CA: Microcosm Press. van den IJssel, J., Doornbos, E., Iorfida, E., March, G., Siemes, C., & Montenbruck, O. (2020). Thermosphere densities derived from swarm gps observations. 
+
+Advances in Space Research , 65 (7), 1758-1771. Retrieved from https:// www.sciencedirect.com/science/article/pii/S0273117720300077 doi: https://doi.org/10.1016/j.asr.2020.01.004 Visser, P., & van den IJssel, J. (2016). Orbit determination and estimation of non-gravitational accelerations for the goce reentry phase. Advances in Space Re-search , 58 (9), 1840-1853. Retrieved from https://www.sciencedirect.com/ science/article/pii/S0273117716303726 doi: https://doi.org/10.1016/ j.asr.2016.07.013 Yaya, Philippe, Hecker, Louis, Dudok de Wit, Thierry, F` evre, Cl´ emence Le, & Bruinsma, Sean. (2017). Solar radio proxies for improved satellite or-bit prediction. J. Space Weather Space Clim. , 7 , A35. Retrieved from 
+
+https://doi.org/10.1051/swsc/2017032 doi: 10.1051/swsc/2017032

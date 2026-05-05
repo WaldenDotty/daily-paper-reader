@@ -1,0 +1,650 @@
+Title: A Coordinate System for Dynamical Instabilities in Hierarchical Systems in REBOUND
+
+URL Source: https://arxiv.org/pdf/2605.01005v1
+
+Published Time: Tue, 05 May 2026 00:08:15 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+> Draft version May 5, 2026
+> Typeset using L ATEX twocolumn style in AASTeX7
+
+A Coordinate System for Dynamical Instabilities in Hierarchical Systems in REBOUND 
+
+Tiger Lu ( 陆均) 1, ∗ and Garett Brown 2
+
+> 1Center for Computational Astrophysics, Flatiron Institute, 162 5th Avenue, New York, NY 10010, USA
+> 2Independent Researcher
+
+ABSTRACT We implement coordinates suitable for studying wide binary systems in TRACE , a hybrid integrator in the widely used open-source N -body integration package REBOUND . This is a regime in which traditional hybrid integrators perform poorly. The coordinate system supports close encounters between any pair of bodies in the system. We describe the implementation of this coordinate system and benchmark its performance against other integrators in the REBOUND ecosystem. In tests of planet-planet scattering, stellar flybys, and ZLK oscillations TRACE in wide binary coordinates is qualitatively correct when other hybrid methods fail, and in many cases returns statistically similar results to the high-precision IAS15 
+
+integrator with up to 9 × speedups. We also provide some guidelines for when use of these coordinates are appropriate. 
+
+1. INTRODUCTION The N -body problem is one of the oldest unsolved problems in classical mechanics – despite centuries of effort, no general reasonable analytic solution exists for 
+
+N ≥ 3 (H. Poincar´ e 1890; K. F. Sundman 1913) and numerical simulations are often the only viable approach for studying the evolution of planetary systems. This comes at a steep computational cost: in a planetary system the shortest orbital periods are often measured in days, while the dynamical processes that sculpt their architectures may unfold over gigayears. Bridging these twelve or more orders of magnitude in timescale is the central numerical challenge of the field. For the so-called planetary N -body problem, charac-terized by a dominant central “star” orbited by many smaller “planets”, J. Wisdom & M. Holman (1991) and H. Kinoshita et al. (1991) developed an efficient, ac-curate and widely used algorithm known today as the “Wisdom-Holman” method, which enabled integration of planetary systems on gigayear timescales. The genius of the Wisdom-Holman method was in the realization that it was possible to split the Hamiltonian governing the equations of planetary motion into a dominant part, corresponding to Keplerian motion about the host star, and a much smaller part that incorporates effects from other planets in the systems as minor perturbations to this dominant Keplerian motion. This allows Wisdom-Holman integrators to take large timesteps without sac- 
+
+> Email: tlu@flatironinstitute.org
+> ∗Flatiron Research Fellow
+
+rificing accuracy, and for this excellent blend of long-term accuracy and speed Wisdom-Holman integrators have become the gold standard when studying the long-term evolution of planetary systems. The specifics of how the Hamiltonian is split depend on the choice of coordinate system used. While Wisdom-Holman methods can in principle be formulated in any canonical coordinate system (see H. Rein et al. 2019a for a review), arguably the two most widely adopted are Jacobi coordinates and Democratic Heliocentric coordi-nates (DHC; M. J. Duncan et al. 1998), each with well-documented strengths and weaknesses that have been the subject of considerable discussion in the literature (D. M. Hernandez & W. Dehnen 2017; H. Rein & D. Tamayo 2019; H. Rein et al. 2026; D. M. Hernandez 2026). In brief: Jacobi coordinates exactly solve the two-body problem and hence are more accurate. How-ever, Jacobi coordinates are inflexible in that they are inherently tied to a specific orbital ordering. If this or-dering ever changes – for instance, due to dynamical instabilities – Jacobi coordinates cannot be used. In such cases, one must stomach the slightly less accurate DHC in order to support the possibility of orbit cross-ings. As such, DHC is the coordinate system of choice for so-called hybrid integrators such as MERCURY (J. E. Chambers & G. W. Wetherill 1998), SyMBA (M. J. Dun-can et al. 1998; H. F. Levison & M. J. Duncan 2000), 
+
+GENGA (S. L. Grimm & J. G. Stadel 2014), MERCURIUS 
+
+(H. Rein et al. 2019b), and TRACE (T. Lu et al. 2024, hereafter L24) which seek to leverage the accuracy ben-efits of Wisdom-Holman methods over long timescales 
+
+> arXiv:2605.01005v1 [astro-ph.EP] 1 May 2026
+
+2 
+
+> Figure 1. Schematic representation of a wide binary system, where a system of planets orbits around one component of a binary star system. Orbits and physical sizes not to scale.
+
+while occasionally switching over to more flexible inte-gration techniques when close encounters call for it. Wide binary systems, in which a planetary system orbits one component of a stellar binary (see Figure 1), would seem to violate the fundamental assumption Wisdom-Holman methods are built upon: that of a dom-inant central mass. Wisdom-Holman methods in Ja-cobi coordinates handle such systems surprisingly well in practice, but indeed perform poorly in DHC. We thus aim to address a specific system archetype in this work: binary star systems in which DHC fails, but also involve close encounters and orbital instabilities that render Ja-cobi coordinates unusable. Understanding dynamical instabilities in binary systems has immense scientific value: intriguing clues pointing to the profound influ-ence binary companions have on planetary system ar-chitectures and demographics have surfaced in recent years (e.g. N. A. Kaib et al. 2013; H. Ngo et al. 2016; S. Christian et al. 2025; K. Sullivan & G. J. Gilbert 2026). Fortuitously this problem was solved by J. E. Cham-bers et al. (2002), who presented a modification of DHC suitable for binary systems. These coordinates were in-cluded as an option in the MERCURY integrator. In this work, we implement these coordinates as an option in the TRACE hybrid integrator, which is available in the open source C/Python package REBOUND 3 (H. Rein & S. F. Liu 2012). Close encounters between pairs of plan-ets, as well as between planets and either star, are sup-ported. The plan for this paper is as follows. In §2 we re-view the coordinate system derived by J. E. Chambers et al. (2002), and detail the resulting modifications to the TRACE algorithm. In §3 we provide guidelines as to what regions of parameter space these coordinates are a significant improvement over DHC. In §4 we apply the integrator to several astrophysically relevant systems  
+
+> 3https://rebound.readthedocs.io/
+
+and benchmark its performance against other integra-tors in the REBOUND ecosystem. We conclude in §5.  
+
+> 2.
+
+THE WIDE BINARY MAP The Hamiltonian for a planetary system of N planets (subscripted i = 1 , . . . , N ) orbiting one star of a binary system (subscripted A, hereafter simply “star”) can be written: 
+
+H = p2A
+
+2mA
+
++ p2B
+
+2mB
+
++
+
+> N
+
+X
+
+> i=1
+
+p2
+
+> i
+
+2mi
+
+− G
+
+ mAmB
+
+|⃗q A −⃗q B| + mA
+
+> N
+
+X
+
+> i=1
+
+mi
+
+|⃗q A −⃗q i|
+
++ mB
+
+> N
+
+X
+
+> i=1
+
+mi
+
+|⃗q B −⃗q i| +
+
+> N
+
+X
+
+> i=1
+
+X
+
+> j>i
+
+mimj
+
+|⃗q i −⃗q j |
+
+
+
+,
+
+(1) where ⃗q,⃗ p are the canonical coordinates/momenta and 
+
+m the masses. The companion star (hereafter simply “companion”) is denoted with the subscript B. 2.1. Wide Binary Coordinates 
+
+Equation 1 is very difficult to solve numerically. J. E. Chambers et al. (2002) leveraged the hierarchical na-ture of binary systems to define a new coordinate sys-tem. These coordinates, originally coined “Wide Binary Coordinates” and hereafter simply WB , are defined: ⃗QA = mA⃗q A + mB⃗q B + P 
+
+> j
+
+mj⃗q j
+
+mtot 
+
+,⃗ Qi =⃗q i −⃗q A,⃗ QB =⃗q B − mA⃗q A + P 
+
+> j
+
+mj⃗q j
+
+mtot 
+
+,
+
+(2) and momenta defined: ⃗PA =⃗p A +⃗p B + X
+
+> j
+
+⃗p j ,⃗ Pi =⃗p i − mi⃗ p A + P
+
+> j
+
+⃗p j
+
+mA + P 
+
+> j
+
+mj
+
+,⃗ PB =⃗p B + mB⃗p A +⃗p B + P
+
+> j
+
+⃗p j
+
+mtot 
+
+,
+
+(3) where mtot = mA + mB + P 
+
+> j
+
+mj , and each summation over j is assumed to run from j = 1 to j = N . In these coordinates, Equation 1 may be rewritten 
+
+H = HJump + HInteraction + HKepler (4) where HJump describes the barycentric motion of the central star: 3
+
+HJump = 12mA
+
+> N
+
+X
+
+> i=1
+
+⃗Pi
+
+> 2
+
+, (5) 
+
+HInteraction describes both planet-planet and planet-companion interactions: 
+
+HInteraction = Gm BmA
+
+1
+
+QB
+
+− 1
+
+|⃗ QB +⃗s|
+
+!| {z }
+
+> star −companion interaction
+
++ Gm B
+
+> N
+
+X
+
+> i=1
+
+mi
+
+1
+
+QB
+
+− 1
+
+|⃗QB −⃗ Qi +⃗s|
+
+!| {z }
+
+> planet −companion interactions
+
+−
+
+> N
+
+X
+
+> i=1
+
+X
+
+> j>i
+
+Gm imj
+
+|⃗ Qj −⃗ Qi|
+
+| {z }
+
+> planet −planet interactions
+
+,
+
+(6) where ⃗s is the center of mass of the planetary system, relative to the star: ⃗s ≡
+
+PNi=1 mi⃗ Qi
+
+mA + PNi=1 mi
+
+. (7) Finally, HKepler describes the Keplerian motion (of both the planets and the companion) about the star: 
+
+HKepler = P 2B
+
+2μbin 
+
+− Gm tot μbin 
+
+QB
+
+| {z }
+
+> companion orbit
+
++
+
+> N
+
+X
+
+> i=1
+
+ P 2
+
+> i
+
+2mi
+
+− Gm Ami
+
+Qi
+
+| {z }
+
+> planet orbits
+
+,
+
+(8) where μbin ≡ (mA + P 
+
+> j
+
+mj )mB/m tot is the reduced mass of the system. Note that in the absence of a companion, these coordinates reduce to the familiar 
+
+DHC . The equations of motion governed by the sub-Hamiltonians HInteraction and HJump both admit trivial analytic solutions, while HKepler corresponds to Kepler’s equation and can be solved with a Kepler solver. For a timestep h, one timestep of the WB integrator consists of the following substeps: 1. Advance HInteraction for h/ 2, 2. Advance HJump for h/ 2, 3. Advance HKepler for h,4. Advance HJump for h/ 2, 5. Advance HInteraction for h/ 2. The idea of this splitting, as in all Wisdom-Holman schemes, is for the Keplerian motion HKepler to domi-nate the system’s dynamics, with HInteraction and HJump 
+
+acting only as small perturbations. 2.2. Switching Conditions 
+
+The assumption of a dominant HKepler breaks down in the regime of close encounters, either between pairs of planets or between a planet and one of the stars. The approach adopted by many hybrid integrators is to move terms from the other sub-Hamiltonians into HKepler as necessary to ensure it always remains dominant over the other sub-Hamiltonians. When this happens HKepler no longer exactly corresponds to Kepler’s equation and thus a Kepler solver cannot be used, but a traditional inte-grator such as IAS15 (H. Rein & D. S. Spiegel 2015) or Bulirsch-Stoer (W. H. Press et al. 2002) may be used to solve the resulting equations of motion. The main novelty of this work is the application of the time-reversible switching scheme of TRACE to WB co-ordinates. All encounters – between pairs of planets, be-tween planets and the star, and between planets and the companion – are supported. We provide a general qual-itative description of these switching conditions here, and refer interested readers to L24 for a more in-depth review. One timestep of the WB integrator proceeds as such: 1. We first check for encounters between planets and either star. The terms associated with these inter-actions are coupled, so there is no convenient way to shift certain terms to HKepler here. Hence, our approach is to convert our system back to inertial coordinates and solve Equation 1 if one of these encounters is detected. By default REBOUND ’s im-plementation of Bulirsch-Stoer (T. Lu et al. 2023) is used, but the user may also opt for IAS15 .
+
+• Close approaches with the star are flagged with the same approach used in L24, using a criterion derived by D. Pham et al. (2024) in-volving ratios of multiple higher-order deriva-tives. 
+
+• Close approaches with the companion are flagged if any planet comes within some frac-tion Rcrit ,WB of the companion’s Hill radius. From our testing we found Rcrit ,WB = 0 .1to be reasonable and this set as the default. This value can be adjusted by the user via the ri trace.r crit WB field. 42. If no encounter between planets and stars are de-tected, we next check for close encounters between pairs of planets. We integrate Equation 4 with the procedure described in §2.1. However, the sub-Hamiltonians HInteraction and HKepler are now modulated by the switching terms 
+
+HInteraction = Gm BmA
+
+1
+
+QB
+
+− 1
+
+|⃗QB +⃗s|
+
+!
+
++ Gm B
+
+> N
+
+X
+
+> i=1
+
+mi
+
+1
+
+QB
+
+− 1
+
+|⃗QB −⃗ Qi +⃗s|
+
+!
+
+−
+
+> N
+
+X
+
+> i=1
+
+X
+
+> j>i
+
+Gm imj
+
+|⃗ Qj −⃗ Qi| [1 − K ij ],
+
+(9) 
+
+HKepler = P 2B
+
+2μbin 
+
+− Gm tot μbin 
+
+QB
+
++
+
+> N
+
+X
+
+> i=1
+
+ P 2
+
+> i
+
+2mi
+
+− Gm Ami
+
+Qi
+
+
+
+−
+
+> N
+
+X
+
+> i=1
+
+X
+
+> j>i
+
+Gm imj
+
+|⃗Qj −⃗ Qi| Kij ,
+
+(10) where Kij = 1 if there is a close encounter between planets i and j, and Kij = 0 otherwise. The cri-terion for flagging a close encounter between pairs of planets is the same as that of L24, which checks for overlapping Hill radii multiplied by some con-stant r crit hill . The idea is to move appro-priate terms from HInteraction into HKepler dur-ing close encounters such that HKepler remains the dominant aspect of the motion. The equations of motion associated with HInteraction can always be trivially solved. In the absence of close encoun-ters, those associated with HKepler are solved with the Kepler solver used in WHFast (H. Rein & D. Tamayo 2015), REBOUND ’s implementation of the Wisdom-Holman algorithm. If there is a close en-counter, the terms in HKepler associated with that close encounter are solved with Bulirsch-Stoer. 3. At the end of a timestep, all close encounters are re-checked and the timestep is potentially rejected and repeated with the time-reversible algorithm of D. M. Hernandez & W. Dehnen (2023) imple-mented in TRACE .
+
+3. PARAMETER SPACE STUDY Here we explore the parameter space in which WB co-ordinates offer a meaningful advantage over DHC . The 200 400 600 800 1000 
+
+> Semimajor Axis (AU)
+> 3.0
+> 2.5
+> 2.0
+> 1.5
+> 1.0
+> 0.5
+> 0.0
+> 0.5
+> log 10  [Mass ( M )]
+> WB Better
+> DHC Better
+> WB better
+> Best fit power law
+> 6.0
+> 4.8
+> 3.6
+> 2.4
+> 1.2
+> 0.0
+> 1.2
+> 2.4
+> 3.6
+> log 10  (Err WB /Err DHC )
+
+Figure 2. Comparison of energy errors in a parameter space of binary companions, in semimajor axis-mass space. For each companion, the ratio of energy errors between an in-tegration with WB coordinates and an integration with DHC 
+
+coordinates is plotted, both with the TRACE integrator. Blue corresponds to WB performing better, and red the opposite. The gray contour roughly corresponds to the limit where WB 
+
+outperforms DHC , and this is reasonably well fit by Equation 11. 
+
+results of this section represent only a test of the coor-dinates themselves, with further tests of close encounters in WB coordinates discussed in §4. We conducted a suite of simulations, all of which in-cluded the Sun, Jupiter and Saturn on their present-day orbits. In each simulation, we also added a compan-ion on a circular orbit. We sampled the mass of the companion from a log-uniform distribution from 1 MJ to 3M⊙, and its semimajor axis uniformly from 50 to 1000 AU. Each parameter was sampled at 100 values, yielding 10 , 000 simulations per suite in total. We integrated each system for 10 6 Jupiter orbits, using a timestep of 1 /20th Jupiter’s initial orbital period. We ran one suite with 
+
+TRACE in WB coordinates, and one in DHC 4. All systems re-mained stable with no close encounters throughout each integration. The mean energy errors were 3 .53 × 10 −6
+
+and 3 .23 × 10 −4 for WB and DHC , respectively.         
+
+> 4The default switching condition in TRACE flags a close encounter if particles pass within 3 Hill radii of one another. This is phys-ically reasonable for planets, but not a binary companion for which this condition is far too generous – if this default condi-tion were used, every timestep would be flagged as a close en-counter and integrated with Bulirsch-Stoer. While this would indeed correctly integrate the system, it would be far slower and would not represent a fair comparison of the coordinate systems. Hence, for this and all subsequent tests, we manu-ally set the switching criterion for the binary to it’s Hill radius multiplied by r crit WB when TRACE DHC is used.
+
+5Our results are shown in Figure 2. For each bi-nary companion, we plot the ratio of the energy error 
+
+|Efinal − Einitial /E initial | for the WB integration over the 
+
+DHC integration. Blue corresponds to regions in param-eter space where WB outperforms DHC , and red the op-posite. WB coordinates perform significantly better for larger, more distant companions. A gray dashed con-tour roughly corresponding to where WB and DHC per-form equivalently is shown. This contour is reasonably well fit by a power law log 10 
+
+ MM⊙
+
+
+
+= 0 .9 log 10 
+
+ a
+
+1 AU 
+
+
+
+− 4.67 , (11) which we offer as a guideline for when WB coordinates offer a significant advantage over DHC . WB coordinates are strongly preferred for the majority of true stellar companions. We also ran the simulations above with WHFAST in Ja-cobi coordinates. These yielded an average energy error of 1 .92 × 10 −6. WB coordinates were competitive with 
+
+WHFAST across the entirety of the explored parameter space. We also note a dark blue band in Figure 2 where 
+
+TRACE WB performs up to six orders of magnitude bet-ter than TRACE DHC . It is unclear what the physical in-terpretation of this band is, and further investigation is warranted – but we note that this feature is due to TRACE WB performing extremely well, not TRACE DHC perform-ing poorly. The same spike in performance is seen in 
+
+WHFAST . 
+
+> 4.
+
+TESTS In this section, we apply TRACE in WB coordinates to some astrophysically relevant test problems, and benchmark its performance against other integrators in 
+
+REBOUND . All integrators use their default, out-of-the-box settings, other than the switching criterion modifi-cation to TRACE DHC described in §3. 4.1. Planet-Planet Scattering 
+
+Planet-planet scattering is believed to have been a ubiquitous process in the late stages of planet formation (e.g. M. B. Davies et al. 2014; M. Juri´ c & S. Tremaine 2008; S. Chatterjee et al. 2008), and was envisioned as one of the most powerful use cases of TRACE . We repeat a similar experiment to the one performed in Section 5.3 of L24. The original experiment consists of three Jupiter-like planets around a sun-like star. The Jupiters are initialized in compact orbits such that they rapidly experience dynamical instabilities. In this experiment, we also add a 0 .5M⊙ star on a circular, 200 AU orbit. As such, this experiment tests both planet-planet en-counters, planet-star encounters, and the robustness of the WB coordinates in general. We have run 500 simula-tions each with IAS15 and TRACE with both WB and DHC 
+
+coordinates. We report results from our simulations in Figure 3. We plot histograms of semimajor axis, eccentricity, and inclination of all surviving planets. There are noticeable differences between IAS15 and TRACE DHC , which has a tendency to overpredict semimajor axis and inclination while underpredicting eccentricity. TRACE WB is signifi-cantly more consistent with the IAS15 demographics. For the IAS15 , TRACE DHC and TRACE WB suites, the mean energy errors are 10 −9.39 , 10 −1.14 and 10 −2.62 , re-spectively. The average runtimes are 55 .2, 3 .34 and 5 .82 minutes, respectively. In a regime where TRACE DHC 
+
+performs poorly, TRACE WB recovers statistically similar results to IAS15 simulations while boasting over a 9 ×
+
+speedup. 4.2. Stellar Flybys 
+
+Planetary systems do not exist in a vacuum, and stellar flybys can dramatically shape the architectures of planetary systems (e.g. R. Spurzem et al. 2009; D. Malmberg et al. 2011; R. J. Parker & S. P. Quanz 2012; G. Li & F. C. Adams 2015; M. X. Cai et al. 2017; C. Schoettler & J. E. Owen 2024). TRACE in DHC coordi-nates does not resolve these encounters well. We used the AIRBALL package (G. Brown et al. 2024) to simulate the effect of stellar flybys on a planetary system 5. Our planetary system is initialized with a sun-like star and a Neptune-like planet. We performed 300 flyby simulations each with IAS15 and TRACE in both 
+
+DHC and WB . The flyby star is initialized at a distance of 10 5 AU from the host star and we fix its pericen-ter approach to 16 .5× Neptune’s orbit. The orien-tation and velocity of the flyby is randomized. The mass of the stellar companion varies from a Jupiter mass to 100 Solar masses. A timestep is selected using the timestep for perihelion resolution function in 
+
+AIRBALL , which selects a timestep sufficient to resolve a highly eccentric orbit based on the criterion of J. Wis-dom (2015) and D. M. Hernandez et al. (2022). The flyby duration is of order 0.5 Myr. Figure 4 shows the results of our simulations. We plot relative change in the specific orbital energy of Neptune as well as change in Neptune’s eccentricity and incli-nation as a function of stellar mass, and compare with analytic predictions. The analytic predictions were de-rived by D. C. Heggie (1975); D. C. Heggie & F. A.    
+
+> 5The setup of our simulations closely follows one of the exam-ples in the AIRBALL documentation: https://airball.gbrown.ca/ examples/adiabatic-tests/
+
+620 40 60 
+
+Semimajor Axis (AU) 
+
+> Probability Density
+
+IAS15 
+
+TRACE DHC 
+
+TRACE WB 
+
+0.0 0.5 1.0 
+
+Eccentricity 
+
+0 50 100 150 
+
+Inclination (deg)        
+
+> Figure 3. Distributions of semimajor axis, eccentricity, and inclination from results of three-body scattering experiments including a binary perturber. Results from IAS15 are plotted as a solid green histogram, and taken to be the gold standard for numerical integration. Results from TRACE DHC and TRACE WB are plotted as blue and purple step histograms, respectively.
+
+Rasio (1996); D. Malmberg et al. (2011) for the energy, eccentricity, and inclination estimates, respectively (see also H. Rickman 1976; A. Roy & M. Haddow 2003; D. C. Heggie 2006; R. Spurzem et al. 2009). The estimates fo-cus primarily on the interactions of three similarly sized point masses (usually “stars”), but R. Spurzem et al. (2009) discuss the applications to hierarchical systems that have a dominant central mass and a smaller orbiting body. From our simulations, TRACE WB and IAS15 both reproduce analytic predictions well, while TRACE DHC 
+
+fails across the board. The mean runtimes for IAS15 ,
+
+TRACE WB and TRACE DHC were 0.34, 0.15 and 0.11 sec-onds, respectively. TRACE WB boasts a 2 × speedup over 
+
+IAS15 , and we stress that the actual integration speedup is likely higher as our simulations’ runtimes were domi-nated by initialization and overhead costs. We caution that due to the structure of the TRACE WB 
+
+code, only one flyby at a time is supported. This should not be a major issue – the effects of stellar flybys on planetary systems follow a L´ evy flight where the overall change to the system is often dominated by a few rare flyby events (G. Brown & H. Rein 2022). 4.3. ZLK Cycles 
+
+von Zeipel-Lidov-Kozai (ZLK) cycles (H. von Zeipel 1910; M. L. Lidov 1962; Y. Kozai 1962; S. Naoz 2016) are a well studied phenomenon in hierarchical three-body systems. A planet in the presence of a massive inclined companion will experience coupled eccentricity and in-clination oscillations. L24 identified ZLK cycles as a fail case of TRACE in DHC coordinates. Generally if numerically integrating ZLK cycles an adaptive timestep integrator such as IAS15 is preferred over fixed-timestep integrators. This is because a planet            
+
+> Figure 4. Effect of a stellar flyby as a function of perturber mass on a single planet system’s energy error (top) , eccen-tricity excitation (middle) and inclination excitation (bot-tom) .We compare results from IAS15 (green), TRACE WB
+> (violet) and TRACE DHC (blue) to analytic predictions (black).
+
+7undergoing ZLK cycles experiences epochs of both high and low eccentricity. Accurately resolving the dynamics near pericenter during high-eccentricity phases requires a very small timestep. In particular, J. Wisdom (2015) show that the timestep τp should satisfy 
+
+τp = π
+
+8
+
+s
+
+(1 − e)3
+
+1 + ea3
+
+GM ∗
+
+. (12) Fixed-timestep integrators face two main difficulties in this context. First, they require prior knowledge of the maximum eccentricity in order to set an appropriate timestep, which is a nontrivial estimate in some regimes (e.g. G. Li et al. 2014a). Second, the timestep must re-main small throughout the entire integration, even dur-ing low-eccentricity phases where such resolution is un-necessary. The speed benefits of fixed-timestep integra-tors are worth it for systems that only reach moderate eccentricity, but the timesteps required for systems that attain extremely high eccentricity quickly render run-times untenably long. We note that although TRACE is designed in principle to mitigate this issue via a peri-center switching condition, in practice we found that it can lead to qualitatively different behavior. We integrated systems consisting of a Sun-like star, a Jupiter-mass planet on an initially circular 5 AU orbit, and a 0.5 M⊙ binary companion on a circular 100 AU orbit. The binary companion’s inclination 6 was set to 50 ◦, 60 ◦, 70 ◦ and 80 ◦.This setup was run with IAS15 and 
+
+TRACE in both WB and DHC coordinates. For TRACE , we also explored timesteps of 1 , 2, 5 and 10 ×τp where τp was calculated from the theoretical maximum eccentricity attained for ZLK cycles in the quadrupole limit: 
+
+emax = p1 − 5/3 cos 2 imut (13) where imut is the initial mutual inclination between the companion and the Jupiter. All systems were integrated for 3 Myr, which is ∼100 × the nominal timescale for ZLK cycle in the quadrupole limit (J. M. O. Antognini 2015): 
+
+tZLK = 16 30 πmA + mJup + mB
+
+mB
+
+P 2comp 
+
+PJup 
+
+. (14) In practice, the actual number of ZLK oscillations in each simulation was around 10 and varied with binary inclination. In Figure 5, we compare the performance of TRACE in both DHC and WB to IAS15 . Each grid cell represents   
+
+> 6We also ran a set of simulations with 89 ◦inclinations, but these proved too computationally costly to complete for the fixed-timestep integrators.
+
+an inclination (directly mapping to maximum eccentric-ity) – timestep pairing. For each setup, we first assessed the accuracy of the TRACE simulations. We numerically computed the maximum eccentricity and the mean ZLK oscillation period for each of our simulation suites. If either quantity deviated from the IAS15 simulation to 5% (roughly the standard deviation of the IAS15 ZLK periods), the cell is shaded gray. Simulations that re-produce IAS15 are colored by their runtime relative to 
+
+IAS15 . Gray hatches are overlaid on the simulations where IAS15 is faster. Un-hatched colored squares are regions where TRACE would be preferred over IAS15 . In 
+
+DHC coordinates, the preferred parameter space is ex-tremely limited. WB coordinates significantly expand this region. With a sufficiently small timestep, TRACE WB is preferred over IAS15 for binary inclinations up to 70 ◦,corresponding to emax ∼ 0.9. For more extreme eccen-tricities, the timestep required to resolve pericenter pas-sage becomes so small that IAS15 ’s adaptive timestep becomes advantageous. One specific but potentially relevant complication is if timestep is restricted for some other reason – for exam-ple, a close-in planet with a companion undergoing ZLK oscillations. In this case, IAS15 loses the advantage of an adaptive timestep. We demonstrate this in Figure 6, where we have run the imut = 70 ◦ case, but now in-clude an Earth-like planet on a 0 .1 AU circular orbit. For TRACE we adopt a timestep equal to 1/15th the or-bital period of the inner planet, while IAS15 ’s adaptive timestep remains small in order to resolve the Earth’s short orbit. In WB and DHC coordinates the fractional dif-ference in ZLK oscillation period to IAS15 is 2 .5% and 28%, respectively. Both TRACE runs were ∼20 × faster than the IAS15 run. We conclude with some notes. First, the maximum ZLK eccentricity may grow due to octupole-order effects (e.g. S. Naoz et al. 2013; G. Li et al. 2014b), making it much harder to map a maximum eccentricity to the initial binary inclination. Second, WHFast in Jacobi co-ordinates outperforms IAS15 up to inclinations of 80 ◦,or emax ∼ 0.975. However, for applications appropriate for WHFast it may be more natural to use a secular code.  
+
+> 5.
+
+CONCLUSIONS We have implemented coordinates appropriate for in-tegrations of planetary systems orbiting one compo-nent of a binary star system, originally derived by J. E. Chambers et al. (2002), into the hybrid integra-tor TRACE . Our implementation supports close encoun-ters between pairs of planets, and between planets and either star in the binary system. We have conducted a parameter space study for when these coordinates offer 850 60 70 80 
+
+Binary Inclination (deg) 
+
+1.0 
+
+2.0 
+
+5.0 
+
+10.0 
+
+> Timestep (×  p)
+
+Inaccurate 
+
+Accurate to 5% 
+
+# DHC 
+
+50 60 70 80 
+
+Binary Inclination (deg) 
+
+# WB 
+
+Accurate but Slower 
+
+1/10 
+
+1/3 
+
+1
+
+5
+
+10                      
+
+> Speedup over IAS15
+> Figure 5. Binary inclination - timestep space in which TRACE DHC and WB are preferred over IAS15 for ZLK integrations. Gray squares indicate where TRACE does not reproduce IAS15 results. Hatched colored squares indicate where TRACE reproduces IAS15
+> results, but is slower. Unhatched colored squares represent parameter space where TRACE is preferred over IAS15 .WB coordinates greatly expand the region of parameter space where TRACE is preferred.
+
+0.6 0.8 1.0 1.2 1.4 
+
+Time (Myr) 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+> Jupiter Eccentricity
+
+WB DHC IAS15                
+
+> Figure 6. Evolution of Jupiter’s eccentricity for a system with a Sun-like star, and Earth-like planet on a 0.1 AU orbit, a Jupiter-like planet on a 5 AU orbit, and a 0.5 M⊙com-panion on a 100 AU orbit inclined by 70 ◦. We compare re-sults from IAS15 (green), TRACE WB (purple) and TRACE DHC
+> (blue). For clarity, only a representative slice of the evolu-tion from 0 .5 to 1 .5 Myr is plotted. IAS15 takes ∼20 ×longer to run than either TRACE run.
+
+significant benefits over DHC, and benchmarked the in-tegrator’s performance against other integrators in the 
+
+REBOUND ecosystem. Hybrid integrators have inherently limited and specific use cases. It is instructive to explicitly discuss when this integrator should be used over alternatives. We offer the following guidelines for choosing an integrator for planetary systems in REBOUND :1. If one is not limited by computation time, or exact trajectories are required, IAS15 should be used. 2. If computation time is a concern and there are no close encounters in a system, WHFAST should be used. 3. If computation time is a concern, only qualita-tively correct trajectories are required, and close encounters are expected, TRACE should be used. The choice of whether to use TRACE in the de-fault DHC or WB coordinates then depends on the system’s architecture. For systems about sun-like stars we offer the relation in Equation 11 as a rea-sonable guideline for when WB coordinates are nec-essary. These use cases – such as dynamical instabilities and planet formation in binary star systems – are of great scientific value. For these use cases, we show that TRACE 
+
+in WB coordinates offers sufficient accuracy without great computational costs. For large ensembles of chaotic sys-9tems, this may be the only viable integration method that is not prohibitively expensive. ACKNOWLEDGMENTS T.L. is supported by a Flatiron Research Fellowship at the Flatiron Institute, a division of the Simons Founda-tion. This work has benefited from the use of the rusty 
+
+cluster at the Flatiron Institute. We thank Hanno Rein, David Hernandez, Malena Rice, Vighnesh Nagpal, Max Goldberg, Yubo Su, Jared Goldberg, Quang Tran and the members of the CCA Astronomical Data Group for helpful discussions. 
+
+# Software: matplotlib (J. D. Hunter 2007), REBOUND 
+
+(H. Rein & S. F. Liu 2012), scipy (P. Virtanen et al. 2020) REFERENCES 
+
+Antognini, J. M. O. 2015, MNRAS, 452, 3610, doi: 10.1093/mnras/stv1552 Brown, G., & Rein, H. 2022, MNRAS, 515, 5942, doi: 10.1093/mnras/stac1763 Brown, G., Rein, H., Mohsin, H., et al. 2024, https://airball.gbrown.ca/ Cai, M. X., Kouwenhoven, M. B. N., Portegies Zwart, S. F., & Spurzem, R. 2017, MNRAS, 470, 4337, doi: 10.1093/mnras/stx1464 Chambers, J. E., Quintana, E. V., Duncan, M. J., & Lissauer, J. J. 2002, AJ, 123, 2884, doi: 10.1086/340074 Chambers, J. E., & Wetherill, G. W. 1998, Icarus, 136, 304, doi: 10.1006/icar.1998.6007 Chatterjee, S., Ford, E. B., Matsumura, S., & Rasio, F. A. 2008, ApJ, 686, 580, doi: 10.1086/590227 Christian, S., Vanderburg, A., Becker, J., et al. 2025, AJ, 169, 308, doi: 10.3847/1538-3881/adc933 Davies, M. B., Adams, F. C., Armitage, P., et al. 2014, in Protostars and Planets VI, ed. H. Beuther, R. S. Klessen, C. P. Dullemond, & T. Henning, 787–808, doi: 10.2458/azu uapress 9780816531240-ch034 Duncan, M. J., Levison, H. F., & Lee, M. H. 1998, AJ, 116, 2067, doi: 10.1086/300541 Grimm, S. L., & Stadel, J. G. 2014, ApJ, 796, 23, doi: 10.1088/0004-637X/796/1/23 Heggie, D. C. 1975, Monthly Notices of the Royal Astronomical Society, 173, 729, doi: 10.1093/mnras/173.3.729 Heggie, D. C. 2006, in Few-Body Problem: Theory and Computer Simulations, 20, doi: 10.48550/arXiv.astro-ph/0512504 Heggie, D. C., & Rasio, F. A. 1996, Monthly Notices of the Royal Astronomical Society, 282, 1064, doi: 10.1093/mnras/282.3.1064 Hernandez, D. M. 2026, arXiv e-prints, arXiv:2603.24456, doi: 10.48550/arXiv.2603.24456 Hernandez, D. M., & Dehnen, W. 2017, MNRAS, 468, 2614, doi: 10.1093/mnras/stx547 Hernandez, D. M., & Dehnen, W. 2023, MNRAS, 522, 4639, doi: 10.1093/mnras/stad657 Hernandez, D. M., Zeebe, R. E., & Hadden, S. 2022, MNRAS, 510, 4302, doi: 10.1093/mnras/stab3664 Hunter, J. D. 2007, Computing in Science & Engineering, 9, 90, doi: 10.1109/MCSE.2007.55 Juri´ c, M., & Tremaine, S. 2008, ApJ, 686, 603, doi: 10.1086/590047 Kaib, N. A., Raymond, S. N., & Duncan, M. 2013, Nature, 493, 381, doi: 10.1038/nature11780 Kinoshita, H., Yoshida, H., & Nakai, H. 1991, Celestial Mechanics and Dynamical Astronomy (ISSN 0923-2958), vol. 50, no. 1, 1991, p. 59-71., 50, 59 Kozai, Y. 1962, AJ, 67, 591 Levison, H. F., & Duncan, M. J. 2000, AJ, 120, 2117, doi: 10.1086/301553 Li, G., & Adams, F. C. 2015, MNRAS, 448, 344, doi: 10.1093/mnras/stv012 Li, G., Naoz, S., Holman, M., & Loeb, A. 2014a, ApJ, 791, 86, doi: 10.1088/0004-637X/791/2/86 Li, G., Naoz, S., Kocsis, B., & Loeb, A. 2014b, ApJ, 785, 116, doi: 10.1088/0004-637X/785/2/116 Lidov, M. L. 1962, Planetary and Space Science, 9, 719 Lu, T., Hernandez, D. M., & Rein, H. 2024, MNRAS, 533, 3708, doi: 10.1093/mnras/stae1982 Lu, T., Rein, H., Tamayo, D., et al. 2023, The Astrophysical Journal, 948, 41, doi: 10.3847/1538-4357/acc06d Malmberg, D., Davies, M. B., & Heggie, D. C. 2011, MNRAS, 411, 859, doi: 10.1111/j.1365-2966.2010.17730.x Naoz, S. 2016, ARA&A, 54, 441 Naoz, S., Farr, W. M., Lithwick, Y., Rasio, F. A., & Teyssandier, J. 2013, MNRAS, 431, 2155, doi: 10.1093/mnras/stt302 Ngo, H., Knutson, H. A., Hinkley, S., et al. 2016, ApJ, 827, 8, doi: 10.3847/0004-637X/827/1/8 Parker, R. J., & Quanz, S. P. 2012, MNRAS, 419, 2448, doi: 10.1111/j.1365-2966.2011.19911.x 10 
+
+Pham, D., Rein, H., & Spiegel, D. S. 2024, The Open Journal of Astrophysics, 7, 1, doi: 10.21105/astro.2401.02849 Poincar´ e, H. 1890, Acta Math, 13, 270 Press, W. H., Teukolsky, S. A., Vetterling, W. T., & Flannery, B. P. 2002, Numerical recipes in C++ : the art of scientific computing Rein, H., Dey, K., & Tamayo, D. 2026, arXiv e-prints, arXiv:2601.08019, doi: 10.48550/arXiv.2601.08019 Rein, H., & Liu, S. F. 2012, A&A, 537, A128, doi: 10.1051/0004-6361/201118085 Rein, H., & Spiegel, D. S. 2015, MNRAS, 446, 1424, doi: 10.1093/mnras/stu2164 Rein, H., & Tamayo, D. 2015, MNRAS, 452, 376, doi: 10.1093/mnras/stv1257 Rein, H., & Tamayo, D. 2019, Research Notes of the AAS, 3, 16, doi: 10.3847/2515-5172/aaff63 Rein, H., Tamayo, D., & Brown, G. 2019a, MNRAS, 489, 4632, doi: 10.1093/mnras/stz2503 Rein, H., Hernandez, D. M., Tamayo, D., et al. 2019b, MNRAS, 485, 5490, doi: 10.1093/mnras/stz769 Rickman, H. 1976, Bulletin of the Astronomical Institutes of Czechoslovakia, 27, 92 Roy, A., & Haddow, M. 2003, Celestial Mechanics and Dynamical Astronomy, 87, 411, doi: 10.1023/B:CELE.0000006767.34371.2f Schoettler, C., & Owen, J. E. 2024, MNRAS, 533, 3484, doi: 10.1093/mnras/stae1900 Spurzem, R., Giersz, M., Heggie, D. C., & Lin, D. N. 2009, Astrophysical Journal, 697, 458, doi: 10.1088/0004-637X/697/1/458 Sullivan, K., & Gilbert, G. J. 2026, arXiv e-prints, arXiv:2603.21897, doi: 10.48550/arXiv.2603.21897 Sundman, K. F. 1913, Acta mathematica, 36, 105 Virtanen, P., Gommers, R., Oliphant, T. E., et al. 2020, Nature methods, 17, 261 von Zeipel, H. 1910, Astronomische Nachrichten, 183, 345, doi: 10.1002/asna.19091832202 Wisdom, J. 2015, AJ, 150, 127, doi: 10.1088/0004-6256/150/4/127 Wisdom, J., & Holman, M. 1991, AJ, 102, 1528, doi: 10.1086/115978

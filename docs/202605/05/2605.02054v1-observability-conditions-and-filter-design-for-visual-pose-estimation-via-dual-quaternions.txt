@@ -1,0 +1,2453 @@
+Title: Observability Conditions and Filter Design for Visual Pose Estimation via Dual Quaternions
+
+URL Source: https://arxiv.org/pdf/2605.02054v1
+
+Published Time: Tue, 05 May 2026 01:25:00 GMT
+
+Number of Pages: 16
+
+Markdown Content:
+# Observability Conditions and Filter Design for Visual Pose Estimation via Dual Quaternions ∗
+
+Nicholas B. Andrews 1 and Kristi A. Morgansen 1
+
+Abstract — This paper presents a dual quaternion framework for 6-DOF visual target tracking that addresses key limitations of perspective-n-point (P nP) solvers: sensitivity to noise and outliers, and inability to propagate estimates through measure-ment dropouts. A nonlinear observability analysis is performed using a Lie algebraic approach, deriving sufficient conditions for local observability under two sensing modalities: relative position vector and unit vector measurements. For the unit vector case, the classical collinear feature point degeneracy of the perspective-three-point problem is recovered through rank analysis of the observability codistribution matrix, providing a control-theoretic interpretation of a previously geometric result. A dual quaternion Lie group unscented Kalman filter is then developed, directly modeling relative dynamics without assumptions about cooperative measurements or slowly-varying motion. Simulations demonstrate improved pose estimation accuracy and robustness to occlusions compared to an off-the-shelf P nP solver. Results are broadly applicable to visual-inertial navigation, simultaneous localization and mapping, and P nPsolver development. 
+
+I. I NTRODUCTION 
+
+Accurate state estimation is essential for the safe and efficient operation of autonomous robotic systems, including spacecraft, underwater vehicles, and aircraft. Tasks such as manipulating, docking, and avoiding obstacles critically de-pend on precise relative pose (position and orientation) infor-mation for guidance, navigation, and control. Although au-tonomous systems typically utilize multiple sensing modali-ties, the availability and decreasing cost of high-performance cameras, combined with advances in computer vision and on-board processing, have driven increased adoption of vision-based sensing in closed-loop control systems. Central to vision-based pose estimation is the Perspective-
+
+n-Point (P nP) problem: estimating the pose of a camera relative to n known 3-D feature points whose projections are observed in the 2-D image plane. While typically formulated in the context of computer vision and cameras, the P nPframework is mathematically equivalent to bearing only or unit vector position measurements that arise in applications using acoustic or radio frequency sensors for localization. Numerous algorithms have been developed to find solutions to the PnP problem [1]–[3], offering practical “off-the-shelf” utility due to their simplicity of implementation and widespread adoption in computer vision libraries. However, classical P nP solvers exhibit two key limitations for target tracking applications. First, they are deterministic and inher-ently sensitive to measurement noise and outliers. Second,  
+
+> ∗This work was supported in part by Blue Origin Enterprises, L.P.
+> 1Department of Aeronautics and Astronautics, University of Washington, Seattle, WA 98195 USA
+
+[nian6018, morgansn]@uw.edu 
+
+they are memoryless: they do not incorporate knowledge of rigid body motion, rely heavily on consistent feature matching and outlier rejection, and cannot propagate state estimates through measurement dropouts or occlusions. To address these shortcomings, practitioners often aug-ment P nP solvers with sequential stochastic state estimators, such as Kalman and particle filters, which leverage physics-informed motion models. These methods have demonstrated reduced estimation error and greater robustness to noise and outliers, even with fewer correlated feature points [4], [5]. While reducing the number of required features alleviates some computational burden, the filtering algorithms them-selves introduce additional overhead that may be prohibitive for platforms with limited onboard compute. The limitations of traditional P nP solvers and advanta-geous properties of sequential stochastic state estimators motivate continued research in the development of pose estimation frameworks that exploit both the geometric con-straints of the P nP problem and the rigid body physics. Dual quaternions provide a particularly attractive mathemat-ical foundation for such frameworks, offering a compact, singularity-free representation of SE(3) states that unifies rotation and translation within a single algebraic structure. Dual quaternions have been shown to be the most effi-cient representation to perform basic pose transformations in terms of storage requirements and number of operations [6]. Moreover, many dual quaternion operations admit a matrix representation, enabling the application of linear algebraic tools and simplifying the analysis of 6-DOF systems [7]. Due to their advantageous computation and modeling properties, dual quaternions have been used for controller [8], [9] and estimator [4], [10]–[13] design. The primary motivation for the work here is a compre-hensive treatment of the modeling, nonlinear observability analysis, and sequential state estimator design for 6-DOF visual target tracking approached entirely through the use of dual quaternions. In this work, no assumptions are made about additional measurement sources (inertial measurement units, gyroscopes, etc.) or the cooperative nature between the target and the camera. By making as few assumptions as possible about additional measurement types, relative motion dynamics, and cooperation, the results from this work are broadly applicable and generalizable to applications such as visual-inertial navigation, simultaneous localization and mapping (SLAM), and P nP solver algorithms. The analytical observability of the PnP problem has been investigated in various contexts using several control-theoretic methods. In [14], [15], the observability Gramian 
+
+> arXiv:2605.02054v1 [eess.SY] 3 May 2026
+
+was calculated to derive observability conditions for a linear time-varying 6-DOF system using bearing and velocity mea-surements. A similar Gramian-based approach was applied in [13] to a satellite relative navigation system with line-of-sight and IMU measurements modeled using dual quaternions. Of the prior works, the present analysis is most closely related to [16] and [17]. In [16], the authors investigated uniqueness of the P nP problem across the one-, two- , three-, and n-unit vector measurement cases, deriving conditions on the rank of the Fisher information matrix. Their analysis, however, does not incorporate a process model, relies on a small-angle linearization about the true attitude, and characterizes only instantaneous observability, a stricter requirement than what sequential state estimators require, since such esti-mators propagate prior state information. A Lie algebraic observability analysis in a related setting was performed in [17] for 6-DOF IMU-camera calibration. However, that work incorporates IMU measurements and does not treat the P nPgeometry directly. To the best of our knowledge, this work presents the first nonlinear observability analysis of the P nP problem using a Lie algebraic approach, establishing local weak observability through rank analysis of the observability codistribution matrix. The analysis is carried out for two sensing modalities: relative position vector measurements and unit vector measurements representative of projected camera observations. Notably, the observability conditions for the unit vector case recover the classical collinear-feature degeneracy known from the Perspective-Three-Point (P3P) literature, a result typically derived through algorithmic and geometric arguments, here obtained from a control-theoretic perspective. In contrast to [16], the present approach in-corporates the system motion model, makes no small-angle approximation, and respects the underlying SE(3) geometry. The resulting observability conditions are directly applicable to sequential state estimators and establish that three unit vector measurements suffice to uniquely determine the pose given a prior estimate, providing a theoretical guarantee of practical relevance for filter-based pose estimation. The second key contribution is a dual quaternion formula-tion of a Lie group unscented Kalman filter (UKF) [18], [19] which is specifically tailored to the P nP problem and is used to demonstrate the nonlinear local observability conditions from the first primary contribution. Previous works have developed dual quaternion extended Kalman filters (EKFs) [10]–[13] and particle filters [4] for the relative pose and velocity estimation problem. However, these works either assume the relative velocity is measured directly via co-operative gyroscopes or lasers, is constant, or is slowly varying and estimated as a random walk. In the formulation here, none of these assumptions are made, and a model of the relative dynamics is incorporated directly, allowing for improved pose and velocity estimation through a complete modeling of rigid body motion. Additionally, while the UKF is computationally more demanding than an EKF, it is known to perform better for highly nonlinear systems, does not require the calculation of Jacobian matrices which may be analytically intractable for some systems, and is much less computationally demanding than a particle filter which is oftentimes infeasible to run on mobile systems without a GPU. The remainder of this article is organized as follows. Background material on quaternions and dual quaternions for modeling states in SO(3) and SE(3) is reviewed in Section II. The dual quaternion relative motion dynamics are presented at the end of Section II in the context of a camera observing a target. A brief introduction to nonlinear observability theory and the matrix rank condition for local observability is provided in Section III. Sufficient conditions for the relative pose and velocity states to be locally observable with only relative position measurements and with only unit vector measurements are derived in Sections IV and V, respectively. A dual quaternion formulation of a Lie algebraic UKF, with corresponding pseudocode and code repository, is pre-sented in Section VI, with additional details provided in the Appendix. The previously derived observability conditions are demonstrated in Section VII using the dual quater-nion unscented Kalman filter in a simple simulation with dynamic camera and target motion, highlighting improved pose estimation accuracy and robustness during occlusions relative to a traditional P nP solver implemented in OpenCV. Conclusions and future research directions are discussed in Section VIII. II. Q UATERNION FRAMEWORK 
+
+In this section, the fundamentals of the quaternion frame-work which will serve as a basis for the relative motion model, observability analyses, and filter design in subsequent sections are introduced. The quaternion and dual quaternion definitions and properties presented here are summarized from [8], [9], [20], [21]. 
+
+Quaternions 
+
+A quaternion object is defined by its coefficients 
+
+q0, q 1, q 2, q 3 ∈ R and basis elements i, j, k:
+
+q = q0 + q1i + q2j + q3k. (1) The basis elements satisfy the properties i2 = j2 = k2 = −1,
+
+i = jk = −kj , j = ki = −ik , k = ij = −ji , and ijk = −1.The sets of quaternions, scalar quaternions, and vector quaternions are defined as H = {q | q0 + q1i + q2j + q3k},
+
+Hs = {q ∈ H | q1, q 2, q 3 = 0 }, and 
+
+Hv = {q ∈ H | q0 = 0 }. The elements of a quaternion are typically divided into a scalar component, q0, and vector component, q = q1 q2 q3
+
+ ∈ R3, allowing aquaternion to be succinctly expressed as the concatenated array q = q0 q ∈ H. In some definitions, the scalar component is the last entry in the quaternion array, however, for this work the scalar component will always be the first entry. Quaternion operations and element definitions are defined in Table I. Unit quaternions form a Lie group that is isomorphic to SU(2) and are an advantageous SO(3) representation TABLE I QUATERNION AND DUAL QUATERNION OPERATIONS AND ELEMENT DEFINITIONS [9], [22].                                                                                                                                                
+
+> Operation Quaternion Definition Dual Quaternion Definition
+> Addition a+b=
+> h
+> a0+b0a+b
+> i
+> ˆa+ ˆb=ar+br+ϵ(ad+bd)
+> Scalar Multiplication λa =
+> h
+> λa0λa
+> i
+> λˆa=λa r+ϵ λa d
+> Multiplication ab =
+> h
+> a0b0−a·ba0b+b0a+a×b
+> i
+> ˆaˆb=arbr+ϵ(adbr+arbd)
+> Conjugate a∗=
+> h
+> a0−a
+> i
+> ˆa∗=a∗
+> r+ϵ a ∗
+> d
+> Dot Product a·b=
+> h
+> a0b0+a·b03
+> i
+> ˆa·ˆb=ar·br+ϵ(ad·br+ar·bd)
+> Cross Product a×b=
+> h
+> 0a0b+b0a+a×b
+> i
+> ˆa×ˆb=ar×br+ϵ(ad×br+ar×bd)
+> Norm || a|| =
+> q
+> a20+a·a|| ˆa|| =p|| ar|| 2+|| ad|| 2
+> Real Part Undefined (ˆ a)r=ar
+> Dual Part Undefined (ˆ a)d=ad
+> Zero Element 0q=
+> h
+> 003
+> iˆ0q= 0 q+ϵ0q
+> Identity Element 1q=
+> h
+> 103
+> iˆ1q= 1 q+ϵ0q
+
+compared to Euler angles because they are singularity-free and do not suffer from “gimbal lock” degenerate orientations. The set of unit quaternions is defined as 
+
+Hu = {q ∈ H | q∗q = qq ∗ = q · q = 1 q }. A unit quaternion 
+
+qu ∈ Hu can be expressed as a rotation angle, ϕ ∈ R, about a unit vector, n ∈ R3:
+
+qu =
+
+h
+
+cos 
+
+ ϕ
+
+> 2
+
+
+
+sin 
+
+ ϕ
+
+> 2
+
+
+
+n
+
+i
+
+. (2) The orientation of a frame X with respect to a frame 
+
+Y is represented by the unit quaternion qX/Y ∈ Hu. Unit quaternions have the conjugate inverse property 
+
+q−1 
+
+> X/Y
+
+= q∗ 
+
+> X/Y
+
+≜ qY /X , (3) admitting a convenient form for transforming a vector in R3
+
+between coordinate frames. By lifting a vector vX ∈ R3
+
+represented in frame X coordinates to a vector quater-nion vX = 0 vX  ∈ Hv , coordinate transformations to and from frame Y have the form 
+
+vY = q∗ 
+
+> Y /X
+
+vX qY /X , (4a) 
+
+vX = qY /X vY q∗ 
+
+> Y /X
+
+. (4b) Additionally, unit quaternions can be chained together to solve for the total relative rotation between multiple reference frames: 
+
+qX/Y = q∗ 
+
+> Y /Z
+
+qX/Z . (5) The unit quaternion kinematic equation is 
+
+˙qX/Y = 12 qX/Y ωXX/Y = 12 ωYX/Y qX/Y , (6) where ωXX/Y ∈ R3 is the angular velocity of frame X
+
+relative to frame Y expressed in frame X coordinates, and 
+
+ωXX/Y =
+
+h
+
+0 ωXX/Y 
+
+i
+
+∈ Hv .
+
+Matrix Form: Many quaternion operations can be rewrit-ten in a matrix form which allows for easier manipulation and use of matrix calculus tools for quaternion calculus. A quaternion q ∈ H left multiplied by a matrix M ∈ R4×4
+
+follows the standard matrix multiplication algebra as if q
+
+were a R4×1 vector: 
+
+M =
+
+ m m1
+
+m2 M3
+
+
+
+∈ R4×4, (7a) 
+
+Mq = mq0 + m1q, m2q0 + M3q ∈ H, (7b) where m ∈ R, m1 ∈ R1×3, m2 ∈ R3×1, and M3 ∈ R3×3.The left, [q]L, and right, [q]R, quaternion multiplication matrices are defined as: 
+
+[q]× =
+
+ 0 −q3 q2
+
+q3 0 −q1
+
+−q2 q1 0
+
+ ∈ R3×3, (8a) 
+
+[q]L = q0I4 +
+
+0 −q⊤
+
+q [q]×
+
+
+
+∈ R4×4, (8b) 
+
+[q]R = q0I4 +
+
+0 −q⊤
+
+q − [q]×
+
+
+
+∈ R4×4, (8c) where In is the n × n identity matrix and q is interpreted as a vector in R3×1 for consistent block matrix composition. Quaternion multiplication can then be re-written into a matrix form as 
+
+ab = [ a]L b = [ b]R a, (9a) 
+
+abc = [ ab ]L c = [ bc ]R a (9b) for a, b, c ∈ H. Note that attention must be exercised to mind the order of operations when transforming quaternions to and from the matrix form, as demonstrated by the following example: 
+
+abc = ([ b]R a) c̸ = [ b]R (ac ) . (10) Additionally, the quaternion cross product can be recon-structed as the matrix 
+
+[q]× =
+
+0 01×3
+
+q q0I3 + [ q]×
+
+
+
+, (11) such that a × b = [ a]× b.The quaternion conjugate is antihomomorphic 
+
+(ab )∗ = b∗a∗ (12) and can be expressed in matrix form using the conjugate matrix I∗ = diag   1 −1 −1 −1 ∈ R4×4:
+
+q∗ = I∗q, (13) where diag (·) is the diagonal matrix function which places the input vector along the diagonal and off-diagonal elements are zero. 
+
+Derivatives: Recasting quaternion expressions in matrix form enables the direct application of matrix calculus tools for differentiation. Some common quaternion derivatives that will be used to construct dual quaternion derivatives in later sections are: 
+
+∂ab ∂a = [ b]R , ∂ab ∂b = [ a]L , ∂a ∗ba ∂a = [ a∗b]L + [ ba ]R I∗.
+
+(14) 
+
+Dual Quaternions 
+
+Similar to how a complex number is composed of a real and imaginary component, a dual quaternion is formed by a real part, qr ∈ H, and a dual part, qd ∈ H. The dual unit, ϵ , has the properties 
+
+ϵ 2 = 0 and ϵ̸ = 0. The set of dual quaternions, scalar dual quaternions, and vector dual quaternions are defined as DH = {ˆq | ˆq = qr + ϵ q d, q r , q d ∈ H},
+
+DH s = {ˆq ∈ DH | qr , q d ∈ Hs}, and 
+
+DH v = {ˆq ∈ DH | qr , q d ∈ Hv }. Dual quaternion operations and element definitions are given in Table I. The dual pose can be thought of as an exten-sion of the unit quaternion and is a dual quaternion which embeds the relative orientation and translation between 6-DOF coordinate frames. The dual pose be-longs to the set of unit dual quaternions defined as 
+
+DH u = ˆq ∈ DH | ˆq∗ ˆq = ˆ q ˆq∗ = ˆ q · ˆq = ˆ 1q . The pose of a frame X with respect to a frame Y is represented by the dual pose, ˆqX/Y ∈ DH u, and is defined as 
+
+ˆqX/Y = qX/Y + ϵ 12 rYX/Y qX/Y (15) 
+
+= qX/Y + ϵ 12 qX/Y rXX/Y , (16) where qX/Y ∈ Hu is the orientation of frame X with respect to frame Y , rXX/Y ∈ R3 is the position of frame 
+
+X relative to frame Y expressed in frame X coordinates, and rXX/Y =
+
+h
+
+0 rXX/Y 
+
+i
+
+∈ Hv .Many parallels exist between quaternions and dual quater-nions in terms of properties and expression forms for chang-ing coordinate frames, kinematics, and derivatives. Similar to unit quaternions, unit dual quaternions also have the conjugate inverse property: 
+
+ˆq−1 
+
+> X/Y
+
+= ˆ q∗ 
+
+> X/Y
+
+≜ ˆqY /X . (17) Changing coordinate frames between vector dual quaternions 
+
+ˆvX , ˆvY ∈ DH v has the familiar quaternion form 
+
+ˆvY = ˆ q∗ 
+
+> Y /X
+
+ˆvX ˆqY /X , (18a) 
+
+ˆvX = ˆ qY /X ˆvY ˆq∗ 
+
+> Y /X
+
+. (18b) Additionally, unit dual quaternions can be chained together over intermediate pose transformations to solve for the total relative transformation between frames 
+
+ˆqX/Y = ˆ q∗ 
+
+> Y /Z
+
+ˆqX/Z . (19) The dual velocity is a vector dual quaternion that embeds the relative rotational and translational velocities between coordinate frames and is defined as 
+
+ˆωZX/Y = ωZX/Y + ϵ (vZX/Y + ωZX/Y × rZZ/X ) ∈ DH v , (20) where ωZX/Y ∈ R3 is the angular velocity of frame X
+
+relative to frame Y expressed in frame Z coordinates, 
+
+ωZX/Y =
+
+h
+
+0 ωZX/Y 
+
+i
+
+∈ Hv , vZX/Y ∈ R3 is the translational velocity of frame X relative to frame Y expressed in frame 
+
+Z coordinates, vZX/Y =
+
+h
+
+0 vZX/Y 
+
+i
+
+∈ Hv , and rZZ/X ∈ R3
+
+is the position of frame Z relative to frame X expressed in frame Z coordinates, rZZ/X =
+
+h
+
+0 rZZ/X 
+
+i
+
+∈ Hv . Calculating relative velocities between dual velocities expressed in the same coordinate frame follows standard vector subtraction 
+
+ˆωZX/Y = ˆ ωZX/W − ˆωZY /W .
+
+The dual quaternion kinematics are 
+
+˙ˆqX/Y = 12 ˆqX/Y ˆωXX/Y = 12 ˆωYX/Y ˆqX/Y . (21) The simplicity and resemblance to the quaternion kinematics in (6) once more highlight dual quaternions as a natural extension of quaternions to SE(3). 
+
+Matrix Form: Dual quaternion operations can also be expressed in matrix form, where a dual quaternion ˆq ∈ DH 
+
+left multiplied by a matrix follows the standard matrix multiplication algebra as if ˆq were a R8×1 vector: 
+
+M =
+
+M1 M2
+
+M3 M4
+
+
+
+∈ R8×8, (22a) 
+
+Mˆq = ( M1qr + M2qd) + ϵ (M3qr + M4qd) ∈ DH ,
+
+(22b) where M1, M2, M3, M4 ∈ R4×4.For a dual quaternion ˆq ∈ DH , the left and right dual quaternion multiplication matrices are 
+
+[ˆ q]L =
+
+[qr ]L 04×4
+
+[qd]L [qr ]L
+
+
+
+∈ R8×8 (23a) 
+
+[ˆ q]R =
+
+[qr ]R 04×4
+
+[qd]R [qr ]R
+
+
+
+∈ R8×8. (23b) rC/J 
+
+J
+
+C
+
+T
+
+rT /C 
+
+rT /J       
+
+> Fig. 1. Diagram of the target ( T), camera ( C), and inertial ( J) coordinate frames and the relative position vectors ( rT /J , r C/J , r T /C ∈R3) between them.
+
+Dual quaternion multiplication can be reconstructed in matrix form as 
+
+ˆaˆb = [ˆ a]L ˆb =
+
+hˆb
+
+i
+
+> R
+
+ˆa, (24a) 
+
+ˆaˆbˆc =
+
+h
+
+ˆaˆb
+
+i
+
+> L
+
+ˆc =
+
+hˆbˆc
+
+i
+
+> R
+
+ˆa =
+
+h ˆb
+
+i
+
+> R
+
+ˆa
+
+
+
+ˆc = ˆ a
+
+
+
+[ˆ c]R ˆb
+
+
+
+(24b) for dual quaternions ˆa, ˆb, ˆc ∈ DH . The dual quaternion cross product has a matrix form as well: 
+
+[ˆ q]× =
+
+[qr ]× 04×4
+
+[qd]× [qr ]×
+
+
+
+∈ R8×8, (25) such that ˆa × ˆb = [ˆ a]× ˆb.Lastly, the dual quaternion conjugate is also antihomomor-phic: 
+
+ˆaˆb
+
+∗
+
+= ˆb∗ˆa∗ (26) and can be rewritten using the dual conjugate matrix 
+
+ˆI∗
+
+= blkdiag (I∗, I∗) ∈ R8×8,
+
+ˆq∗ = I∗ ˆq, (27) where blkdiag (·) is the block diagonal matrix function which returns a block diagonal matrix with its input matrices as the diagonal blocks and zero matrices on the off-diagonal blocks. 
+
+Derivatives: By rewriting dual quaternion operations in a matrix form, dual quaternion derivatives can be calculated using matrix calculus tools and can be written in a compact form that mirrors quaternion derivatives. Some common derivatives that will be used in the following observability analysis sections are: 
+
+∂ˆaˆb∂ˆa =
+
+hˆb
+
+i
+
+> R
+
+, ∂ˆaˆb∂ˆb = [ˆ a]L , ∂ˆa∗ˆbˆa∂ˆa =
+
+h
+
+ˆa∗ˆb
+
+i
+
+> L
+
++
+
+hˆbˆa
+
+i
+
+> R
+
+ˆI∗
+
+.
+
+(28) 
+
+Rigid Body Dynamics 
+
+The 6-DOF relative motion between two rigid bodies can be modeled using dual quaternions to represent pose, translational velocity, and angular velocity. Motivated by visual target tracking, define two body-fixed frames, the target frame, T , and the camera frame, C, along with an inertial reference frame, J. Fig. 1 illustrates the geometry of these three coordinate frames. The net external forces, f C ∈ R3, and torques, τ C ∈ R3,applied at the camera center of mass in frame C coordinates can be lifted to vector quaternions and embedded into the force vector dual quaternion ˆf C ∈ DH v :
+
+f C =
+
+h
+
+0 f C i
+
+∈ Hv , τ C = 0 τ C  ∈ Hv , (29a) 
+
+ˆf C = f C + ϵ τ C . (29b) The mass matrix, MC , contains the mass, m, and inertia matrix, IC ∈ S3++ , properties of the system in frame C
+
+coordinates 
+
+MC =
+
+
+
+04×4
+
+1 03×1
+
+01×3 mI3
+
+1 03×1
+
+01×3 IC 04×4
+
+ . (30) From (21) and [23], the equations of motion for the camera frame with respect to the inertial frame, J, in dual quaternion form are 
+
+˙ˆqC/J = 12 ˆqC/J ˆωCC/J , (31a) 
+
+˙ˆωCC/J =  MC −1  ˆf C − ˆωCC/J × MC ˆωCC/J 
+
+
+
+. (31b) The target frame with respect to the inertial frame has the same form: 
+
+˙ˆqT /J = 12 ˆqT /J ˆωTT /J , (32a) 
+
+˙ˆωTT /J =  MT −1  ˆf T − ˆωTT /J × MT ˆωTT /J 
+
+
+
+. (32b) The relative motion dynamics are derived by first differ-entiating ˆωCT /C = ˆ ωCT /J − ˆωCC/J with respect to time to yield 
+
+˙ˆωCT /C = ˙ˆωCT /J − ˙ˆωCC/J . (33) Next, applying Proposition 1 from [24] to derive an equiva-lent expression for ˙ˆωCT /J and simplifying gives 
+
+˙ˆωCT /J = ˆ qT /C 
+
+ ˙ˆωTT /J + ˆ ωTT /C × ˆωTT /J 
+
+
+
+ˆq∗ 
+
+> T /C
+
+(34) 
+
+= ˆ qT /C ˙ˆωTT /J ˆq∗ 
+
+> T /C
+
++ ˆ ωCT /C ×
+
+
+
+ˆωCT /C + ˆ ωCC/J 
+
+
+
+(35) 
+
+= ˆ qT /C ˙ˆωTT /J ˆq∗ 
+
+> T /C
+
++ ˆ ωCT /C × ˆωCC/J . (36) The expression for ˙ˆωCT /J in (36) is then substituted into (33) to yield the complete relative pose dynamics 
+
+˙ˆqT /C = 12 ˆωCT /C ˆqT /C , (37a) 
+
+˙ˆωCT /C = ˆ qT /C ˙ˆωTT /J ˆq∗ 
+
+> T /C
+
++ ˆ ωCT /C × ˆωCC/J − ˙ˆωCC/J . (37b) To maintain generality, no assumptions are made regarding any particular model for the external forces and torques. For a concrete example of such modeling, see [9] for a dual quaternion representation of forces and torques acting on a spacecraft. III. N ONLINEAR OBSERVABILITY 
+
+Below, a brief review is provided of nonlinear observ-ability and the Lie algebraic approach for determining the observability of nonlinear systems, summarized from [17], [25], [26]. Consider the nonlinear system, Σ, with the following process and measurement models: 
+
+Σ : ˙x = f (x, u), (38a) 
+
+y = h(x), (38b) where x(t) ∈ Rn, y(t) ∈ Rk, u(t) ∈ U ⊆ Rm, and U
+
+is the set of admissible controls. Let x(t, x0, u) denote the solution trajectory to the initial value problem for Σ with initial condition x(0) = x0 under the control input u(t), and define y(t, x0, u) = h(x(t, x0, u)) to be the measurement signal over the solution trajectory. Initial states xA and xB
+
+at time t = 0 are V -indistinguishable if for every control 
+
+u ∈ U , the corresponding state trajectories x(t, xA, u) and 
+
+x(t, xB , u) remain in V ⊆ Rn over t ∈ [0 , T ] and satisfy 
+
+y(t, xA, u) = y(t, xB , u) ∀ t ∈ [0 , T ]. (39) The system Σ is locally observable at xA if there exists a neighborhood W of xA such that, for every neighborhood 
+
+V ⊂ W , indistinguishability within V implies xA = xB . If 
+
+Σ is locally observable at all x, then the system is deemed locally observable. Intuitively, this definition means that xA
+
+can be distinguished from nearby states within finite time and with trajectories remaining close to xA.A differential geometric approach to determining local observability involves analyzing the Lie derivatives of the output function h(x) with respect to the process model 
+
+f (x, u). The zeroth through second-order Lie derivatives are given by: 
+
+L0 
+
+> f
+
+h = h(x), (40a) 
+
+L1 
+
+> f
+
+h = ∇h(x) · f (x, u), (40b) 
+
+L2 
+
+> f
+
+h = L1
+
+> f
+
+ L1 
+
+> f
+
+h = ∇(L1 
+
+> f
+
+h) · f (x, u). (40c) Higher-order Lie derivatives follow a similar recursive form, and derivatives are computed with respect to x. If h(x) is a scalar function, ∇h(x) is the gradient and is represented as a row vector in this work. If h(x) is a vector function, 
+
+∇h(x) is the Jacobian matrix. If the process model is control-affine, meaning it decom-poses as: ˙x = f0(x)+ Pmi=1 fi(x)ui, where f0(x) is the drift vector field and fi(x) are the control vector fields, then Lie derivatives can be computed separately with respect to each of the vector fields. For instance, a second-order mixed Lie derivative of h(x), first along f0(x) and then along f1(x),is: 
+
+L2 
+
+> f1f0
+
+h = L1 
+
+> f1
+
+(L1 
+
+> f0
+
+h) = ∇(L1 
+
+> f0
+
+h) · f1(x). (41) Taking a Lie derivative with respect to fi(x) implicitly assumes ui̸ ≡ 0.The observability Lie algebra O for a nonlinear control-affine system is defined as 
+
+O = span Ldfi h(x) | d ∈ N0, i = 0 , . . . , m . (42) In this definition the Lie derivatives can be any combination of the process model vector fields and of arbitrary degree. Local observability is then determined using the following rank condition on the Jacobian of O, dO:
+
+Theorem 1 [25] The nonlinear system is locally observable if rank (d O) = n .
+
+In linear systems, dO reduces to the classical observability matrix, and its dimensions are determined by the dimension-ality of the system. However, for nonlinear systems, while the number of columns of dO is determined by the state dimension n, the number of rows necessary to satisfy the full rank condition is not known a priori. While no universal method exists for constructing dO, sequentially computing low-order Lie derivatives along well-chosen combinations of the process model vector fields typically yields good results. If any set of Lie derivatives generates a dO that satisfies the rank condition, then the system is locally observable. In practice, if a nonlinear system is locally observable, then a state estimator, such as a Kalman filter, will have its estimate error covariance converge towards the Cram´ er–Rao lower bound, and estimation errors will remain statistically bounded by the estimate error covariance when initialized with a state estimate sufficiently close to the true state. 
+
+A. State Definition 
+
+In this work, the state x ∈ DH u × DH v , is composed of the dual pose and dual velocity quaternions of frame T with respect to frame C in frame C coordinates (from (15) and (20)): 
+
+x =
+
+ ˆqT /C 
+
+ˆωCT /C 
+
+
+
+=
+
+" qT /C + ϵ 12 rCT /C qT /C 
+
+ωCT /C + ϵ
+
+
+
+vCT /C − ωCT /C × rCT /C 
+
+#
+
+.
+
+(43) To simplify the observability analyses in the following sections, the following state transformation is applied, which is a decomposition of the dual quaternion states into their real and dual components. Let x† be the transformed quaternion state of (43): 
+
+x† =
+
+
+
+qT /C 
+
+μT /C 
+
+ωCT /C 
+
+βCT /C 
+
+ ∈ Hu × H × Hv × Hv , (44) where μT /C = (ˆ qT /C )d = 12 rCT /C qT /C and 
+
+βCT /C = (ˆ ωCT /C )d = vCT /C − ωCT /C × rCT /C . Formally, since a bijective transformation exists between x and x†,observability of x† is equivalent to observability of x [7]. The subsequent observability analyses therefore focus on establishing observability of x†.Recall from (37a), the dual quaternion kinematic equation is ˙ˆqT /C = 12 ˆωCT /C ˆqT /C . Expressing the dual components of 
+
+ˆqT /C and ˆωCT /C in terms of the transformed state variables from (44), and evaluating the dual quaternion kinematic equation yields the transformed state kinematic equations 
+
+˙qT /C = 12 ωCT /C qT /C , (45a) 
+
+˙μT /C = 12 βCT /C qT /C + ωCT /C μT /C , (45b) where ˙qT /C = ( ˙ˆqT /C )r and ˙μT /C = ( ˙ˆqT /C )d.IV. P OSITION VECTOR MEASUREMENTS 
+
+The first measurement model used for observability anal-ysis is based on a series of relative position measure-ments. This model captures several practical measurement types, including cameras measuring fiducial markers or radio transponders that return range and bearing data. For nota-tional consistency and to build on the visual target tracking application introduced in previous sections, the measurement model is presented in the context of a camera measuring fiducial markers. In this model it is assumed that the position of each marker with respect to the target coordinate frame, 
+
+rTM/T ∈ R3, is known to the observer, where M denotes the marker coordinate frame and rTM/T =
+
+h
+
+0 rTM/T 
+
+i
+
+∈ Hv .The position vector measurement function for a single marker is 
+
+y = h(x) = rCM/C = rCT /C + qT /C rTM/T q∗ 
+
+> T /C
+
+∈ Hv , (46) where qT /C ∈ Hu is the orientation of the target frame T
+
+with respect to the camera frame C, and rCT /C ∈ Hv is the position of frame T with respect to frame C in frame 
+
+C coordinates. Substituting in the transformed state, the measurement function is rewritten as 
+
+y = h(x†) = 2 μT /C q∗ 
+
+> T /C
+
++ qT /C rTM/T q∗ 
+
+> T /C
+
+. (47) In Section 4.3.2 of [21] an explicit form is presented for the derivative ∂qaq ∗ 
+
+> ∂q
+
+where q ∈ Hu and a ∈ Hv . In this work, the alternative form (14) is utilized which is instead written in terms of the left and right quaternion multiplication matrices and will prove advantageous for matrix rank analysis: 
+
+∂qaq ∗
+
+∂q = [ aq ∗]R + [ qa ]L I∗. (48) For brevity, let b = qa ∈ H, note that then −b∗ = aq ∗, and define the function 
+
+2V (b) = [ −b∗]R + [ b]L I∗ (49) 
+
+= 2 
+
+0 01×3
+
+b −b0I3 − b
+
+> ×
+
+
+
+. (50) The rank properties of V (qa ) are proven in the following lemma. 
+
+Lemma 1 For q ∈ Hu and a ∈ Hv ,
+
+rank ( V (qa )) = 
+
+(
+
+0 if a = 0 q
+
+3 otherwise. (51) 
+
+Proof: First, rewrite 0q = qa as 0q = [ q]L a. Applying Lemma 3 from [7] gives that [q]L is full rank if q ∈ Hu.Therefore, the solution to the equation b = 0 q = qa has only the trivial solution a = 0 q , for which rank ( V (qa )) = 0 .If a̸ = 0 , then because [q]L is full rank, b = qa has at least one non-zero element. From (50), the elementwise form of 
+
+V (b) is 
+
+V (b) = 
+
+
+
+0 0 0 0
+
+b1 −b0 b3 −b2
+
+b2 −b3 −b0 b1
+
+b3 b2 −b1 −b0
+
+ . (52) If bi̸ = 0 for some i ∈ { 0, 1, 2, 3}, then by inspection one can see that a linear transformation of V (b) exists such that there will be a 3 × 3 block matrix of the form biI3 + S×
+
+where S× ∈ R3×3 is a skew-symmetric matrix. A non-zero constant times the identity matrix plus a skew-symmetric matrix is known to be full rank, hence rank ( V (b)) = 3 if 
+
+a̸ = 0 q .
+
+Zeroth Order Lie Derivative 
+
+The zeroth order Lie derivative contribution to the Jaco-bian of the observability Lie algebra is the derivative of the measurement function with respect to the transformed state variables: 
+
+L0 
+
+> f
+
+h = h(x†) = 2 μT /C q∗ 
+
+> T /C
+
++ qT /C rTM/T q∗ 
+
+> T /C
+
+, (53) The Jacobian of this Lie derivative is found by direct computation as follows: 
+
+∇L 0 
+
+> f
+
+h =
+
+ ∂L0    
+
+> fh∂q T /C
+> ∂L0
+> fh∂μ T /C
+> ∂L0
+> fh∂ω CT /C
+> ∂L0
+> fh∂β CT /C
+
+
+
+(54) 
+
+=
+
+h ∂L0   
+
+> fh∂q T /C
+> ∂L0
+> fh∂μ T /C
+
+04×4 04×4
+
+i
+
+, (55) 
+
+∂L0 
+
+> f
+
+h∂q T /C 
+
+=
+
+h
+
+rTM/T q∗
+
+> T /C
+
+i
+
+> R
+
++
+
+h
+
+qT /C rTM/T 
+
+i
+
+> L
+
+I∗ (56) 
+
++ 2 μT /C 
+
+ 
+
+> L
+
+I∗ (57) 
+
+= 2 
+
+
+
+V
+
+
+
+qT /C rTM/T 
+
+
+
++ μT /C 
+
+ 
+
+> L
+
+I∗
+
+, (58) 
+
+∂L0 
+
+> f
+
+h∂μ T /C 
+
+= 2 
+
+h
+
+q∗
+
+> T /C
+
+i
+
+> R
+
+(59) 
+
+First Order Lie Derivative 
+
+The first order Lie derivative is calculated and factored in terms of the zeroth order Lie derivative: 
+
+L1 
+
+> f
+
+h = ∇L 0 
+
+> f
+
+h · f (x†, u) (60) 
+
+= ∂L0 
+
+> f
+
+h∂q T /C 
+
+˙qT /C + ∂L0 
+
+> f
+
+h∂μ T /C 
+
+˙μT /C (61) 
+
+= 12
+
+∂L0 
+
+> f
+
+h∂q T /C 
+
+ωCT /C qT /C (62) 
+
++ 12
+
+∂L0 
+
+> f
+
+h∂μ T /C 
+
+
+
+βCT /C qT /C + ωCT /C μT /C 
+
+
+
+. (63) The Jacobian of this expression is then 
+
+∇L 1 
+
+> f
+
+h =
+
+ ∂L1    
+
+> fh∂q T /C
+> ∂L1
+> fh∂μ T /C
+> ∂L1
+> fh∂ω CT /C
+> ∂L1
+> fh∂β CT /C
+
+
+
+, (64a) 
+
+∂L1 
+
+> f
+
+h∂ω CT /C 
+
+= 12
+
+∂L0 
+
+> f
+
+h∂q T /C 
+
+qT /C 
+
+ 
+
+> R
+
++ ∂L0 
+
+> f
+
+h∂μ T /C 
+
+μT /C 
+
+
+
+> R
+
+!
+
+,
+
+(64b) 
+
+∂L1 
+
+> f
+
+h∂β CT /C 
+
+= 12
+
+∂L0 
+
+> f
+
+h∂μ T /C 
+
+qT /C 
+
+ 
+
+> R
+
+. (64c) The terms ∂L1  
+
+> fh∂q T /C
+
+and ∂L1  
+
+> fh∂μ T /C
+
+are omitted because they are analytically intractable and are not necessary in the observ-ability analysis. Interestingly, (64b) and (64c) can be factored and written as the matrix product 
+
+ ∂L1  
+
+> fh∂ω CT /C
+> ∂L1
+> fh∂β CT /C
+
+
+
+= 12
+
+h ∂L0  
+
+> fh∂q T /C
+> ∂L0
+> fh∂μ T /C
+
+i ˆqT /C 
+
+ 
+
+> R
+
+. (65) 
+
+Observability Codistribution 
+
+For the observability analysis, three independent markers, denoted as coordinate frames M 1, M 2, M 3, are assumed to be simultaneously visible and to have non-zero range from the observing camera. The concatenated measurement function is 
+
+y = h(x†) = 
+
+
+
+rCM 1/C 
+
+rCM 2/C 
+
+rCM 3/C 
+
+ ∈ Hv × Hv × Hv . (66) To express the Jacobian of the zeroth order Lie derivative of the concatenated measurement function, define the matrix 
+
+F ∈ R12 ×8 as 
+
+F =
+
+
+
+V
+
+
+
+qT /C rTM 1/T 
+
+
+
++ μT /C 
+
+ 
+
+> L
+
+I∗
+
+h
+
+q∗
+
+> T /C
+
+i
+
+> R
+
+V
+
+
+
+qT /C rTM 2/T 
+
+
+
++ μT /C 
+
+ 
+
+> L
+
+I∗
+
+h
+
+q∗
+
+> T /C
+
+i
+
+> R
+
+V
+
+
+
+qT /C rTM 3/T 
+
+
+
++ μT /C 
+
+ 
+
+> L
+
+I∗
+
+h
+
+q∗
+
+> T /C
+
+i
+
+> R
+
+ . (67) The observability codistribution matrix consisting of the zeroth and first order Lie derivatives is then 
+
+dO =
+
+ 2F 012 ×8
+
+⋆12 ×8 F ˆqT /C 
+
+
+
+> R
+
+
+
+∈ R24 ×16 . (68) The symbol ⋆ denotes non-zero derivatives whose full struc-ture is omitted for brevity as they will not be needed for the desired observability result. The conditions for observability are now formally stated. 
+
+Theorem 2 The observability codistribution, dO, is full rank and the nonlinear system (43) is locally observable with three relative position measurements if the non-collinear condition is satisfied: rTM 2/M 1 × rTM 3/M 1̸ = 0 q .Proof: Performing block row reduction on F by subtracting the first row from the second and third, and simplifying using the linearity property V (qa ) − V (qb ) = 
+
+V (q (a − b)) for a, b ∈ H and q ∈ Hu yields 
+
+
+
+V
+
+
+
+qT /C rTM 1/T 
+
+ h
+
+q∗
+
+> T /C
+
+i
+
+> R
+
+V
+
+
+
+qT /C rTM 2/M 1
+
+
+
+04×4
+
+V
+
+
+
+qT /C rTM 3/M 1
+
+
+
+04×4
+
+ . (69) The first block row has rank four because 
+
+rank 
+
+h 
+
+q∗
+
+> T /C
+
+i
+
+> R
+
+
+
+= 4 [7]. Applying Lemma 1, the second and third block rows each have rank three provided that 
+
+rTM 2/M 1̸ = 0 q and rTM 3/M 1̸ = 0 q . The first block row is clearly linearly independent from the second and third. The second and third block rows are linearly independent from each other if rTM 2/M 1̸ = κ r TM 3/M 1 for any non-zero scalar 
+
+κ. Since the block rows are mutually linearly independent, their ranks sum to yield rank ( F) = 8 .The matrix dO (68) has a block triangular structure, with its lower diagonal block equal to the upper diagonal block right-multiplied by 12
+
+ˆqT /C 
+
+
+
+> R
+
+. Since ˆqT /C 
+
+ 
+
+> R
+
+is always full rank, dO achieves full rank if F has full rank because 
+
+dO then becomes a block triangular matrix with full-rank diagonal blocks [27]. Intuitively, the observability condition requires that the three marker locations form a plane rather than a line. This geometric constraint is necessary because collinear markers would fail to provide rotational information about all axes. V. U NIT VECTOR MEASUREMENTS 
+
+The next observability analysis considers the unit vec-tor measurement model, which is functionally equivalent to common projected-vector measurement models including pinhole cameras, bearing-only radar, and angle-only star trackers. While these models differ in their specific deriva-tions, they share a fundamental structure: each represents relative position vectors normalized by a distance metric. Consequently, although the Jacobian matrices of these mea-surement functions take different forms, they yield equivalent rank conditions and thus identical observability criteria. The unit vector representation is adopted here because it simplifies the mathematical analysis. To prove observability, the transformed state x† is again leveraged to simplify the derivatives. The unit vector mea-surement function, ν (r) ∈ Hv , with input position vector 
+
+r ∈ R3 and r = 0 r ∈ Hv , is defined as 
+
+ν (r) = r
+
+|| r|| . (71) The positive depth condition, || r|| > 0, must be satisfied for a valid measurement. In addition to the unit vector measurements, the unit quaternion constraint q∗ 
+
+> T /C
+
+qT /C = 1 q
+
+is included as a pseudo-measurement. Incorporating the unit quaternion constraint as a pseudo-measurement is a common technique in filter design that enforces the geometric con-straint during measurement updates, preventing the quater-nion state from drifting off the unit sphere due to numerical errors and linearization approximations. This approach was similarly employed in the observability analysis in [17] to maintain the unit norm constraint on quaternion states. H = DG =                             
+
+> 
+> C qT /C
+> 04×404×404×4
+> 04×4∇ν
+> 
+> rCM1/C
+> 
+> 04×404×4
+> 04×404×4∇ν
+> 
+> rCM2/C
+> 
+> 04×4
+> 04×404×404×4∇ν
+> 
+> rCM3/C
+> 
+> I404×4
+> V
+> 
+> qT /C rTM1/T
+> 
+> +μT /C
+> 
+> LI∗
+> h
+> q∗
+> T /C
+> i
+> R
+> V
+> 
+> qT /C rTM2/T
+> 
+> +μT /C
+> 
+> LI∗
+> h
+> q∗
+> T /C
+> i
+> R
+> V
+> 
+> qT /C rTM3/T
+> 
+> +μT /C
+> 
+> LI∗
+> h
+> q∗
+> T /C
+> i
+> R
+> 
+> ∈R16 ×8(70)
+
+The measurement function, incorporating both the unit quaternion constraint and a single unit vector measurement, is 
+
+y = h(x†) = 
+
+"q∗ 
+
+> T /C
+
+qT /C − 1q
+
+ν
+
+
+
+rCM/C 
+
+#
+
+∈ 0q × Hv . (72) 
+
+Zeroth Order Lie Derivative 
+
+The derivative of a quaternion a ∈ H multiplied by its conjugate is 
+
+∂a ∗a∂a = [ a]R I∗ + [ a∗]L ∈ R4×4 (73) 
+
+= 2 
+
+ a
+
+03×4
+
+
+
+(74) 
+
+≜ 2C (a) . (75) To calculate the Jacobian of the unit vector function with respect to each of the transformed state variables, apply the chain rule 
+
+∂ν 
+
+
+
+rCM/C 
+
+
+
+∂x† =
+
+∂ν 
+
+
+
+rCM/C 
+
+
+
+∂r CM/C 
+
+∂r CM/C 
+
+∂x† . (76) Note that ∂r CM/C  
+
+> ∂x†
+
+is the Jacobian of the position vector measurement, whose form and properties were established in Section IV. Now taking the Lie derivative of the measurement (72) and writing ∇ν
+
+
+
+rCM/C 
+
+
+
+= ∂ν (rCM/C )
+
+> ∂r CM/C
+
+for brevity, 
+
+L0 
+
+> f
+
+h =
+
+"q∗ 
+
+> T /C
+
+qT /C − 1q
+
+ν
+
+
+
+rCM/C 
+
+#
+
+, (77) 
+
+∇L 0 
+
+> f
+
+h =
+
+h ∂L0   
+
+> fh∂q T /C
+> ∂L0
+> fh∂μ T /C
+
+08×4 08×4
+
+i
+
+, (78) 
+
+∂L0 
+
+> f
+
+h∂q T /C 
+
+= 2 
+
+" C  qT /C 
+
+
+
+∇ν
+
+
+
+rCM/C 
+
+  
+
+V
+
+
+
+qT /C rTM/T 
+
+
+
++ μT /C 
+
+ 
+
+> L
+
+I∗
+
+#
+
+,
+
+(79) 
+
+∂L0 
+
+> f
+
+h∂μ T /C 
+
+= 2 
+
+" 04×4
+
+∇ν
+
+
+
+rCM/C 
+
+ h 
+
+q∗
+
+> T /C
+
+i
+
+> R
+
+#
+
+. (80) 
+
+First Order Lie Derivative 
+
+Using the same factorization approach as in Section IV, the first-order Lie derivative Jacobian can be factored and rewritten in terms of the zeroth-order Lie derivative Jacobian: 
+
+ ∂L1  
+
+> fh∂ω CT /C
+> ∂L1
+> fh∂β CT /C
+
+
+
+= 12
+
+h ∂L0  
+
+> fh∂q T /C
+> ∂L0
+> fh∂μ T /C
+
+i ˆqT /C 
+
+ 
+
+> R
+
+. (81) 
+
+Observability Codistribution 
+
+Now assume that three markers are simultaneously vis-ible for three unit vector measurements. The concatenated measurement function is 
+
+y = h(x†) = 
+
+
+
+q∗ 
+
+> T /C
+
+qT /C − 1q
+
+ν
+
+
+
+rCM 1/C 
+
+
+
+ν
+
+
+
+rCM 2/C 
+
+
+
+ν
+
+
+
+rCM 3/C 
+
+
+
+∈ 0q × Hv × Hv × Hv .
+
+(82) The observability codistribution with zeroth and first order Lie derivatives is then 
+
+dO =
+
+ 2H 016 ×8
+
+⋆16 ×8 H ˆqT /C 
+
+
+
+> R
+
+
+
+∈ R32 ×16 , (83) where the block matrix H is defined in (70). The matrix H
+
+is decomposed as H = DG , where D ∈ R16 ×16 is block diagonal, and G ∈ R16 ×8 extends F (67) with an additional block row corresponding to the unit quaternion constraint pseudo-measurement. First, the following lemma will be used to derive the observability conditions. 
+
+Lemma 2 Let A ∈ Rm×m and B ∈ Rm×n with B full rank and overdetermined (i.e., m > n , rank ( B) = n). If 
+
+{n1, n2, . . . , nk} is a basis for null ( A) and for each ni the system 
+
+Bz = ni (84) 
+
+has no solution, then null ( AB ) = {0n}, and hence AB is full rank (i.e., rank ( AB ) = n). Proof: First, observe that 
+
+null ( AB ) = {z ∈ Rn | Bz ∈ null ( A)} (85) because B is full rank. Suppose there exists a nonzero vector 
+
+z such that Bz ∈ null ( A), then since null ( A) is a subspace of Rm with basis {n1, n2, . . . , nk}, any vector in null ( A)
+
+can be expressed as a linear combination of these basis vectors with scalars α1, . . . , α k such that 
+
+Bz =
+
+> k
+
+X
+
+> i=1
+
+αini. (86) By assumption, for each i, the system Bz = ni has no solution. Since range ( B) is a subspace, if it does not contain the basis vectors ni, it cannot contain any of their linear combinations. Therefore, the only possible solution to Bz ∈ null ( A) is Bz = 0, implying z ∈ null ( B).However, since B is full rank, its nullspace is trivial, meaning 
+
+null ( AB ) = {0} and rank ( AB ) = n.The observability conditions for the nonlinear system with three unique unit vector measurement sources is presented in the following theorem. 
+
+Theorem 3 The observability codistribution, dO, is full rank and the nonlinear system (43) is locally observable with three relative unit vector measurements if the non-collinear condition is satisfied: rTM 2/M 1 × rTM 3/M 1̸ = 0 q .Proof: Once more, dO (83) is a block triangular matrix with its lower diagonal block right multiplied by ˆqT /C 
+
+
+
+> R
+
+.The observability analysis will follow a similar approach to Section IV by first proving rank of the repeated diagonal block matrix H to then prove the overall rank of dO.A basis for the nullspace of the block diagonal matrix 
+
+D can readily be constructed from the nullspaces of each diagonal block: 
+
+null ( D) = span 
+
+
+
+p
+
+0q
+
+0q
+
+0q
+
+ ,
+
+
+
+0q
+
+rCM 1/C 
+
+0q
+
+0q
+
+ ,
+
+
+
+0q
+
+0q
+
+rCM 2/C 
+
+0q
+
+ ,
+
+
+
+0q
+
+0q
+
+0q
+
+rCM 3/C 
+
+
+
+(87) 
+
+= span {n1, n2, n3, n4} , (88) where p ∈ null  C  qT /C 
+
+ is represented as a quater-nion and equivalently satisfies qT /C · p = 0 q . Additionally, one can directly verify null 
+
+
+
+∇ν
+
+
+
+rCM/C 
+
+ 
+
+=
+
+n
+
+rCM/C 
+
+o
+
+is a direct consequence of the position vector being pro-jected/normalized along the direction of the vector. Now investigate the cases for each basis vector ni ∈ null ( D)
+
+such that the system Gz = ni, where z1, z2 ∈ H and 
+
+z = z1 z2
+
+ ∈ H × H, has no solution. 
+
+Case 1: For n1 = p 0q 0q 0q
+
+, the system of equations Gz = n1 is: 
+
+
+
+I4 04×4
+
+V
+
+
+
+qT /C rTM 1/T 
+
+
+
++ μT /C 
+
+ 
+
+> L
+
+I∗
+
+h
+
+q∗
+
+> T /C
+
+i
+
+> R
+
+V
+
+
+
+qT /C rTM 2/T 
+
+
+
++ μT /C 
+
+ 
+
+> L
+
+I∗
+
+h
+
+q∗
+
+> T /C
+
+i
+
+> R
+
+V
+
+
+
+qT /C rTM 3/T 
+
+
+
++ μT /C 
+
+ 
+
+> L
+
+I∗
+
+h
+
+q∗
+
+> T /C
+
+i
+
+> R
+
+
+
+z =
+
+
+
+p
+
+0q
+
+0q
+
+0q
+
+ .
+
+(89) The bottom three block rows yield Fz = 0q 0q 0q
+
+.By Theorem 2, F is full rank when the markers are non-collinear. Applying this same condition, which gives the non-collinear observability condition of Theorem 3, it follows that Fz = 0q 0q 0q
+
+ implies z = 0q 0q
+
+. Substituting into the top block row equation gives I40q = p, which contradicts the requirement that p̸ = 0q for n1 to be a non-trivial nullspace basis vector of null ( D). Therefore, 
+
+n1 /∈ range ( G) when the markers are non-collinear. 
+
+Cases 2-4: For n2, n3, n4, each basis vector is the re-spective position vector of the marker relative to the camera represented in the camera frame of reference. Looking just at n2 for now, the first block row equation of Gz = n2
+
+reduces to I4z1 = 0 q , implying z1 = 0 q . The bottom three block row equations then reduce to: 
+
+h
+
+q∗
+
+> T /C
+
+i
+
+> R
+
+h
+
+q∗
+
+> T /C
+
+i
+
+> R
+
+h
+
+q∗
+
+> T /C
+
+i
+
+> R
+
+ z2 =
+
+
+
+rCM 1/C 
+
+0q
+
+0q
+
+ . (90) Since 
+
+h
+
+q∗
+
+> T /C
+
+i
+
+> R
+
+is full rank [7], the second and third equa-tions then require z2 = 0 q . Substituting this into the first equation yields 0q = rCM 1/C , which violates the positive depth constraint of the unit vector measurement model. The same approach can be repeated for n3 and n4 to conclude that n2, n3, n4 /∈ range ( G).In summary, if the non-collinear condition is satisfied, then 
+
+G is full rank with n1, n2, n3, n4 /∈ range ( G). It follows from Lemma 2 that H is full rank, and consequently dO is full rank, establishing local observability of the system. The observability condition derived in Theorem 3 re-covers the well-known collinear-feature degeneracy from the P3P literature, providing a direct connection between algorithmic and nonlinear observability perspectives on the problem. Classical P3P solvers are known to admit up to four geometrically valid solutions even under non-degenerate (non-collinear) configurations, conventionally disambiguated by a fourth point correspondence. Theorem 3 provides a complementary view: the four P3P solutions represent a global multiplicity, while local weak observability holds at each solution individually. Consequently, once an ini-tial pose estimate places the filter near the true solution, three measurements suffice to uniquely determine subsequent poses, with the prior estimate playing the disambiguating role traditionally assigned to a fourth point. While the deterministic nonlinear system is observable when the observability conditions are satisfied, in practice, nearly unobservable conditions, such as nearly collinear markers or large process or measurement noises, can render the system effectively unobservable. These practical chal-lenges motivate the design of observability-optimal marker placement [28], trajectory planning, and estimators to mini-mize these effects. VI. D UAL QUATERNION ESTIMATOR DESIGN 
+
+In this section, a dual quaternion unscented Kalman filter (DQ-UKF) is presented for estimating the relative pose and velocity of a rigid body. This architecture is a specific instantiation of the Lie algebraic UKF [18] in which the state on SE(3) is represented as a dual quaternion, and extends [29] by incorporating dual velocity state variables. This design is motivated by two main reasons. First, although the UKF introduces a higher computational cost compared to an EKF, it typically provides better performance on nonlinear systems and avoids the need to derive analytic Jacobians, which can become intractable for complex systems. Sec-ond, an invariant filtering formulation is adopted here that respects the manifold constraints of the dual quaternion pose representation. These design choices are made to maximize tracking performance at the cost of processing time. Despite the computational overhead, we expect real-time feasibility in practice, and the formulation is presented in a general manner so that practitioners may simplify components based on application needs. The remainder of this section is a high-level presentation of the DQ-UKF applied to the relative motion dynamics (37) with the accompanying pseudocode and code repository provided in the Appendix. A “loosely coupled” estimation framework is adopted in which the target’s relative motion is estimated independently of the camera’s inertial state. This design choice is motivated by the fact that autonomous vehicles almost always maintain their own inertial estimates using an onboard or offboard state estimator, and we do not wish to make any assumptions about its implementation. Additionally, prior work [30], [31] has shown that while “tightly coupled” estimators—where target and primary vehicle states are estimated jointly in the state vector—can outperform “loosely coupled” alternatives, this benefit only occurs when the target process model accurately reflects the true dynamics. If the target’s motion model is inaccurate, the tightly coupled approach can corrupt the primary vehicle’s inertial estimate as target dynamics errors propagate through the joint filter. Since the target may be uncooperative and its inertial properties may be only approximately known, a loosely coupled structure is more robust in practice. This formulation also enables running one estimator instance per tracked target in parallel, which can be instantiated or deleted as needed. The state estimate, ˆx, is the same definition as in (43) and is sometimes referred to as the Lie group or manifold state estimate in the literature. The error state and covariance, 
+
+ξ ∈ R12 and ˆP ∈ S12 ++ , are defined as 
+
+ξ = ϕ∆ r∆ ω∆ v∆
+
+ , ξ ∼ N (012 , ˆP), (91) where ϕ∆, r ∆, ω ∆, v ∆ ∈ R3 are the rotation, position, angular velocity, and translational velocity error vectors, respectively. The error states are represented in the C frame for this particular application. Following the dual pose error definition of [12], define the dual pose error, ˆq∆ ∈ DH u, of the estimate relative to the truth as 
+
+ˆq∆≜ˆq∗ 
+
+> truth
+
+ˆqestimate , (92) which is a left-invariant Lie group error definition because 
+
+(ˆ aˆqtruth )∗(ˆ aˆqestimate ) = ˆ q∗ 
+
+> truth
+
+ˆqestimate (93) for ˆa ∈ DH u. This dual quaternion error definition is used both when mapping UKF sigma points from the Lie algebra to the dual quaternion group and when applying the measurement update to the dual quaternion state estimate. If ξ is a sigma point in the error space, the corresponding dual quaternion sigma point state, χ ∈ DH u × DH v , is 
+
+χ = RETRACT (ˆ x, ξ). (94) As described in the pseudocode, dual pose perturbations are applied multiplicatively, whereas dual velocity perturbations are applied additively. However, the dual velocity cannot be perturbed as a single quantity because the dual part contains a bilinear coupling term ω×r between the angular velocity and position, arising from expressing the velocity in the rotating camera frame. Perturbing the full dual velocity directly would produce an inconsistent error state, as it would not correctly account for how perturbations in r and ω propagate through the transport term. Instead, the angular and linear velocity components are perturbed individually, and the dual velocity is reassembled from the updated components. Each dual quaternion sigma point is then propagated through the dynamics (37). A closed-form solution to the process model exists if ˙ˆωCT /C = ˆ0q , but in general this term may be nonzero and require numerical integration. Standard numerical integration methods typically violate the unit-norm constraint of quaternions and dual quaternions, so the propagated state is explicitly renormalized following the procedure outlined in NORMALIZE (·) [12], [13]. Although numerical integration errors can accumulate over long time horizons, for real-time update rates on the order of 100 Hz these errors become negligible and standard fourth-order Runge–Kutta integration performs comparably to more advanced Lie algebraic integrators at such step sizes [32]. Thorough analyses on the effects of quaternion normalization on estimate error can be found in [13], [33], [34]. In a standard UKF implementation, the mean of the propagated sigma points would be computed by a weighted Euclidean mean. On a manifold, however, such an average does not preserve the group structure, and computing a proper group mean requires solving a nonlinear optimization problem. To avoid this additional computational cost, the propagated mean is approximated using the zero-perturbation sigma point. The state differences between each propagated sigma point and the mean are then lifted back to the Lie algebra via ξ = LIFT (ˆ x, χ), and the covariance is updated accordingly. Upon receiving a measurement, y ∈ Rk, new sigma points are generated in the error space, retracted to the manifold, and passed through the measurement function. If unit quaternion or unit dual quaternion measurements were used instead of Euclidean vectors, care would be required to compute innovation differences on the manifold instead. In our implementation, the Kalman gain is computed in the standard manner, the measurement update ξ⋆ ∈ R12 is calculated in the Lie algebra, and the dual quaternion state estimate is updated via 
+
+ˆxk = RETRACT (ˆ xk|k−1, ξ⋆). (95) VII. N UMERICAL EXAMPLE 
+
+The analytical observability conditions and utility of the DQ-UKF will now be demonstrated via a numerical example. Specifically, consider a visual target tracking scenario in which both the camera and target undergo acceleration relative to each other, and the camera estimates the target’s relative pose and velocity states using only a pinhole camera measurement model. A loosely coupled framework was assumed and that the camera’s pose and velocities with respect to the inertial frame were known. Pinhole camera measurements and P nP pose estimates were obtained using OpenCV [35], with the S OLVE PNP function employing the algorithm of [3]. OpenCV pose estimates were used as a baseline for comparison against DQ-UKF results. Previous works have thoroughly analyzed the sensitivity of memoryless deterministic P nP solvers to measurement noise and feature point count [36], [37], and [5] extended this analysis to an EKF-based P nP pose estimator, comparing its performance against traditional solvers. Hardware demon-strations have further validated the utility of P nP filters in applied settings [4], [12], [38]. The present results comple-ment this body of work by quantitatively demonstrating the robustness of the DQ-UKF, and by extension a broader class of sequential visual pose estimators, to occlusions, showing that sequential estimators maintain lower estimation error compared to memoryless P nP solvers. The process model used in the filter was the relative dynamics from (37). A zero-order hold was assumed on 
+
+˙ˆωTT /J and ˙ˆωCC/J over the state propagation time interval. This design choice was motivated by real-time implementation considerations: typically, these quantities vary slowly over the sample period, and repeated evaluation of the acceleration models during numerical integration introduces undesirable computational complexity. Errors introduced by the zero-order hold and post-propagation dual quaternion state nor-malization were compensated through the addition of asmall amount of process noise applied to the state estimate covariance. An overview of the 3-D trajectories of the camera and target frames with respect to the inertial frame are shown in Fig. 2. The trajectories are representative of a flyby or interception between the camera and target. A time history of the true relative pose and velocity states in the camera frame is shown in Fig. 3. The target was spinning and translating about its -Z axis at constant velocities, and the camera was experiencing a small force in the body frame +X and torque along +Y, resulting in a translation and rotation towards the approaching target. Five marker points were placed on the target’s X-Y plane, one at the origin and the other four at the four corners of the box drawn by (±1, ±1) . Using OpenCV, the feature points were projected through the pinhole camera model with the following camera intrinsic matrix 
+
+K =
+
+
+
+800 0 640 0 800 512 0 0 1
+
+ . (96) The measured features were then corrupted with zero-mean camera pixel sensor noise defined by the standard deviation 
+
+σy. Since each projected feature returns a 2-D pixel mea-surement, the measurement covariance matrix for m feature points is R = σ2
+
+> y
+
+I2m. A small amount of process noise was applied to the velocity states to compensate for the zero-order hold of the camera and target’s accelerations and to better replicate the qualitative estimator performance one might see in practice. The process noise covariance was the block diag-6              
+
+> 4
+> 2
+> 0
+> 2
+> X (m) 4
+> 2
+> 0
+> 2
+> 4
+> Y (m)
+> 0
+> 2
+> 4
+> 6
+> 8
+> 10
+> Z (m)
+> Camera
+> Target
+> Fig. 2. 3-D plot showing the camera and target coordinate frame trajectories with respect to an inertial frame evolving and approaching each other over time. The +X-axis of each body fixed frame is denoted with a sphere on the end and the camera is affixed to the camera’s +Z-axis and denoted with a frustum. TABLE II PROCESS AND MEASUREMENT NOISE STANDARD DEVIATIONS .
+> Variable Description Value
+> σϕRotation vector (rad) 0
+> σrPosition (m) 0
+> σωAngular velocity (rad/s) 0.3
+> σvVelocity (m/s) 0.3
+> σyPinhole camera measurement (px) 2
+
+onal matrix Q = ∆ t · blkdiag 
+
+
+
+σ2
+
+> ϕ
+
+I3, σ 2 
+
+> r
+
+I3, σ 2 
+
+> ω
+
+I3, σ 2 
+
+> v
+
+I3
+
+
+
+,where ∆t was the time step duration between filter updates. Process and measurement noise values are shown in Table II. An initial pose estimate was obtained from measurements using OpenCV’s P nP solver, while the initial velocity esti-mate was randomly sampled from a normal distribution cen-tered at the true velocity with covariance given by the initial estimate covariance in Table III. While a more sophisticated and realistic initialization method could be employed to extract velocity estimates from a sequence of P nP solutions, it was not the focus of this work and we opted for a simpler, yet still representative, approach. The scenario was simulated over five seconds with mea-surements updated at 30 Hz. To investigate pose estimation performance under occlusions, the number of active markers varied over a 5-second sequence: four markers (0-1s), three markers (1-2s), two markers (2-3s), three markers (3-4s), and four markers (4-5s). DQ-UKF estimate errors with ±3σ
+
+covariance bounds are shown in Fig. 4. Figure 5 compares the orientation and position estimate error magnitudes against 0.05              
+
+> 0.00
+> x
+> 0.0
+> 0.2
+> y
+> 0.0
+> 0.5
+> z
+> 0
+> 5
+> rx
+> 2.5
+> 0.0
+> ry
+> 1e 16
+> 7.5
+> 10.0
+> rz
+> 0.025
+> 0.000
+> x
+> 0.0
+> 0.1
+> y
+> 0.095
+> 0.100
+> z
+> 1
+> 0
+> vx
+> 2.5
+> 0.0
+> 2.5
+> vy
+> 1e 16
+> 012345
+> Time (s)
+> 1.2
+> 1.0
+> 0.8
+> vzFig. 3. Time history of the truth pose and velocities of the target relative to camera in camera frame coordinates. All states are in base SI units. TABLE III INITIAL STATE ESTIMATE STANDARD DEVIATIONS .
+> Description Value
+> Rotation vector (rad) 0.2
+> Position (m) 0.2
+> Angular velocity (rad/s) 0.1
+> Velocity (m/s) 0.5
+
+OpenCV’s P nP solver as a baseline. A pose estimate was unavailable between 2-3s because the OpenCV P nP solver requires a minimum of three points. Several key insights emerge from these simulation results. During the 2-3s interval when only two markers were visi-ble, the system became unobservable according to Theorem 3. This unobservability was evident in Fig. 4, where the estimate covariance increased for some states. Interestingly, the covariance did not increase uniformly across all states, indicating that two markers still provided partial information about a subset of state variables depending on the geometry between the target and camera. This result is a subtle but important distinction: while the observability conditions from Theorem 3 apply to the entire state, fewer measurements can still render a subset of state variables observable, as illustrated by these results. Additionally, Fig. 5 shows that 0.5         
+
+> 0.0
+> 0.5
+> x
+> Residual
+> 3
+> 0.5
+> 0.0
+> 0.5
+> y
+> 0.5
+> 0.0
+> 0.5
+> z
+> 0.5
+> 0.0
+> 0.5
+> rx
+> 0.5
+> 0.0
+> 0.5
+> ry
+> 0.5
+> 0.0
+> 0.5
+> rz
+> 0.5
+> 0.0
+> 0.5
+> x
+> 0.5
+> 0.0
+> 0.5
+> y
+> 0.25
+> 0.00
+> 0.25
+> z
+> 1
+> 0
+> 1
+> vx
+> 1
+> 0
+> 1
+> vy
+> 012345
+> Time (s)
+> 1
+> 0
+> 1
+> vz
+> Fig. 4. Time history of DQ-UKF estimate errors and estimate 3σcovariance bounds. All states are in base SI units.
+
+the DQ-UKF achieved lower and smoother pose estimation errors on average compared to a memoryless P nP solver across all simulated marker counts. Both advantageous characteristics, smaller estimate error and graceful handling of unobservable periods, stem from incorporating a motion model and prior estimates. Unlike a memoryless P nP solver, which cannot provide solutions with fewer than three markers, sequential state estimators, such as the DQ-UKF, maintain and propagate estimates under significant occlusions. These results demonstrate that P nPestimators can achieve lower estimation error and greater robustness to occlusions when additional modeling and com-putational overhead can be incorporated. VIII. C ONCLUSION 
+
+This article presented a comprehensive modeling, anal-ysis, and filter design for dynamic 6-DOF target tracking using a dual quaternion representation. Specifically, the work presented here was motivated by visual pose and velocity tracking of a target. In Sections IV and V, sufficient condi-tions for local observability of the nonlinear relative motion dynamic system were derived using first relative position measurements and then relative unit vector measurements. Notably, the observability conditions found in Section V are 0.0       
+
+> 0.5
+> ||  || (rad)  DQ-UKF
+> OpenCV
+> 0.0
+> 0.5
+> ||  r|| (m)
+> 012345
+> Time (s)
+> 2
+> 3
+> 4
+> # of Markers Fig. 5. Pose estimation error comparison between DQ-UKF and OpenCV PnP solver: orientation error (top), position error (middle), and number of measured markers (bottom). Occlusions are simulated by decreasing and increasing the number of markers used for pose estimation.
+
+identical to the P3P minimal conditions for a solution found in memoryless P3P solvers, offering a novel control-theoretic connection between local observability and multiple P3P solutions. These analyses further demonstrated the utility of a dual quaternion modeling framework for 6-DOF system analysis. Following the observability analyses, a Lie algebraic UKF for pose and velocity estimation was formalized in a dual quaternion formulation and presented with accompanying pseudocode and code repository. Lastly, simulation results for a visual target tracking scenario with non-zero relative ac-celerations demonstrated that the DQ-UKF achieves superior tracking performance compared to a memoryless P nP solver, particularly in the presence of occlusions and measurement noise, while having the additional benefit of maintaining es-timate covariance for uncertainty quantification and decision making purposes. This work identified several promising directions for future research. A fundamental open question concerns the optimal placement of visual markers and selection of feature points for pose estimation. While increasing the number of visual feature points generally improves pose estimates, the compu-tational burden of detecting and correlating large feature sets grows substantially, with asymptotically diminishing returns in estimation accuracy. By incorporating physics-based mod-els of relative motion, the proposed filter architecture may achieve comparable tracking performance with substantially reduced feature point requirements. Observability-based op-timal sensor placement methods [28], [39]–[41] have shown promise in addressing analogous problems in other domains and represent a natural control-theoretic direction for mini-mizing feature point requirements in visual pose estimation. More broadly, we anticipate this work will facilitate broader adoption of dual quaternions for 6-DOF system modeling and analysis, catalyzing development of novel estimation, control, and planning algorithms that leverage their compact, singularity-free geometric properties. APPENDIX 
+
+The pseudocode below adheres to NumPy’s zero-based indexing and bracket notation for arrays. Sigma point generation is based on the method in [42]. Python implementations of the pseudocode and Section VII simulation code are available at 
+
+github.com/uwaa-ndcl/dqukf_pose_estimation . 
+
+> 1:
+
+function NORMALIZE (ˆx) 
+
+> 2:
+
+ˆq, ˆω = ˆ x[0] , ˆx[1] ∈ DH  
+
+> 3:
+
+qr , q d = (ˆ q)r , (ˆ q)d ∈ H 
+
+> 4:
+
+ωr , ω d = (ˆ ω)r , (ˆ ω)d ∈ H 
+
+> 5:
+
+qr = qr /|| qr || ∈ Hu 
+
+> 6:
+
+qd = qd − qr (qd · qr ) ∈ H 
+
+> 7:
+
+ωr = 0 ωr
+
+ ∈ Hv 
+
+> 8:
+
+ωd = 0 ωd
+
+ ∈ Hv 
+
+> 9:
+
+ˆq = qr + ϵ q d ∈ DH u 
+
+> 10:
+
+ˆω = ωr + ϵ ω d ∈ DH v 
+
+> 11:
+
+return ˆq ˆω ∈ DH u × DH v 
+
+> 12:
+
+function RETRACT (ˆx, ξ) 
+
+> 13:
+
+ˆq, ˆω = ˆ x[0] , ˆx[1] ∈ DH u, DH v 
+
+> 14:
+
+ϕ∆, r ∆, ω ∆, v ∆ = ξ[: 3] , ξ[3 : 6] , ξ[6 : 9] , ξ[9 :] ∈
+
+R3 
+
+> 15:
+
+θ = || ϕ∆|| 2 ∈ R 
+
+> 16:
+
+q∆ =
+
+h
+
+cos   θ
+
+> 2
+
+ ϕ∆ 
+
+> θ
+
+sin   θ
+
+> 2
+
+i
+
+∈ Hu 
+
+> 17:
+
+r∆ = 0 r∆
+
+ ∈ Hv 
+
+> 18:
+
+ω∆ = 0 ω∆
+
+ ∈ Hv 
+
+> 19:
+
+v∆ = 0 v∆
+
+ ∈ Hv 
+
+> 20:
+
+r = 2(ˆ q)d(ˆ q)r ∈ Hv 
+
+> 21:
+
+ω = (ˆ ω)r ∈ Hv 
+
+> 22:
+
+v = (ˆ ω)d + ω × r ∈ Hv 
+
+> 23:
+
+ˆq+ = ˆ q  q∆ + ϵ 12 r∆q∆
+
+ ∈ DH u 
+
+> 24:
+
+ˆω+ = ( ω + ω∆) + ϵ (v + v∆)
+
+−(ω + ω∆) × (r + r∆) ∈ DH v 
+
+> 25:
+
+return ˆq+ ˆω+
+
+ ∈ DH u × DH v 
+
+> 26:
+
+function LIFT (ˆx, ˆx+) 
+
+> 27:
+
+ˆq, ˆω = ˆ x[0] , ˆx[1] ∈ DH u, DH v 
+
+> 28:
+
+ˆq+, ˆω+ = ˆ x+[0] , ˆx+[1] ∈ DH u, DH v 
+
+> 29:
+
+r = 2(ˆ q)d(ˆ q)r ∈ Hv 
+
+> 30:
+
+r+ = 2(ˆ q+)d(ˆ q+)r ∈ Hv 
+
+> 31:
+
+ω = (ˆ ω)r ∈ Hv 
+
+> 32:
+
+ω+ = (ˆ ω+)r ∈ Hv 
+
+> 33:
+
+v = (ˆ ω)d + ω × r ∈ Hv 
+
+> 34:
+
+v+ = (ˆ ω+)d + ω+ × r+ ∈ Hv 
+
+> 35:
+
+q∆ = (ˆ q∗ ˆq+)r ∈ Hu 
+
+> 36:
+
+q0, q = q∆[0] , q ∆[1 :] ∈ R, R3 
+
+> 37:
+
+ϕ∆ = 2 arctan( || q|| 2, q0) q 
+
+> || q|| 2
+
+∈ R3 
+
+> 38:
+
+r∆ = r+ − r ∈ Hv 
+
+> 39:
+
+ω∆ = ω+ − ω ∈ Hv 
+
+> 40:
+
+v∆ = v+ − v ∈ Hv 
+
+> 41:
+
+return ϕ∆ r∆ ω∆ v∆
+
+ ∈ R12 42: class DUAL QUATERNION UKF 
+
+43: Attributes: State estimate ˆx ∈ DH u × DH v ,estimate covariance ˆP ∈ S12 ++ , process model 
+
+f : DH u × DH v → DH u × DH v , measurement model h : DH u × DH v → Rk, process noise 
+
+Q ∈ S12 ++ , measurement noise R ∈ Sk
+
+> ++
+
+, sigma point parameters α, β, κ ∈ R
+
+44: method INIT (ˆx0, ˆP0, f, h, Q, R, α, β, κ )
+
+45: ˆx, ˆP, f, h, Q, R, n = ˆ x0, ˆP0, f, h, Q, R, 12 
+
+46: λ = α2(n + κ) − n
+
+47: wm[0] = λn+λ
+
+48: wc[0] = λn+λ + (1 − α2 + β)
+
+49: wm[i] = wc[i] = 12( n+λ) , i = 1 , . . . , 2n
+
+50: method SIGMA POINTS 51: S =
+
+q
+
+(n + λ) ˆP
+
+52: ξ[0] = 0n
+
+53: for i = 1 to n do 
+
+54: ξ[i] = S[i − 1] 
+
+55: ξ[i + n] = −S[i − 1] 
+
+56: return ξ
+
+57: method PREDICT 58: ξ = SIGMA POINTS 59: for i = 0 to 2n do 
+
+60: χ[i] = RETRACT (ˆ x, ξ[i]) 
+
+61: χ[i] = f (χ[i]) 
+
+62: χ[i] = NORMALIZE (χ[i]) 
+
+63: ξ[i] = LIFT (χ[0] , χ[i]) 
+
+64: ˆx = χ[0] 
+
+65: ˆP = P2ni=0 wc[i]ξ[i]ξ[i]⊤ + Q
+
+66: method UPDATE (yk)
+
+67: ξ = SIGMA POINTS 68: for i = 0 to 2n do 
+
+69: χ[i] = RETRACT (ˆ x, ξ[i]) 
+
+70: γ[i] = h(χ[i]) 
+
+71: ˆyk = P2ni=0 wm[i]γ[i]
+
+72: Sk = P2ni=0 wc[i]( γ[i] − ˆyk)( γ[i] − ˆyk)⊤ + R
+
+73: Pxy = P2ni=0 wc[i]ξ[i]( γ[i] − ˆyk)⊤
+
+74: Kk = Pxy S−1
+
+> k
+
+75: ξ⋆ = Kk(yk − ˆyk)
+
+76: ˆx = RETRACT (ˆ x, ξ⋆)
+
+77: ˆP = ˆP − KkSkK⊤
+
+> k
+
+78: 
+
+REFERENCES [1] V. Lepetit, F. Moreno-Noguer, and P. Fua, “EPnP: An accurate O(n) solution to the PnP problem,” Int. J. Comput. Vis. , vol. 81, no. 2, pp. 155–166, Feb. 2009. [2] T. Ke and S. I. Roumeliotis, “An efficient algebraic solution to the perspective-three-point problem,” in 2017 IEEE Conference on Computer Vision and Pattern Recognition (CVPR) , Jul. 2017. [3] G. Terzakis and M. Lourakis, “A consistently fast and globally optimal solution to the perspective-n-point problem,” in Lecture Notes in Computer Science , ser. Lecture Notes in Computer Science. Cham: Springer International Publishing, 2020, pp. 478–494. [4] A. Sveier and O. Egeland, “Dual quaternion particle filtering for pose estimation,” IEEE Trans. Control Syst. Technol. , vol. 29, no. 5, pp. 2012–2025, Sep. 2021. [5] M. A. Mehralian and M. Soryani, “EKFPnP: extended kalman filter for camera pose estimation in a sequence of images,” IET Image Process. ,vol. 14, no. 15, pp. 3774–3780, Dec. 2020. [6] J. Funda and R. P. Paul, “A computational analysis of screw trans-formations in robotics,” IEEE Trans. Rob. Autom. , vol. 6, no. 3, pp. 348–356, Jun. 1990. [7] N. B. Andrews and K. A. Morgansen, “Relative pose observability analysis using dual quaternions,” in 2024 IEEE 63rd Conference on Decision and Control (CDC) , Dec. 2024, pp. 7740–7745. [8] T. P. Reynolds and M. Mesbahi, “Coupled 6-dof control for distributed aerospace systems,” in 2018 IEEE Conference on Decision and Control (CDC) , 2018, pp. 5294–5299. [9] N. Filipe and P. Tsiotras, “Adaptive position and attitude-tracking controller for satellite proximity operations using dual quaternions,” 
+
+J. Guid. Control Dyn. , vol. 38, no. 4, pp. 566–577, Apr. 2015. [10] M. Hudoba de Badyn, J. Binz, A. Iannelli, and R. S. Smith, “Dis-tributed dual-quaternion extended kalman filtering for spacecraft pose estimation,” J. Guid. Control Dyn. , vol. 48, no. 5, pp. 1071–1087, May 2025. [11] B. Razgus, E. Mooij, and D. Choukroun, “Relative navigation in asteroid missions using dual quaternion filtering,” J. Guid. Control Dyn. , vol. 40, no. 9, pp. 2151–2166, Sep. 2017. [12] N. Filipe, M. Kontitsis, and P. Tsiotras, “Extended kalman filter for spacecraft pose estimation using dual quaternions,” J. Guid. Control Dyn. , vol. 38, no. 9, pp. 1625–1641, Sep. 2015. [13] Y. Zivan and D. Choukroun, “Dual quaternion kalman filtering and observability analysis for satellite relative navigation with line-of-sight measurements,” IEEE Trans. Aerosp. Electron. Syst. , vol. 58, no. 2, pp. 754–765, Apr. 2022. [14] T. Hamel and C. Samson, “Riccati observers for the nonstationary PnP problem,” IEEE Trans. Automat. Contr. , vol. 63, no. 3, pp. 726–741, Mar. 2018. [15] M.-D. Hua, S. De Marco, T. Hamel, and R. W. Beard, “Relative pose estimation from bearing measurements of three unknown source points,” in 2020 59th IEEE Conference on Decision and Control (CDC) , Dec. 2020, pp. 4176–4181. [16] D. Sun and J. L. Crassidis, “Observability analysis of six-degree-of-freedom configuration determination using vector observations,” J. Guid. Control Dyn. , vol. 25, no. 6, pp. 1149–1157, Nov. 2002. [17] F. M. Mirzaei and S. I. Roumeliotis, “A kalman filter-based algorithm for IMU-camera calibration: Observability analysis and performance evaluation,” IEEE Trans. Robot. , vol. 24, no. 5, pp. 1143–1156, Oct. 2008. [18] M. Brossard, S. Bonnabel, and J.-P. Condomines, “Unscented kalman filtering on lie groups,” in 2017 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , Sep. 2017. [19] T. N. Zambo, “A practical exploration of a dual quaternion based unscented kalman filter for pose estimation,” Ph.D. dissertation, Delft University of Technology, Dec. 2024. [20] A. Valverde and P. Tsiotras, “Spacecraft robot kinematics using dual quaternions,” Robotics , vol. 7, no. 4, p. 64, Oct. 2018. [21] J. Sol` a, “Quaternion kinematics for the error-state kalman filter,” 2017. [Online]. Available: https://arxiv.org/abs/1711.02508 [22] K. Stanfield and A. Bani Younes, “Dual-quaternion analytic lqr control design for spacecraft proximity operations,” Sensors , vol. 21, no. 11, 2021. [23] J. Wang and Z. Sun, “6-DOF robust adaptive terminal sliding mode control for spacecraft formation flying,” Acta Astronaut. , vol. 73, no. C, pp. 76–87, Apr. 2012. [24] N. Filipe and P. Tsiotras, “Rigid body motion tracking without linear and angular velocity feedback using dual quaternions,” in 2013 European Control Conference (ECC) , Jul. 2013, pp. 329–334. [25] R. Hermann and A. Krener, “Nonlinear controllability and observabil-ity,” IEEE Trans. Automat. Contr. , vol. 22, no. 5, pp. 728–740, Oct. 1977. [26] H. Nijmeijer and A. J. van der Schaft, Nonlinear Dynamical Control Systems . Springer Science & Business Media, Apr. 1990. [27] N. Alger, “Rank of a lower triangular block matrix,” Mathematics Stack Exchange. [Online]. Available: https://math.stackexchange.com/ q/1867025 [28] N. B. Andrews and K. A. Morgansen, “Optimal fiducial marker placement for satellite proximity operations using observability gramians,” 2025. [Online]. Available: https://arxiv.org/abs/2501.01704 [29] K. Li, F. Pfaff, and U. D. Hanebeck, “Unscented dual quaternion particle filter for SE(3) estimation,” IEEE Control Syst. Lett. , vol. 5, no. 2, pp. 647–652, Apr. 2021. [30] K. Eckenhoff, P. Geneva, N. Merrill, and G. Huang, “Schmidt-ekf-based visual-inertial moving object tracking,” in 2020 IEEE Inter-national Conference on Robotics and Automation (ICRA) , 2020, pp. 651–657. [31] K. Eckenhoff, Y. Yang, P. Geneva, and G. Huang, “Tightly-coupled visual-inertial localization and 3-D rigid-body target tracking,” IEEE Robot. Autom. Lett. , vol. 4, no. 2, pp. 1541–1548, Apr. 2019. [32] M. S. Andrle and J. L. Crassidis, “Geometric integration of quater-nions,” Journal of Guidance, Control, and Dynamics , vol. 36, no. 6, pp. 1762–1767, 2013. [33] I. Y. Bar-Itzhack and Y. Oshman, “Attitude determination from vector observations: Quaternion estimation,” IEEE Transactions on Aerospace and Electronic Systems , no. 1, pp. 128–136, 2007. [34] I. Y. Bar-Itzhack, J. Deutschmann, and F. L. Markley, “Quaternion normalization in additive EKF for spacecraft attitude determination,” in Navigation and Control Conference , Aug. 1991. [35] OpenCV, “Open source computer vision library,” https://opencv.org/. [36] Y. Zheng, Y. Kuang, S. Sugimoto, K. Astrom, and M. Okutomi, “Revisiting the pnp problem: A fast, general and optimal solution,” in Proceedings of the IEEE International Conference on Computer Vision (ICCV) , Dec. 2013. [37] L. Ferraz, X. Binefa, and F. Moreno-Noguer, “Very fast solution to the PnP problem with algebraic outlier rejection,” in 2014 IEEE Conference on Computer Vision and Pattern Recognition , Jun. 2014. [38] B. E. Tweddle and A. Saenz-Otero, “Relative computer vision-based navigation for small inspection spacecraft,” J. Guid. Control Dyn. ,vol. 38, no. 5, pp. 969–978, May 2015. [39] B. T. Hinson and K. A. Morgansen, “Gyroscopic sensing in the wings of the hawkmoth manduca sexta: the role of sensor location and directional sensitivity,” Bioinspir. Biomim. , vol. 10, no. 5, p. 056013, Oct. 2015. [40] N. L. Brace, N. B. Andrews, J. Upsal, and K. A. Morgansen, “Sensor placement on a cantilever beam using observability gramians,” in 2022 IEEE 61st Conference on Decision and Control (CDC) , 2022, pp. 388– 395. [41] S. Smocot, “Observability-informed optimal sensor placement for soft robots,” Master’s thesis, McGill University, Montreal, 2026. [42] E. Wan and R. Van Der Merwe, “The unscented kalman filter for non-linear estimation,” in Proceedings of the IEEE 2000 Adaptive Systems for Signal Processing, Communications, and Control Symposium (Cat. No.00EX373) , 2000, pp. 153–158.
