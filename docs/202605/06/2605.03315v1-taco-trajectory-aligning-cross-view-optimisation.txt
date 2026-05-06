@@ -1,0 +1,274 @@
+Title: TACO: Trajectory Aligning Cross-view Optimisation
+
+URL Source: https://arxiv.org/pdf/2605.03315v1
+
+Published Time: Wed, 06 May 2026 00:26:00 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# TACO: Trajectory Aligning Cross-view Optimisation 
+
+Tavis Shore 1 and Oscar Mendez 1,2 and Simon Hadfield 1
+
+Fig. 1: TACO trajectories closely track ground truth, whilst IMU-only (blue) drifts unboundedly. 
+
+Abstract — Cross-View Geo-localisation (CVGL) matches ground imagery against satellite tiles to give absolute position fixes, an alternative to GNSS where signals are occluded, jammed, or spoofed. Recent fine-grained CVGL methods regress sub-tile metric pose, but have only been evaluated as one-shot localisers, never as the primary fix in a live pipeline. Inertial sensing provides high-rate relative motion, but accumulates unbounded drift without an absolute anchor. We propose TACO, a tightly-coupled IMU + fine-grained CVGL pipeline that consumes a single GNSS reading at start-up and thereafter operates on onboard sensing alone. A closed-form cross-track error model triggers CVGL before IMU drift exceeds the matcher’s capture radius, and a forward-biased five-point multi-crop search keeps inference cost fixed at five forward passes per fix. A yaw-residual gate rejects fixes that disagree with the onboard compass, and an anisotropic body-frame noise model scales each Unscented Kalman Filter update by per-fix confidence. A factor graph with vetted loop closures provides an offline smoothed trajectory. On the KITTI raw dataset, TACO reduces median Absolute Trajectory Error (ATE) from 97 .0 m (IMU-only) to 16 .3 m, a 5.9× reduction, at < 0.1 ms per-frame fusion cost and a 5-10 % camera duty cycle. Code is available: github.com/tavisshore/TACO. Keywords: Localisation, Vision-Based Navigation, Sensor Fusion 
+
+I. I NTRODUCTION 
+
+Localisation underpins autonomy in mobile robotics. Most deployed systems still rely on Global Navigation Satellite Systems (GNSS) for an absolute reference, but satellite positioning fails exactly where autonomy is most demanded:               
+
+> 1Centre for Vision Speech and Signal Processing, Uni-versity of Surrey, Guildford, United Kingdom, {
+
+t.shore, s.hadfield }@surrey.ac.uk      
+
+> 2Locus Robotics, Kent, United Kingdom,
+
+omendez@locusrobotics.com 
+
+urban canyons where signals are occluded and reflected, and contested airspace where adversaries jam or spoof the con-stellation. Robust autonomous platforms cannot depend on services they do not control. The open problem is absolute, drift-bounded positioning over indefinite runtimes using only the sensors carried on the vehicle, with no live external communication. The dominant alternatives are Visual-Inertial Odometry (VIO) and visual SLAM. Both produce only relative pose: VIO achieves sub-metre short-term accuracy but accumulates unbounded drift, while SLAM bounds error only when the platform revisits previously mapped regions or is supplied with a pre-built map. Neither suits a first-traversal run in unmapped terrain. CVGL offers an absolute anchor by matching a ground-level image to publicly available satellite imagery, a reference that already covers the planet at sub-metre resolution. Early retrieval-based CVGL produced tile-level estimates of tens to hundreds of metres, too coarse to fuse against an inertial estimate. Recent fine-grained methods [1], [2], [3] regress sub-tile metric pose, bringing CVGL accuracy into the regime of a few seconds of low-cost IMU dead-reckoning. This makes CVGL viable as the absolute correction signal in a sensor-fusion loop. However, to date these methods have been evaluated as one-shot localisers, never as the primary fix in a live, continuously running pipeline on a moving vehicle. We close this gap with Trajectory Aligning Cross-view Optimisation (TACO). An IMU dead-reckons body-frame motion at sensor rate; a closed-form cross-track error model tracks accumulated uncertainty and triggers a CVGL update before drift exceeds the capture radius of the fine-grained 
+
+> arXiv:2605.03315v1 [cs.CV] 5 May 2026
+
+matcher. A forward-biased five-point multi-crop search keeps the matcher inside that radius at a fixed cost of five forward passes per trigger. A yaw-residual gate rejects fixes that disagree with the onboard compass, and an anisotropic body-frame noise model scales each Unscented Kalman Filter (UKF) update by per-fix confidence. A factor graph with geo-metrically vetted loop closures provides an offline smoothed trajectory. The result is a drift-bounded, map-free, GNSS-free localiser that runs in real time on a single consumer GPU with the sensor suite already present on most outdoor autonomous platforms. Our contributions are:  
+
+> •
+
+The first live localiser to use fine-grained CVGL as the sole absolute anchor, replacing live GNSS with a single start-up fix and onboard sensing.  
+
+> •
+
+An IMU-error-triggered, forward-biased five-point search that stays inside the CVGL capture radius at fixed inference cost per trigger.  
+
+> •
+
+A yaw-residual gate and anisotropic per-fix noise model that admit only geometrically consistent CVGL fixes into the UKF. II. R ELATED WORKS 
+
+A. GNSS-denied Inertial-Visual Localisation 
+
+Visual-inertial odometry systems such as VINS-Mono [4], ORB-SLAM3 [5], and OKVIS [6] achieve sub-metre short-term accuracy by tightly fusing IMU pre-integration with visual feature tracks, but produce only relative pose and accumulate unbounded drift on trajectories without revisits. LiDAR-inertial systems such as LIO-SAM [7] and FAST-LIO2 [8], and HD-map matching approaches that localise a camera within a prior LiDAR map [9], bound error against a prior, but require either an expensive sensor or a pre-built map of the deployment area, neither available for first-traversal missions in unprepared terrain. We instead pair an IMU and monocular camera with freely available satellite imagery, the lightest sensor footprint that still provides an absolute reference without prior survey or infrastructure. 
+
+B. Cross-View Geo-Localisation 
+
+Retrieval-based CVGL formulates ground-to-aerial match-ing as nearest-neighbour search in a learned embedding space. CVM-Net [10] pairs a Siamese backbone with NetVLAD pooling, SAFA [11] introduces a polar transform with spatial-aware attention, and TransGeo [12] replaces the CNN with a transformer. BEV-CV [13] lifts ground images into a semantic bird’s-eye-view before matching, narrowing the cross-view domain gap by aligning representations rather than warping the aerial image. All report strong top-1 recall on CVUSA [14] and VIGOR [15], but their output is a discrete tile selection: localisation error is dominated by tile size and typically falls in the tens of metres, an order of magnitude too coarse to anchor an IMU whose cross-track drift over a few seconds is already sub-metre. Fine-grained CVGL regresses metric pose within a tile, a direction catalysed by the VIGOR benchmark [15] which exposed the inadequacy of tile-level metrics. CCVPE [1] predicts a 2D location heat-map with a conditional orien-tation field, SliceMatch [2] aggregates aerial features along ground-frustum slices, Shi et al. [16] iteratively refine 3-DoF pose with a geometry-guided cross-view transformer, and FG 2 [3] matches ground-derived BEV points against aerial-sampled points and solves for pose by Procrustes alignment, the design we adopt as our matcher. These methods reach metre-level accuracy under good conditions, but all assume the query lies near the centre of a known aerial crop (equivalently, a coarse location prior of the order of the matcher’s capture radius), and every published evaluation is one-shot: a single ground image against a single aerial crop, with no temporal context and no fusion. PEnG [17] relaxes the known-crop assumption by cascading graph-based coarse retrieval with edge-localised Relative Pose Estimation (RPE) over a city-scale road graph, but still operates one-shot per query and at a per-query cost incompatible with real-time deployment. To our knowledge, no fine-grained CVGL method has yet been demonstrated as the absolute fix in a live, continuously running localiser. 
+
+C. Fusing CVGL with Inertial Sensing 
+
+A small body of work fuses CVGL with onboard motion estimates. Shetty and Gao [18] fuse a Siamese cross-view network with monocular VO through a Kalman filter on a UAV. Dixit et al. [19] treat retrieval-based cross-view matches as sensor measurements inside a particle filter on a ground vehicle. Jin et al. [20] (BEVRender) cast GNSS-denied UGV localisation as template matching of an inferred local BEV against a georeferenced aerial map. OrienterNet [21] localises a single ground image against OpenStreetMap given a coarse GPS prior. None of these use fine-grained pose-regressing CVGL as the primary absolute fix in a tightly-coupled IMU loop, and none demonstrates indefinite-runtime, drift-bounded operation on a moving ground vehicle without any live GNSS signal. TACO closes this gap by using the IMU’s dead-reckoned trajectory both as the coarse prior the fine-grained matcher requires and as the high-rate state the matcher’s fixes correct. III. M ETHODOLOGY 
+
+A. Problem Formulation and Notation 
+
+We track a planar pose xt = [ xt, y t, θ t]⊤ in metres and radians relative to a UTM origin set from a single GNSS reading at start-up; no further GNSS is consumed. An IMU sample (ωt, a t, ∆tt) arrives at every step. A ground-level RGB image It with intrinsics Kt and a corresponding crop of the globally referenced zoom-19 satellite mosaic S are queried only when the trigger of Section III-D fires, on a small fraction of IMU steps. Between triggers the camera can remain in a low-power standby state, so the visual sensor’s average duty cycle scales with the trigger rate rather than with wall-clock time. The objective is to produce xt online with ATE that remains bounded as the run length T →∞, without revisiting previously mapped regions, without a survey drive, and without live external communication. Fig. 2: IMU stream feeds a preintegrator (reset per accepted fix); the IMU error trigger drives CVGL inference on a forward-biased satellite crop, and the yaw-gated CVGL fix updates a UKF whose accepted fixes anchor a Pose2 factor graph with vetted loop closures. 
+
+B. IMU Preintegration and Error Model 
+
+We maintain a dead-reckoning position-error estimate since the last accepted fix from two complementary sources. The gyro-driven cross-track random walk and the accelerometer-driven along-track contribution are 
+
+ˆϵcross (T ) = 3 d(T ) σω
+
+√T , ˆϵalong (T ) = 12 σa(T ) T 2,
+
+(1) where T is the elapsed time since the anchor, d(T ) =P 
+
+> k
+
+vk∆tk is the distance travelled, σω is the gyroscope angle random walk in rad /√s calibrated to the platform’s IMU, and σa(T ) is the empirical standard deviation of the high-pass-filtered forward accelerometer residual over the same window; the constant component is absorbed by the ve-locity estimate, leaving un-modelled bias drift as the relevant error source. Under the small-angle assumption, d(T ) σω
+
+√T
+
+has units of metres. The leading factor of 3 on the cross-track term is a deliberate 3σ inflation: it fires the trigger before the true error reaches the matcher’s capture radius with high probability, trading marginally higher fix density for a smaller probability of capture-radius overshoot. The UKF heading state itself is supplied by an absolute heading measurement (the platform’s compass-aided IMU), so (1) drives only the trigger and query-bias predictor (Section III-D), never the realised heading evolution. 
+
+a) Preintegration.: Body-frame motion between IMU samples is summarised by a preintegrator whose output drives both the UKF predict step and the factor-graph odome-try chain. The preintegrator is reset on every accepted CVGL fix (details in Section III-F), keeping the trigger and the filter mutually consistent. 
+
+b) Composite trigger value.: The scalar quantity used to gate inference and scale process noise is the envelope 
+
+ϵIMU = max(ˆ ϵcross (T ), ˆϵalong (T ), 0.03 ddiv ) , (2) where ddiv is the chord between the current UKF position and the corrected preintegrator. The third term is a small floor that prevents ϵIMU from collapsing to zero on benign segments where the model alone would underestimate accu-mulated uncertainty. 
+
+C. Fine-Grained CVGL Module 
+
+We use FG 2 [3] as a black-box metric localiser. A query forward pass takes a ground image It and a satellite crop 
+
+Sc centred on a candidate UTM coordinate, encodes both with a shared DINOv2 backbone, lifts ground features to a Birds-Eye-View (BEV) grid, matches BEV cells against satellite cells via a learnt cross-view matcher, and returns a sub-pixel offset and rotation through weighted Procrustes alignment. The returned tuple is (R, t, w ): a 2×2 rotation, a metric translation in the rotated tile frame, and a scalar match weight w ∈ (0 , 1] summarising the Procrustes mass. The satellite source is a zoom-19 GeoTIFF mosaic at 
+
+∼ 0.3 m /px , cached locally and queried by lat/lon to UTM conversion. Each crop is rotated so that the vehicle heading aligns with image-up using himg = π 
+
+> 2
+
+− ψENU to convert from the IMU’s east-CCW yaw convention to the navigation convention expected by CVGL. The network is used with its published weights, making our contribution backbone-agnostic: a gating, biasing, and noise-aware fusion architec-ture that turns sparse metric fixes into the absolute anchor of a real-time state estimator. 
+
+D. Triggering and Multi-Crop Search a) Dual trigger.: A CVGL inference is invoked when either the IMU error satisfies ϵIMU ≥ 1.0 m , or the wall-clock time since the last accepted fix exceeds 2.0 s . The error trigger covers the moving regime, where drift is bounded by speed and gyro noise; the time trigger covers the stationary regime, where ϵIMU → 0 so the model alone would never call for a fix and the filter would lose its anchor on long stops. Together they keep the fix rate roughly proportional to information demand: dense fixes during cornering and traffic, sparse fixes on smooth highway runs. Fig. 3: Multi-crop sampling at IMU error envelope ϵIMU ≈
+
+28 m : 5 body-frame offsets around the forward-biased UKF estimate; the candidate with the highest CVGL weight wins. 
+
+b) Forward bias.: The UKF position at trigger time represents the vehicle at the last anchor, not the vehicle now. Between anchor and trigger the vehicle has moved forward by approximately ϵIMU along its current heading. We therefore shift the search centre forward by 
+
+δfwd = min(0 .4 ϵIMU , 15 m) (3) in the heading direction before sampling crops. The con-servative coefficient 0.4 avoids overshoot when the vehicle is decelerating; the cap at 15 m avoids extrapolating off the satellite tile during long blackouts. 
+
+c) Five-point cross.: Around the bias-corrected centre we evaluate CVGL at five body-frame offsets 
+
+{(±d, 0) , (0 , 0) , (0 , ±d)},d = min(0 .5 ϵIMU , 10 m) , (4) covering back/centre/forward/left/right. The candidate with the largest match weight w is taken as the fix, and the inference cost per trigger is fixed at five forward passes. With FG 2’s empirical capture radius rcap ≈ 20 m at zoom-19, the union of the five capture discs covers a region of radius ∼ d + rcap around the search centre. At the trigger boundary ( ϵIMU = 1 m , d = 0 .5 m ) the coverage envelope is 
+
+∼ 20 .5 m , comfortably exceeding the residual offset between bias-corrected centre and true position. At the parameter caps (d = 10 m , reached only after rejected-fix runs that drive 
+
+ϵIMU above 20 m ), the envelope grows to ∼ 30 m , providing headroom against the long-blackout regime. 
+
+E. Yaw-Residual Gate 
+
+A surviving fix must pass a heading consistency check against the onboard compass before admission to the filter. 
+
+Fig. 4: Single FG 2 fix: the red arrow shows the UKF position correction at the green star, anchoring the drifting UKF (cyan) trajectory to the optimised path (purple). Because the satellite tile is rotated to align with the compass-derived heading ψc before CVGL is queried, the rotation matrix R returned by the network encodes the residual between CVGL’s predicted heading and ψc:
+
+ψres = atan2( R1,0, R 0,0) . (5) We reject the fix if |ψres | > 0.35 rad ( ≈ 20 ◦). A large ψres 
+
+indicates that the BEV matcher has locked onto a 90 ◦- or 
+
+180 ◦-symmetric structure (chequerboard intersections, par-allel parking bays, motorway lane markings) and produced a high-w but geometrically inconsistent correspondence; fusing the associated position fix would drag the filter away from truth. On rejection we update the time-since-fix counter as if a fix had been processed, which prevents the time trigger from re-firing immediately on the same bad scene. 
+
+F. UKF Fusion with Anisotropic CVGL Noise a) State and predict.: The filter is a 3-state unscented Kalman filter on (x, y, θ ) with standard van der Merwe weights ( α = 10 −3, β = 2 , κ = 0 ). Sigma points are propagated through the body-frame rigid-motion model 
+
+x′ = x + cos θ ∆fwd − sin θ ∆lat ,y′ = y + sin θ ∆fwd + cos θ ∆lat ,θ′ = θ + ∆ θ, 
+
+(6) where (∆ fwd , ∆lat , ∆θ) is the body-frame increment from the corrected preintegrator. The process noise is built directly from the IMU error model: 
+
+Q = diag  σ2fwd , σ 2lat , σ 2
+
+> θ
+
+ , (7) with σfwd = max(1 .0, 2.0 ϵIMU ) m , σlat =max(1 .5, 0.3 ϵIMU ) m , and σθ = 0 .05 rad . The asymmetric scaling reflects that along-track odometry error grows linearly with speed while cross-track error is dominated by the gyro-noise floor. 
+
+b) Anisotropic position-only update.: CVGL returns a 2D position only, so the measurement model is z = [ x, y ]⊤.We construct the measurement covariance in the body frame and rotate it into the world frame using the heading at the localised frame: 
+
+Rmeas = Rot( θ) diag  σ2fwd ,w , σ 2lat ,w 
+
+ Rot( θ)⊤, (8) where the body-frame sigmas are inverse-weight scaled, 
+
+σfwd ,w = clip   1.5 
+
+> w
+
+, 0.5, 8.0 ,σlat ,w = clip   3.0 
+
+> w
+
+, 1.0, 12 .0 . (9) The factor of two between lateral and forward sigmas reflects FG 2’s BEV geometry: the matcher recovers along-heading position from rich foreshortened depth cues but resolves lateral position only through the much sparser cross-heading parallax. Inverse-w scaling keeps weak fixes safe to fuse: a low-confidence return inflates Rmeas to the cap, the Kalman gain shrinks, and the resulting state correction is bounded. 
+
+c) Position-only anchor reset.: After a successful up-date we reset only the position channel of the corrected prein-tegrator to (ˆ x, ˆy) from the UKF; heading and velocity are preserved: heading is supplied by the compass at every step, and the IMU’s short-horizon velocity estimate is unaffected by the position correction. The error model in (1) resets at the same instant, so the trigger and the filter advance in lockstep. 
+
+G. Factor Graph and Loop Closure 
+
+The same data stream feeds a GTSAM Pose2 factor graph used for offline post-processing, enabling closer comparison to previous works that report smoothed trajectories. One 
+
+Pose2 node xi is instantiated per processed frame. Three factor families are added:  
+
+> •
+
+Origin prior on x0 at the start-up GNSS reading with isotropic noise σ = 0 .01 , treating it as effectively exact.  
+
+> •
+
+Odometry between consecutive nodes via 
+
+BetweenFactorPose2 with the body-frame increment from the corrected preintegrator and isotropic noise 
+
+σodo ,i = 12 (σfwd ,i + σlat ,i ) taken from the same IMU error model that fed the UKF. A second, weaker 
+
+BetweenFactorPose2 with the lateral component zeroed and σ = 1 m acts as a soft non-holonomic constraint that suppresses lateral jitter without preventing cornering.  
+
+> •
+
+Fix priors at every accepted CVGL frame, implemented as PriorFactorPose2 with isotropic noise σfix ,i = 
+
+> 12
+
+(σfwd ,w,i + σlat ,w,i ) taken directly from the per-fix sigmas used by the UKF measurement model, ensuring the graph and the filter agree on per-fix confidence. A loop closure adds a relative-pose constraint between two fix nodes that observe the same physical location. To prevent spurious links between fixes that merely happen to be near one another (e.g. on parallel roads in a grid layout), we re-quire three independent conditions to hold simultaneously for any candidate pair (i, j ): a UTM chord dij ≤ 50 m (a coarse spatial prune at the scale of the CVGL coverage diameter at zoom-19); a frame gap j − i ≥ 30 (preventing fixes within a single trajectory segment from being chained); and a path-to-chord ratio Pj−1 
+
+> k=i
+
+∥∆k∥/d ij ≥ 5. The path-to-chord test is the geometric discriminator: a genuine revisit forces the vehicle to detour substantially relative to the chord (around a block or after a U-turn), whereas fixes on a parallel road or in stop-and-go traffic yield ratios near 1 and are rejected. A surviving pair contributes a BetweenFactorPose2 with isotropic noise σlc = max  q
+
+σ2fwd ,w,i + σ2fwd ,w,j , 0.5 m ,so the loop edge is never more confident than the per-fix forward uncertainty at either endpoint, with a small absolute floor to prevent over-confident closures from dominating the optimisation. The full graph is solved by Levenberg-Marquardt for 100 iterations at relative tolerance 10 −5. The optimised easting and northing channels are then low-pass filtered with a Savitzky-Golay window of length 15 and polynomial order 3, removing residual node-level jitter while preserving curvature at junctions and turns. IV. R ESULTS 
+
+A. Datasets and Protocol 
+
+We evaluate on the KITTI odometry benchmark [26], reporting all eight sequences with publicly available ground truth. Table I splits them into a representative group (multi-kilometre urban drives with turns, where gyro random-walk converts into measurable cross-track error) and a non-representative group (near-straight highway, or too short for any inertial system to accumulate measurable drift). Group medians are reported separately so headline figures are not driven by sequences that do not test the bounded-drift claim. Sequences 00 and 06 are captured in regions disjoint from the FG 2 training set, providing a cross-area generalisation test; the remaining sequences overlap the training region. Per-sequence cross-area status is marked in Table I. The IMU runs at 100 Hz ; camera frames are 10 Hz and consumed only at trigger times (Section III-D). At the dataset’s mean velocity 8.2 m /s and the observed ∼ 62 ac-cepted fixes/km on the representative group, this corresponds to a ∼ 5% camera duty cycle on the accepted-fix path; including yaw-rejected attempts pushes the upper end to ∼
+
+10% . CVGL inference is restricted to frames in the FG 2 test splits [3] (with a short lookback to the most recent admissible split frame), eliminating training-set contamination. Satellite imagery is the zoom-19 Karlsruhe GeoTIFF cached locally. A single GPS reading at frame 0 anchors the UTM origin; no GPS is consumed thereafter. 
+
+B. Baselines and Metrics 
+
+We compare against three classes of prior work, drawn from the published systems with both per-sequence KITTI ATE and compute information for a like-for-like comparison. 
+
+a) Monocular SLAM/VO.: DROID-SLAM [22] and DPVO [23] are learned monocular trajectory estimators; per-sequence values are reproduced from Lipson et al. [27] Ta-ble 2(b). Both apply Sim(3) alignment to ground truth, grant-Fig. 5: Trajectories on three KITTI sequences: IMU dead-reckoning drifts unboundedly while TACO tracks ground truth, demonstrating long-term bounded error from triggered CVGL fixes. TABLE I: Per-sequence ATE (m) on KITTI. Bold: best within minimal-sensor, real-time class (IMU, DROID-SLAM, DPVO, TACO). ⋆ marks cross-area sequences disjoint from the FG 2 training region. TACO entries are the UKF online trajectory.                                                                                                                                
+
+> Representative Median Non-rep. Median
+> System 00 ⋆02 05 06 ⋆08 10 (rep.) 01 04 (non-rep.) IMU only 463.4 455.4 47.7 66.6 127.4 22.5 97.0 41.6 1.4 21.5 DROID-SLAM [22] 92.1 fail 118.5 62.5 161.6 118.7 118.5 344.6 1.0 172.8 DPVO [23] 113.2 123.4 59.0 54.8 115.9 13.6 86.1 12.7 0.7 6.7
+> Fervers et al. [24] -1.42 0.77 0.57 2.51 0.96 0.96 2.53 0.66 1.60 Zhang et al. [25] 0.95 0.82 0.54 1.31 1.17 0.65 0.89 1.52 0.36 0.94
+> TACO 16.2 16.4 10.5 17.0 83.1 12.9 16.3 93.4 5.2 49.3 IMU drift (m/km) 124.8 90.1 21.7 54.3 39.7 24.5 47.0 17.0 3.5 10.2 TACO ATE (m/km) 4.4 3.5 4.8 13.8 25.9 14.8 9.3 38.3 13.2 25.8 TACO steady-state RMSE (m) 14.5 16.6 12.7 18.8 83.6 13.2 15.5 97.7 5.6 51.7 TACO fixes/km 62.7 45.9 61.8 43.2 65.4 62.1 62.0 23.7 28.1 25.9 TACO smoothed (m) 14.4 16.4 10.3 16.8 83.3 12.9 15.4 93.4 5.0 49.2
+
+ing a scale freedom unavailable to TACO, which estimates absolute UTM coordinates. They share TACO’s monocular constraint but build their map online. 
+
+b) CVGL-anchored tracking.: Fervers et al. [24] and Zhang et al. [25] are the closest published architectures to TACO, each fusing CVGL fixes with a continuous odometry source. Both invoke their CVGL backbone on every frame, and rely on richer sensor stacks: Fervers et al. require LiDAR for ground-feature projection, Zhang et al. use stereo cameras with a full ORB-SLAM3 front-end. The successor Fervers et al. [28] uses a four-camera surround rig and reports 2–3 Hz throughput on an RTX 6000, sub-real-time at KITTI’s 10 Hz acquisition rate. 
+
+c) OSM reference.: OrienterNet [21] matches against rasterised OpenStreetMap tiles. We retain it as a per-frame compute reference but exclude it from the trajectory compar-ison: the prior modality differs, and no per-sequence KITTI ATE is published under a comparable protocol. 
+
+d) Metrics.: ATE is computed as RMSE in UTM me-tres after rigid first-pose alignment. Drift rate (m/km), steady-state RMSE (per-frame error after the third FG 2 fix), and CVGL fix density (per km) characterise TACO’s behaviour. Compute is reported as per-frame inference cost and GPU-seconds per 100 m at 8.2 m/s, the dataset’s mean velocity. 
+
+C. Quantitative Results a) Per-sequence ATE.: TACO reduces median ATE from 97 .0 m (IMU-only) to 16 .3 m on the representative group (a 5.9× reduction), and posts the lowest ATE in the minimal-sensor class on every representative sequence, recovering on seq 02 where DROID-SLAM [22] fails. 
+
+b) CVGL-anchored systems.: Fervers et al. [24] and Zhang et al. [25] achieve sub-metre to low-metre ATE; the gap is the price of their additional sensors and per-frame CVGL invocation (Table II). 
+
+c) Non-representative group.: On seq 01 and seq 04, IMU drift is already within CVGL’s sub-fix uncertainty, so TABLE II: Compute profile. Per-frame cost and GPU-s/ 100 m at 10 Hz, 8.2 m/s. 
+
+System Sensors Map Hardware Per-frame GPU-s/100 m 
+
+IMU only IMU — CPU O(1) 0
+
+ORB-SLAM3 [5] mono cam online CPU 50 ms —DROID-SLAM [22] mono cam online RTX 3090, 20 GB † 59 ms 7.2
+
+DPVO [23] mono cam online RTX 3090, 4 GB † 21 ms 2.5
+
+OrienterNet [21] mono cam OSM GPU 88 ms 10 .7
+
+Fervers et al. [24] mono cam + LiDAR + IMU satellite n.r. n.r. ‡ n.r. Fervers et al. [28] 4×surround cam + IMU satellite RTX 6000 ∼ 400 ms § ∼ 49 
+
+Zhang et al. [25] stereo cam satellite RTX 3090 > ORB-SLAM3 ¶ > 10 est 
+
+TACO mono cam + IMU satellite RTX 3090, 1.5GB < 1 / 336 ms # 2.0–4.1                   
+
+> †VRAM as reported on EuRoC [27] Table 3; KITTI memory not separately reported. ‡Per-frame ConvNeXt-T + UperNet with LiDAR projection; throughput not stated. §Authors report 2-3Hz; per-frame cost is dataset-agnostic at 10 Hz. ¶Authors state pipeline “requires more computational resources” than ORB-SLAM3 alone. #IMU/UKF/error: <1ms; CVGL: ∼336 ms per 5-crop trigger ( ∼67 ms/crop) on 5-10% of frames. n.r. = not reported.
+
+cross-view anchoring offers no benefit, consistent with fram-ing TACO as a drift-bounded replacement for GNSS rather than an accuracy-improving overlay on a low-drift base-line. DPVO posts the lowest minimal-sensor ATE on these sequences because Sim(3) alignment maps near-straight or short trajectories onto ground truth almost exactly, an ad-vantage absolute-UTM TACO cannot exploit. 
+
+d) Compute footprint.: Aggregating per-frame cost over the trigger schedule yields 2.0-4.1 GPU-seconds per 
+
+100 m (Table II), an order of magnitude below every com-parator. TACO uniquely combines a single-camera-and-IMU budget with bounded drift and real-time inference on a consumer GPU. 
+
+D. Ablations 
+
+Table III isolates each design choice in Section III. The yaw-residual gate, multi-crop search, and anisotropic mea-surement noise each contribute a comparable share of the headline reduction. Removing the forward bias hurts most on long sequences where the UKF anchor lags the live position by tens of metres at trigger time. The Pose2 smoother provides a further modest reduction on top of the UKF online trajectory, primarily by tightening curvature at loop closures. TABLE III: Component ablation - representative group.        
+
+> Configuration ATE / km (m/km) TACO (full) 9.3
+> - no yaw-residual gate 13.0 - single crop 16.6 - isotropic noise 13.4 - no forward bias 13.4 - no Pose2 smoother (UKF only) 10.4
+
+E. Drift Bounding over Time 
+
+Figure 6 aggregates per-frame position error against cu-mulative distance across representative sequences. IMU-only error grows super-linearly with distance, consistent with the O(d√t) random-walk model of Section III. The fused TACO trajectory remains bounded around the 30 m reference envelope for the full multi-kilometre range, with momentary peaks at trigger boundaries and rapid relaxation after each accepted fix. Critically, the bound is set by the CVGL capture radius and the trigger threshold, not by T : the empirical evidence behind the indefinite-runtime claim. 
+
+Fig. 6: Median position error vs distance across sequences. IMU drifts unboundedly; TACO stays bounded near 30 m. 
+
+F. Runtime 
+
+On an NVIDIA RTX 3090 the IMU/UKF path runs at 
+
+< 2 ms total per frame (preintegrator < 1 ms, UKF pre-dict+update ∼ 0.2 ms, error estimate < 1 ms). The CVGL forward pass is ∼ 67 ms per crop on our optimised inference path (DINO extractor in fp16, matcher under fp16 autocast, single ground feature reused across the candidate crops, satellite branch batched B = 5 ); the multi-crop search there-fore costs ∼ 336 ms per trigger, amortising to ∼ 17 -34 ms per camera-rate frame at the 5-10% trigger fraction. Peak VRAM is ∼ 1.5 GB, verified to run under a hard 2 GB cap; this fits comfortably on Jetson Orin NX/Orin Nano-class modules, where TensorRT-FP16 deployment is expected to retain real-time operation. The low trigger fraction additionally enables camera standby between fixes, a power profile unavailable to the every-frame backbones of [24], [25]. V. C ONCLUSION & F UTURE WORK 
+
+TACO demonstrates that fine-grained CVGL, used pre-viously only as a one-shot localiser, can serve as the sole absolute anchor in a live, indefinite-runtime localiser on a moving ground vehicle. On the KITTI representative group it reduces median ATE from 97 .0 m (IMU-only) to 16 .3 m ,a 5.9× reduction, at a sustained per-frame fusion cost of <
+
+0.1 ms and a CVGL duty cycle of 5-10% , well over an order of magnitude below the GPU footprint of comparable map-aided localisers. Bounded drift, sub-millisecond fusion cost, and a backbone-agnostic design make TACO a viable option for autonomous platforms in GNSS-denied environments. 
+
+Future Work 
+
+Further ATE reductions are gated by the CVGL backbone rather than the fusion architecture: widening FG 2’s capture radius via offset-augmented retraining or a coarse-to-fine head would directly tighten the seq 08 ceiling and reduce the seq 01/04 regressions on sparse-fix segments. Porting TACO to aerial platforms introduces 6-DoF motion, faster yaw rates, and altitude-dependent scale variation, requiring retraining on overhead-oblique imagery and extending the UKF state to full SE(3). Finally, embedded deployment via backbone quantisation, distillation, or TensorRT compilation onto Jet-son Orin Nano- or Raspberry Pi 5 NPU-class hardware would broaden applicability without architectural changes. REFERENCES [1] Zimin Xia, Olaf Booij, and Julian FP Kooij. Convolutional cross-view pose estimation. IEEE Transactions on Pattern Analysis and Machine Intelligence , 46(5):3813–3831, 2023. [2] Ted Lentsch, Zimin Xia, Holger Caesar, and Julian FP Kooij. Slice-match: Geometry-guided aggregation for cross-view pose estimation. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 17225–17234, 2023. [3] Zimin Xia and Alexandre Alahi. Fgˆ 2: Fine-grained cross-view localization by fine-grained feature matching. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,pages 6362–6372, 2025. [4] Tong Qin, Peiliang Li, and Shaojie Shen. Vins-mono: A robust and versatile monocular visual-inertial state estimator. IEEE transactions on robotics , 34(4):1004–1020, 2018. [5] Carlos Campos, Richard Elvira, Juan J G´ omez Rodr´ ıguez, Jos´ e MM Montiel, and Juan D Tard´ os. Orb-slam3: An accurate open-source li-brary for visual, visual–inertial, and multimap slam. IEEE transactions on robotics , 37(6):1874–1890, 2021. [6] Stefan Leutenegger, Simon Lynen, Michael Bosse, Roland Siegwart, and Paul Furgale. Keyframe-based visual–inertial odometry using non-linear optimization. The International Journal of Robotics Research ,34(3):314–334, 2015. [7] Tixiao Shan, Brendan Englot, Drew Meyers, Wei Wang, Carlo Ratti, and Daniela Rus. Lio-sam: Tightly-coupled lidar inertial odometry via smoothing and mapping. In 2020 IEEE/RSJ international conference on intelligent robots and systems (IROS) , pages 5135–5142. IEEE, 2020. [8] Wei Xu, Yixi Cai, Dongjiao He, Jiarong Lin, and Fu Zhang. Fast-lio2: Fast direct lidar-inertial odometry. IEEE Transactions on Robotics ,38(4):2053–2073, 2022. [9] Ryan W Wolcott and Ryan M Eustice. Visual localization within lidar maps for automated urban driving. In 2014 IEEE/RSJ International Conference on Intelligent Robots and Systems , pages 176–183. IEEE, 2014. [10] Sixing Hu, Mengdan Feng, Rang MH Nguyen, and Gim Hee Lee. Cvm-net: Cross-view matching network for image-based ground-to-aerial geo-localization. In Proceedings of the IEEE conference on computer vision and pattern recognition , pages 7258–7267, 2018. [11] Yujiao Shi, Liu Liu, Xin Yu, and Hongdong Li. Spatial-aware feature aggregation for image based cross-view geo-localization. volume 32, 2019. [12] Sijie Zhu, Mubarak Shah, and Chen Chen. Transgeo: Transformer is all you need for cross-view image geo-localization. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,pages 1162–1171, 2022. [13] Tavis Shore, Simon Hadfield, and Oscar Mendez. Bev-cv: Birds-eye-view transform for cross-view geo-localisation. In 2024 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) ,pages 11048–11055. IEEE, 2024. [14] Scott Workman, Richard Souvenir, and Nathan Jacobs. Wide-area image geolocalization with aerial reference imagery. In IEEE Inter-national Conference on Computer Vision (ICCV) , pages 1–9, 2015. Acceptance rate: 30.3%. [15] Sijie Zhu, Taojiannan Yang, and Chen Chen. Vigor: Cross-view image geo-localization beyond one-to-one retrieval. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,pages 3640–3649, 2021. [16] Yujiao Shi, Fei Wu, Akhil Perincherry, Ankit Vora, and Hongdong Li. Boosting 3-dof ground-to-satellite camera localization accuracy via geometry-guided cross-view transformer. In Proceedings of the IEEE/CVF International Conference on Computer Vision , pages 21516–21526, 2023. [17] Tavis Shore, Oscar Mendez, and Simon Hadfield. Peng: Pose-enhanced geo-localisation. IEEE Robotics and Automation Letters , 10(4):3835– 3842, 2025. [18] Akshay Shetty and Grace Xingxin Gao. Uav pose estimation using cross-view geolocalization with satellite imagery. In 2019 Interna-tional Conference on Robotics and Automation (ICRA) , pages 1827– 1833. IEEE, 2019. [19] Deeksha Dixit, Surabhi Verma, and Pratap Tokekar. Evaluation of cross-view matching to improve ground vehicle localization with aerial perception, 2020. [20] Lihong Jin, Wei Dong, Wenshan Wang, and Michael Kaess. Bevren-der: Vision-based cross-view vehicle registration in off-road gnss-denied environment. In 2024 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , pages 11032–11039. IEEE, 2024. [21] Paul-Edouard Sarlin, Daniel DeTone, Tsun-Yi Yang, Armen Avetisyan, Julian Straub, Tomasz Malisiewicz, Samuel Rota Bulo, Richard New-combe, Peter Kontschieder, and Vasileios Balntas. Orienternet: Visual localization in 2d public maps with neural matching. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recog-nition , pages 21632–21642, 2023. [22] Zachary Teed and Jia Deng. DROID-SLAM: Deep visual SLAM for monocular, stereo, and RGB-D cameras. In Advances in Neural Information Processing Systems (NeurIPS) , 2021. [23] Zachary Teed, Lahav Lipson, and Jia Deng. Deep patch visual odometry. Advances in Neural Information Processing Systems ,36:39033–39051, 2023. [24] Florian Fervers, Sebastian Bullinger, Christoph Bodensteiner, Michael Arens, and Rainer Stiefelhagen. Continuous self-localization on aerial images using visual and lidar sensors. In 2022 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , pages 7028– 7035, 2022. [25] Yanhao Zhang, Yujiao Shi, Shan Wang, Ankit Vora, Akhil Perincherry, Yongbo Chen, and Hongdong Li. Increasing slam pose accuracy by ground-to-satellite image registration. In 2024 IEEE International Conference on Robotics and Automation (ICRA) , pages 8522–8528. IEEE, 2024. [26] Andreas Geiger, Philip Lenz, Christoph Stiller, and Raquel Urtasun. Vision meets robotics: The kitti dataset. International Journal of Robotics Research (IJRR) , 2013. [27] Lahav Lipson, Zachary Teed, and Jia Deng. Deep patch visual slam. In 
+
+European Conference on Computer Vision , pages 424–440. Springer, 2024. [28] Florian Fervers, Sebastian Bullinger, Christoph Bodensteiner, Michael Arens, and Rainer Stiefelhagen. Uncertainty-aware vision-based metric cross-view geolocalization. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) ,pages 21621–21631, June 2023.

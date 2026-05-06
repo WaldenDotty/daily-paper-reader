@@ -6,56 +6,55 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-05-05
-- 运行时间：2026-05-05 20:04:35 UTC
+- 最新运行日期：2026-05-06
+- 运行时间：2026-05-06 20:56:10 UTC
 - 运行状态：成功
 - 本次总论文数：11
 - 精读区：0
 - 速读区：11
 
 ### 今日简报（AI）
-今日速读 11 篇前沿论文，重点攻克高维系统安全控制、大气建模及复杂动态避障等技术难题。
-最值得关注神经可达避障管在航天器对接中的安全应用，以及物理信息驱动模型对热层密度预测的精度提升。
-建议深入了解神经网络与 MPC、TDMPC 等控制框架的融合趋势，探索其在极端环境下的鲁棒性表现。
-- 详情：[/202605/05/README](/202605/05/README)
+今日速览 11 篇前沿成果，重点聚焦低轨卫星空间监测、精准拦截引导及自动驾驶鲁棒控制。
+值得关注利用大规模 LEO 星座构建空间交通监控框架，以及通过连续时间残差学习（ICODE-MPPI
+- 详情：[/202605/06/README](/202605/06/README)
 
 ### 精读区论文标签
 - 本次无精读推荐。
 
 ### 速读区论文标签
-1. [Neural Backward Reach-Avoid Tubes with MPC Supervision for High-Dimensional Systems: An Application to Safe Spacecraft Docking](/202605/05/2605.02021v1-neural-backward-reach-avoid-tubes-with-mpc-supervision-for-high-dimensional-systems-an-application-to-safe-spacecraft-docking)  
+1. [In-Orbit Optical SSA Using Proliferated LEO Satellites for Space Traffic Monitoring: An Analytical Framework](/202605/06/2605.01241v1-in-orbit-optical-ssa-using-proliferated-leo-satellites-for-space-traffic-monitoring-an-analytical-framework)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：航天器交会对接与高维动力学自主控制策略
-2. [Reduced-Order Data Assimilation for Thermospheric Density Using Physics-informed SINDyc Models](/202605/05/2604.24646v2-reduced-order-data-assimilation-for-thermospheric-density-using-physics-informed-sindyc-models)  
+   evidence：在轨光学空间态势感知与交通监控
+2. [Feedback Linearization-Based Guidance with Zero-Dynamics Correction for Guaranteed Interception](/202605/06/2605.03167v1-feedback-linearization-based-guidance-with-zero-dynamics-correction-for-guaranteed-interception)  
+   标签：评分：7.0/10、query:cislunar-dyn-nav
+   evidence：基于反馈线性化的非线性拦截制导与轨迹收敛
+3. [Robust Path Tracking for Vehicles via Continuous-Time Residual Learning: An ICODE-MPPI Approach](/202605/06/2605.03260v1-robust-path-tracking-for-vehicles-via-continuous-time-residual-learning-an-icode-mppi-approach)  
+   标签：评分：7.0/10、query:cislunar-dyn-nav
+   evidence：通过残差学习实现自主系统的鲁棒路径跟踪
+4. [Safe Navigation using Neural Radiance Fields via Reachable Sets](/202605/06/2604.26899v2-safe-navigation-using-neural-radiance-fields-via-reachable-sets)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：用于轨道预测和空间态势感知的驱动降阶建模
-3. [RAY-TOLD: Ray-Based Latent Dynamics for Dense Dynamic Obstacle Avoidance with TDMPC](/202605/05/2604.27450v1-ray-told-ray-based-latent-dynamics-for-dense-dynamic-obstacle-avoidance-with-tdmpc)  
+   evidence：自主系统的安全导航与路径规划
+5. [Dynamic-TD3: A Novel Algorithm for UAV Path Planning with Dynamic Obstacle Trajectory Prediction](/202605/06/2605.00059v1-dynamic-td3-a-novel-algorithm-for-uav-path-planning-with-dynamic-obstacle-trajectory-prediction)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：自主导航与避障
-4. [A Coordinate System for Dynamical Instabilities in Hierarchical Systems in REBOUND](/202605/05/2605.01005v1-a-coordinate-system-for-dynamical-instabilities-in-hierarchical-systems-in-rebound)  
+   evidence：路径规划中的自主导航与轨迹预测
+6. [Toward LEO Satellite Network Systems for Instantaneous Detection of Environmental Changes](/202605/06/2605.01243v1-toward-leo-satellite-network-systems-for-instantaneous-detection-of-environmental-changes)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：多体系统积分与近距离交会坐标系研究
-5. [Point-to-Cloud NMPC with Smooth Avoidance Constraints](/202605/05/2605.01431v1-point-to-cloud-nmpc-with-smooth-avoidance-constraints)  
+   evidence：低轨卫星网络建模与轨道动力学
+7. [Joint typical periodic optimization: systems with stable hyperbolicity](/202605/06/2605.01550v1-joint-typical-periodic-optimization-systems-with-stable-hyperbolicity)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：用于避障和跟踪的非线性模型预测控制
-6. [Evidence-Based Landing Site Selection and Vison-Based Landing for UAVs in Unstructured Environments](/202605/05/2605.01432v1-evidence-based-landing-site-selection-and-vison-based-landing-for-uavs-in-unstructured-environments)  
+   evidence：周期轨道优化与稳定性
+8. [A Measure-Theoretic Formulation of Behavioral Systems](/202605/06/2605.01558v1-a-measure-theoretic-formulation-of-behavioral-systems)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：非结构化环境下无人机的自主着陆与视觉导航
-7. [Physics Driven Digital Twin Model for Evaluation of GNSS User Receiver Equipment](/202605/05/2605.01553v1-physics-driven-digital-twin-model-for-evaluation-of-gnss-user-receiver-equipment)  
+   evidence：非线性动力学轨迹优化的测度论公式
+9. [Mirror Descent for Deterministic Optimal Control](/202605/06/2605.02653v1-mirror-descent-for-deterministic-optimal-control)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：GNSS接收机评估与轨迹驱动的信号合成
-8. [Optimizing Trajectory-Trees in Belief Space: An Application from Model Predictive Control to Task and Motion Planning](/202605/05/2605.01860v1-optimizing-trajectory-trees-in-belief-space-an-application-from-model-predictive-control-to-task-and-motion-planning)  
+   evidence：确定性最优控制问题的镜像下降法
+10. [TACO: Trajectory Aligning Cross-view Optimisation](/202605/06/2605.03315v1-taco-trajectory-aligning-cross-view-optimisation)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：在信念空间中优化机器人规划的轨迹
-9. [Observability Conditions and Filter Design for Visual Pose Estimation via Dual Quaternions](/202605/05/2605.02054v1-observability-conditions-and-filter-design-for-visual-pose-estimation-via-dual-quaternions)  
+   evidence：紧耦合IMU与跨视图地理定位，用于无GNSS定位
+11. [PerFlow: Physics-Embedded Rectified Flow for Efficient Reconstruction and Uncertainty Quantification of Spatiotemporal Dynamics](/202605/06/2605.03548v1-perflow-physics-embedded-rectified-flow-for-efficient-reconstruction-and-uncertainty-quantification-of-spatiotemporal-dynamics)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：用于目标跟踪的视觉姿态估计和可观测性分析
-10. [SAGA: A Robust Self-Attention and Goal-Aware Anchor-based Planner for Safe UAV Autonomous Navigation](/202605/05/2605.02301v1-saga-a-robust-self-attention-and-goal-aware-anchor-based-planner-for-safe-uav-autonomous-navigation)  
-   标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：无人机自主导航与轨迹规划
-11. [Natural Gradient Bayesian Filtering: Geometry-Aware Filter for Dynamical Systems](/202605/05/2605.02306v1-natural-gradient-bayesian-filtering-geometry-aware-filter-for-dynamical-systems)  
-   标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：航空航天系统状态估计中的贝叶斯滤波
+   evidence：物理嵌入流用于时空动力学重建
 
 
 <div class="dpr-home-promo-card">
