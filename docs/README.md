@@ -6,55 +6,47 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-05-06
-- 运行时间：2026-05-06 20:56:10 UTC
+- 最新运行日期：2026-05-07
+- 运行时间：2026-05-07 20:03:58 UTC
 - 运行状态：成功
-- 本次总论文数：11
+- 本次总论文数：8
 - 精读区：0
-- 速读区：11
+- 速读区：8
 
 ### 今日简报（AI）
-今日速览 11 篇前沿成果，重点聚焦低轨卫星空间监测、精准拦截引导及自动驾驶鲁棒控制。
-值得关注利用大规模 LEO 星座构建空间交通监控框架，以及通过连续时间残差学习（ICODE-MPPI
-- 详情：[/202605/06/README](/202605/06/README)
+今日速览 8 篇控制与导航前沿论文，重点聚焦低推力交会、能量成形控制及噪声环境下的空间建模。
+推荐关注基于自适应同伦的鲁棒交会估计技术，以及利用星形集滤波实现的高效自由空间近似方案。
+建议深入了解物理系统协同学习（Co-Learning）在复杂动力学控制与能量优化中的应用潜力。
+- 详情：[/202605/07/README](/202605/07/README)
 
 ### 精读区论文标签
 - 本次无精读推荐。
 
 ### 速读区论文标签
-1. [In-Orbit Optical SSA Using Proliferated LEO Satellites for Space Traffic Monitoring: An Analytical Framework](/202605/06/2605.01241v1-in-orbit-optical-ssa-using-proliferated-leo-satellites-for-space-traffic-monitoring-an-analytical-framework)  
+1. [Tightly-Coupled Estimation and Guidance for Robust Low-Thrust Rendezvous via Adaptive Homotopy](/202605/07/2605.04481v1-tightly-coupled-estimation-and-guidance-for-robust-low-thrust-rendezvous-via-adaptive-homotopy)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：在轨光学空间态势感知与交通监控
-2. [Feedback Linearization-Based Guidance with Zero-Dynamics Correction for Guaranteed Interception](/202605/06/2605.03167v1-feedback-linearization-based-guidance-with-zero-dynamics-correction-for-guaranteed-interception)  
-   标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：基于反馈线性化的非线性拦截制导与轨迹收敛
-3. [Robust Path Tracking for Vehicles via Continuous-Time Residual Learning: An ICODE-MPPI Approach](/202605/06/2605.03260v1-robust-path-tracking-for-vehicles-via-continuous-time-residual-learning-an-icode-mppi-approach)  
-   标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：通过残差学习实现自主系统的鲁棒路径跟踪
-4. [Safe Navigation using Neural Radiance Fields via Reachable Sets](/202605/06/2604.26899v2-safe-navigation-using-neural-radiance-fields-via-reachable-sets)  
+   evidence：用于近距离操作和交会的紧耦合估计与引导技术
+2. [Co-Learning Port-Hamiltonian Systems and Optimal Energy-Shaping Control](/202605/07/2604.26172v2-co-learning-port-hamiltonian-systems-and-optimal-energy-shaping-control)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：自主系统的安全导航与路径规划
-5. [Dynamic-TD3: A Novel Algorithm for UAV Path Planning with Dynamic Obstacle Trajectory Prediction](/202605/06/2605.00059v1-dynamic-td3-a-novel-algorithm-for-uav-path-planning-with-dynamic-obstacle-trajectory-prediction)  
+   evidence：基于物理信息的能量成形控制学习与轨迹数据处理
+3. [STAR-Filter: Efficient Convex Free-Space Approximation via Starshaped Set Filtering in Noisy Environments](/202605/07/2604.26626v1-star-filter-efficient-convex-free-space-approximation-via-starshaped-set-filtering-in-noisy-environments)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：路径规划中的自主导航与轨迹预测
-6. [Toward LEO Satellite Network Systems for Instantaneous Detection of Environmental Changes](/202605/06/2605.01243v1-toward-leo-satellite-network-systems-for-instantaneous-detection-of-environmental-changes)  
+   evidence：噪声环境下机器人规划的凸自由空间近似
+4. [Triangulation of Points Constrained to a Plane](/202605/07/2604.27246v1-triangulation-of-points-constrained-to-a-plane)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：低轨卫星网络建模与轨道动力学
-7. [Joint typical periodic optimization: systems with stable hyperbolicity](/202605/06/2605.01550v1-joint-typical-periodic-optimization-systems-with-stable-hyperbolicity)  
+   evidence：基于噪声图像数据的点重建与三角测量
+5. [Sampling-Based Control via Entropy-Regularized Optimal Transport](/202605/07/2605.02147v1-sampling-based-control-via-entropy-regularized-optimal-transport)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：周期轨道优化与稳定性
-8. [A Measure-Theoretic Formulation of Behavioral Systems](/202605/06/2605.01558v1-a-measure-theoretic-formulation-of-behavioral-systems)  
+   evidence：针对具有复杂代价景观的非线性机器人系统的采样模型预测控制
+6. [Pose Tracking with a Foundation Pose Model and an Ensemble Directional Kalman Filter](/202605/07/2605.03105v1-pose-tracking-with-a-foundation-pose-model-and-an-ensemble-directional-kalman-filter)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：非线性动力学轨迹优化的测度论公式
-9. [Mirror Descent for Deterministic Optimal Control](/202605/06/2605.02653v1-mirror-descent-for-deterministic-optimal-control)  
+   evidence：用于位置和姿态联合估计的集成卡尔曼滤波
+7. [Robust Visual SLAM for UAV Navigation in GPS-Denied and Degraded Environments: A Multi-Paradigm Evaluation and Deployment Study](/202605/07/2605.03678v1-robust-visual-slam-for-uav-navigation-in-gps-denied-and-degraded-environments-a-multi-paradigm-evaluation-and-deployment-study)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：确定性最优控制问题的镜像下降法
-10. [TACO: Trajectory Aligning Cross-view Optimisation](/202605/06/2605.03315v1-taco-trajectory-aligning-cross-view-optimisation)  
+   evidence：GPS受限环境下的自主导航与SLAM
+8. [High-Power AM-CW Lunar Laser Ranging as a $μ$Hz SGWB Detector](/202605/07/2605.04110v1-high-power-am-cw-lunar-laser-ranging-as-a-hz-sgwb-detector)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：紧耦合IMU与跨视图地理定位，用于无GNSS定位
-11. [PerFlow: Physics-Embedded Rectified Flow for Efficient Reconstruction and Uncertainty Quantification of Spatiotemporal Dynamics](/202605/06/2605.03548v1-perflow-physics-embedded-rectified-flow-for-efficient-reconstruction-and-uncertainty-quantification-of-spatiotemporal-dynamics)  
-   标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：物理嵌入流用于时空动力学重建
+   evidence：地月系统中的月球激光测距，用于获取距离和距离率观测值
 
 
 <div class="dpr-home-promo-card">
