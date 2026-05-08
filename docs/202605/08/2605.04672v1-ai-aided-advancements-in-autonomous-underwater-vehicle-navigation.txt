@@ -1,0 +1,482 @@
+Title: AI-Aided Advancements in Autonomous Underwater Vehicle Navigation
+
+URL Source: https://arxiv.org/pdf/2605.04672v1
+
+Published Time: Thu, 07 May 2026 00:43:13 GMT
+
+Number of Pages: 25
+
+Markdown Content:
+# AI-Aided Advancements in Autonomous Underwater Vehicle Navigation 
+
+Guy Damari a, ∗, Zeev Yampolsky a, ∗, Nadav Cohen a, Arup Kumar Sahoo a, Jeryes Danial a, Felipe O. Silva b, Itzik Klein a, ∗∗ 
+
+> aThe Hatter Department of Marine Technologies, University of Haifa, Abba Khoushy Ave 199, Haifa, 3498838, Israel
+> bFederal University of Lavras (UFLA), Campus Universitário, Lavras, 37200-900, MG, Brazil
+
+Abstract 
+
+Autonomous underwater vehicles (AUVs) have become indispensable for deep-sea exploration, spanning critical scientific research and commercial applications. The rapid attenuation of electromagnetic waves renders satellite radio signals unavailable, while the dynamic unpredictability of the marine environment presents formidable navigation challenges. This chapter explores recent advancements in AI-aided AUV positioning, specifically focusing on advanced sensor fusion architectures that integrate inertial navigation systems with Doppler velocity logs and cameras. Beyond traditional model-based filtering, we examine the transformative emergence of AI-driven learning approaches in enhancing inertial dead-reckoning tasks and adaptive fusion algorithms. By addressing these recent milestones, this chapter provides a comprehensive roadmap for achieving the high-precision navigation essential for autonomous underwater missions. 
+
+Keywords: Autonomous Underwater Vehicle, Inertial Navigation System, Doppler Velocity Log, Calibration, Alignment,, Sensor Fusion, Deep Learning, Physics-Informed Neural Networks 
+
+1. Introduction 
+
+Autonomous underwater vehicles (AUVs) have become essential tools for ocean exploration, environmental monitoring, pipeline inspection, and commercial operations [1–3]. Unlike aerial or ground platforms, AUVs face a uniquely hostile navigation environment as electromagnetic signals cannot penetrate seawater, render-ing global navigation satellite systems (GNSS) unavailable [4–6], while acoustic interference, ocean currents, and pressure variations introduce persistent disturbances to onboard sensors. Maintenance of accurate long-duration navigation under these conditions remains one of the central challenges in marine robotics and autonomy. To provide accurate underwater navigation, AUVs can employ and integrate various positioning technologies. Acoustic positioning systems, including long baseline (LBL), ultra-short baseline (USBL), and short baseline (SBL), provide absolute position fixes by measuring travel times of acoustic signals between transponders    
+
+> ∗Equal Contributor
+> ∗∗ Corresponding author
+> Email address: kitzik@univ.haifa.ac.il (Itzik Klein )
+> arXiv:2605.04672v1 [cs.RO] 6 May 2026
+
+and the vehicle [1, 4, 7–9]. While effective, these systems require external infrastructure, have limited opera-tional range, and are susceptible to multipath interference and sound speed variations. Pressure sensors offer accurate depth estimation with minimal drift, and are routinely integrated into AUV navigation pipelines as a complementary aiding source [10, 11]. The common prevailing navigation architecture for AUVs based on the INS/DVL fusion. INS provides autonomous navigation capability by computing vehicle the position, velocity, and orientation through the integration of gyroscope and accelerometer measurements [10, 12]. Although offering high-frequency updates and short-term precision, inertial systems suffer from cumulative drift errors, making them unsuitable as standalone navigation solutions for extended operations. DVL com-plements INS by providing drift-free velocity measurements through a configuration of acoustic transducers that emit beams toward the seafloor and analyze Doppler-shifted returns to estimate vehicle velocity [13]. As the inertial sensors, DVL measurements are subject to scale factor errors, biases, and beam-level noise that must be carefully characterized and compensated [14, 15]. Together, these sensors form the backbone of underwater dead-reckoning, commonly integrated through nonlinear variants of the Kalman filter, including the extended, unscented and invariant Kalman filters [16–18]. INS/DVL integration can be implemented using either a loosely or tightly coupled approach [11, 19, 20]. In the loosely coupled approach, the raw DVL beam measurements are first processed via a least squares estimator to produce the AUV velocity vector, which is then used as an external measurement update in the filter. This requires at least three valid beams to compute a velocity estimate. In the tightly coupled approach, each individual beam measurement is incorporated directly into the filter, allowing the navigation solution to be updated even when fewer than three beams are available, thereby improving robustness during partial DVL outages. Realizing the full potential of INS/DVL integration requires careful attention to each stage of the navigation pipeline. Sensors must be individually calibrated prior to deployment [14, 21], their reference frames must be accurately initialized through self-alignment procedures and subsequently aligned with one another [22, 23], and their measurements must be fused through filters capable of tracking time-varying noise statistics and uncertainty [16, 24, 25]. When DVL measurements are partially or fully unavailable, dedicated reconstruction approaches can recover missing beam information [26, 27], or alternative navigation strategies must be employed [28, 29]. In such scenarios, visual-inertial odometry (VIO) offers a complementary positioning modality by coupling camera measurements with inertial data to estimate vehicle pose [30]. In the underwater domain, cameras offer a low-cost and passive sensing modality that can provide useful en-vironmental information in conditions of sufficient visibility. Their fusion with inertial sensors addresses two fundamental challenges: resolving the scale ambiguity inherent to monocular vision and bounding IMU drift through periodic visual corrections [30]. VIO methods range from loosely-coupled filter-based approaches, where visual and inertial estimates are fused independently, to tightly-coupled nonlinear optimization frame-works that jointly optimize visual reprojection and inertial residuals [30]. However, the underwater environ-ment poses unique challenges compared to aerial or ground applications, including dynamic and non-uniform 2Figure 1: General block diagram showing the navigation process as block as such that each block is enhanced by data-driven frameworks. 
+
+illumination, significant light attenuation and scattering, texture-poor seafloor regions, and frequent visibil-ity degradation due to turbidity, all of which can severely degrade feature extraction and data association [31]. Each of these stages has traditionally been addressed through model-based methods, Kalman-filter variants, least-squares estimators, and analytical decomposition techniques. Although theoretically grounded, such approaches carry well-known limitations: sensitivity to sensor quality, dependence on prescribed maneuver patterns, lengthy convergence times, and an inability to adapt when real-world conditions deviate from assumed models. More recently, physics-informed neural networks (PINNs) have emerged as a promising paradigm that preserves the interpretability and physical consistency of model-based approaches while har-nessing the expressive power of deep learning [32]. Originally proposed to solve forward and inverse problems governed by partial differential equations, PINNs embed the underlying physical laws directly into the train-ing objective as soft constraints, ensuring that the learned solutions remain physically consistent even under limited or noisy supervision [33]. This chapter addresses the full AUV navigation pipeline through the advancement of AI-aided algorithms, as illustrated in Figure 1. Beginning with DVL calibration and initial INS alignment, we then address the alignment between the INS and DVL sensor frames before examining their fusion through adaptive-learning filters. We further explore visual-inertial odometry as a complementary positioning modality capable of operating under acoustically or DVL-degraded conditions. Finally, we examine physics-informed neural net-works (PINNs) as a principled framework for pure inertial dead reckoning when all external aiding is absent. Across each topic, we contrast established model-based approaches with their AI-aided counterparts, high-lighting the specific advantages that learning-based methods bring to the challenge of precision underwater navigation. 32. DVL Calibration 
+
+Traditionally, DVL calibration is performed while the platform sails at the water surface, enabling GNSS signals to be received and used as accurate reference velocity measurements. The common DVL error model applied in the literature consists of scale factors, misalignment, and, less commonly, biases. Moreover, the calibration procedure typically employs model-based estimation filters, such as the Kalman filter or its nonlinear variations [34, 35], among other algorithms, to estimate the error terms. As a result, the required calibration trajectories often involve complex maneuvers over extended time periods to ensure sufficient observability and accurate estimation, leading to a time-consuming and overall complex process. In this section, we describe DCNet [36], an AI-aided framework that reduces calibration complexity by utilizing a nearly constant-velocity trajectory alongside a comprehensive error mode. 
+
+2.1. Model-Based GNSS Aided Calibration 
+
+In model-based DVL calibration the following error model is commonly applied [35, 37]: 
+
+ˆvd = (1 + k)Tdb (Tbnvn + ωbnb × lDVL ) + δv d (1) where k is a scale factor term, Tdb is a constant transformation matrix from the body frame to the DVL frame, Tbn is a transformation matrix from the navigation frame to the body frame, vn is the velocity vector of the platform expressed in the navigation frame, lDVL is the lever arm vector between the DVL and the platform’s center of mass, ωbnb is the angular velocity vector of the platform expressed in the body frame, and δv d is zero-mean Gaussian white noise. The term ωbnb × lDVL is commonly neglected since the lever arm is known in advance and can be corrected for. Therefore, the error model is typically simplified to: 
+
+ˆvd = (1 + k)Tdb Tdnvn + δv d (2) The scale factor is typically modeled as a scalar term, multiplying all three axes by the same value [38]. A common approach in the literature estimates the scale using a vector norm, either by applying an integral [35] or by averaging over T seconds of measurements to reduce the Gaussian white noise effect. The vector norm is used because the frame transformation does not affect the magnitude of the velocity vector. Accordingly, after averaging over all t = 1 , . . . , T time steps of the DVL and GNSS velocity measurements during the calibration trajectory, a scalar scale factor ˜k is estimated from (2) as follows [38]: 
+
+k = 1
+
+T
+
+> T
+
+X
+
+> t=1
+
+ˆkt. (3) The averaged scale factor, k, is then used to calibrate the DVL measurement during the AUV mission. 
+
+2.2. DCNet Data-driven DVL Calibration 
+
+DCNet is an end-to-end data-driven framework that estimates the DVL error terms in the body frame based on the GNSS and DVL velocities [36]. DCNet achieves a threefold reduction in calibration complexity: (1) it 4employs a straightforward, nearly constant-velocity trajectory; (2) it supports various error models, with the six-term configuration yielding the best performance; and (3) it is an end-to-end architecture that eliminates the need for manual model assumptions. DCNet is multi-head neural network architecture consisting of a two dimensional convolutional neural network (2DCNN) head and a 1DCNN head which both process the input GNSS and DVL velocity vectors simultaneously. Then the output of the 2DCNN and 1DCNN heads is concatenated and fed forward through a fully connected block to regress and estimate the relevant error terms. While DCNet can estimate several error term models, the most comprehensive configuration has been shown to produce the best results and is defined as: 
+
+ˆvd = (1 + kDVL ) ˆTdb vn + bDVL + δv d (4) where kDVL ∈ R3 represents the scale factor vector and bDVL ∈ R3 denotes the bias vector. To train DCNet, a closed-loop loss function is employed that calibrates the input DVL velocity using the error terms estimated by DCNet and computes the mean squared error (MSE) with respect to the ground-truth (GT) velocity. This loss function architecture allows DCNet to estimate any error term based solely on the velocity error as a metric to achieve the best fit, without assuming any prior knowledge of the error terms, which are unknown in practice. During DCNet training, the objective is to minimize the following loss function: 
+
+J(θ) = M SE (yi, ˆyi) = 
+
+PNi=1 [P{X,Y,Z } 
+
+> j
+
+(yi,j − ˆyi,j )2]
+
+N (5) where yi is the ith GT velocity expressed in body frame, ˆyi is the calibrated DVL velocity, N is the number of samples examined, and J(θ) is the MSE loss function value that is a function of DCNet weights and biases vector, θ = [ ω b ]T .To evaluate DCNet robustness and effectiveness, DCNet was trained and evaluated using real-world data recorded by the Snapir AUV of the University of Haifa, as shown in Figure 3. The data was recorded on two different occasion thus different sea conditions. The data provided contained only the DVL measurements, therefore a noising pipeline was employed during training and evaluation to generate noised DVL and GNSS measurements. Figure 2 shows the data-flow and training procedure for DCNet. Table 1 shows the velocity 
+
+> Figure 2: DCNet data-flow and training process diagram.
+
+5root mean squared error (VRMSE) of five evaluation trajectories with calibrated DVL velocity by the baseline (3), DCNet, and the improvements of DCNet over the baseline. DCNet demonstrated an improvement of 
+
+70% over the model-based baseline.                            
+
+> Table 1: VRMSE of the model-based (baseline) and DCNet on five test trajectories.
+> T1 [m/s ]T2 [m/s ]T3 [m/s ]T4 [m/s ]T5 [m/s ]Average [m/s ]Improvement [%]
+> Baseline 0.74 0.74 0.74 0.74 0.74 0.74 –DCNet 0.21 0.22 0.21 0.21 0.26 0.22 70
+> Figure 3: The University of Haifa’s Snapir AUV during a mission in the Mediterranean Sea.
+
+3. INS Alignment 
+
+In underwater navigation, initial INS attitude alignment is critical for mission success, data validity, and downstream tasks such as guidance and control [39]. While roll and pitch can be accurately estimated using a stationary IMU [10], heading (yaw) remains more challenging, as it requires either sensing Earth’s rotation or using aiding sensors such as dual-antenna GNSS. This difficulty is further intensified under in-motion conditions, such as AUV mooring, due to the superposition of the Earth angular rate with the vehicle movements. Initial heading alignment has been studied since the 1960s [40, 41]. Most self-alignment methods rely on vector observations in two frames, comparing IMU measurements—specific force and angular rate—with known references such as gravity and Earth’s rotation, using analytical or optimization-based solutions like Wahba’s problem [42]. Later approaches, including the Attitude Decomposition-based Initial Alignment (ADIA) and their variantes, such as the Dual-Vector ADIA (DVA) or the Optimization-Based ADIA (OBA), integrate measurements over time [43]. However, under realistic low-dynamic or moored conditions, the observability and accuracy of DVA and OBA are limited by environmental effects, sensor noise, and short alignment periods [44]. In this section we present HeadingNet, an AI-aided framework for neural-assisted in-motion self-heading alignment. 63.1. Model-Based ADIA approaches 
+
+The orientation of a given platform in time can be decomposed as follows [45]: 
+
+Tnb (t) = Tnn0 (t)Tn0 
+
+> b0
+
+Tb0 
+
+> b
+
+(t) (6) where Tn0 
+
+> b0
+
+is the constant initial alignment transformation, Tnn0 (t) is the transformation of the navigation frame, and Tb0 
+
+> b
+
+(t) is the transformation of the body frame, both over the alignment interval [t0, t ]. The matrices Tnn0 (t) and Tb0 
+
+> b
+
+(t) are computed based on the Earth’s rotation rate and the gyroscope angular rate, respectively [44]. In low-dynamics conditions, such as for a moored vessel, the gravity vector gn(t)
+
+can be approximated by the specific force vector f b(t) [44]. By considering the referenced frame attitude decomposition in (6) the following vector observation is achieved: 
+
+ub0 (t) = Tb0 
+
+> n0
+
+un0 (t) (7) where ub0 (t) is an observation vector in the body frame frozen at time t0, and un0 (t) is the corresponding observation vector in the navigation frame also frozen at time t0. To analytically estimate Tb0 
+
+> n0
+
+, DVA can be utilized where two sets of non co-linear observation vectors exist as follows [46]: 
+
+Tb0 
+
+> n0
+
+=
+
+
+
+(un0 
+
+> 1
+
+)T
+
+(un0 
+
+> 2
+
+)T
+
+(un0 
+
+> 1
+
+× un0 
+
+> 2
+
+)T
+
+ 
+
+> −1
+
+
+
+(ub0 
+
+> 1
+
+)T
+
+(ub0 
+
+> 2
+
+)T
+
+(ub0 
+
+> 1
+
+× ub0 
+
+> 2
+
+)T
+
+ (8) where each observation vector in both the body and navigation frames is recorded at two distinct times, tk
+
+and tj with tk < t j , yielding un0 
+
+> 1
+
+, ub0 
+
+> 1
+
+and un0 
+
+> 2
+
+, ub0 
+
+> 2
+
+, respectively, thus providing two independent vector observations for DVA. In OBA, in turn, the initial attitude is estimated using Wahba’s optimal quaternion formulation [42]. Both the DVA and OBA frameworks provide accurate alignment at longer time period, yet fail to do so in shorter time periods. 
+
+3.2. HeadingNet Neural-assisted self-heading Alignment 
+
+HeadingNet is a data-driven framework that estimates the heading angle ψ at the end of the alignment period [47]. This corresponds to the initial heading required by the navigation filter at mission start, rather than the heading at t = 0 . HeadingNet is a multi-head neural network architecture consisting of three 2DCNN heads followed by a fully connected (FC) block for final regression and heading estimation. For HeadingNet to function as a self-heading alignment framework, its inputs are the same as those of DVA and OBA, namely two sets of independent observation vectors: the gravity/accelerometers specific force vectors ( gn, f b), and the Earth’s/gyroscopes angular rates ( wnin , ωbib ). To train HeadingNet, a loss function adapted from [48] is used to account for the cyclic nature of angles, and the cyclic mean squared error (CMSE) is defined as follows: 
+
+LCMSE =   1
+
+N
+
+> N
+
+X
+
+> i=1
+
+err 2
+
+> i
+
+ · λ (9) 7Table 2: Average AE of the heading angle estimation based on the mooring-condition dataset. 
+
+10 [ sec ] 30 [ sec ] 60 [ sec ] 90 [ sec ] 120 [ sec ]
+
+Best model-based AE [deg] 150.5 7.58 2.28 0.98 0.93 HeadingNet AE [deg] 4.33 1.53 1.43 0.97 0.46 
+
+Improv. [%] 97 79 37 0.9 51 
+
+> Table 3: Average AE of the heading angle estimation based on the mooring-condition dataset.
+
+where λ is a scaling factor, N is the number of samples, and err 2 
+
+> i
+
+is defined as: 
+
+err i = atan2   sin(∆ ψi), cos(∆ ψi) , ∀i ∈ 1, . . . , N (10) where ∆ψi is the difference between the heading angle estimated by HeadingNet, ˆψi, and the GT heading angle, ψi, for sample i ∈ [1 , . . . , N ]. Figure 4 shows a block diagram of the information flow through HeadingNet during the training. HeadingNet was trained and evaluated on real-world data recorded by an autonomous surface vehicle (ASV) moored to a pier on multiple days, forming a mooring-condition dataset [44]. HeadingNet was evaluated over five alignment durations: 10, 30, 60, 90, and 120 seconds allowing comparison of the alignment time efficiency and not only accuracy. Table 3 presents the averaged absolute error (AE) of the heading angle for each evaluated alignment duration for both the best model-based approach (DVA or OBA) and HeadingNet. Two main observations can be drawn from Table 3. First, HeadingNet achieved a sub-five-degree error with only ten seconds of alignment, resulting in 60% time improvement. Second, when compared to the best model-based method at 120 seconds, which yielded its highest accuracy, HeadingNet outperformed the baseline by 51% .To conclude, HeadingNet offers a rapid and accurate self-heading alignment which outperforms the best model-based approache. Nevertheless, HeadingNet is able to estimate only the heading angle, unlike DVA and OBA, which provide the entire initial attitude. Yet, this drawback can be tackled by expanding HeadingNet to estimate the entire orientation, or using it as a hybrid framework. 
+
+> Figure 4: HeadingNet observation vector information flow and loss calculation during training.
+
+84. INS/DVL Alignment 
+
+Accurate alignment between the INS and DVL reference frames is a prerequisite for effective sensor fusion. Due to mechanical and installation constraints, the DVL and IMU are rarely co-located or co-aligned on an AUV, introducing a constant rotation Cbd ∈ SO (3) between their respective frames. Errors in this rotation directly corrupt velocity projection and propagate into position drift throughout the mission [14, 22]. In this section, we review the standard model-based approach as well an AI-aided method. 
+
+4.1. Standard Model-Based Alignment 
+
+The standard in-situ alignment approach is velocity-based, that is, the INS integrates accelerometer and gyroscope measurements to produce an estimate of inertial velocity vb(t) expressed in the body frame, which is then compared against the estimated velocity of DVL vd(t). The two are related by an unknown rotation matrix Tbd:
+
+vb(t) = Tbd vd(t). (11) Over N time instances, the alignment is cast as a Wahba problem [49]: 
+
+ˆTbd = argmin Tbd∈SO (3) 
+
+1
+
+N
+
+> N
+
+X
+
+> i=1
+
+vb[ti] − Tbd vd[ti] 2 , (12) solved by singular value decomposition (SVD) method [50]. This approach carries significant practical limita-tions. Convergence requires sufficient velocity excitation, imposing specific maneuver patterns incompatible with typical straight-line AUV operations. The method is also highly sensitive to IMU quality. For exam-ple, with navigation-grade sensors the SVD achieves ∼0.42 ◦ RMSE, while tactical-grade sensors push this to ∼23 ◦, a tenfold degradation driven by accelerometer and gyroscope bias. Moreover, convergence times routinely exceed 70 seconds and some variants depend on external GNSS or acoustic infrastructure [14, 23], limiting operational autonomy. 
+
+4.2. ResAlignNet: Data-Driven INS/DVL Alignment 
+
+To overcome these limitations, ResAlignNet [51], extending previous work on data-driven alignment [52]. It employs a 1D ResNet-18 [53] backbone adapted for temporal sensor fusion. The alignment is reformulated as a supervised regression task that directly estimates the three Euler angles (ϕ, θ, ψ ) parameterizing Tbd from synchronized velocity measurements of both sensors. The input to the network is a six-dimensional tensor 
+
+[vb 
+
+> INS
+
+∥ vd
+
+> DVL
+
+] ∈ RW ×6, where W is the length of the temporal window. An initial convolutional layer (64 filters, kernel 7, stride 2) is followed by four residual layers with channel dimensions 64, 128, 256, and 512. Each residual block implements the skip connection: 
+
+y = F(x, {Wi}) + x, (13) 9which preserves gradient flow and prevents vanishing gradients [53]. A global average pooling layer then aggregates temporal features into a fixed-size representation, and a fully connected layer regresses the three alignment angles. The network minimizes the MSE between predicted and ground-truth Euler angles: 
+
+L = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+X
+
+> j∈{ ϕ,θ,ψ }
+
+ αi,j − ˆαi,j 
+
+2, (14) using Adam optimizer (learning rate 10 −7, batch size 32). Training data are generated via a noising pipeline that applies realistic DVL and IMU error models to synthetic trajectories, enabling Sim2Real transfer. That is, a model trained on synthetic data can be deployed on operational sensor measurements without retraining. Importantly, ResAlignNet requires only onboard INS and DVL sensors, foregoing GNSS, acoustic infrastructure, and prescribed vehicle maneuvers—making it fully autonomous and eliminating pre-mission trajectory constraints. 
+
+4.3. Experimental Results 
+
+ResAlignNet was validated using the Snapir AUV during sea trials in the Mediterranean Sea near Haifa, Israel [54]. Two trajectory patterns were evaluated: a straight-line segment (Trajectory #1) and a long-turn maneuver (Trajectory #2). Table 4 presents the RMSE in all window sizes and methods for both trajectories. ResAlignNet (RAN-18) consistently achieves the lowest RMSE in every window size on both trajectories. AlignNet [52] offers a significant improvement over SVD but is not able to support ResNet-based architec-tures. ResNet-34 and CNN-LSTM reach competitive accuracy at larger windows but show higher errors at shorter ones, while RAN-18 delivers robust sub-degree performance throughout. The Sim2Real variant, trained exclusively on the same synthetic straight-line and turn trajectories used in simulation and then deployed directly on real-world measurements, maintains RMSE between 1.6◦–3.4◦, demonstrating effective knowledge transfer from simulation to real-world deployment. The SVD baseline severely degrades under tactical-grade conditions, with maximum errors exceeding 179 ◦ throughout the test dataset. ResAlignNet reaches accurate alignment in only 25 seconds, representing a 65% reduction in convergence time compared to the SVD baseline [51]. These results demonstrate that replacing the model-based SVD estimator with ResAlignNet yields consis-tent sub-degree alignment accuracy across sensor grades and trajectory types, eliminates motion-pattern requirements, and enables immediate AUV deployment without lengthy pre-mission calibration procedures. 
+
+5. INS/DVL Fusion 
+
+AUV navigation solution is primarily performed by an INS/DVL sensor fusion. It is performed by a nonlinear filtering approach that takes into consideration biases and stochastic noise. Most commonly, this is achieved using a nonlinear variant of the Kalman filter [10, 19]. There are two main approaches to integrating DVL measurements into the inertial dead reckoning solution to 10 Table 4: RMSE [ ◦] comparison across window sizes for Trajectories #1 and #2 using real-world sea-trial data collected with the Snapir AUV. RAN: ResAlignNet. 
+
+Traj. Window [s] SVD AlignNet RAN-34 CNN-LSTM RAN-18 
+
+#1 5 52.47 1.50 1.02 1.31 0.95 
+
+25 14.23 1.25 0.99 0.92 0.92 
+
+50 18.47 1.36 0.94 0.92 0.91 
+
+75 24.70 1.32 0.95 0.92 0.92 
+
+100 25.74 1.48 0.94 0.93 0.91 
+
+#2 5 59.40 1.49 1.04 1.14 0.98 
+
+25 39.64 1.26 0.97 0.92 0.93 
+
+50 44.51 1.24 0.94 0.92 0.92 
+
+75 37.44 1.25 0.91 0.91 0.90 
+
+100 36.75 1.45 0.93 0.91 0.89 
+
+mitigate its drift. The first is the tightly coupled approach, where each raw beam measurement is processed and integrated into the filter. In this case, it does not matter how many beams are available out of the four transmitted, the filter still updates the solution to mitigate inertial drift. While fewer than three beams cannot provide accurate velocity estimates, research has shown that the tightly coupled approach can still maintain a lower divergence rate compared to using no measurements at all. On the other hand, the loosely coupled approach first processes the raw beam measurements to estimate the Cartesian velocity vector, and then updates the filter. This velocity estimation is done using a least squares estimation. It is only feasible when three or four beams are available, if not, there is no velocity update and the navigation solution drifts [55]. In both approaches, the nonlinear Kalman filter prediction and update steps are performed similarly, as described in [56]. The distinction lies in the measurement model. In the tightly coupled approach, each raw beam measurement is processed individually as follows: 
+
+δz i = bTi ˆCbn ˆvn − bTi vbDV L ≈ bTi Cbnδvn − bTi Cbnvn[×]ϵ (15) where δz i is the measurement residual of the ith beam, bi is the ith beam unit direction vector, Cbn is the rotation matrix from the navigation to the body frame, vn is the velocity in the navigation frame, and ϵ is the misalignment error vector. The corresponding measurement matrix Hk,i takes the form: 
+
+HT C k,i = [ bTi Cbn − bTi Cbnvn[×] 01×3 01×3] (16) The full Hk matrix is then assembled by concatenating the per-beam rows Hk,i according to the number of available beams. In the loosely coupled approach, a least squares estimator is first applied to the raw beam measurements to estimate the DVL velocity vector ˆvDV L , where y is the vector of beam measurements and T is the matrix 11 of beam direction vectors: 
+
+ˆvDV L = argmin 
+
+> vDV L
+
+|| y − TvDV L || 2. (17) The solution is obtained via the pseudo-inverse of T [18]: 
+
+ˆvDV L = ( TT T)−1TT y. (18) The estimated velocity is then incorporated into the filter through the following residual: 
+
+δz = ˆCbn ˆvn − vbDV L ≈ Cbnδvn − Cbnvn[×]ϵ (19) with the corresponding measurement matrix: 
+
+HLC k = [ Cbn − Cbnvn[×] 03×3 03×3] (20) The above model-based approaches are well established in the literature. However, with the rise of computa-tional power and the proven capabilities of data-driven methods in other fields, such techniques have begun to be integrated into INS/DVL fusion methods. This is commonly achieved either by enhancing the DVL or inertial measurements prior to their incorporation into the filter, or by replacing a specific block within the filter where performance can be improved. An illustration of these approaches is shown in Fig. 5.    
+
+> (a) (b)
+> Figure 5: Illustration of the two main deep learning-based approaches to improve INS/DVL navigation performance. (a) Improving DVL velocity estimation precision. (b) Enhancing a single block within the Kalman filter to provide a full navigation solution.
+
+5.1. Enhancing DVL Velocity Estimation 
+
+Recently, a deep learning method named BeamsNet with two versions, was proposed to enhance the DVL velocity estimate [26]. The first uses inertial data alongside raw DVL beam measurements as input to a 1D-CNN to regress the AUV velocity vector. The second version performs the same task using only past DVL measurements, without inertial data. In doing so, BeamsNet replaces and enhances the least squares solution in (18). Since INS/DVL fusion relies on the accuracy of the DVL measurements to mitigate inertial drift, more accurate velocity estimates directly translate to an improved navigation solution. Both 12 versions of BeamsNet were validated through simulation and sea experiments conducted in the Mediterranean Sea. Results demonstrate that both versions achieve more than 60 % improvement in DVL velocity vector estimation accuracy compared to the model-based least squares approach, with the first version, which incorporates inertial data, providing the higher accuracy of the two. Building on the capabilities of BeamsNet, it was extended to scenarios involving partial DVL measurements. The underwater environment poses extreme conditions that may cause the acoustic beams transmitted from the DVL to deflect away from the sensor, in scenarios such as sea creatures blocking the field of view, extreme roll and pitch maneuvers, uneven seabed, and more [57]. To this end, a hybrid neural coupled (HNC) approach was proposed in [58, 59]. For scenarios where only one or two beams are available, the BeamsNet framework was able to regress the missing beams and integrate them into the EKF via either a loosely or tightly coupled approach. The HNC approach was trained and evaluated on real AUV data recorded in the Mediterranean Sea across two separate missions. Results demonstrate that the proposed method outperforms the baseline loosely and tightly coupled model-based approaches by an average of 96.15%, and surpasses a model-based beam estimator by an average of 12.41% in terms of velocity accuracy, across scenarios involving two or three missing beams. 
+
+5.2. Neural-Aided Adaptive Filtering 
+
+Another approach for utilizing deep learning within the INS/DVL fusion framework is by enhancing a specific block within the filtering pipeline. Specifically, in adaptive Kalman filtering, the process and/or measurement noise covariance matrices are estimated online throughout the mission. This is particularly important in the underwater environment due to its extreme and dynamic conditions. In [54], a transformer-based network was proposed to adapt the process noise covariance matrix in real-time. An innovative Kalman-informed loss function was introduced, mimicking the Kalman prediction and update steps during training, to adjust the process noise covariance matrix by minimizing the error of the primary observable state, velocity, and by doing so, also maintaining the reliability and consistency associated with Kalman filtering. The adaptive Kalman-informed transformer approach was evaluated on data recorded in the Mediterranean Sea. Results demonstrate that A-KIT outperforms the conventional EKF by more than 49.5% and model-based adap-tive EKF approaches by an average of 35.4% in terms of position accuracy. It was also able to maintain filter consistency and theoretical guarantees, thereby preserving the reliability of the state estimator while improving its performance through data-driven capabilities. Considering adaptive noise estimation, two recent works integrate neural networks into the Kalman filter estimation process, demonstrating improved robustness and accuracy. In [24], the authors propose a hybrid adaptive process noise estimation within the Lie group using a lightweight neural network architecture. The proposed hybrid approach achieves an impressive 17% improvement on real-world data when trained in a sim2real paradigm. In addition, ProcessNet is proposed in [25] to adaptively estimates the process noise matrix in an unscented Kalman filter (UKF) for INS/DVL fusion. ProcessNet proposes a simple and effective end-to-end hybrid adaptive framework that outperforms both adaptive and non-adaptive baseline methods, 13 achieving up to 34% improvement over a baseline UKF. In another work, a Gaussian process regression method was utilized to replace the least squares solution for estimating the AUV velocity from raw DVL beam data, while simultaneously providing an estimated covariance matrix to be used within the EKF as an adaptive approach for the measurement noise covariance matrix [60]. Results demonstrate that the approach reduces DVL velocity estimation errors by approximately 20% compared to the least squares approach, while simultaneously improving overall navigation accuracy, particularly in the orientation states. Furthermore, the adaptive covariance provided, enables a more robust EKF integration compared to both the LS estimator and BeamsNet. 
+
+5.3. DVL-Based Acceleration 
+
+Recently, an algorithm was proposed to estimate velocity during complete DVL outages by utilizing historical DVL measurements and aiding information [57]. This approach also enables the estimation of the AUV’s acceleration vector, which was used as an external update to enhance INS/DVL fusion. Subsequently, a simple yet effective end-to-end deep learning approach for estimating this acceleration was introduced [61]. Experimental results demonstrate that this AI-aided method improves acceleration estimation by up to 
+
+67 .2% compared to the model-based baseline. Furthermore, the proposed approach requires only software modifications, making it highly suitable for operational AUVs. 
+
+6. Visual–Inertial Odometry (VIO) 
+
+Underwater simultaneous localization and mapping (SLAM) aims to estimate the pose of a robotic platform while reconstructing a representation of the surrounding environment using onboard sensing. Unlike terres-trial and aerial systems, underwater robots operate without access to GNSS and must rely on local sensing modalities such as cameras, IMUs, and, in some cases, acoustic or depth sensors. The absence of global positioning significantly increases the difficulty of long-term navigation, as drift cannot be directly corrected through external references. Early efforts in underwater vision-based navigation have focused on monocular visual odometry due to the simplicity and low cost of single-camera systems. Ferrera et al. [62] proposed UW-VO, a monocular visual odometry framework designed specifically for underwater environments. The method relies on optical-flow-based feature tracking and a retracking mechanism to improve robustness under short-term occlusions and turbidity. A keyframe-based optimization with bundle adjustment is employed to maintain trajectory consis-tency. While the system demonstrates improved performance compared to standard terrestrial methods, it remains highly dependent on image quality and feature reliability. To further improve robustness in degraded underwater conditions, Chen et al. [63] proposed an adaptive image-enhanced monocular SLAM system built upon the ORB-SLAM3 framework. Their approach introduces a preprocessing stage that combines environ-ment recognition with adaptive image enhancement. By dynamically applying techniques such as CLAHE for low-light conditions and dark channel prior (DCP) for turbid environments, the method significantly 14 improves feature extraction and tracking performance. Nevertheless, despite these improvements, monoc-ular systems inherently suffer from scale ambiguity and remain sensitive to severe visual degradation. To overcome these limitations, stereo vision has been introduced as a more robust alternative for underwater mapping. Weidner et al. [64] proposed a stereo-based framework for 3D reconstruction of underwater caves. By utilizing a dual-camera setup, the method directly recovers depth through stereo matching, thus resolving the scale ambiguity present in monocular approaches. In addition, the authors exploit artificial illumination by detecting the intersection of the light cone with the cave boundaries, enabling robust edge-based recon-struction even under challenging lighting conditions. Visual odometry is performed using a stereo variant of ORB-SLAM2 on well-illuminated regions, allowing estimation of the camera trajectory. Experimental results demonstrate improved geometric consistency and reduced reconstruction noise compared to standard dense stereo methods in highly degraded underwater scenes. Despite the advantages of stereo vision, underwater environments remain highly challenging due to dynamic illumination, repetitive textures, and motion-induced blur, which continue to degrade feature-based track-ing and data association. To address these limitations, recent works have explored event-based cameras as an alternative sensing modality for underwater SLAM. Event cameras provide high dynamic range and microsecond-level temporal resolution, making them inherently robust to rapid motion and challenging light-ing conditions. Early event-based SLAM systems, such as [65] and [66], demonstrate the potential of event-driven perception by converting asynchronous event streams into time surface (TS) representations for tracking and optimiza-tion. However, TS-based methods are highly sensitive to motion variations and texture sparsity, often leading to unstable feature extraction and matching failures, especially in degraded underwater environments. These limitations highlight the challenges of directly applying event-based SLAM pipelines to underwater scenarios, despite their theoretical advantages. In parallel to geometry-based approaches, recent works have explored deep learning techniques to improve robustness of visual odometry and SLAM in challenging underwater environments. Teixeira et al. [67] inves-tigate the application of deep learning models for underwater visual odometry estimation, highlighting their ability to learn robust motion representations directly from image sequences. By leveraging convolutional and recurrent neural network architectures, these approaches bypass traditional feature extraction pipelines and demonstrate improved robustness under conditions of low texture, repetitive patterns, and poor illumi-nation, which commonly degrade classical methods. In addition, the authors propose a visual-inertial fusion network that utilizes inertial supervision to reduce drift and improve trajectory consistency. More broadly, recent surveys have emphasized the growing role of deep learning in enhancing underwater SLAM pipelines. Heshmat et al. [31] highlight how deep learning techniques improve key components such as feature extraction, image enhancement, denoising, and sensor fusion, leading to increased robustness in low-visibility conditions. These methods also enable more reliable loop closure detection and mapping performance by leveraging data-driven representations. However, despite these advantages, deep learning-15 based approaches remain computationally demanding and require large-scale training data, which limits their deployment on resource-constrained underwater platforms. To further improve robustness and miti-gate drift in challenging underwater environments, recent works have focused on tightly-coupled VIO systems that integrate visual measurements with inertial sensing and additional modalities. Rahman [68] proposed a sonar-visual-inertial SLAM system that extends the OKVIS framework by incorporating acoustic range measurements from a scanning sonar. By jointly optimizing visual, inertial, and sonar constraints in a non-linear optimization framework, the method improves scale estimation and robustness in feature-degraded environments. Experimental results on underwater caves and submerged structures demonstrate that the inclusion of sonar significantly enhances reconstruction accuracy and reduces tracking failures under poor visibility conditions. Building upon this multi-sensor fusion paradigm, Rahman[69] introduced SVIn2, a tightly-coupled SLAM system that integrates stereo vision, IMU, sonar, and depth measurements. The method incorporates robust initialization, image enhancement, and loop closure mechanisms to address drift accumulation and localiza-tion failures. In particular, the inclusion of depth sensing provides additional scale constraints, while loop closure enables global consistency over long trajectories. Results show significant improvements in robustness and accuracy compared to state-of-the-art visual-inertial methods, especially in low-visibility underwater en-vironments. More recently, Miao [70] proposed UniVIO, a unified underwater stereo visual-inertial odometry framework that combines the advantages of feature-based and direct methods within a single optimization pipeline. The approach introduces an underwater image rectification model to compensate for refraction ef-fects, along with a unified optimization strategy that jointly minimizes photometric and reprojection errors. This hybrid formulation improves both robustness and accuracy in challenging conditions characterized by weak textures and unstable illumination. Experimental evaluations demonstrate that UniVIO outperforms existing methods across multiple datasets, highlighting the effectiveness of combining complementary visual representations in underwater VIO systems. 
+
+7. PINN-Based Dead Reckoing 
+
+Recent research has explored data-driven approaches to learn motion patterns directly from inertial data. Although these approaches demonstrate improved accuracy and generalization, they lack interpretability, explainability and are also black-box in nature. Alternatively, PINNs have emerged as a promising paradigm that bridges the gap between model-based and data-driven approaches. By embedding the INS equations of motion directly into the learning process, PINNs ensure that the predicted trajectories remain physically consistent while leveraging the expressive power of deep neural networks. MoRPI-PINN [71] and PiDR [72] are such models developed in recent times for mobile robot and AUVs, respectively. 16 7.1. Physics-Informed Neural Networks for Dead Reckoning 
+
+Let a neural network Nθ approximate the navigation states as 
+
+ˆx(t) = Nθ (t, f , ω), (21) where ˆx = [ˆ p, ˆv, ˆη] denotes the predicted position, velocity, and orientation, respectively. The PiDR frame-work is trained using a composite objective function that integrates both data-driven supervision and physics-based constraints. The data-driven loss ensures that the predicted states closely match the GT measurements by minimizing their discrepancy. It is defined as a weighted mean squared error, assigning different impor-tance to each state component during training as in [73]: 
+
+Ldata = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+
+
+wp∥ˆp(i) − p(i)∥22 + wv ∥ˆv(i) − v(i)∥22 + wη ∥ˆη(i) − η(i)∥22
+
+
+
+, (22) where wp, w v , w η are weighting coefficients. To ensure physical consistency, a physics-informed loss is introduced by enforcing the residuals of the strap-down INS equations: 
+
+rphys =
+
+ 
+
+> dˆpn
+> dt
+
+− D(ϕ, h )ˆ vndˆvn 
+
+> dt
+
+−  Cbnfb − (2 ωnie + ωnen ) × ˆvn + gn
+
+  
+
+> dˆCbn
+> dt
+
+−
+
+
+
+CbnΩbib − (Ωnie + Ωnen )Cbn
+
+ , (23) and the corresponding physics loss is defined as: 
+
+Lphys = 1
+
+NpNp
+
+X
+
+> i=1
+
+∥r(i)
+
+> phys
+
+∥22. (24) The overall training objective combines both components as: 
+
+Ltotal = λdata Ldata + λphys Lphys , (25) and the optimal network parameters are obtained by solving 
+
+θ∗ = arg min  
+
+> θ
+
+Ltotal (θ). (26) Minimizing 26 ensures that the learned trajectories are both data-consistent and physically plausible. Unlike model-based approaches, PiDR eliminates explicit numerical integration and trajectory representation via automatic differentiation. To further understand the performance of the proposed framework, we analyze the error characteristics [73] of the predicted trajectories. Let the GT position and the predicted position be denoted as p(t) and ˆp(t),respectively. Then the position error is defined as: 
+
+e(t) = ˆ p(t) − p(t), (27) and its magnitude is given by ∥e(t)∥2.17 Classical INS exhibits unbounded drift due to cumulative integration errors. Since position is obtained through double integration of noisy acceleration measurements, the error growth can be approximated as 
+
+∥eINS (t)∥ ∼ O (t2), (28) which results in rapidly increasing deviation over time. The proposed PiDR framework demonstrates significantly improved error stability by constraining the so-lution space through physics-informed residuals. The learned trajectory minimizes both the data error and the physics residual, that is, 
+
+min 
+
+> θ
+
+ ∥e(t)∥22 + ∥rphys (t)∥22
+
+ , (29) which effectively regularizes the solution. As a result, the error growth is significantly reduced and can be empirically observed to follow a bounded behavior: 
+
+∥ePiDR (t)∥ ∼ O (t). (30) These observations highlight the effectiveness of integrating physical knowledge into the learning process for drift-resilient navigation. Although the PiDR framework estimates position, velocity, and orientation jointly, the error analysis is primarily conducted in the position domain. This is because position error inherently accumulates the effects of both velocity and orientation errors through the integration process, and thus serves as a comprehensive indicator of overall navigation performance. PiDR was evaluated on a real-world AUV dataset [54]. The dataset spans approximately 66 minutes of recorded data, including diverse motion patterns and environmental conditions as depicted in Figure 6. To 
+
+> Figure 6: Trajectories T1, T2, T3, T5, T6, T7, and T8 belong to the training set, and T10, T11, and T13 are part of the testing set.
+
+18 evaluate the PiDR method relative to other approaches, the following metrics were used: position RMSE (PRMSE), mean absolute trajectory error (MATE), total distance error(TDR), and final distance error (FDE). From Table 5 it can be observed that PiDR achieves substantial performance gains across all met-rics, with up to 97% improvement over classical INS and consistent improvements over both MoRPI and MoRPI-PINN. This highlights the effectiveness of physics-informed learning in mitigating drift in underwater navigation. 
+
+> Table 5: Comparative results for PiDR and baseline methods on the test dataset.
+
+Method PRMSE [m] MATE [m] TDE [%] FDE [m] Improvement [%] 3D-INS [12] 528.3 392.8 171 1201.9 97 MoRPI [74] 363.0 315.1 92 407.7 96 MoRPI-PINN [71] 256.4 234.2 81 297.3 95 PiDR [72] 14.5 13.0 5 12.1 –
+
+8. Conclusion 
+
+An accurate navigation solution is critical for the AUV’s safe return, mission validity, and overall success. Achieving this requires a pipeline of interdependent steps, where even small inaccuracies can propagate and endanger the entire mission. While the literature offers well-established model-based approaches, they rely heavily on prior knowledge and accurate modeling of the harsh, unpredictable underwater environment, which can limit their effectiveness. In DVL calibration, DCNet was shown to reduce the process complexity by offering a comprehensive error model and a simple constant velocity trajectory. Following calibration, HeadingNet exhibited neural-assisted self-alignment heading estimation, reducing the required time and in-creasing the accuracy significantly. ResAlignNet is later introduced for the INS/DVL alignment, showing considerable improvement over the model-based approaches, both in accuracy and time reduction. There-fore, overall the described AI-aided frameworks significantly improve accuracy and reduce the initialization time. In INS/DVL fusion, BeamsNet and AKIT were discussed, where BeamsNet enables a seamless navi-gation where model-based approaches fail, while AKIT offers an adaptive process noise estimation in harsh unpredictable underwater environment. In addition, SLAM-based approaches such as VIO were explored for scenarios where traditional sensors are limited or vision-based capabilities are required. Finally, PiDR, a physics-informed neural network, incorporates navigation equations as constraints within the learning pro-cess, achieving significant improvements in pure inertial navigation. The AI-aided frameworks presented in this chapter improve upon model-based methods. All were evalu-ated on real-world datasets collected during multiple sea missions, demonstrating robustness and practical applicability. However, these approaches have so far been tested only offline, and not in real-time. In addi-tion, some methods, particularly SLAM-based frameworks, are computationally demanding, which can limit 19 real-time deployment. Nevertheless, even complex SLAM models have been shown to run in real time on platforms quad-rotors, and the typically moderate underwater dynamics further support their integration into AUV navigation. Overall, improved accuracy and reduced start-up time can enhance mission reliabil-ity, reduce initialization time, and improve data quality, supporting both scientific and industrial marine applications. 
+
+Acknowledgement 
+
+G. D. is grateful for the support of the Maurice Hatter foundation and the University of Haifa excellence scholarship for PhD studies. Z.Y. is supported by the Maurice Hatter Foundation and University of Haifa presidential scholarship for outstanding students on a direct Ph.D. track. N.C. is supported by the Maurice Hatter Foundation and University of Haifa presidential scholarship for outstanding students on a direct Ph.D. track. 
+
+References 
+
+[1] J. C. Kinsey, R. M. Eustice, L. L. Whitcomb, A survey of underwater vehicle navigation: Recent advances and new challenges, in: IFAC conference of manoeuvering and control of marine craft, Vol. 88, Lisbon, 2006, pp. 1–12. [2] L. Paull, S. Saeedi, M. Seto, H. Li, AUV navigation and localization: A review, IEEE Journal of oceanic engineering 39 (1) (2013) 131–149. [3] R. B. Wynn, V. A. Huvenne, T. P. Le Bas, B. J. Murton, D. P. Connelly, B. J. Bett, H. A. Ruhl, K. J. Morris, J. Peakall, D. R. Parsons, et al., Autonomous underwater vehicles (AUVs): Their past, present and future contributions to the advancement of marine geoscience, Marine geology 352 (2014) 451–468. [4] L. Stutters, H. Liu, C. Tiltman, D. J. Brown, Navigation technologies for autonomous underwater vehicles, IEEE Transactions on Systems, Man, and Cybernetics, Part C (Applications and Reviews) 38 (4) (2008) 581–589. [5] B. Zhang, D. Ji, S. Liu, X. Zhu, W. Xu, Autonomous underwater vehicle navigation: A review, Ocean Engineering 273 (2023) 113861. [6] J. J. Leonard, A. Bahr, Autonomous underwater vehicle navigation, Springer handbook of ocean engi-neering (2016) 341–358. [7] C. Alexandris, P. Papageorgas, D. Piromalis, Positioning systems for unmanned underwater vehicles: A comprehensive review, Applied Sciences 14 (21) (2024) 9671. 20 [8] T. Zhang, H. Shi, L. Chen, Y. Li, J. Tong, AUV positioning method based on tightly coupled SINS/LBL for underwater acoustic multipath propagation, Sensors 16 (3) (2016) 357. [9] Y. Wu, X. Ta, R. Xiao, Y. Wei, D. An, D. Li, Survey of underwater robot positioning navigation, Applied Ocean Research 90 (2019) 101845. [10] P. D. Groves, Principles of GNSS, Inertial, and Multisensor Integrated Navigation Systems, Artech House, Norwood, MA, USA, 2013. [11] D. Wang, X. Xu, Y. Yao, T. Zhang, Y. Zhu, A novel SINS/DVL tightly integrated navigation method for complex environment, IEEE Transactions on Instrumentation and Measurement 69 (7) (2019) 5183– 5196. [12] D. Titterton, J. L. Weston, Strapdown inertial navigation technology, Vol. 17, IET, 2004. [13] N. A. Brokloff, Matrix algorithm for Doppler sonar navigation, in: Proceedings of OCEANS’94, Vol. 3, IEEE, 1994, pp. III–378. [14] J. C. Kinsey, L. L. Whitcomb, In situ alignment calibration of attitude and Doppler sensors for precision underwater vehicle navigation: Theory and experiment, IEEE Journal of Oceanic Engineering 32 (2) (2007) 286–299. [15] D. Wang, X. Xu, Y. Yang, T. Zhang, A quasi-Newton quaternions calibration method for DVL error aided GNSS, IEEE transactions on vehicular technology 70 (3) (2021) 2465–2477. [16] A. Barrau, S. Bonnabel, The invariant extended Kalman filter as a stable observer, IEEE Transactions on Automatic Control 62 (4) (2017) 1797–1812. [17] S. J. Julier, J. K. Uhlmann, New extension of the Kalman filter to nonlinear systems, in: Signal processing, sensor fusion, and target recognition VI, Vol. 3068, Spie, 1997, pp. 182–193. [18] Y. Bar-Shalom, X. R. Li, T. Kirubarajan, Estimation with applications to tracking and navigation: theory algorithms and software, John Wiley & Sons, 2001. [19] J. Farrell, Aided navigation: GPS with high rate sensors, McGraw-Hill, Inc., 2008. [20] B. Xu, Y. Guo, J. Hu, An improved robust Kalman filter for SINS/DVL tightly integrated navigation system, IEEE Transactions on Instrumentation and Measurement 70 (2021) 1–15. [21] A. Frutuoso, F. O. Silva, E. A. de Barros, Performance evaluation of coarse alignment methods for autonomous underwater vehicles in mooring conditions, Ocean Engineering 282 (2023) 114991. [22] G. Troni, L. L. Whitcomb, New methods for in-situ calibration of attitude and Doppler sensors for underwater vehicle navigation: Preliminary results, in: OCEANS 2010 MTS/IEEE SEATTLE, IEEE, 2010, pp. 1–8. 21 [23] L. Zhaopeng, T. Kanghua, W. Meiping, Online estimation of DVL misalignment angle in SINS/DVL integrated navigation system, in: IEEE 2011 10th International Conference on Electronic Measurement & Instruments, Vol. 2, IEEE, 2011, pp. 336–339. [24] B. Diker, I. Klein, Neural Aided Adaptive Innovation-Based Invariant Kalman Filter, arXiv preprint arXiv:2603.26709 (2026). [25] A. Levy, I. Klein, Adaptive neural unscented kalman filter, IEEE Transactions on Intelligent Vehicles (2026). [26] N. Cohen, I. Klein, BeamsNet: A Data-driven Approach Enhancing Doppler Velocity Log Measurements for Autonomous Underwater Vehicle Navigation, Engineering Applications of Artificial Intelligence 114 (2022) 105216. [27] I. Klein, Y. Lipman, Continuous INS/DVL Fusion in Situations of DVL Outages, in: 2020 IEEE/OES Autonomous Underwater Vehicles Symposium (AUV), 2020, pp. 1–6. [28] E. Topini, F. Fanelli, A. Topini, M. Pebody, A. Ridolfi, A. B. Phillips, B. Allotta, An experimental com-parison of deep learning strategies for AUV navigation in DVL-denied environments, Ocean Engineering 274 (2023) 114034. [29] P. Liu, B. Wang, Z. Deng, M. Fu, INS/DVL/PS tightly coupled underwater navigation method with limited DVL measurements, IEEE Sensors Journal 18 (7) (2018) 2994–3002. [30] J. Qin, M. Li, D. Li, J. Zhong, K. Yang, A survey on visual navigation and positioning for autonomous UUVs, Remote Sensing 14 (15) (2022) 3794. [31] M. Heshmat, L. Saad Saoud, M. Abujabal, A. Sultan, M. Elmezain, L. Seneviratne, I. Hussain, Under-water SLAM meets deep learning: challenges, multi-sensor integration, and future directions, Sensors 25 (11) (2025) 3258. [32] M. Raissi, P. Perdikaris, G. E. Karniadakis, Physics-informed neural networks: A deep learning frame-work for solving forward and inverse problems involving nonlinear partial differential equations, Journal of Computational physics 378 (2019) 686–707. [33] P.-F. Xu, C.-B. Han, H.-X. Cheng, C. Cheng, T. Ge, A physics-informed neural network for the predic-tion of unmanned surface vehicle dynamics, Journal of Marine Science and Engineering 10 (2) (2022) 148. [34] D. Wang, B. Wang, H. Huang, Y. Yao, Online calibration method of DVL error based on improved integrated navigation model, IEEE Sensors Journal 22 (21) (2022) 21082–21092. 22 [35] B. Xu, Y. Guo, A novel DVL calibration method based on robust invariant extended Kalman filter, IEEE Transactions on Vehicular Technology 71 (9) (2022) 9422–9434. [36] Z. Yampolsky, I. Klein, DCNet: A data-driven framework for DVL calibration, Applied Ocean Research 158 (2025) 104525. [37] B. Xu, L. Wang, S. Li, J. Zhang, A novel calibration method of SINS/DVL integration navigation system based on quaternion, IEEE Sensors Journal 20 (16) (2020) 9567–9580. [38] S. Liu, T. Zhang, Y. Zhu, A GNSS aided calibration method for DVL error based on the optimal-REQUEST, IEEE Sensors Journal 22 (22) (2022) 21899–21910. [39] J. A. Farrell, F. O. Silva, F. Rahman, J. Wendel, Inertial Measurement Unit Error Modeling Tutorial: Inertial Navigation System State Estimation with Real-Time Sensor Calibration, IEEE Control Systems Magazine 42 (6) (2022) 40–66. doi:10.1109/MCS.2022.3209059 .[40] E. H. Thompson, J. L. Farrell, J. W. Knight, Alignment Methods for Strapdown Inertial Systems, J. Spacecr. Rockets 3 (9) (1966) 1432–1434. [41] K. R. Britting, Inertial Navigation Systems Analysis, John Wiley & Sons, Canada, 1971. [42] G. Wahba, A Least Squares Estimate of Satellite Attitude, SIAM Rev. 8 (3) (1966) 384–386. [43] P. M. G. Silson, Coarse alignment of a ship’s strapdown inertial attitude reference system using velocity loci, IEEE Trans. Instrum. Meas. 60 (6) (2011) 1930–1941. [44] A. Frutuoso, F. O. Silva, E. A. de Barros, Performance evaluation of coarse alignment methods for autonomous underwater vehicles in mooring conditions, Ocean Eng. 282 (2023) 114991. doi:10.1016/ j.oceaneng.2023.114991 .[45] Y. Y. Qin, G. M. Yan, D. Q. Gu, J. B. Zheng, A Clever Way of SINS Coarse Alignment Despite Rocking Ship, J. Northwestern Polytech. Univ. 23 (5) (2005) 681–684. [46] F. O. Silva, E. M. Hemerly, W. C. L. Filho, Error Analysis of Analytical Coarse Alignment Formulations for Stationary SINS, IEEE Trans. Aerosp. Electron. Syst. 52 (4) (2016) 1777–1796. doi:10.1109/TAES. 2016.150177 .[47] Z. Yampolsky, F. O. Silva, A. Frutuoso, I. Klein, Neural-Assisted in-Motion Self-Heading Alignment, arXiv preprint arXiv:2604.00168 (2026). [48] D. Engelsman, I. Klein, Towards learning-based gyrocompassing, Engineering Applications of Artificial Intelligence 163 (2026) 112842. doi:https://doi.org/10.1016/j.engappai.2025.112842 .URL https://www.sciencedirect.com/science/article/pii/S0952197625028738 
+
+23 [49] G. Wahba, A least squares estimate of satellite attitude, SIAM Review 7 (3) (1965) 409. [50] S. Umeyama, Least-squares estimation of transformation parameters between two point patterns, IEEE Transactions on Pattern Analysis and Machine Intelligence 13 (4) (1991) 376–380. [51] G. Damari, I. Klein, ResAlignNet: A data-driven approach for INS/DVL alignment, Ocean Engineering 356 (2026) 125277. [52] G. Damari, I. Klein, A data-driven method for INS/DVL alignment, in: OCEANS Great Lakes Confer-ence, MTS, Chicago, IL, 2025. [53] K. He, X. Zhang, S. Ren, J. Sun, Deep residual learning for image recognition, in: Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition, 2016, pp. 770–778. [54] N. Cohen, I. Klein, Adaptive Kalman-Informed Transformer, Engineering Applications of Artificial Intelligence 146 (2025) 110221. [55] P. A. Miller, J. A. Farrell, Y. Zhao, V. Djapic, Autonomous underwater vehicle navigation, IEEE Journal of Oceanic Engineering 35 (3) (2010) 663–678. [56] D. Simon, Optimal state estimation: Kalman, H infinity, and nonlinear approaches, John Wiley & Sons, 2006. [57] I. Klein, Y. Gutnik, Y. Lipman, Estimating DVL velocity in complete beam measurement outage sce-narios, IEEE Sensors Journal 22 (21) (2022) 20730–20737. [58] N. Cohen, I. Klein, LiBeamsNet: AUV velocity vector estimation in situations of limited DVL beam measurements, in: OCEANS 2022, Hampton Roads, IEEE, 2022, pp. 1–5. [59] N. Cohen, I. Klein, Seamless Underwater Navigation with Limited Doppler Velocity Log Measurements, IEEE Transactions on Intelligent Vehicles (2024). [60] N. Cohen, I. Klein, Gaussian Process Regression for Improved Underwater Navigation, in: 2025 IEEE/ION Position, Location and Navigation Symposium (PLANS), IEEE, 2025, pp. 1125–1132. [61] Y. Stolero, I. Klein, AUV acceleration prediction using DVL and deep learning, in: OCEANS 2025 -Great Lakes, 2025, pp. 1–5. [62] M. Ferrera, J. Moras, P. Trouvé-Peloux, V. Creuze, Real-Time Monocular Visual Odometry for Turbid and Dynamic Underwater Environments, Sensors 19 (3) (2019). doi:10.3390/s19030687 .URL https://www.mdpi.com/1424-8220/19/3/687 
+
+[63] G. Chen, G. Du, C. Yang, Y. Xu, C. Wu, H. Hu, F. Dong, J. Zeng, An underwater visual SLAM system with adaptive image enhancement, Ocean Engineering 326 (2025) 120896. doi:https://doi.org/10. 
+
+24 1016/j.oceaneng.2025.120896 .URL https://www.sciencedirect.com/science/article/pii/S0029801825006092 
+
+[64] N. Weidner, S. Rahman, A. Q. Li, I. Rekleitis, Underwater cave mapping using stereo vision, in: 2017 IEEE International Conference on Robotics and Automation (ICRA), 2017, pp. 5709–5715. doi:10. 1109/ICRA.2017.7989672 .[65] P. Chen, W. Guan, P. Lu, Esvio: Event-based stereo visual inertial odometry, IEEE Robotics and Automation Letters 8 (6) (2023) 3661–3668. [66] J. Niu, S. Zhong, X. Lu, S. Shen, G. Gallego, Y. Zhou, Esvo2: Direct visual-inertial odometry with stereo event cameras, IEEE Transactions on Robotics (2025). [67] B. Teixeira, H. Silva, A. Matos, E. Silva, Deep learning for underwater visual odometry estimation, Ieee Access 8 (2020) 44687–44701. [68] S. Rahman, A. Q. Li, I. Rekleitis, Sonar visual inertial SLAM of underwater structures, in: 2018 IEEE International Conference on Robotics and Automation (ICRA), IEEE, 2018, pp. 5190–5196. [69] S. Rahman, A. Q. Li, I. Rekleitis, Svin2: An underwater slam system using sonar, visual, inertial, and depth sensor, in: 2019 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS), IEEE, 2019, pp. 1861–1868. [70] R. Miao, J. Qian, Y. Song, R. Ying, P. Liu, UniVIO: Unified direct and feature-based underwater stereo visual-inertial odometry, IEEE Transactions on Instrumentation and Measurement 71 (2021) 1–14. [71] A. K. Sahoo, I. Klein, MoRPI-PINN: A physics-informed framework for mobile robot pure inertial navigation, arXiv preprint arXiv:2507.18206 (2025). [72] A. K. Sahoo, I. Klein, PiDR: Physics-Informed Inertial Dead Reckoning for Autonomous Platforms, arXiv preprint arXiv:2601.03040 (2026). [73] S. Chakraverty, A. K. Sahoo, D. Mohapatra, Artificial Neural Networks and Type-2 Fuzzy Set: Elements of Soft Computing and Its Applications, Elsevier, 2025. [74] A. Etzion, I. Klein, MoRPI: Mobile robot pure inertial navigation, IEEE Journal of Indoor and Seamless Positioning and Navigation 1 (2023) 141–150. 25

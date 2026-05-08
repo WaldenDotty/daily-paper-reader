@@ -1,0 +1,690 @@
+Title: Track A*: Fast Visibility-Aware Trajectory Planning for Active Target Tracking
+
+URL Source: https://arxiv.org/pdf/2605.05338v1
+
+Published Time: Fri, 08 May 2026 00:09:01 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+> 1
+
+# Track A*: Fast Visibility-Aware Trajectory Planning for Active Target Tracking 
+
+Hanxuan Chen, Kangli Wang, and Ji Pei 
+
+Abstract —Offline reference trajectories for active target track-ing are needed both for building multi-modal tracking datasets and for benchmarking online tracking planners under repeatable conditions. We present Track A* (TA*), an offline search-based trajectory planner that targets the visibility-aware target tracking objective on a discretized four-dimensional spatio-temporal grid 
+
+(x, y, z, t ). TA* combines a layered Directed Acyclic Graph (DAG) search with three engineering optimizations: cross-time obstacle distance caching against a Bounding Volume Hierarchy (BVH), per-layer beam pruning, and a configurable multi-ray visibility evaluator. TA* employs a beam-pruned heuristic search on this discrete graph to efficiently find high-quality tracking trajectories. While it trades strict theoretical optimality for practical scalability, our empirical results demonstrate robust, near-baseline visibility performance at a fraction of the com-putational cost. On a 1000-scenario stress test across eight CARLA Optimized maps, TA* converges on all scenarios and completes in 45 s using 32 workers; on a 248-scenario controlled comparison against an unoptimized priority-queue A* baseline (BinaryHeap implementation) under identical scenario inputs and a 5×10 6 expansion cap, TA* reduces mean planning time by 23.0 × and worst-case planning time by 11.8 ×, while raising convergence from 56.9% to 100%. On the n = 141 baseline-converged subset, TA* changes average visibility by only −0.15 
+
+percentage points (pp), with no scenario exceeding a 5 pp drop. We position TA* as a practical offline reference planner under these specific conditions, with limitations and failure cases discussed for environments such as Town07 dense vegetation. 
+
+Index Terms —Trajectory Planning, Target Tracking, Track A*, Search-Based Planning, Autonomous Vehicles, Unmanned Aerial Vehicles (UAVs), Embodied AI. 
+
+I. I NTRODUCTION 
+
+# ACTIVE target tracking is a fundamental capability for autonomous robots, enabling applications ranging from cinematography and surveillance to embodied AI and au-tonomous driving [1], [2]. The core challenge lies in gen-erating a trajectory for the tracking robot (the ”tracker”) that maintains continuous visibility of a moving target while avoiding obstacles and ensuring dynamic feasibility. While significant progress has been made in online, real-time local planning methods (e.g., Artificial Potential Fields [3], Model Predictive Control [4]), these approaches are sus-ceptible to local minima in complex, obstacle-dense environ-ments. When a target moves behind a large building or into a narrow corridor, local planners may fail to find a path that restores visibility. Consequently, there is an academic and practical need for offline search-based trajectory planning .Such planners serve two roles: (1) generating high-quality 
+
+Hanxuan Chen, Kangli Wang, and Ji Pei are with Autel Robotics (e-mail: 
+
+{chenhanxuan, wangkangli, peiji }@autelrobotics.com). Corresponding author: Ji Pei. 
+
+reference trajectories for multi-modal tracking datasets that can be used to train or evaluate learning-based embodied AI agents; and (2) providing a reproducible offline baseline against which online tracking algorithms can be evaluated. Traditional global planners, such as A* [5] and RRT* [6], are designed for static 2D or 3D spatial environments. Spatio-temporal search has been studied for autonomous driving and racing, where the goal is to navigate an ego vehicle around dynamic obstacles [7]–[9]. Target tracking, however, imposes a different objective: the planner must choose a tracker tra-jectory that remains time-synchronized with a moving target while preserving line-of-sight visibility. This requires search-ing a four-dimensional spatio-temporal space (x, y, z, t ) and redesigning the cost function around target position deviation, temporal smoothness, tracker kinematics, and continuous vis-ibility. Recent visibility-aware trackers, such as visPlanner [2], Eva-Tracker [10], and SVPTO [11], have proposed inno-vative solutions for maintaining target visibility. However, these methods are predominantly local optimization, MPC, or learning-based planners. They are effective for online aerial tracking but do not provide an offline global search baseline that can systematically reason over all tracker states across time. A* has also been used in UAV target tracking, but primarily as a spatial obstacle-avoidance component rather than a 4D visibility-aware search over target motion [12]. Recent surveys similarly identify optimization, sampling, and learning as the dominant paradigms, leaving search-based spatio-temporal tracking underexplored [13]. In this paper, we propose Track A* (TA*), an offline search-based trajectory planner for visibility-aware target tracking under a configurable, viewpoint-agnostic objective. TA* ad-dresses the gap between spatio-temporal A* methods for ego-navigation and visibility-aware local trackers by com-bining a 4D layered DAG search, a target-tracking-specific visibility objective, and practical offline optimizations. TA* employs a beam-pruned heuristic search on this discrete graph to efficiently find high-quality tracking trajectories; while it trades strict theoretical optimality for practical scalability, our empirical results demonstrate robust, near-baseline visibility performance at a fraction of the computational cost. Our large-scale evaluation focuses on aerial tracking at 22 m altitude, while the formulation itself is parameterized by altitude, cam-era distance, and viewpoint offsets and is therefore applicable to other tracker configurations not separately quantified in this work. Our main contributions are: 1) 4D Layered DAG Search for Tracking: We lift A*-
+
+> arXiv:2605.05338v1 [cs.RO] 6 May 2026 2
+
+style search from static 2D/3D pathfinding to a four-dimensional (x, y, z, t ) layered DAG search that explic-itly reasons about target motion and tracker timing, with a layer-local beam to bound work per layer. 2) Visibility-Aware Tracking Objective: We formulate a task-specific cost function that combines tracking deviation, obstacle safety, line-of-sight visibility from a 5-ray sampler, and a vertical smoothness term. 3) Offline Reference Trajectory Generation: We package the search and a beam-width default ( B = 2048 ) chosen for an empirical 5-pp worst-case visibility envelope on our 248-scenario subset, suitable for dataset construction and offline benchmarking. 4) Cross-Time Obstacle Distance Caching: We share static obstacle distances across the time dimension via a Bounding Volume Hierarchy (BVH) and evaluate TA* on 1000 CARLA tracking scenarios, including a Town07 dense-vegetation failure case. II. R ELATED WORK 
+
+A. Spatio-Temporal Search-Based Planning 
+
+Search-based methods, particularly A* [5] and its variants such as Theta* [14] and D* Lite [15], provide strong guaran-tees on discretized graphs. Recent work has extended graph search to spatio-temporal planning for autonomous vehicles. Xin et al. [7] construct a DAG-based spatio-temporal driving space for faster and smoother autonomous vehicle maneuvers, Rowold and Betz [8] use efficient spatiotemporal graph search for local racing trajectory planning, and Zhong et al. [9] combine search and optimization for autonomous driving. These methods demonstrate the value of time-indexed search, but their objective is ego-navigation and dynamic obstacle avoidance rather than maintaining visibility of a moving target. 
+
+B. Visibility-Aware Target Tracking 
+
+Visibility-aware trajectory planning is an active research area, especially for UAV tracking. visPlanner [2] formulates aerial tracking as a visibility-aware trajectory optimization problem using ESDFs, while Eva-Tracker [10] removes the ESDF dependency through ray-casting and MPC. SVPTO [11] further incorporates safe visibility-guided perception-aware optimization, and recent UAV-tracking surveys document a parallel line of learning-based occlusion-aware active trackers [13]. These approaches target online planning and perception-aware control, but they remain local or learning-based and therefore do not provide a search-based offline global baseline. 
+
+C. A* for Target Tracking and the Remaining Gap 
+
+A* has occasionally appeared in target tracking systems. For example, Cai et al. [12] use an improved A* algorithm for UAV path planning during target tracking, but the search is spatial and is coupled with a separate tracking controller; it does not search over time or optimize a visibility-aware tracking objective. Recent surveys of UAV target tracking identify optimization-based, sampling-based, and learning-based planners as the dominant families, without identifying Layered Beam Search            
+
+> Per-layer DAG expansion
+> Beam width W= 2048
+> || = 7 neighbors Inputs
+> Target P
+> Obstacles
+> 4D Voxel Grid
+> (x,y,z,t)
+> DAG nodes
+> Post-Smooth
+> Shortcut + elastic
+> Output
+> S= { s0,,sT}
+> BVH Distance Cache
+> Static SDF, shared
+> query
+> 5-Ray Visibility
+> LoS vs. target
+> query
+> Fig. 1. Overview of the TA* algorithm pipeline (§III); the discretisation, neighbour set, beam width, distance cache, and 5-ray visibility evaluator are described in the cited subsections.
+
+a 4D A*-based planner designed for active target tracking [13]. We are not aware of prior work that jointly addresses search-based 4D spatio-temporal planning, explicit line-of-sight visibility optimization, target-following objectives, and offline reference trajectory generation; Table I summarizes this gap on five comparison axes. Entries in the table reflect the dominant claim of each cited paper rather than its full feature set, and “–” marks an axis not addressed by that paper. TA* is designed to address this gap under the discrete-graph proximal-optimal objective defined in §III and to support dataset generation and benchmarking under a configurable viewpoint specification. Table I is a coarse taxonomy for situating TA* and is not intended as a complete feature audit of the cited works. III. T HE TRACK A* (TA*) A LGORITHM 
+
+A. Problem Formulation a) Inputs: The planner receives: (i) a discrete target tra-jectory P = {pt}Tt=0 ⊂ R3 sampled at uniform time step ∆t,(ii) a static obstacle set O represented as oriented bounding boxes and queried through a Bounding Volume Hierarchy (BVH), and (iii) an initial tracker position s0 ∈ R3. We use ∆t = 0 .5 s in all experiments (constant-speed pedestrian model at 1.4 m/s). The horizon T is set by the target trajectory length and corresponds to a 150–400 m walking path. 
+
+b) State and decision space: A tracker state at layer t
+
+is st = ( xt, y t, z t) in world coordinates. We do not include velocity in the state: any feasible motion uses voxel-aligned positions, so velocity is the derived quantity vt = (st −
+
+st−1)/∆t. The continuous space is discretized by a uniform voxel grid with horizontal resolution ∆xy = 4 m and vertical resolution ∆z = 4 m. Search is restricted to a corridor of width ±45 m around the target path, plus buffer space around obstacles whose footprint enters this corridor. 
+
+c) Feasibility constraints: A state st is feasible if 
+
+zmin ≤ zt ≤ zmax , (1) 
+
+dcam min ≤ ∥ st − pt∥ ≤ dcam max , (2) 
+
+dist( st, O) ≥ dsafe , (3) and an edge (st−1, s t) is admissible when ∥st − st−1∥ ≤ 
+
+vmax ∆t. We use dcam min = 3 m, dcam max = 50 m, dsafe = 1 .5 m, and vmax = 10 m/s. Edge collision is checked only at the endpoints; obstacle bounding boxes are inflated by dsafe prior 3 
+
+> TABLE I REPRESENTATIVE TRACKING AND SPATIO -TEMPORAL PLANNERS ON FIVE AXES RELEVANT TO TA*.
+
+Method Search-based 4D (x, y, z, t ) Visibility objective Target tracking Offline / global 
+
+visPlanner [2] – – yes (ESDF) yes local Eva-Tracker [10] – – yes (ray-cast) yes local SVPTO [11] – – yes (perception) yes local Cai et al. [12] yes (A*) no (3D) no yes spatial Xin et al. [7] yes (DAG) yes no no (ego-nav) global Rowold and Betz [8] yes yes no no (racing) global Zhong et al. [9] yes yes no no (driving) global TA* (ours) yes yes yes (5-ray LoS) yes offline 
+
+to BVH queries, which together with the voxel resolution provides an implicit swept-volume margin in our experimental setting. This endpoint-only check is a discrete approximation rather than a fully swept-volume collision test; we revisit this approximation in Sec. V. We treat visibility as a soft cost rather than a hard feasibility constraint; the optional hard threshold 
+
+Vt ≥ Vmin is disabled in all experiments ( Vmin = 0 ). 
+
+d) Output: TA* returns the tracker trajectory S⋆ =
+
+{s⋆t }Tt=0 that minimizes the cumulative cost defined in §III-B on the discrete graph induced by the voxel neighborhood, optionally followed by a post-smoothing pass that tightens the trajectory subject to the same feasibility constraints. 
+
+B. Cost Function 
+
+The transition cost from st−1 to st at target waypoint pt is the weighted sum of five terms: 
+
+C(st−1, s t) = wpath ∥st − st−1∥
+
++ wtrk 
+
+∥st − qt∥
+
+max( dbehind , 1) + wvis 
+
+ 1 − Vt
+
+
+
++ wsafe 
+
+h max  0, d I − dt
+
+
+
+dI
+
+i2
+
++ wsm |zt − zt−1|.
+
+(4) The five terms are: (i) Euclidean step length; (ii) deviation from the desired viewpoint qt = pt − dbehind ˆut + ( zref −
+
+pt,z ) ˆ ez , where ˆut is the unit target velocity (or a fixed forward direction when ∥vtgt  
+
+> t
+
+∥ ≈ 0) and zref is the preferred altitude; (iii) occlusion penalty, with Vt ∈ [0 , 1] defined in §III-C; (iv) a quadratic safety penalty that activates only when the obstacle distance dt = dist( st, O) falls below the influence distance 
+
+dI ; and (v) a vertical smoothness term that discourages rapid altitude changes. There is no explicit acceleration or jerk term in the production cost. Each term is normalized by a problem-specific quantity ( dbehind , dI , the unit voxel step) so that all contributions lie in [0 , O (1)] before weighting. The default weights in Table II were chosen on a 20-scenario development set (Town03 only) and held fixed across all eight maps and all four cohorts of §IV-A; we did not retune any weight per map. 
+
+C. Visibility Score 
+
+Visibility at layer t is the fraction of unobstructed line-of-sight rays from the tracker to a small set of target sample                                  
+
+> TABLE II DEFAULT COST WEIGHTS AND KEY PARAMETERS USED BY TA* IN ALL EXPERIMENTS .
+> Symbol Value Meaning
+> wpath 1.0 step length
+> wtrk 2.0 desired-viewpoint deviation
+> wvis 18.0 occlusion penalty
+> wsafe 8.0 quadratic obstacle penalty
+> wsm 0.15 vertical smoothness
+> ∆t0.5 s time step
+> ∆xy ,∆z4.0 m voxel resolution
+> dbehind 20 m desired tracker offset
+> zref 22 m preferred altitude
+> dI5 m influence distance
+> dsafe 1.5 m hard safety distance
+> dcam min , d cam max 3, 50 m camera range
+> vmax 10 m/s max tracker speed
+
+points: 
+
+Vt = 1
+
+|R| 
+
+X
+
+> o∈R
+
+⊮LoS  st, p t + o , (5) where LoS( ·, ·) is a single BVH ray-cast against O. The default ray-offset set R5, in metres, is 
+
+R5 = (0 , 0, 0) , (0 , 0, 0.8) , (0 , 0, −0.6) ,
+
+(0 .3, 0, 0) , (−0.3, 0, 0) , (6) which samples the target’s central body axis plus four offsets approximating a human-sized bounding region. We addition-ally support 1-ray and 3-ray subsets of R5 as fast proxies for ablation; the reported visibility in all comparison tables is always recomputed with the full 5-ray set on the final trajectory, so the metric definition is independent of the proxy used during search. The per-scenario score is the frame-wise mean ¯V = 1 
+
+> T+1
+
+P 
+
+> t
+
+Vt, and per-cohort numbers are means of 
+
+¯V over scenarios. All visibility deltas in this paper are reported in percentage points (pp), i.e., 100 · ( ¯VTA ∗ − ¯Vbase ).The phenomenon of frame-wise identical visibility between the baseline and TA* on many scenarios is a direct conse-quence of the voxel discretization: when two distinct search procedures pick the same 4×4×4 m voxel for layer t, the LoS geometry to the target sample points is bit-exact identical, so Vt matches to all digits. Sec. IV-D reports how often this happens. 4
+
+Algorithm 1 TA* layered DAG beam search (one scenario). 
+
+Require: Target {pt}Tt=0 , BVH O, init s0, beam B 
+
+> 1:
+
+g0(s0) ← 0; open 0 ← { s0} 
+
+> 2:
+
+Initialize per-voxel obstacle-distance cache ˆd[ · ] ← ⊥  
+
+> 3:
+
+for t = 1 , 2, . . . , T do  
+
+> 4:
+
+open t ← ∅  
+
+> 5:
+
+for u ∈ open t−1 do  
+
+> 6:
+
+for δ ∈ N do  
+
+> 7:
+
+v ← u + δ 
+
+> 8:
+
+if v violates Eq. (1) then  
+
+> 9:
+
+continue  
+
+> 10:
+
+end if  
+
+> 11:
+
+dv ← ˆd[v] if cached, else BVH query and write back  
+
+> 12:
+
+Vv ← ray-cast at (v, p t) using ray subset (Eq. 5)  
+
+> 13:
+
+gt(v) ← min  gt(v), g t−1(u) + C(u, v ) 
+
+> 14:
+
+record parent par t(v) ← u if updated  
+
+> 15:
+
+end for  
+
+> 16:
+
+end for  
+
+> 17:
+
+open t ← top-B states in open t by gt 
+
+> 18:
+
+end for  
+
+> 19:
+
+return backtrack from arg min v gT (v)
+
+D. Layered DAG Beam Search 
+
+Because t is strictly monotonic, the spatio-temporal search graph is a DAG indexed by layer. TA* exploits this structure with a layer-synchronous relaxation (Algorithm 1) instead of a global priority queue. Let N be the set of voxel-neighborhood offsets pre-filtered by ∥δ∥ ≤ vmax ∆t; in our setting this reduces a 27-cell 3D neighborhood to |N | = 7 (the six face neighbors plus the self-stay action). For each layer t we keep only the top-B candidates by accumulated cost g, with 
+
+B = 2048 in all production runs. 
+
+a) Complexity: The work per layer is bounded by O(B ·|N | ) neighbor expansions, each performing an O(1) voxel-grid lookup for ˆd in the typical case (cache hit) and one BVH LoS ray-cast per ray in R. The total work over the horizon is O(T · B · |N | ) which is independent of map size beyond the corridor extent. The cache reduces BVH distance queries from O(T · Nexp ) in the priority-queue baseline to O(Nexp ),where Nexp is the number of distinct spatial voxels touched. 
+
+b) Ranking and admissibility: Open-set ordering uses the layer-local accumulated cost g; we do not employ an admissible heuristic. The result is therefore a beam-pruned layered Dijkstra, and we do not claim the admissibility-based optimality of standard A*. The choice B = 2048 is the empirical default that keeps the worst-case per-scenario visibility drop within 5 pp on the 248-scenario controlled comparison (§IV-C); larger B approaches an unpruned layered Dijkstra at the cost of additional runtime, while smaller B
+
+trades visibility quality for additional speed (§IV-F). 
+
+E. Key Optimizations for Offline Generation a) Cross-time obstacle distance caching: Because O is static, the distance from a spatial voxel (x, y, z ) to its nearest obstacle is independent of t. The BinaryHeap baseline imple-mentation recomputes this distance for every (x, y, z, t ) node it expands. TA* maintains a layer-shared cache ˆd : Z3 → R≥0,populated lazily on first access. Section IV-F reports the runtime impact of disabling this cache. 
+
+b) Configurable visibility evaluator: The 5-ray check in Eq. (5) is the dominant per-edge cost. To isolate its contribution we expose 1- and 3-ray proxies as configuration options; §IV-F shows that the 5-ray default is needed to keep the worst-case per-scenario visibility drop within the 5-pp empirical envelope. IV. E XPERIMENTS AND RESULTS 
+
+A. Evaluation Cohorts 
+
+To avoid conflating different sources of evidence, we orga-nize the evaluation into four well-separated cohorts. All four use scenarios sampled from the same eight CARLA Optimized maps (Town01–Town07 and Town10HD) [16], with pedestrian targets at 1.4 m/s, ∆t = 0 .5 s, trajectory lengths between 150 and 400 m, and an aerial tracker initialised 20 m behind the target at 22 m altitude (Town07 is additionally evaluated at 40 m). Hardware and software details for the wall-clock numbers are given in the Reproducibility appendix.  
+
+> •
+
+C1 (1000 stress). 1000 scenarios = 8 maps × 125 trajectories. TA*-only batch run measuring scalability, runtime distribution, and convergence at scale; not used as direct evidence of visibility tracking success.  
+
+> •
+
+C2 (248 controlled comparison). 8 maps × 31 = 248 scenarios. Both the priority-queue A* baseline and TA* run on identical scenario JSONs, with a shared 5×10 6
+
+expansion cap, the same 5-ray visibility evaluator on outputs, the same ∆t and voxel resolution, and the same machine. We refer to this as a controlled implementation comparison : it isolates the impact of the algorithmic and engineering changes between the two specific implemen-tations and does not generalize to other A* implementa-tions or planners.  
+
+> •
+
+C3 ( n = 141 baseline-converged subset). The subset of C2 scenarios on which the baseline also converges. Visibility deltas are reported only on this subset; on the remaining 107 scenarios the baseline emits a 1-point fallback (cf. Eq. (7)) so visibility is undefined.  
+
+> •
+
+C4 (Town07 dense vegetation). 125 Town07 trajectories at 22 m and a separate 125 at 40 m, used as an environmental feasibility failure case (Sec. V). They are not aggregated into C1/C2/C3 visibility statistics. We define the priority-queue A* baseline (referred to as “baseline” below) as the original BinaryHeap implementation that shares the cost in Eq. (4) and the feasibility constraints in Eq. (1) with TA*, but does not use cross-time obstacle distance caching, beam pruning, or layered DAG expansion. We define the 1-point fallback as 
+
+Sbase = {s0} if expansions reach 5×10 6; (7) i.e., when the priority queue exhausts the expansion budget the baseline returns the start state alone, which is by construction collision-free but provides no tracking trajectory. 5T01 T02 T03 T04 T05 T06 T07 T10        
+
+> 0
+> 1000
+> 2000
+> 3000
+> 4000
+> 5000
+> Runtime (ms)
+> TA*-only stress test runtime (cohort C1)
+> Mean (ms)
+> P99 (ms)
+> T01 T02 T03 T04 T05 T06 T07 T10
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Average visibility
+> 0.00
+> Average visibility across 1000 scenarios
+
+Fig. 2. Per-map runtime and visibility distribution on cohort C1 (TA*-only stress test, 1000 scenarios). Town04 has the highest runtime; Town07 visibility is zero throughout, a property of the map’s vegetation layout rather than planner non-convergence (Sec. V). 
+
+B. Cohort C1: 1000-Scenario Stress Test 
+
+Table III summarizes the TA*-only stress test on C1: TA* converges on all 1000 scenarios in 45 s of 32-worker wall time, with a single-scenario mean runtime of 1214 .1 ms and a worst case of 5690 ms. The cross-map mean visibility of 
+
+0.8269 in this batch is dominated by Town07, where vegetation occlusion forces Vt = 0 on every trajectory; the Town07-excluded cross-map mean visibility is 0.945 , which is the number relevant to non-vegetation deployments. The per-map runtime and visibility distribution are shown in Fig. 2, and Town07 is analysed in detail in Sec. V. 
+
+TABLE III TA*-ONLY STRESS TEST ON COHORT C1 (1000 SCENARIOS ). 
+
+Metric Value 
+
+Scenarios 1000 Converged 1000/1000 32-worker wall time 45 s Mean / median runtime 1214.1 / 980.5 ms P99 / max runtime 4265 / 5690 ms Average visibility (all) 0.8269 Average visibility (excl. Town07) 0.945 Mean / max expanded nodes 7.4×10 5 / 3.0×10 6
+
+C. Cohort C2: Controlled Comparison Against the Priority-Queue A* Baseline 
+
+On cohort C2 (248 scenarios, both planners run with identi-cal inputs and a shared 5×10 6 expansion cap; cf. §IV-A), TA* reduces mean planning time from 28876 .3 ms to 1253 .6 ms (23.0 ×), reduces worst-case single-scenario runtime from 
+
+61 .8 s to 5.2 s (11.8 ×), and raises convergence from 141/248 to 248/248 (Table IV). All speed and convergence claims are relative to this specific baseline implementation under this expansion cap; the optimization ablation in §IV-F disentangles the contributions of the layered DAG structure, the cross-time distance cache, and the beam-width pruning. Per-map breakdown is in Table VI, and Fig. 3 visualizes the per-map runtime and convergence comparison. 
+
+D. Cohort C3: Visibility Preservation 
+
+Visibility comparisons are only meaningful on scenarios where both planners produce non-degenerate trajectories. We 
+
+TABLE IV COHORT C2 CONTROLLED COMPARISON AGGREGATES (248 SCENARIOS ). 
+
+Metric Baseline TA* Change 
+
+Mean runtime (ms) 28876.3 1253.6 23.0 ×
+
+Total runtime (s) 7161.3 310.9 23.0 ×
+
+Max runtime (ms) 61817 5237 11.8 ×
+
+Converged 141/248 248/248 +43 .1 pp 1-point fallback 107/248 0/248 –Mean / total / max runtimes are single-thread, single-scenario summed times; “32-worker wall” figures in the prose are wall-clock. The “+43 .1 pp” on the Converged row is a percentage-point change in convergence rate, not a runtime delta. T01 T02 T03 T04 T05 T06 T07 T10        
+
+> 0
+> 5
+> 10
+> 15
+> 20
+> 25
+> 30
+> 35
+> Mean speedup vs baseline (×)
+> 20.9×
+> 28.6×
+> 18.6×
+> 20.8×
+> 24.8×
+> 19.3×
+> 31.2×
+> 26.6×
+> Fair comparison speedup
+> Overall 23.0×
+> T01 T02 T03 T04 T05 T06 T07 T10
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> Convergence rate (\%)
+> Convergence on 248 scenarios
+> Baseline
+> TA*
+
+Fig. 3. Cohort C2 (248-scenario controlled comparison) per-map runtime and convergence. TA* removes the baseline’s convergence failures under the same expansion cap and never falls back to the 1-point output. 
+
+therefore restrict visibility-delta reporting to cohort C3 (the 
+
+n = 141 subset of C2 on which the baseline also converges); the remaining 107 cases are excluded because the baseline 1-point fallback yields no comparable trajectory. On C3, TA* changes average visibility from 0.9763 to 0.9748 (−0.15 pp), with a worst single-scenario drop of −4.32 pp and no scenario exceeding a 5 pp drop. The distribution in Fig. 5 shows 129/141 scenarios with frame-wise identical visibility (a direct consequence of the 4×4×4 m voxel discretisation, cf. §III-C), 4 scenarios losing less than 1 pp, 7 losing between 1 and 
+
+5 pp, and 1 improving over the baseline. We do not claim that visibility preservation extrapolates to the truncated 107 cases or to cohort C4. 
+
+TABLE V VISIBILITY PRESERVATION ON COHORT C3 ( n = 141 ). 
+
+Metric Value 
+
+Comparison subset 141 scenarios Baseline / TA* avg. visibility 0.9763 / 0.9748 Average visibility change −0.15 pp Worst single-scenario drop −4.32 pp Scenarios with >5 pp drop 0Frame-wise identical / better 129 / 1 
+
+E. Per-Map Breakdown of Cohort C2 
+
+Table VI reports the controlled comparison on cohort C2 by map. Town04 and Town07 are the most challenging for the baseline: it falls back to the 1-point output on 87% of Town04 scenarios and on all Town07 scenarios under the 
+
+5×10 6 expansion cap. TA* converges on every map. Town02 6
+
+TABLE VI COHORT C2 PER -MAP BREAKDOWN .
+
+Map Baseline fall-back Speedup Baseline runtime (ms) TA* runtime (ms) ∆Vis pp Worst pp 
+
+Town01 8/31 20.9 × 24740.6 1182.0 0.00 0.00 Town02 12/31 28.6 × 24020.7 840.4 −0.80 −4.32 
+
+Town03 5/31 18.6 × 20606.9 1105.5 −0.15 −2.71 
+
+Town04 27/31 20.8 × 44258.2 2127.3 −0.10 −0.41 
+
+Town05 9/31 24.8 × 32132.2 1296.5 0.00 0.00 Town06 6/31 19.3 × 29853.2 1546.5 0.00 0.00 Town07 31/31 31.2 × 27217.7 871.2 n/a n/a Town10HD 9/31 26.6 × 28180.7 1059.8 −0.08 −1.77 TA* tracker 
+
+> TA* tracker (occluded)
+> target (pedestrian)
+> target (pedestrian) (occluded)
+> target ground anchor
+> t=0.0s
+> t=57.0s
+> t=114.0s
+> t=171.0s
+> start
+
+Fig. 4. Top-down view of a single representative Town03 cohort-C2 run (path 7, 343 m, both planners converge). Background is the CARLA T OWN 03 O PT 
+
+bird’s-eye render at the same world frame as the overlay. Solid line segments are in direct view of the camera; dashed segments are flagged occluded by depth-tested obstacle bounding boxes. FOV cones are coloured green when the 5-ray visibility score is ≥ 0.6 and red otherwise. −5 −4 −3 −2 −1 0 1
+
+Visibility change vs. baseline (pp) 
+
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> 120
+> Scenarios
+
+Visibility preservation (n=141) 
+
+> -5 pp threshold
+
+Fig. 5. Visibility change on cohort C3 ( n = 141 ). The dashed reference line marks the 5 pp empirical envelope; no scenario crosses it. 
+
+produces the largest visibility drop among baseline-converged scenarios ( −4.32 pp); Town01, Town05, and Town06 are frame-wise identical on average. 
+
+F. Optimization Ablation 
+
+We additionally measured the contribution of the three engineering choices that distinguish TA* from the priority-queue baseline—the layered DAG structure, the cross-time obstacle distance cache, and the layer-local beam pruning— 0.0               
+
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Frame visibility  Vt (a)
+> TA* below baseline (10 frames)
+> TA* above baseline (0 frames)
+> baseline Vt
+> TA* Vt
+> 020 40 60 80 100 120
+> Time t(s)
+> 10
+> 5
+> 0
+> Running mean  V (pp)
+> (b)
+> running mean (pp)
+> empirical 5 pp envelope
+> final mean =4.07 pp
+
+Fig. 6. Frame-wise visibility on the worst-case scenario in cohort C3 (Town02 path 6, average ∆V = −4.07 pp in the present runs). (a) Per-frame baseline (red) and TA* (blue) visibility Vt; the remaining 226/236 frames are bit-exact identical (§III-C). (b) Running mean ∆V in pp: the loss is concentrated in a 10-frame window starting near t = 29 s where the baseline regains line of sight one frame earlier than TA*, and the curve relaxes back toward the empirical −5 pp envelope (grey dashed) by the end of the trajectory; the red dotted line marks the final mean. 
+
+by running five planner variants on the same 248-scenario cohort C2. Variants B0 and B4 reuse the numbers reported in Table IV; B1, B2, and B3 are dedicated builds run for this paper, summarised in Table VII. Hyperparameters, scenario JSONs, and the controlled cap of 5×10 6 expansions are identical across all five variants. Three observations stand out from Table VII: (i) Adding the per-voxel obstacle-distance cache to the BinaryHeap baseline (B1) saves roughly a quarter of the mean runtime but does not change the set of scenarios that fit within the cap, indicating that the priority-queue exhaustion is the dominant convergence failure rather than per-expansion cost. (ii) Switching to the layered DAG without beam pruning (B2) changes the work distribution from “go very deep on a few promising states” to “expand many states per layer”, which still hits the 5×10 6
+
+budget on every C2 scenario; only when the cap is raised to 
+
+10 8 does B2 reach 234 /248 . (iii) Beam pruning at B = 2048 
+
+both bounds the per-layer work to |N | · B = 14 336 neighbor expansions and aligns the search with the matched expansion budget, which is what unlocks 100% convergence; the cache then stacks on top to cut another ≈ 33% of mean runtime. We therefore attribute the headline 23 .0× mean speedup to the joint effect of the layered DAG structure, the beam-pruning bound, and the cross-time cache, rather than to any single change. 7(a) Priority-queue A* baseline 
+
+> target (pedestrian)
+> Start (S)
+> Goal (G)
+> 1-point fallback
+
+S
+
+G
+
+> 1-point fallback
+> (drone start)
+
+(b) TA* (full configuration) 
+
+> target (pedestrian)
+> Start (S)
+> Goal (G)
+> planner output
+
+S
+
+G
+
+Fig. 7. Single representative Town04 cohort-C2 run (path 0) under the matched 5×10 6 expansion cap; the target’s Start ( S) and Goal ( G) anchor both panels. (a) Priority-queue A* baseline: runtime 37 .6 s, single-thread; the planner exhausts the cap and returns the 1-point fallback (red × at the drone’s spawn location, near S). (b) TA*: runtime 2.89 s, single-thread, 638 m collision-free tracking path that follows the highway from S to G. Background: CARLA TOWN 04 O PT top-down render in the same world frame as the overlay. TABLE VII OPTIMIZATION ABLATION ON COHORT C2 (248 SCENARIOS , 32 WORKERS ). 
+
+ID Structure Cache Beam Mean (ms) Max (ms) Conv Speedup vs B0 
+
+B0 priority queue (BinaryHeap) no – 28876.3 61817 141/248 1.00 ×
+
+B1 priority queue (BinaryHeap) yes – 23103.1 49706 141/248 1.25 ×
+
+B2 ⋆ layered DAG yes ∞ 5870.7 16736 234/248 4.92 ×
+
+B3 layered DAG no 2048 1864.4 8338 248/248 15 .49 ×
+
+B4 layered DAG yes 2048 1253.6 5237 248/248 23 .03 ×
+
+> ⋆
+
+Run with the expansion cap raised to 10 8; under the matched 5×10 6 cap shared by the other rows, B2 returns 1-point fallbacks on every scenario because the no-beam layered DAG keeps too many states per layer. “Conv” counts converged scenarios; speedup is mean-runtime ratio relative to B0. 
+
+G. Ablation: Beam Width and Ray Count 
+
+A separate ablation varies the beam width and visibility-ray count to characterise the speed-quality trade-off on a 20-scenario benchmark. Table VIII reports representative settings. Aggressive configurations such as Rays=1, Beam=128 provide very high speedups but can incur large worst-case visibility losses. The default configuration, Rays=5 and Beam=2048, is selected because it keeps the worst-case visibility drop within the empirical 5 pp envelope on this benchmark while maintaining a 25 .9× speedup. 
+
+H. Trajectory Quality 
+
+Beyond runtime and visibility, we also report static trajectory-quality metrics that the convergence count alone does not expose: mean path length, mean minimum obstacle clearance over the trajectory, and the per-scenario rate at 
+
+TABLE VIII BEAM -WIDTH / RAY -COUNT ABLATION ON THE 20-SCENARIO SPEED -QUALITY BENCHMARK .
+
+Configuration Speedup Avg. Vis. Worst loss (pp) 
+
+Rays=1, Beam=128 381.0 × 0.9448 −22 .67 
+
+Rays=5, Beam=128 160.3 × 0.9581 −17 .00 
+
+Rays=3, Beam=1500 44.0 × 0.9738 −4.17 
+
+Rays=5, Beam=2048 25.9 × 0.9761 −4.42 
+
+which clearance stays above dsafe (the “collision-free rate”). Table IX reports these on cohort C2; the baseline column uses the n = 141 baseline-converged subset because the 1-point fallback degenerates every quality metric (zero path length, undefined clearance), while the TA* column uses all 248 
+
+converged scenarios. We compute the metrics by replaying each output trajectory against the same BVH used during 8B0     
+
+> heap
+> B1
+> heap+cache
+> B2
+> DAG+cache
+> B3
+> DAG+beam
+> B4
+> DAG+cache+beam
+> (TA*)
+> 10 4
+> Mean runtime (ms, log)
+> 1.00× 1.25×
+> 4.92×
+> 15.49×
+> 23.03×
+> Optimization ablation on cohort C2 (248 scenarios, 32 workers)
+> 0
+> 50
+> 100
+> 150
+> 200
+> 250
+> Converged scenarios (red dots)
+> 141/248 141/248
+> 234/248 248/248 248/248
+
+Fig. 8. Optimization ablation: per-variant mean runtime (log scale, blue bars) and convergence count (red dots) on cohort C2. The cross-time distance cache alone provides a modest 1.25 × speedup on top of the BinaryHeap baseline; switching to the layered DAG structure removes the priority-queue overhead but, without beam pruning, still requires a 20 × larger expansion budget to fit all scenarios; adding beam pruning is what enables the full 23 × improvement at 100% convergence under the matched 5×10 6 cap. 
+
+Fig. 9. Speed-quality trade-off from the beam-width / ray-count sweep. The default (R=5 , B =2048) point exchanges some speed for a bounded worst-case visibility drop. 
+
+search. 
+
+TABLE IX TRAJECTORY -QUALITY METRICS ON COHORT C2. 
+
+Metric Baseline ( n=141 ) TA* ( n=248 )
+
+Mean path length (m) 273.4 324.3 Mean min. clearance (m) 5.95 4.99 Worst min. clearance (m) 1.83 1.64 Collision-free rate 1.000 1.000 Mean ∥v∥max (m/s) 8.00 8.00 Mean ∥a∥max (m/s 2) 22.6 22.6 
+
+The two columns are not a matched pair: the baseline aggregates over the 
+
+n = 141 scenarios on which the priority-queue baseline converges, while TA* aggregates over all 248 converged scenarios. 
+
+The collision-free rate is 100% on both planners, confirming that the dsafe = 1.5 m hard constraint in Eq. (1) holds throughout. Mean minimum clearance drops from 5.95 mto 4.99 m and the single-trajectory worst case drops from 
+
+1.83 m to 1.64 m, but both stay clear of the safety margin even in the worst case. The mean path length on TA* is 
+
+≈ 18% higher than on the baseline-converged subset because TA* additionally covers the harder, longer trajectories that the baseline fails on; on the matched n = 141 subset the path-length difference is 0.5% (not shown). Acceleration peaks reflect the vmax ∆t = 5 m voxel-step granularity and would be reduced by the post-smoothing pass that is enabled by default in production but bypassed for the present trajectory-replay measurements. V. L IMITATIONS AND FAILURE CASES 
+
+A. Town07 Dense Vegetation: Environmental Feasibility 
+
+Cohort C4 (Town07-only) exposes the difference between planner convergence and environmental visibility. Across the 125 Town07 scenarios in cohort C1, TA* converges 125 /125 
+
+but the per-trajectory average visibility is exactly 0. A separate Town07-only validation with a hand-edited ROI mask confirms the same behavior at both 22 m and 40 m tracker altitudes (Table X): under the matched 5×10 6 expansion cap the baseline returns the 1-point fallback on 0/125 scenarios at either altitude, while TA* converges 125 /125 in roughly 14 sof 8-worker wall time at 22 m and 12 s at 40 m, but the resulting trajectories still have Vt = 0 everywhere. 
+
+TABLE X TOWN 07-ONLY VALIDATION (COHORT C4). 
+
+Metric 22 m 40 m
+
+Baseline converged 0/125 0/125 TA* converged 125/125 125/125 Baseline mean runtime (ms) 37402 36618 TA* mean runtime (ms) 823 681 Baseline wall time (s) 603 595 TA* wall time (s) 14 12 TA* avg. visibility 0.000 0.000 
+
+a) Why visibility is zero: Table XI reports the obsta-cle composition that the planner faces in cohort C4. Three classes—Fences, Poles, and Vegetation—account for 73 .9% 
+
+of all per-scenario obstacle records. Fences, GuardRails, and Terrain are short and rarely block the line of sight, but Poles (27 .3% ), Vegetation ( 14 .9% ) and Buildings ( 7.3% ) all have non-trivial fractions of objects whose top exceeds the 11 mline-of-sight midpoint between the 22 m drone and the 0 mtarget ( 38 .5% , 31 .2% , and 77 .8% respectively); aggregated over all classes, 20 .9% of obstacle records have tops above 
+
+11 m. Raising the tracker to 40 m moves the LoS midpoint to 
+
+20 m but does not significantly reduce the occluded fraction because Town07 also contains tall buildings (peaks above 
+
+28 m). We therefore treat Town07 as a sensor-and-environment failure case: TA* provides feasible, collision-free tracking-distance trajectories under the discrete planning objective, but the camera-distance and altitude configuration in our experiments does not permit target visibility on this particular map. The full obstacle composition that drives this failure (Fences, Poles, Vegetation, Buildings, and a residual “Other” class) is reported in Table XI in Appendix A. 
+
+B. Other Limitations a) Baseline scope: Our headline speed and convergence numbers compare TA* to a single priority-queue A* im-9
+
+plementation under one expansion cap and one set of hy-perparameters. Other published spatio-temporal A* solvers may adopt different expansion strategies, anytime variants, or admissible heuristics; the controlled comparison should be read as evidence that the specific TA* engineering changes are responsible for the observed gains, not as a benchmark against the broader A*-family. 
+
+b) Single-altitude evaluation: Cohorts C1–C3 fix the tracker altitude at 22 m. Other altitudes, ground-vehicle view-points, and indoor trackers are supported by the formulation in §III, but only Town07 has been validated at a second altitude; quantifying TA* on a wider viewpoint sweep is left to future work. 
+
+c) Approximate optimality: TA* is a beam-pruned lay-ered Dijkstra. It does not preserve standard A* admissibility, and the B = 2048 default visibility envelope is empirical rather than analytical. The 5 pp envelope on cohort C3 should not be extrapolated to the 107 baseline-truncated scenarios in C2 nor to cohort C4. 
+
+d) Approximate collision checking: The endpoint-only check defined in §III-A does not formally certify that the entire swept volume between two voxel-aligned waypoints is collision-free; it relies on the obstacle-bounding-box inflation by dsafe and the 4×4×4 m voxel resolution to provide a margin in practice. The 100% collision-free rate on cohort C2 (Table IX) confirms that this approximation is sufficient for our scenarios but is not a guarantee against pathological obstacle geometries. VI. C ONCLUSION 
+
+We presented Track A* (TA*), an offline search-based trajectory planner for active target tracking. By elevating the search to a 4D spatio-temporal layered DAG with cross-time obstacle distance caching and per-layer beam pruning, TA* produces low-cost, visibility-aware trajectories under a discretized cost. On a 1000-scenario stress test (cohort C1) TA* converges on every scenario and completes in 45 s of 32 -worker wall time. On a 248 -scenario controlled comparison against a single priority-queue A* baseline implementation (cohort C2), TA* improves mean runtime by 23 .0× and worst-case runtime by 11 .8×, while raising convergence from 
+
+56 .9% to 100% under the matched 5×10 6 expansion cap; the optimization ablation (Table VII) attributes this jointly to the layered DAG structure, the cross-time obstacle distance cache, and the beam-pruning bound. On the n = 141 baseline-converged subset (cohort C3) TA* preserves visibility closely with a −0.15 pp average change and no scenario exceeding a 5 pp drop. The Town07 cohort C4 highlights a sensor-and- environment failure mode in which TA* still produces feasible tracking-distance trajectories but vegetation, poles, and buildings prevent any line of sight to the target. Within these scope limits TA* is a practical offline reference planner for generating tracking trajectories and benchmarking online active-tracking methods. APPENDIX AREPRODUCIBILITY NOTES 
+
+A. Artifact availability 
+
+Due to company policy, we are unable to publicly release the internal source code, scenario-generation scripts, or machine-local experiment paths used for this study. To support tech-nical scrutiny and independent re-implementation, this paper reports the algorithmic formulation, hyperparameters, cohort definitions, map configuration, and every numerical aggregate needed to interpret the tables and figures. The simulator itself, CARLA 0.9.16, is open-source and publicly available [16]; the experiments use its standard Optimized maps as described below. The planner itself is simulator-agnostic and can be tested with other simulation backends or map collections by supplying equivalent target trajectories, obstacle geometry, and camera-visibility queries. 
+
+B. Computing environment 
+
+All wall-clock numbers in this paper come from a single Ubuntu 22.04.5 LTS x86 64 workstation with an Intel Core i9-14900KF CPU (32 hardware threads, up to 6.0 GHz), 64 GB of RAM, and an NVIDIA RTX 6000 Ada Generation GPU with 48 GB of VRAM. Runtime numbers are CPU-side planner wall-clock measurements; the GPU is used only for CARLA rendering and image capture, not for TA* search. The planner is implemented in Rust on rustc 1.78+ with an in-house BVH library for obstacle distance queries and line-of-sight ray-casting; the post-processing scripts that build figures and tables target Python 3.10+ with numpy .
+
+C. CARLA Optimized maps 
+
+The eight maps Town01–Town07 and Town10HD use the 
+
+Optimized variants shipped with CARLA 0.9.16 [16]. These are the official runtime-optimised meshes in which adjacent geometry is pre-merged and LoD chains are simplified for real-time rendering; the semantic content (buildings, vegetation, fences, poles) is unchanged from the non-Optimized maps, but the per-map polygon count is lower, which is what makes 32-worker BVH construction tractable. 
+
+D. Cohort definitions 
+
+Cohort C1 is the full 8 × 125 = 1000 -scenario stress test described in §IV-B. Cohort C2 is the 8 × 31 = 248 -scenario subset on which the priority-queue baseline and TA* are run with identical inputs and a shared 5×10 6 expansion cap. Cohort C3 is the n = 141 subset of C2 on which the baseline also converges; visibility deltas are reported only on this subset. Cohort C4 contains the 125 Town07 scenarios at 
+
+22 m and 125 at 40 m and is used as an environmental failure case in Sec. V. Scenarios are sampled with a fixed random seed to make all aggregates deterministic. 10 
+
+E. Visibility metric and exclusion rule 
+
+All visibility numbers in this paper are computed by re-playing the final trajectory through the 5-ray check defined by Eq. (5). The in-search 1- and 3-ray proxies, which appear only in Table VIII, are not used to compute any other reported visibility number. Per-scenario visibility is the frame-wise mean over all output waypoints. Visibility deltas are reported strictly on cohort C3, the n = 141 subset on which both planners return a non-fallback trajectory; the 107 baseline-truncated scenarios are excluded because the 1-point fallback yields no comparable trajectory and Town07 (cohort C4) is reported separately because its visibility is dominated by environmental occlusion rather than by the planner. 
+
+F. Baseline configuration 
+
+The priority-queue A* baseline shares the cost in Eq. (4) and the feasibility constraints in Eq. (1) with TA* but uses a BinaryHeap-backed open set, no cross-time obstacle distance cache, no beam pruning, the same |N | = 7 pre-filtered neighbour set, and the same expansion cap of 5×10 6. The 1-point fallback in Eq. (7) is the verbatim behaviour of that implementation when the cap is reached. 
+
+G. Town07 obstacle composition 
+
+Table XI reports the full per-class obstacle composition for cohort C4 referenced in §V-A. Three classes (Fences, Poles, Vegetation) account for 73 .9% of records; among classes that can plausibly occlude a 22 → 0 m line-of-sight ray, the fraction whose top altitude exceeds the 11 m midpoint is 77 .8% for Buildings, 38 .5% for Poles, and 31 .2% for Vegetation. 
+
+TABLE XI TOWN 07 OBSTACLE COMPOSITION (COHORT C4). 
+
+Class Records Share zmax >11 m 
+
+Fences 9163 31.7% 1.3 0.0% Poles 7899 27.3% 12.2 38.5% Vegetation 4307 14.9% 6.5 31.2% Buildings 2109 7.3% 20.6 77.8% Other † 5414 18.7% 1.3 0.0% 
+
+All 28892 100% 6.5 20.9% 
+
+> †
+
+Other = GuardRail + Terrain + TrafficSigns + Static + Bridge; “zmax” is the mean top altitude (m); “ >11 m” is the fraction whose top exceeds the line-of-sight midpoint of a 22 m-to-0 m ray. 
+
+REFERENCES [1] R. Bonatti, W. Wang, C. Ho, A. Ahuja, M. Gschwindt, E. Camci, E. Kayacan, S. Choudhury, and S. Scherer, “Towards a robust aerial cinematography platform: Localizing and tracking moving targets in unstructured environments,” in IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, 2019, pp. 229–236. [2] Q. Wang, Y. Chen, and F. Gao, “Visibility-aware trajectory optimization with application to aerial tracking,” in IEEE/RSJ International Confer-ence on Intelligent Robots and Systems (IROS) . IEEE, 2021, pp. 5549– 5556. [3] O. Khatib, “Real-time obstacle avoidance for manipulators and mobile robots,” The International Journal of Robotics Research , vol. 5, no. 1, pp. 90–98, 1986. [4] P. Falcone, F. Borrelli, J. Asgari, H. E. Tseng, and D. Hrovat, “Predictive active steering control for autonomous vehicle systems,” IEEE Trans-actions on Control Systems Technology , vol. 15, no. 3, pp. 566–580, 2007. [5] P. E. Hart, N. J. Nilsson, and B. Raphael, “A formal basis for the heuristic determination of minimum cost paths,” IEEE Transactions on Systems Science and Cybernetics , vol. 4, no. 2, pp. 100–107, 1968. [6] S. Karaman and E. Frazzoli, “Sampling-based algorithms for optimal motion planning,” The International Journal of Robotics Research ,vol. 30, no. 7, pp. 846–894, 2011. [7] L. Xin, P. Wang, C.-Y. Chan, J. Chen, S. E. Li, and B. Jiang, “Enable faster and smoother spatio-temporal trajectory planning for autonomous vehicles in constrained dynamic environment,” Proceedings of the Institution of Mechanical Engineers, Part D: Journal of Automobile Engineering , vol. 235, no. 10-11, pp. 2838–2853, 2021. [8] M. Rowold and J. Betz, “Efficient spatiotemporal graph search for local trajectory planning on oval race tracks,” Actuators , vol. 11, no. 11, p. 319, 2022. [9] L. Zhong, Z. Li, Z. Wang, Y. Zheng et al. , “Spatio-temporal trajectory planning using search and optimizing method for autonomous driving,” in SAE Technical Paper . SAE International, 2024. [10] L. Wang, H. Wei, T. Yang, Y. Tang, L. Yu, and X. Yang, “Eva-planner: Environmental adaptive quadrotor planning,” IEEE Transactions on Intelligent Vehicles , 2023, cited as “Eva-Tracker” in the related work section. [11] H. Wang, Y. Zhang, L. Han et al. , “Svpto: safe visibility-guided perception-aware trajectory optimization for aerial tracking,” IEEE Transactions on Industrial Informatics , 2023. [12] Y. Cai, Q. Xi, X. Xing, H. Gui, and Q. Liu, “Path planning for uav tracking target based on improved a-star algorithm,” in IEEE International Conference on Unmanned Systems (ICUS) . IEEE, 2019, pp. 1–5. [13] P. Wu, Y. Li, and D. Xue, “Uav target tracking: a survey,” Artificial Intelligence Review , vol. 58, no. 1, pp. 1–45, 2025. [14] A. Nash, K. Daniel, S. Koenig, and A. Felner, “Theta*: Any-angle path planning on grids,” in AAAI Conference on Artificial Intelligence , 2007, pp. 1177–1183. [15] S. Koenig and M. Likhachev, “D* lite,” in AAAI Conference on Artificial Intelligence , 2002. [16] A. Dosovitskiy, G. Ros, F. Codevilla, A. Lopez, and V. Koltun, “CARLA: An open urban driving simulator,” in Proceedings of the 1st Annual Conference on Robot Learning , 2017, pp. 1–16.
