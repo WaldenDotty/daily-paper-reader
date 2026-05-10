@@ -6,32 +6,32 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-05-09
-- 运行时间：2026-05-09 19:47:33 UTC
+- 最新运行日期：2026-05-10
+- 运行时间：2026-05-10 19:58:46 UTC
 - 运行状态：成功
 - 本次总论文数：3
 - 精读区：0
 - 速读区：3
 
 ### 今日简报（AI）
-今日聚焦卫星集群能效优化与多智能体跨模态导航，探索复杂动力系统的线性化与控制新径。
-重点推荐利用凸优化提升磁驱动卫星集群的能效与扩展性，以及强化学习在多智能体导航中的跨模态应用。
-建议关注航天工程与机器人控制的读者优先研读卫星集群的能效分析方案，以获取系统扩展性的关键见解。
-- 详情：[/202605/09/README](/202605/09/README)
+今日聚焦跨模态导航与高精度定位，探索复杂环境下的鲁棒运动规划方案。
+重点关注利用雷达与激光雷达跨模态复现导航，以及结合 3D Gaussian Splatting 提升视觉定位的无偏特征提取技术。
+建议关注 3DGS 在定位领域的最新应用，以及如何通过多传感器融合应对极端环境下的导航难题。
+- 详情：[/202605/10/README](/202605/10/README)
 
 ### 精读区论文标签
 - 本次无精读推荐。
 
 ### 速读区论文标签
-1. [Power-Efficiency and Scalability Analysis of Magnetically-Actuated Satellite Swarms via Convex Optimization](/202605/09/2605.06286v1-power-efficiency-and-scalability-analysis-of-magnetically-actuated-satellite-swarms-via-convex-optimization)  
-   标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：不稳定轨道动力学中的编队控制
-2. [Duplicate-Aware Shift-and-Lift Carleman Linearization:Structure, Complexity, and Comparative Evaluation](/202605/09/2605.05901v1-duplicate-aware-shift-and-lift-carleman-linearizationstructure-complexity-and-comparative-evaluation)  
+1. [LiDAR Teach, Radar Repeat: Robust Cross-Modal Navigation in Degenerate and Varying Environments](/202605/10/2605.02809v1-lidar-teach-radar-repeat-robust-cross-modal-navigation-in-degenerate-and-varying-environments)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：沿轨迹的高阶非线性Carleman线性化
-3. [Cross-Modal Navigation with Multi-Agent Reinforcement Learning](/202605/09/2605.06595v1-cross-modal-navigation-with-multi-agent-reinforcement-learning)  
+   evidence：多变环境下的鲁棒跨模态导航
+2. [Feasibility-aware Hybrid Control for Motion Planning under Signal Temporal Logics](/202605/10/2605.03662v1-feasibility-aware-hybrid-control-for-motion-planning-under-signal-temporal-logics)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：多模态导航与传感器协作框架
+   evidence：运动规划与控制屏障函数
+3. [ULF-Loc: Unbiased Landmark Feature for Robust Visual Localization with 3D Gaussian Splatting](/202605/10/2605.04730v1-ulf-loc-unbiased-landmark-feature-for-robust-visual-localization-with-3d-gaussian-splatting)  
+   标签：评分：6.0/10、query:cislunar-dyn-nav
+   evidence：自主导航的视觉定位
 
 
 <div class="dpr-home-promo-card">

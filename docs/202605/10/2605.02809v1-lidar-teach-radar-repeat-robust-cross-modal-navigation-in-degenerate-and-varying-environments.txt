@@ -1,0 +1,911 @@
+Title: LiDAR Teach, Radar Repeat: Robust Cross-Modal Navigation in Degenerate and Varying Environments
+
+URL Source: https://arxiv.org/pdf/2605.02809v1
+
+Published Time: Tue, 05 May 2026 02:28:40 GMT
+
+Number of Pages: 21
+
+Markdown Content:
+> IEEE TRANSACTIONS ON ROBOTICS. PREPRINT VERSION. ACCEPTED MAY, 2026 1
+
+# LiDAR Teach, Radar Repeat: Robust Cross-Modal Navigation in Degenerate and Varying Environments 
+
+Renxiang Xiao †, Yichen Chen †, Yuanfan Zhang, Qianyi Shao, Yushuai Chen, Yuxuan Han, Yunjiang Lou, Liang Hu ∗
+
+Abstract —Long-term autonomy requires robust navigation in environments subject to dynamic and static changes, as well as adverse weather conditions. Teach-and-Repeat (T &R) navigation offers a reliable and cost-effective solution by avoiding the need for consistent global mapping; however, existing T&Rsystems lack a systematic solution to tackle various environmental variations such as weather degradation, ephemeral dynamics, and structural changes. This work proposes LTR 2, the first cross-modal, cross-platform LiDAR-Teach-and-Radar-Repeat system that systematically addresses these challenges. LTR 2 leverages LiDAR during the teaching phase to capture precise structural information under normal conditions and utilizes 4D millimeter-wave radar during the repeating phase for robust operation under environmental degradations. To align sparse and noisy forward-looking 4D radar with dense and accurate omnidirec-tional 3D LiDAR data, we introduce a Cross-Modal Registration (CMR) network that jointly exploits Doppler-based motion priors and the physical laws governing LiDAR intensity and radar power density. Furthermore, we propose an adaptive fine-tuning strategy that incrementally updates the CMR network based on localization errors, enabling long-term adaptability to static environmental changes without ground-truth labels. We demonstrate that the proposed CMR network achieves state-of-the-art cross-modal registration performance on the open-access dataset. Then we validate LTR 2 across three robot platforms over a large-scale, long-term deployment (40+ km over 6 months), including challenging conditions such as nighttime smoke. Experimental results and ablation studies demonstrate centimeter-level accuracy and strong robustness against diverse environmental disturbances, significantly outperforming existing approaches. 
+
+Index Terms —Cross-modal Registration; Teach and Repeat; Navigation; 4D mmWave radar; LiDAR. 
+
+I. I NTRODUCTION 
+
+Long-term autonomy is a fundamental, yet challenging research topic that has attracted sustained interest within the robotics community [1]–[3]. Among various navigation paradigms, Teach-and-Repeat (T &R) has emerged as a promis-ing approach to long-term navigation that distinguishes it-self by removing the costly processing of constructing and maintaining metrically consistent maps. It operates in a two-phase framework: during the teaching phase, the robot records detailed environmental information along a piloted trajectory; in the repeating phase, it utilizes this recorded data to navigate the same path autonomously. Owing to its reliability and low 
+
+R. Xiao, Y. Chen, Q. Shao, Y. Chen, Y. Han, Y.Lou and L. Hu are with School of Intelligence Science and Engineering, Harbin Institute of Technology, Shenzhen, China. Y. Zhang is with School of Computer Science and Technology, Harbin Institute of Technology, Shenzhen, China. † Equal Contribution, ∗ For correspondence: l.hu@hit.edu.cn .
+
+(a) Repeat successfully through smoke, unseen in teach. 
+
+(b) A single T &R trajectory for 4.627 km on campus. Fig. 1: Demonstration trajectories of the LTR 2 system. 
+
+(a) The repeat trajectory is covered by an unexpected smoke, which was not seen during trajectory teaching. (b) A nav-igation demonstration with a color-coded error map visual-izing deviations between teach-and-repeat paths, achieving centimeter-level accuracy on average over multi-kilometer trajectories. cost, T &R has been widely adopted for navigation in diverse environments, including underground mines [4], underwater scenarios [5], forests [6], planetary terrains [7], [8] and large-scale areas where maintaining and updating a precise map is costly [9]. Despite its advantages, T&R faces key challenges dur-ing long-term deployment due to inevitable environmental changes. On one hand, the weather changes over time bring variations such as changes in lighting conditions, rain, snow, fog, or smoke. On the other hand, the environment may experience changes such as urban redevelopment or road con-struction, which we call static changes and assume to evolve  
+
+> arXiv:2605.02809v1 [cs.RO] 4 May 2026 2IEEE TRANSACTIONS ON ROBOTICS. PREPRINT VERSION. ACCEPTED MAY, 2026
+
+slowly (we exclude scenarios like robot kidnapping, where the robot operates in a completely different environment). These changes can significantly impact the feature matching between the teach and repeating phases, degrading navigation performance. Although some prior works have attempted to enhance the robustness of visual T &R [10]–[12] or LiDAR T&R [9], [13]–[15] against appearance changes due to lighting conditions and seasons, a systematic solution addressing all different environmental changes remains absent, constituting the primary focus of our research. Recently, millimeter-wave (mmWave) radar has shown ro-bust perception capabilities under adverse weather conditions, thanks to its ability to penetrate small particles and detect objects at long range, even beyond dynamic occlusions [16]– [21]. However, mmWave radars typically produce sparse point clouds with low spatial resolution and unstable feature ex-traction. To mitigate these issues, some pioneering works [22]–[28] have focused on aligning 3D mmWave radar (x, y, Doppler) with LiDAR in the BEV (Bird’s Eye View), leveraging complementary strengths from both modalities. Inspired by the idea of cross-modal alignment of mmWave radar with LiDAR, we propose a cross-modal LiDAR Teach Radar Repeat (LTR 2) solution that leverages cross-modal alignment to enhance its robustness to environmental changes during long-term navigation. Different from existing T &Rsystems, it employs different modalities rather than a single modality at the teach and repeating phases: the high-precision LiDAR to capture detailed structural features in normal con-ditions during the teaching phase, and the 4D mmWave radar (denoted as 4D radar for short thereafter) to ensure reliable navigation across various weather conditions and ephemeral scene changes during the repeating phase, as illustrated in Fig. 1. Such a heterogeneous sensing configuration at dif-ferent stages reflects a practical system design for long-term deployment. In many real-world scenarios, route teaching is carried out under normal conditions using well-instrumented platforms, whereas route repetition is performed continuously over extended periods. Under such a setting, using high-precision but relatively costly LiDAR during teaching, and lightweight, cost-effective radar during repetition, provides a realistic trade-off between sensing fidelity and operational robustness. This design is particularly relevant in environments such as industrial sites, underground facilities, or fire-affected areas, where visibility conditions may degrade due to dust, smoke, or dynamic disturbances. Nonetheless, aligning 4D radar with LiDAR presents addi-tional challenges: compared to 3D mmWave radar, 4D radar features sparser point clouds, smaller horizontal fields of view (FOV), and lower resolution. Thus, existing LiDAR-3D radar alignment methods are inapplicable to LiDAR-4D radar registration. To fill the gap, we introduce a novel data preprocessing and learning-based cross-modal registration procedure in which both the Doppler-based motion prior and the underlying physical principles governing LiDAR intensity and radar power density are exploited. Moreover, we propose an incremental learning based finetuning strategy that enables adaptive evaluation and updating of the Cross-Modal Regis-tration (CMR) network to maintain high performance under significant static environmental changes over time. Together, the integration of robust 4D radar sensing, reliable cross-modal registration, and adaptive fine-tuning strategies enables the LTR 2 system to maintain long-term, robust navigation in the presence of weather, ephemeral, and static changes. Our research contributions are summarized as follows: 1) We introduce a learning-based LiDAR-teach-4D radar-repeat system, achieving robust navigation in degenerate and changing environments, with the potential of large-scale deployment across diverse robotic platforms; 2) We propose a novel data preprocessing and CMR method that leverages not only geometric features but also the underlying physical laws of LiDAR point cloud intensity and radar power density, enabling effective end-to-end alignment between 4D radar and LiDAR; 3) We introduce an adaptive fine-tuning strategy that enhances CMR’s adaptability to static environmen-tal changes, using a localization-error-based metric for detection and an incremental learning-based self-supervised update mechanism; 4) We validated our proposed LTR 2 system through exten-sive outdoor experiments across three robot platforms, covering over 40+ km over 6 months, and including tests in challenging conditions such as smoky scenar-ios at night. Comparative analysis and ablation studies demonstrate the superiority of our proposed method. The remainder of this paper is organized as follows: Sec. II reviews the related work. Sec. III introduces the overall system workflow of LTR 2 and the details of its subsystems. Sec. IV analyzes the data alignment preprocessing and the proposed cross-modal localization network. Sec. V presents the experiment results and analysis. Finally, Sec. VI concludes the paper. II. R ELATED WORK 
+
+A. Teach-and-Repeat Navigation 
+
+T&R paradigms were initially proposed as an alternative to GPS-dependent navigation, enabling long-term autonomous operation without the need for explicit mapping [1], [29]. Early visual T &R methods predominantly relied on feature extraction and matching, where features were filtered and stored based on repeated experiences [7], [30]. Recently, deep neural networks have been incorporated into visual T &R to improve the system’s adaptiveness to changes in lighting or structure [31]–[33]. Nonetheless, it remains difficult to obtain reliable image matching in the extreme environments of poor lighting or low textures. On the other hand, LiDAR [6], [10], [14], [34] or LiDAR-vision fusion [9] T &R methods are robust to illumination changes, but they struggle under adverse weather due to perception degradation and significant structural changes due to their reliance on geometric features. Therefore, maintaining reliable navigation against evolving point clouds over long periods remains an open challenge. Very recently, Qiao et al. [4] has explored a radar-based T &Rsolution, but its effectiveness is limited by the lack of elevation information from the spinning radar. XIAO et al. : LIDAR TEACH, RADAR REPEAT: ROBUST CROSS-MODAL NAVIGATION IN DEGENERATE AND VARYING ENVIRONMENTS 3
+
+Despite advancements in camera-, LiDAR-, and radar-based T&R systems, enhancing their robustness and reliability across diverse environmental conditions remains a significant challenge. To date, there still lacks an effective solution to systematically tackle the wide range of environmental changes commonly encountered in long-term deployment. A promising direction is to harness the complementary merits of different sensing modalities thereby increasing robustness to weather variants and transient dynamics, while leveraging learning-based methods to fine-tune the system for gradual, static environmental changes. Motivated by it, we propose a cross-modal T &R system that aligns the 4D radar with LiDAR through a CMR network. 
+
+B. Radar on LiDAR Localization 
+
+The complementary characteristics of radar and LiDAR mo-tivate extensive research into cross-modal data alignment and localization [17]. Yin et al. [22]–[24] introduce deep learning-based methods to align heterogeneous sensors. Specifically, Yin [22] uses a generative adversarial network to denoise radar data and synthesize LiDAR-like representations, and Yin [23] employs a U-Net architecture to learn cross-modal shared feature embeddings under pose supervision. Building on these, the subsequent study [24] further trains the joint position recognition of radar and LiDAR data to achieve robust cross-modal pose tracking. Other methods such as Cen et al. [35] propose a noise-removal scheme and handcrafted descriptors for radar signals, while Ma et al. [25], [26] use polar coordinates and Cartesian projections to select the most suitable LiDAR frames for ICP-based alignment. In addition, Park et al. [27] introduce a corresponding matrix into the generalized likelihood ratio test framework to evaluate and optimize the radar-LiDAR shape matching, and Nayak et al. [28] propose pixel-wise alignment using encoders on BEV projections. Most existing methods focus on aligning geometric features derived from traditional 3D mmWave radar data to LiDAR, and cannot be directly applied to the forward-looking 4D radar due to their fundamental differences. As summarized in Tab. I, compared to the 3D radar and LiDAR, the 4D radar produces a much sparser point cloud with a narrower horizontal FOV and lower resolutions, posing substantial challenges to reliable feature matching across LiDAR and 4D radar modalities. 
+
+C. Navigation against Environmental Changes 
+
+Environmental changes are commonly encountered in long-term navigation, and four kinds of methods are proposed to mitigate their impact on navigation performance. First, experience-based frameworks [30], [37], [38] maintain mul-tiple historical observations rather than a unified global map, allowing systems to select relevant memories during operation adaptively. Second, another research direction models environ-mental dynamics to predict future or unobserved states. Wang et al. [39] propose a spatiotemporal map prediction framework that captures the temporal dynamics of obstacle occupancy. Similarly, Krajn´ ık et al. [40] introduce the frequency map TABLE I: Sensor Comparison.                                          
+
+> Sensor 4D Radar Spinning Radar LiDAR Type Oculii Eagle G7 Navtech RAS6 RoboSense Helios 32 Data Type x, y, z, Doppler, power x, y, power, Doppler ∗
+> x, y, z, intensity Range Resolution (m) 0.86 0.043 0.01 Azimuth Resolution (°) 0.5 0.9 0.1 Elevation Resolution (°) 1.0 /0.5 Detection Range (m) 400 330 150 Azimuth FOV (°) 120 360 360 Elevation FOV (°) 30 /70 Frequency (Hz) 14 410 Points per Second ≈4.16 ×10 3≈8×10 3≈6.0×10 4
+> /Indicates the absence of elevation data in spinning radar measurements.
+> ∗
+> Doppler velocity is not directly available for the RAS6 spinning radar but can be estimated from successive azimuth scans [36].
+
+enhancement model to describe periodic environmental vari-ations, while Neubert et al. [41] propose SP-ACP to learn seasonal appearance shifts by constructing a dictionary of visual words across different conditions. Third, lifelong map updating techniques [42]–[46] focus on continuously updating environmental representation to maintain the consistency and usability of point cloud maps over extended periods. Finally, lifelong localization aims to maintain accurate pose estimation under environmental variations. Rouˇ cek et al. [33] propose a self-supervised data selection framework to improve localiza-tion accuracy in visual teach-and-repeat, while Clark et al. [47] introduce continual network training and fine-tuning to implicitly embed visual variations into model update. Hausler et al. [48] and Radwan et al. [49] propose incremental updates and deep semantic embedding strategies to improve long-term localization robustness. Within the context of T &R paradigms, reliable localization is prioritized over maintaining full map consistency. However, the visual-based, lifelong localization is vulnerable to moving objects such as pedestrians and vehicles, especially in urban areas. In contrast, our method leverages the over-the-horizon perception of millimeter-wave radar, allowing it to perceive static structure behind dynamic objects and thus providing more stable perception under dynamic environments. III. LTR 2 SYSTEM 
+
+A. System Overview 
+
+As illustrated in Fig. 2, the LTR 2 navigation system consists of four key phases: pre-training, teaching, repeating, and fine-tuning. A CMR network plays the core role in connecting all four phases. This section focuses on the overall workflow and key phases of LTR 2 systems, while the network architecture and training details of CMR are deferred to the next Sec. IV. In the pre-training phase, the CMR network is trained using synchronized LiDAR and 4D radar data (with x, y, z, and Doppler information) collected in diverse environ-ments. In the subsequent teaching phase, LiDAR and 4D radar measurements are recorded along the teaching path. These measurements are processed by the pretrained CMR to iteratively extract reliable teach nodes based on cross-modal consistency. During the repeating phase, the robot searches the target node for each 4D radar frame. Then a pure-pursuit controller enables the robot to follow the target nodes 4 IEEE TRANSACTIONS ON ROBOTICS. PREPRINT VERSION. ACCEPTED MAY, 2026 
+
+Fig. 2: System overview of the LTR 2 pipeline. The system operates in four phases. In the pre-training phase, a Cross-Modal Registration (CMR) network is trained using synchronized LiDAR and 4D Radar frames. Then the trained CMR network is frozen and used in the teaching and repeating phases. In the teaching phase, the teach graph is constructed, whose nodes contain LiDAR-frame observations and edges store relative transformations. In the repeating phase, the live 4D radar frame is registered to LiDAR frames stored in the nodes of the teach graph via the CMR network, based on which the repeat graph is constructed with pose estimates stored in the edges to guide trajectory tracking. In the finetuning phase, the teach and repeat graphs are jointly evaluated to select candidate samples for updating the CMR network parameters. Snowflake and flame icons indicate frozen and training CMR network, respectively. accurately and smoothly. After each trajectory repetition, the cross-modal localization errors are evaluated along the route to detect potential static environmental changes, and the radar-LiDAR pairs collected over the regions with environmental changes are accumulated in the sample dataset. If the changes are significant enough to trigger fine-tuning, the CMR network will be incrementally updated using accumulated samples to maintain reliable localization over time. 
+
+B. Pre-training Phase 
+
+The CMR network is trained in this phase such that it can output the relative pose estimate of a 4D radar frame with respect to another LiDAR frame. The CMR network takes a LiDAR frame Ln, a radar frame Rm, and a prior of the relative pose T′nm as inputs, and output Tnm which corrects the coarse prediction T′nm as below: 
+
+Tnm = CMR( T′nm, Ln, Rm). (1) The CMR network is trained using the recorded LiDAR and 4D radar data when the robot is manually guided along designed paths. Each LiDAR frame is temporally paired with 
+
+N 4D radar frames using timestamp synchronization and known extrinsic calibration parameters. These paired samples are used to train the CMR network. To improve generalization, we add random perturbations in rotation and translation over the ego velocity of the 4D radar during CMR network training. Such data augmentation simulates varying sensor viewpoints and dynamic operating conditions, allowing the CMR network to learn robust feature associations between LiDAR and 4D radar data under real-world variations. Once trained, the CMR XIAO et al. : LIDAR TEACH, RADAR REPEAT: ROBUST CROSS-MODAL NAVIGATION IN DEGENERATE AND VARYING ENVIRONMENTS 5
+
+Algorithm 1 Two-Stage Node Selection                                                                                                                                
+
+> 1: Function NodeSelection () 2: // The First Stage: 3: Vt← ∅ // Node set Vt
+> 4: Vt← V t∪ { (t0,p0, L 0)}// Add start node 5: Vt← V t∪ { (tN−1,pN−1, L N−1)}// Add end node 6: while j < N −2do
+> 7: while i < N −2do
+> 8: loss ←CMR (T′, L i, R j)// By (1) 9: if loss > τ then
+> 10: Vt← V t∪ { (ti−1,pi−1, L i−1)}
+> 11: j←i−1
+> 12: break
+> 13: else
+> 14: i←i+ 1
+> 15: end if
+> 16: end while
+> 17: end while
+> 18: // The Second Stage: 19: for k= 1 to |V t| − 1do
+> 20: // Boundary nodes for Hermite interpolation: wk−1, w k
+> 21: wk−1= ( tk−1,pk−1), w k= ( tk,pk)
+> 22: // vi: expected velocity 23: sk[tk−1, t k]←CubicHermiteInterpolation (wk−1, w k, v i)
+> 24: εk←Eval (sk[tk−1, t k],TeachOdom [tk−1, t k]) // By (5) 25: GlobalError ←GlobalError +εk
+> 26: end for
+> 27: if GlobalError > ε then
+> 28: for k= 1 to |V t| − 1do
+> 29: if εk> ε seg then
+> 30: ck←CalculateCurvature () // By (6) 31: Vt← V t∪argmax (ck)
+> 32: end if
+> 33: end for
+> 34: end if
+> 35: Vt← { (pi, L i)|(ti, p i, L i)∈ V t}
+> 36: return Vt
+
+network is then deployed in the teaching and repeating phases and is further refined during the fine-tuning phases. 
+
+C. Teaching Phase 
+
+In the teaching phase, a teach graph is constructed to support robust trajectory repeat rather than global map optimization, since global consistency is not required for successful teach-and-repeat navigation [50]. The teach graph is defined as 
+
+G = ( Vt, Et), where each node vit ∈ V t stores its associated teach LiDAR frame Li, and each directed edge ei ∈ E
+
+connected from a teach node vi−1 
+
+> t
+
+to its successive node vit
+
+and stores the relative transformation Tii−1 from the LiDAR frame Li−1 to Li, which can be calculated using open-source LiDAR odometry algorithm such as LIO-SAM [51]. Given synchronized LiDAR and 4D radar streams collected during the teach path, nodes are incrementally selected to construct the teach graph via an iterative two-stage selection mechanism. In such a way, we aim to construct a teach graph that has a minimal number of nodes, but still provides reliable cross-modal registration for teach-and-repeat navigation. 
+
+Initial Node Selection: As described in lines 1-17 of Algorithm 1, sparse nodes are selected in the first stage based on the CMR quality. As shown in Fig. 3 (a), the nodes associated with the first and last LiDAR frames are firstly fixed as the start and end nodes. The CMR network is then used to register subsequent LiDAR frames to the first radar frame. Once a LiDAR frame and the first radar frame fail to register, the most recent LiDAR frame is added as a new node 
+
+v1. The radar frame closest to v1 is then selected as the new reference radar frame, which is used to select the next node 
+
+v2 by repeating the previous procedure. Iteratively, it yields the initial compact set of sparse teach nodes {v0, v 1, . . . , v k}
+
+together with the stored LiDAR frames at these nodes. 
+
+Iterative Node Addition: In the second stage, new nodes are added such that the trajectory error between the interpo-lated trajectory over nodes and the teach path is minimized. Given a sequence of initial node set Vt, where each node provides a timestamp and pose (ti, pi), that forms a strictly increasing sequence, a sliding-window cubic Hermite interpo-lation [52] is employed to generate a continuous trajectory s(t)
+
+between consecutive nodes, as illustrated in Fig. 3 (b). For each time interval [ti, t i+1 ], the interpolant is con-strained to match the node positions and their directional derivatives: 
+
+s(ti) = Pi, ˙s(ti) = vi di,
+
+s(ti+1 ) = Pi+1 , ˙s(ti+1 ) = vi di+1 . (2) where pi =
+
+Ri Pi
+
+0 1
+
+
+
+, Pi ∈ R3 is the position, and 
+
+Ri ∈ SO (3) is the rotation matrix of orientation, di is a unit direction vector extracted from Ri, and vi is a user-defined speed. It ensures that the interpolated curve remains continuous in position and orientation at each node. Given the interpolated trajectory, an error evaluation is then conducted. Both positional error epos (ti) and rotational errors 
+
+erot (ti) are calculated as below: 
+
+epos (ti) = ∥s(ti) − porig (ti)∥, (3) where e(ti) and porig (t) represent the position of the fitted interpolated trajectory and the teaching path at time ti. For orientation, let Rintp (ti) and Rorig (ti) be the orientation asso-ciated with the interpolated trajectory and the original teaching trajectory at ti, respectively. The orientation error is calculated in Lie algebra space as: 
+
+erot (ti) = ∥ log  Rintp (ti)⊤Rorig (ti)∨ ∥, (4) where log( ·) maps a rotation matrix to its corresponding skew-symmetric form in so (3) , and (·)∨ converts it to a rotation vector in R3.Finally, the total error is defined as: 
+
+E(ti) = wpos epos (ti) + wrot erot (ti), (5) where the weighting parameters wpos , w rot > 0 are chosen based on application priorities. When the interpolation error of a trajectory segment exceeds the predefined threshold, additional points are inserted with the largest curvature. The relative poses among LiDAR frames provided by LiDAR odometry are used to calculate the 3D curvature. Specifically, for every three consecutive frames, the 3D curvature ci at pi is calculated as below: 
+
+ci = (pi − pi−1) × (pi+1 − pi)
+
+∥pi − pi−1∥ ∥ pi+1 − pi∥ ∥ pi+1 − pi−1∥ , (6) where pi = ( xi, y i, z i) denotes position of the i-th LiDAR frame, and ∥ · ∥ denotes the Euclidean norm. 6 IEEE TRANSACTIONS ON ROBOTICS. PREPRINT VERSION. ACCEPTED MAY, 2026 
+
+(a) Initial node selection 
+
+(b) Iterative node addition Fig. 3: Iterative node selection. (a) Initial node selection based on successful cross-modal registration between radar and LiDAR frames and LiDAR co-collected in the teaching phase. (b) Iterative node addition, where successive cubic Hermite curves refine the trajectory and new nodes are inserted in regions requiring higher spatial fidelity. The magnified view indicates the need for high-fidelity path interpolation in the narrow scenario. The trajectory interpolation and error evaluation process repeat iteratively until the overall trajectory error meets a user-defined threshold, which is described in lines 19-36 of Algorithm 1. Once the nodes are determined, so are the edges, which means the teach graph is completed. 
+
+D. Repeating Phase 
+
+In the repeating phase, the robot searches for the target node from the teach graph and then repeats the teach path by tracking the target nodes. By repeating the path, a repeat graph is constructed incrementally to connect the target node to the repeat node associated with the radar frame. The repeat graph is defined as G = ( Vt, Vr , Er ), where each node vjr ∈ V r stores the radar frame Rj collected at the node, and each directed edge ej ∈ E connected from the repeat node vjr to its target node vit and stores the relative transformation Tij from the radar frame Rj to the LiDAR frame Li, which is calculated by CMR network. The target node selection is initialized via CMR-based place recognition, where the first 4D radar frame is registered against all teach nodes, and the teach node yielding the minimal transformation is selected as the first target node. Once the first target node is established, it proceeds to match each incoming 4D radar frame to the appropriate node in the teach graph. The entire target node searching process consists of two steps: (i) target node switch and (ii) cross-modal registration. 
+
+Target Node Switch: Given that the teach node vnt is selected as the target node for the repeat node vm+1  
+
+> r
+
+, the relative pose of the radar frame Rm+1 to the teach LiDAR frame Ln is obtained as Tnm+1 . If ∥Tnm+1 ∥ ≥ δ, then the incoming radar frame Rm+2 will be kept aligned to the same LiDAR frame Ln, where ∥ · ∥ denotes the norm of a matrix; Otherwise, it will switch to the LiDAR frame in the subsequent teach node vn+1  
+
+> t
+
+.As illustrated in Fig. 4, a target node switch is triggered when it goes from the repeat node vm+1  
+
+> r
+
+to a new node vm+2  
+
+> r
+
+.Before cross-modal registration happens, a coarse estimate 
+
+T′n+1  
+
+> m+2
+
+of the relative pose from the radar frame Rm+2 to the LiDAR frame Ln+1 is calculated as below: 
+
+T′n+1  
+
+> m+2
+
+= Tn+1  
+
+> n
+
+Tnm+1 (Dm+2 
+
+> m+1
+
+)−1. (7) where Tn+1  
+
+> n
+
+is the relative transformation stored in edges of the teach graph, and Dm+2  
+
+> m+1
+
+is the Doppler-based motion prior of the transformation between the radar frames Rm+1 and 
+
+Rm+2 , which is computed as detailed below. Based on a constant velocity model between the two con-secutive radar frames and the ego-velocity estimation method using Doppler information proposed in [53], we have: 
+
+vr =  HT H−1 HT vDoppler . (8) 
+
+Dm+2  
+
+> m+1
+
+= vr
+
+f , (9) where vDoppler is the Doppler velocity of each inlier point obtained via the RANSAC algorithm in the radar frame Rm+1 ,
+
+vr is the ego-velocity of the 4D radar sensor, f is the frequency of 4D radar, and H = ˆr⊤ 
+
+> 1
+
+ˆr⊤ 
+
+> 2
+
+· · · ˆr⊤
+
+> N
+
+⊤ is constructed by stacking the transposed normalized direction vectors ˆri of each radar point. Here, H captures the geometric relationship between the radar points’ positions and the sensor’s movement. If the node switch does not occur, a coarse relative pose estimate is obtained by directly augmenting the latest pose estimate with the Doppler-based motion prior. As illustrated in Fig. 4, the coarse relative pose estimate for radar frame Rm+3 
+
+to LiDAR frame Ln+1 is obtained by augmenting Tn+1  
+
+> m+2
+
+with the Doppler-based motion prior Dm+3 
+
+> m+2
+
+:
+
+T′n+1  
+
+> m+3
+
+= Tn+1 
+
+> m+2
+
+(Dm+3 
+
+> m+2
+
+)−1. (10) 
+
+Registration via CMR: Given the coarse relative pose estimate T′n+1  
+
+> m+2
+
+and the LiDAR frame Ln+1 and radar frame 
+
+Rm+2 , the relative pose between Ln+1 and Rm+2 is estimated using the CMR network: 
+
+Tn+1  
+
+> m+2
+
+= CMR 
+
+
+
+T′n+1 
+
+> m+2
+
+, L n+1 , R m+2 
+
+
+
+, (11) Following these steps, the CMR network outputs the fine relative pose estimate during the repeat phase. 
+
+Trajectory Tracking: After the target node is selected, an arc-based path that connects the robot’s pose to the target node is constructed. To simplify control design, we adopt the pure pursuit geometric guidance strategy [54], which maintains a fixed ratio between linear and angular velocities. XIAO et al. : LIDAR TEACH, RADAR REPEAT: ROBUST CROSS-MODAL NAVIGATION IN DEGENERATE AND VARYING ENVIRONMENTS 7
+
+Fig. 4: Target Node selection during the repeating phase. Green triangles represent radar frames during repeat. Blue triangles denote LiDAR-based nodes obtained during the teaching phase via LiDAR odometry. Target node change indicates a switch to the subsequent teach node for the latter radar frame. The black line denotes the fine estimate after CMR between the radar frame and the LiDAR frame in the target node, while the yellow line represents the coarse estimate before CMR. 
+
+Algorithm 2 Adaptive Incremental CMR Fine-Tuning                                                                                   
+
+> 1: //Evaluation and Sampling 2: for each radar frame Rin the repeating phase do
+> 3: Obtain LiDAR node L
+> 4: Trl←CMR( T′, L, R )// T′recorded by (7) and (10) 5: Trbase ←Tlbase Trl// Global transformation 6: ϵ←NearestNeighbour( Trbase ,TeachOdom)
+> 7: (μi, σ i)←SlidingWindowsStatistics()
+> 8: if aσ i−μi−b > 0then
+> 9: // a, b is empirically set from Fig. 5. 10: Initialize If t
+> 11: Ineg ,Ipos ←SampleSelection()
+> 12: If t ← I neg ∪ I pos
+> 13: end if
+> 14: end for
+> 15: // Self-supervised fine-tune 16: if max i∈I neg μi> τ μor P
+> i∈I neg ℓi> L min then
+> 17: for Li∈ I f t do
+> 18: for all Rmatch to Lido
+> 19: Ri
+> 1,Ri
+> 2←RandomSampling( R)
+> 20: Compute loss Lf t by (17) 21: Update CMR network parameters 22: end for
+> 23: end for
+> 24: end if
+
+Given the arc, a PD controller computes linear and angular velocities for trajectory tracking: 
+
+Arc = vi
+
+ω = ∥t∥
+
+2 sin( θ) , (12) where vi is the expected velocity, t = ( tx, t y , t z )⊤ is the translation vector extracted from the CMR output T nm, ∥t∥
+
+is its Euclidean norm, and θ = atan2( ty , t x) is the yaw-only bearing angle following the standard pure pursuit geometry. 
+
+E. Finetuning Phase 
+
+This subsection presents a strategy to adaptively fine-tune the CMR network in response to static environmental changes. We first reveal that static changes are separable from other kinds of ephemeral changes. Based on this insight, a fine-tuning strategy that consists of evaluation and sampling, and self-supervised fine-tuning is proposed. Once a trajectory repeat is completed, the trajectory is evaluated to select and store samples in a library. If the finetuning criterion is met, all 
+
+Fig. 5: Gaussian distribution of ATE under different environment changes. The black line is the linear decision boundary that isolates the error distribution due to static changes (red) from the other three clusters. Representative scene images for every class are shown on the right. the samples accumulated in the library are used to fine-tune the CMR network in a self-supervised manner. The overall procedure is summarized in Algorithm 2. 
+
+Separability of Environmental Changes: Experiments are conducted to analyze how different types of environmental changes impact the navigation performance of LTR 2 system. As shown in Fig. 5, different types of environmental changes induce different drift distributions. In particular, static environ-mental changes result in significantly higher average trajectory error (ATE) than ephemeral changes such as parked cars and pedestrians, suggesting their separability. This critical obser-vation underpins our finetuning strategy, which specifically targets static changes to increase the reliability of LTR 2 in long-term navigation. 
+
+Evaluation and Sampling: After each trajectory repeat, the local transformation T rl calculated by the CMR registration is transformed to the base coordinate system T rbase :
+
+Trbase = Tlbase Trl , (13) where Tlbase is the teach odometry in the base coordinate. Then, each radar is matched to its nearest neighboring node in the teaching trajectory, and the Euclidean distance is used 8 IEEE TRANSACTIONS ON ROBOTICS. PREPRINT VERSION. ACCEPTED MAY, 2026 
+
+Fig. 6: Positive and negative samples collected in sliding windows. Positive samples are segments where the repeat trajectory remains consistent with the teach trajectory, while negative samples correspond to windows exhibiting abnormal drift. The sliding-window evaluation partitions the trajectory into these two sample types for subsequent fine-tuning. as the drift metric. To identify segments exhibiting abnormal drift, a sliding window-based evaluation is performed. For each window, we compute the mean μi and standard deviation σi
+
+of localization drift. As illustrated in Fig. 6, negative samples are selected from windows that satisfy the following linear classifier criteria: 
+
+Ineg = {(L, R ) ∈ wi | aσ i − μi − b > 0} , (14) where R is the radar frame and L is the tracked LiDAR frame of R, a and b are the hyperparameters related to the boundary line, empirically set from Fig. 5. Overall, the resulting sample dataset Ift is updated by: 
+
+Ift = Ift ∪ I neg ∪ I pos , (15) where a proper ratio r between positive Ipos and negative samples Ineg is kept to prevent catastrophic forgetting of the scene in memory. 
+
+Fine-tuning decision rule: Fine-tuning of the CMR net-work is triggered only when static drift is sufficiently signifi-cant. Formally fine-tuning is performed if 
+
+max 
+
+> i∈I neg
+
+μi > τ μ or X
+
+> i∈I neg
+
+ℓi > L min ,
+
+where τμ is the threshold of maximum drift among negative samples and Lmin is the minimum total trajectory length affected by Ineg . The thresholds are set empirically to avoid unnecessary fine-tuning. 
+
+Self-supervised Finetuning: The CMR network update is trained in a self-supervised manner that enforces geometric and structural consistency across radar frames, eliminating the need for ground-truth annotations. From the sample dataset, we randomly sample radar frame pairs R1, R 2 that are asso-ciated with the same LiDAR reference frame. They are then transformed into the LiDAR coordinate system to establish geometric correspondence. A geometric consistency loss Lgeo is introduced to directly measure the Euclidean distance between corresponding points in the two projected radar frames, which is defined as: 
+
+Lgeo = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+T1 
+
+> i
+
+· r1 − T2 
+
+> i
+
+· r2 22 , (16) where r1 
+
+> i
+
+, r2 
+
+> i
+
+∈ R4 are a pair of corresponding radar points obtained by nearest-neighbor matching after projection into the LiDAR coordinate frame, expressed in homogeneous co-ordinates. T1 
+
+> i
+
+and T2 
+
+> i
+
+are the transformations of radar points to the LiDAR coordinate frame, and N is the total number of matched point pairs. The projected radar frames are further converted into pseudo-image representations to calculate the structural con-sistency loss LSSIM .Both geometric consistency and structural consistency are integrated into a unified loss function for incremental fine-tuning: 
+
+Lf t = λ · L SSIM + (1 − λ) · L geo , (17) where λ is a weighting coefficient balancing the structural and geometric terms. IV. E ND -TO -END CROSS -M ODAL LOCALIZATION 
+
+In this section, we present the framework of cross-modal registration between 4D radar and LiDAR from two perspec-tives: data preprocessing and CMR network design. 
+
+A. Data Preprocessing 
+
+In data preprocessing, we align the radar and LiDAR data and then transform them into a unified representation, facil-itating cross-modal registration. A mask is first constructed using the coarse estimate of relative pose by (7) to align the omnidirectional LiDAR FOV with the forward-looking 4D radar. Then we align the raw data in two dimensions: one in point cloud geometry, the other in normalized radar power density versus LiDAR intensity. Finally, the aligned data is transformed into the cylindrical projection in both dimensions. The entire process is depicted in Fig. 7. 
+
+LiDAR FOV Cropping: Given the coarse estimate of rela-tive pose by (7), we further enlarge the radar’s masking region to account for inaccuracies in the pose estimate. Specifically, we modestly broaden the radar’s FOV around the predicted pose and then project such an expanded area onto the raw LiDAR data, ensuring that sufficient LiDAR points remain available even if the coarse pose estimate deviates from the true pose. 
+
+Radar Intensity Alignment: In this subsection, we analyze the relationship between the power density of 4D radar and the reflected intensity of LiDAR, and then introduce a method to transform the radar power density to LiDAR intensity-like pseudo radar intensity. The received power density Pradar of a 4D radar is given by [55]: 
+
+Pradar = PtGtGr A2 cos 2 θ
+
+(4 π)2λ2d4η , (18) where Pt is the transmitted power, Gt and Gr are the gains of the transmitting and receiving antennas, respectively, d is the range between the radar and the target, and η represents the system loss factor, A is the effective amplitude of the target, connecting the target reflectance characteristics, θ is the observation angle, and λ is the wavelength of the signal. The intensity of LiDAR point cloud is modelled by [56]: 
+
+PLiDAR = PtAr ρ(θ)
+
+d2 e−2αd , (19) XIAO et al. : LIDAR TEACH, RADAR REPEAT: ROBUST CROSS-MODAL NAVIGATION IN DEGENERATE AND VARYING ENVIRONMENTS 9
+
+(a) Visualization of Intensity Aligned Radar in Cylindrical Projection 
+
+(b) Visualization of FOV Cropped LiDAR in Cylindrical Projection Fig. 7: Data preprocessing for 4D radar and LiDAR. (a) Raw radar with power is aligned with the intensity of LiDAR and followed by two separate cylindrical projections in the intensity and geometry. (b) Raw LiDAR is cropped using the 4D radar FOV mask and then transformed into the cylindrical projection. 
+
+Fig. 8: Cumulative distribution heatmaps of intensity ver-sus distance for the original radar (left), the pseudo radar aligned to LiDAR intensity via (22) (middle), and the LiDAR signals (right). With the intensity alignment, the discrepancy in intensity distributions between pseudo radar and LiDAR is significantly less than that between the original radar and LiDAR. where PLiDAR is the received power density, Pt is the trans-mitted power, Ar is the effective aperture area of the receiving antenna which is directly related to the physical diameter of the receiving antenna, ρ(θ) is the target’s reflection coefficient dependent on the angle θ, d is the distance between the LiDAR and the target, and e−2αR accounts for atmospheric attenuation with α as the attenuation coefficient. For an ideal diffuse reflection surface (Lambertian body), the reflectivity is mod-eled as ρ(θ) = ρ0 cos θ, where ρ0 is the maximum reflection coefficient at normal incidence, and cos θ captures the angular dependence, representing the attenuation of reflection with the incident angle. Noting that all the parameters in (18) and (19) can be categorized to two classes: ones related to spatial locations such as d, and θ and the others not, We are inspired to reformulate (18) and (19) as below: 
+
+Pradar = K′ A2 cos 2 θd4 , (20) where the constant scalar K′ = PtGtGr 
+
+> (4 π)2λ2η
+
+.
+
+PLiDAR = K′′ ρ0 cos θd2 e−2αd , (21) where the constant scalar constant K′′ = PtAr .Then we construct a pseudo radar intensity as below: 
+
+˜Pradar = pPradar · e−2αd = √K′ A cos θd2 e−2αd , (22) where we employ an empirical atmospheric attenuation coef-ficient α = 0 .03 km −1, representative of clear-air conditions under which the teaching phase happens. It is straightforward from (21) and (22) that 
+
+˜Pradar 
+
+PLiDAR 
+
+=
+
+√K′AK′′ ρ0
+
+. (23) Given the same working scenarios of LiDAR and radar sensors, the ratio ˜Pradar  
+
+> PLiDAR
+
+is only related to object materials but independent of the locations of objects, implying similar intensity distribution over space between the pseudo radar and LiDAR, which is experimentally validated in Fig. 8. 
+
+Cylindrical Projection: After LiDAR FOV cropping and pseudo radar generated by intensity alignment, both data are normalized separately and transformed into cylindrical pro-jections to represent their respective geometric and intensity distributions, as illustrated in Fig. 7. The cylindrical projection maps 3D point clouds onto a 2D pseudo-image by leveraging the spherical characteristics of LiDAR sensors. Each 3D point with coordinates (x, y, z ) is transformed into a 2D pixel position (u, v ) using the following equations: 
+
+u = arctan 2( y, x )/∆θ, v = arcsin z
+
+px2 + y2 + z2
+
+!
+
+/∆ϕ, (24) 10 IEEE TRANSACTIONS ON ROBOTICS. PREPRINT VERSION. ACCEPTED MAY, 2026 Data  
+
+> Pre -
+> process
+> Doppler -based Coarse Estimate
+> Feature
+> Extraction
+> ×3
+> LiDAR
+> Geometry Image
+> Radar
+> Geometry Image
+> LiDAR
+> Intensity Image
+> Radar
+> Intensity Image
+> Feature
+> Extraction
+> Feature
+> Extraction
+> Feature
+> Extraction
+> Doppler Guided
+> Association
+> Doppler Guided
+> Association
+> Progressive
+> Optimization
+> Progressive
+> Optimization
+> Pose
+> Fusion
+> LiDAR Point Cloud
+> Radar Point Cloud
+> Alignment Result
+> q0,t0
+> q0
+> ×3
+> Doppler -based Coarse Estimate
+
+(a) CMR network architecture. Radar 
+
+> LiDAR
+> Spatial Alignment
+> Region Feature Alignment
+> Coarse Estimate
+> KNN Searching KNN Searching
+
+(b) Doppler guided association block. Radar Features 
+
+> LiDAR Features
+> H
+> W
+> C
+> Cross Patch
+> Attention
+> Cross Patch
+> Attention
+> Inner Patch
+> Registration
+> Inner Patch
+> Registration
+> tn+1
+> tn+1
+
+c  
+
+> Flatten
+> Align
+> (qn,tn)
+> qn+1
+> qn+1
+
+(c) Progressive optimization block. Fig. 9: Overall structure of the CMR network. Preprocessed geometry and intensity images are fed into separate branches, and features are extracted by a Swin Transformer. The Doppler-guided association module exploits the coarse estimate to generate cross-modal correspondences. Then the cross-modal attention and progressive optimization refine alignment, and the final registration is achieved through the pose fusion block. where ∆θ and ∆ϕ are the horizontal and vertical resolutions of the LiDAR sensor, respectively. The resulting 2D pseudo-image has dimensions H × W × 3. For geometry projection, each pixel is filled with the corresponding raw 3D coordinates 
+
+(x, y, z ), while for intensity projection, each pixel fills a single channel with the normalized intensity. 
+
+B. LiDAR-Radar Registration Network 
+
+The CMR network aligns the preprocessed LiDAR and radar images through a pipeline of feature extraction, Doppler guided association, and progressive optimization, as shown in Fig. 9 (a). The geometry and intensity feature extraction are con-ducted in two parallel branches, each employing Point Swin Transformer [57] to capture modality-specific representations. Although both branches share comparable network architec-tures, the intensity branch focuses exclusively on intensity distributions and excludes geometric cues, thus consistently reinforcing rotational alignment. For clarity, the following discussion details the geometry branch. 
+
+Geometry-Intensity Swin Transformer: We employ aSwin Transformer, which has a complexity that scales linearly with image size, to extract features from geometric and in-tensity images. In each transformer block, the Window-Based Multi-Head Self-Attention (W-MSA) divides the image into several equally sized windows and computes attention within each window; the Shifted Window-Based Multi-Head Self-Attention (SW-MSA) introduces cross-window connections by shifting the window partitions of W-MSA. The feature extraction block can be represented as: 
+
+ˆf l = W-MSA  LN  f l−1 + f l−1,f l = MLP 
+
+
+
+LN 
+
+ ˆf l 
+
++ ˆf l,
+
+ˆf l+1 = SW-MSA  LN  f l + f l,f l+1 = MLP 
+
+
+
+LN 
+
+ ˆf l+1  
+
++ ˆf l+1 ,
+
+(25) where f l−1 and f l+1 denote the input and output features of the l-th block, LN denotes the Layer Normalization, and MLP denotes the Multi-Layer Perceptron. The computation process of attention follows the traditional approach with positional encoding: 
+
+Attn (Q, K, V ) = sof tmax ( QK T
+
+√Dk
+
++ B)V, (26) where Q, K, V are derived from the input feature map f
+
+through linear mapping, Dk represents the dimensionality of 
+
+K, and B is the relative position bias. We apply a mask m
+
+to identify the blank regions in the images so that they are excluded during the attention computation: 
+
+m =
+
+(
+
+0, where points exist 
+
+−∞ , where is blank . (27) XIAO et al. : LIDAR TEACH, RADAR REPEAT: ROBUST CROSS-MODAL NAVIGATION IN DEGENERATE AND VARYING ENVIRONMENTS 11 
+
+Since the geometric and intensity images are generated by projecting each point (xi, y i, z i) onto a defined pixel coordinate (ui, v i), each valid pixel in the feature map cor-responds uniquely to a point. We construct the pixel channel of the feature extraction module output F by concatenating the corresponding point coordinate with the feature map: 
+
+F(ui, v i) = xi, y i, z i
+
+ ⊕ f (ui, v i). (28) For notational convenience, we define fi = f (ui, v i) to represent the feature belonging to point i.
+
+Doppler Guided Association: As illustrated in Fig. 9 (b), we introduce the Doppler guided association block to quickly converge the registration result. Because the pixel channel retain the original 3D coordinates, the coarse pose estimate in (7) can be directly applied to transform these coordinates, yielding an initial alignment between the radar and LiDAR projections. With this initial alignment, a nearest neighbor search is performed in the pixel coordinate system, which constrains the search space to a fixed region rather than the entire area of the image. This locality constraint greatly accelerates feature association. Specifically, given the radar point cloud coordinates {ri}ni=1 
+
+and the corresponding features {f radar i }ni=1 , the LiDAR point cloud coordinates {lj }mj=1 and the corresponding features 
+
+{f lidar j }mj=1 , we calculate the attention of ri and the k nearest points {l1, l 2, ...l k} within a certain range:                    
+
+> ˆfradar i=Attn (fradar iMQ,{flidar }kMK,{flidar }kMV),(29)
+
+where {f lidar }k are features of {l1, l 2, ...l k}, M Q, M K , M V
+
+are weight matrices. Afterward, we repeat this process by making the LiDAR point clouds the query vector. The ob-tained features are concatenated with coordinates to get {ri ⊕
+
+ˆf radar i }ni=1 , {lj ⊕ ˆf lidar j }mj=1 . Then, a pose estimate (q0, t0)
+
+of point cloud registration is calculated in the same way as in [58], where q0 and t0 are the rotation quaternion and the translation vector, respectively. 
+
+Progressive Optimization: We progressively optimize the pose estimate (q0, t0) with features of different resolutions extracted by the encoder, as illustrated in Fig. 9 (c). The feature maps are divided into patches. Next the PWC structure [59] is used to estimate local transformations within each patch, and a cross-patch attention is obtained as well. Subsequently, the local patch registration and global cross-patch attentions are concatenated and processed through MLP and average pooling to obtain residual rotation ∆q in quaternion and the translation vector ∆t for refinement. These residuals are added to the estimated pose incrementally to yield improved outcomes: 
+
+ql = ∆ qlql+1 ,
+
+[0 , tl] = ∆ ql[0 , tl+1 ](∆ ql)−1 + [0 , ∆tl]. (30) where ql and ˆql+1 represent the input and output rotation vector of the l-th block, tl and ˆtl+1 represent the input and output translation vector of the l-th block. 
+
+Loss Function: Due to the differences in magnitude and units between the quaternion and the translation vector, we decouple the translation and rotation components in the loss 
+
+Fig. 10: The experimental platform. 
+
+function and introduce two learnable parameters sq and st. For each layer, the training loss function is expressed as follows: 
+
+L = || ˆq
+
+|| ˆq|| −q||· exp (−sq )+ sq +|| ˆt−t||· exp (−st)+ st, (31) where q and ˆq represent the ground truth and estimated rotation vector, t and ˆt are the ground truth and estimated translation vector. Our network provides registration results at four different scales of resolution, and the total loss function is calculated using multi-level supervision: 
+
+L = Σ 4
+
+> l=1
+
+λlLl, (32) where λl denotes the weight parameter in the l-th scale of resolution. V. E XPERIMENT ANALYSIS 
+
+In this section, we comprehensively assess the performance of our proposed CMR network and LTR 2 system. We begin with the experiment setup, including experiment procedures, implementation platforms and evaluation metrics. Then, we analyze the localization accuracy of the CMR network against various state-of-the-art methods. Next, we evaluate navigation performance in extensive closed-loop real-world scenarios, considering accuracy, success rates and storage requirements. Finally, we assess system robustness when trajectory repeats are subject to static environment changes, smoke, or imple-mented on different platforms. 
+
+A. Experiment Setup 
+
+Experimental Procedure: To ensure fair performance comparison across different baselines, all repeat paths start from the same initial pose in the teaching phase during the quantitative experiments. In Sec. V-B, we conduct open-loop experiments on the open-sourced VoD datasets [60] to assess the cross-modal registration performance. where the estimate error of the relative pose between each LiDAR–radar pair is assessed independently without executing the full navigation 12 IEEE TRANSACTIONS ON ROBOTICS. PREPRINT VERSION. ACCEPTED MAY, 2026 
+
+TABLE II: Parameters of the LTR 2 system                                           
+
+> Parameter Description Value
+> θmask Azimuth Range for LiDAR Mask prior 135 ◦
+> viExpect velocity αweight 1.2 m s −1
+> wrot Rotation fitting weight 1.15 m rad −1
+> wpos Position fitting weight 1
+> αEmpirical atmospheric attenuation coefficient 0.03 km −1
+> δThreshold for switching nodes 0.12 m
+> τNegative sample screening threshold 0.25 m
+> εseg Threshold of segmental trajectory 0.04 m
+> εThreshold of global trajectory 0.16 m
+> MMinimum sample size for RANSAC 3
+> pRANSAC confidence level 0.99
+> ηExpected inlier ratio for RANSAC 0.7
+> Niter Maximum RANSAC iterations 120
+> γdoppler Doppler residual inlier threshold 0.10 m s −1
+> aSlope of linear classifier in (14) 0.3
+> bIntercept of linear classifier in (14) 0.245
+> raThe ratio between positive and negative samples 3
+> τμThe maximum drift 0.25 m
+> Lmin The minimum total drift in trajectory 400 m
+
+pipeline. In Sec. V-C, we conduct extensive closed-loop nav-igation experiments in the real world to assess the naviga-tion performance, measuring the trajectory error between the teach path and the repeat path during real-world navigation. V-D compares our iterative node selection approach with the traditional threshold-based ones used in T &R. Sec.V-E explores the robustness of our navigation system in smoke-filled areas. Sect. V-F investigates the effects of our finetuning strategy against static environment changes. Finally Sect. V-G highlights the cross-platform generality of our method using different robot platforms during the teaching and repeating phases. 
+
+Platform: Our LTR 2 navigation system is deployed on an AgileX SCOUT 2.0 robot platform (see Fig. 10), which features differential four-wheel steering for agile mobility. It utilizes ROS-based master-slave communication, with an Intel NUC running ROS Melodic (Ubuntu 18 .04 ) as the master and a laptop equipped with an NVIDIA GeForce RTX 4060 GPU (CUDA 11 .4), an Intel Core i9-13900H processor, and 16 GB 
+
+of RAM, running ROS Noetic (Ubuntu 20 .04 ) as the slave. The robot platform is equipped with a RoboSense RS-Helios 32-channel LiDAR operating at a sampling rate of 10 Hz , an OCULII-EAGLE 4D radar with a sampling rate of 14 Hz and a 113 ◦ horizontal × 45 ◦ vertical FOV, and a Bynav X1 GNSS. We collected paired LiDAR-4D radar data using the robot platform on the university campus, which is used for train-ing the CMR network during the pre-training phase. During teaching, the robot platform is manually controlled to travel a path with both LiDAR and 4D radar collected along the path. During the repeating phase, real-time data is collected from the 4D radar only. 
+
+Implementation Details: The projected pseudo images are generated with a resolution of 64 ◦ × 768 ◦ for VoD dataset and 
+
+32 ◦ × 675 ◦ for our self-collected dataset, matching the LiDAR angular resolutions. The window size and shift size for feature extraction are set to 4 and 2, respectively. All experiments are performed using PyTorch 2.0.1 on four NVIDIA A6000 GPUs, optimized using the Adam algorithm with momentum parameters β1 = 0 .9 and β2 = 0 .999 . The initial learning rate is set to 0.002 and exponentially decays every 350 000 steps down to a minimum of 0.000 01 . The batch size is fixed to 16 .In the loss function, the layer-wise weighting coefficients αl
+
+are set to 1.6, 0.8, 0.4, and 0.2 for the four hierarchical stages. The learnable scaling parameters kt and kr are initialized as 
+
+0.0 and −2.5, respectively. In the fine-tuning stage, we train 30 epochs on the constructed fine-tuning dataset with the learning rate of 0.0001 . Throughout all experiments, all parameters of the LTR 2 system except the network weights are kept the same, as detailed in Tab. II. All experiment results are averaged over three random runs to ensure statistical robustness. 
+
+Evaluation Metrics: We use the Relative Translation Error (RTE), the Relative Yaw Error (RYE), and their stan-dard deviations (STDs) to evaluate single-frame registration performance in open-loop experiments. For closed-loop nav-igation, we employ the Absolute Translation Error (ATE) and the Yaw Angle Error (YAE), together with their STDs, to quantify global localization accuracy and assess stability across repeated trials. Both the teach and repeat trajectories for evaluation are estimated using LiDAR odometry LIO-SAM with GNSS factor incorporated [51]. The odometries are recorded in the same global coordinate with the aid of GNSS, and then aligned in a time–independent manner for computing the ATE. 
+
+B. Open-loop Experiments 
+
+Dataset: The VoD dataset comprises 8600 synchronized frames from 64-channel LiDAR, camera, and 4D radar sensors collected in complex urban traffic environments. The ground truth of relative poses between consecutive frames is provided, which was obtained from fused RTK GPS, IMU, and wheel odometry. Sequences 01, 02, 03, 04, 14, and 19 are used for testing, while the other sequences are for training. 
+
+Benchmarking Methods and Evaluation Protocol: We evaluate our approach against both classical and learning-based registration methods, which include GICP, NDT, ADPG-ICP [61], VGICP, RegFormer [58], a visual-aided radar odom-etry [19] and CMflow [62]. To ensure a fair comparison, all methods use the same pose prior for matching. The resulting transformation estimates are evaluated against the ground truth for performance assessment. 
+
+Performance Comparison and Analysis: As shown in Tab. III and IV, our CMR network outperforms all baseline methods in RTE and RYE, thanks to its dual-branch archi-tecture that integrates geometric and intensity cues. Other network-based methods have poor cross-modal performance due to training only for LiDAR geometry, and methods based on geometric feature optimization also have difficulty aligning heterogeneous data due to the multi-path noise of 4D radar, as shown in Fig. 11. Our CMR can alleviate structural ambiguity and improve robustness by fusing complementary geometric and intensity information. Furthermore, we conduct a detailed analysis of the en-vironmental complexity of different test sequences. In par-ticular, in sequences 04 and 14, the proportion of dynamic obstacles in these two sequences is significantly higher than that in other test sequences, and the frequent appearance of XIAO et al. : LIDAR TEACH, RADAR REPEAT: ROBUST CROSS-MODAL NAVIGATION IN DEGENERATE AND VARYING ENVIRONMENTS 13 
+
+TABLE III: RTE of Open-loop Performance Comparison in VoD datasets [RTE ( m)↓, RTE STD ( m)↓]
+
+Methods 01 02 03 04 14 19 RTE RTE STD RTE RTE STD RTE RTE STD RTE RTE STD RTE RTE STD RTE RTE STD GICP 0.470 0.606 0.411 0.365 0.388 0.366 0.428 0.379 0.293 0.242 0.591 0.896 
+
+ICP 0.428 0.254 0.451 0.264 0.517 0.260 0.488 0.262 0.520 0.193 0.670 0.330 
+
+NDT 0.306 0.102 0.304 0.136 0.371 0.127 0.333 0.135 0.325 0.108 0.376 0.133 
+
+VGICP 3.947 3.605 4.501 4.615 3.859 3.407 4.516 5.255 4.008 3.312 7.741 11.248 
+
+ADPGICP [61] 6.476 9.961 20.681 12.688 9.316 10.132 9.551 10.590 11.839 11.248 17.504 13.517 
+
+CMflow [62] 7.307 4.508 3.777 2.804 10.195 5.261 5.707 3.971 8.876 5.664 4.810 4.088 
+
+Zhang et al. [19] 3.472 2.438 11.461 7.537 6.036 3.195 7.232 4.531 3.567 2.696 9.247 7.163 
+
+RegFormer [58] 0.819 0.614 0.431 0.509 0.398 0.732 0.554 0.696 0.619 0.316 0.817 1.024 
+
+HRegNet [63] 10.321 6.057 6.394 3.658 4.225 2.910 5.117 3.078 10.396 6.300 6.267 3.808 
+
+Ours (w/o Intensity) 0.408 0.270 0.400 0.294 0.409 0.286 0.387 0.268 0.598 0.277 0.397 0.290 
+
+Ours 0.092 0.052 0.106 0.115 0.100 0.070 0.066 0.089 0.116 0.041 0.121 0.096 Ours ( N (0 , σ 25◦ )) 0.167 0.066 0.152 0.160 0.146 0.085 0.112 0.104 0.160 0.056 0.186 0.141 
+
+Ours ( N (0 , σ 215 ◦ )) 0.172 0.079 0.162 0.164 0.153 0.110 0.142 0.107 0.180 0.068 0.202 0.176 
+
+Ours ( N (0 , σ 230 ◦ )) 3.819 3.962 4.601 4.477 3.919 3.321 4.243 5.339 4.083 3.291 5.954 4.608 
+
+Best performance in bold , second best underlined. The bottom three rows present our CMR network under yaw perturbations by adding Gaussian noises of varying magnitudes. 
+
+TABLE IV: RYE of Open-loop Performance Comparison in VoD datasets [RYE ( ◦)↓, RYE STD ( ◦)↓]
+
+Methods 01 02 03 04 14 19 RYE RYE STD RYE RYE STD RYE RYE STD RYE RYE STD RYE RYE STD RYE RYE STD GICP 1.978 2.810 1.503 1.269 1.807 1.947 1.581 1.010 1.324 0.918 2.010 2.438 
+
+ICP 1.837 2.012 1.633 1.555 2.204 1.987 2.230 1.541 1.990 1.238 2.591 1.846 
+
+NDT 0.398 0.402 0.454 0.391 0.436 0.380 0.459 0.366 0.376 0.242 0.812 0.443 
+
+VGICP 3.250 4.478 3.179 3.567 4.186 8.221 3.718 4.071 3.164 3.463 7.627 11.586 
+
+ADPGICP [61] 3.523 8.636 7.293 15.165 5.175 13.212 2.529 3.897 1.260 1.830 4.978 6.061 
+
+CMflow [62] 1.057 0.614 0.774 0.577 1.569 0.938 0.956 0.611 1.477 0.824 0.874 0.556 
+
+Zhang et al. [19] 0.635 0.415 1.468 0.964 1.064 0.618 1.204 0.690 0.719 0.457 1.550 0.947 
+
+RegFormer [58] 1.224 0.737 0.805 0.519 0.628 0.363 1.627 1.024 1.429 0.848 0.731 0.422 
+
+HRegNet [63] 1.540 0.938 1.192 0.717 0.753 0.487 0.904 0.584 1.596 0.956 1.128 0.679 
+
+Ours (w/o Intensity) 0.726 0.491 0.660 0.497 0.708 0.503 0.728 0.509 0.768 0.540 0.798 0.592 
+
+Ours 0.219 0.163 0.221 0.159 0.217 0.162 0.232 0.180 0.160 0.102 0.191 0.130 Ours ( N (0 , σ 25◦ )) 0.262 0.196 0.254 0.184 0.236 0.184 0.213 0.159 0.196 0.136 0.218 0.148 
+
+Ours ( N (0 , σ 215 ◦ )) 0.279 0.207 0.275 0.194 0.251 0.198 0.262 0.208 0.217 0.146 0.243 0.158 
+
+Ours ( N (0 , σ 230 ◦ )) 1.477 0.747 1.726 0.738 1.850 1.194 2.287 0.901 2.684 0.440 1.471 0.429 
+
+Best performance in bold , second best underlined. The bottom three rows present our CMR network under yaw perturbations by adding Gaussian noises of varying magnitudes. 
+
+moving objects makes the pure geometric method unstable. For example, in sequence 04, our method reduces RTE by about 80 .2 % compared to the second-best NDT method. Similarly, in sequence 14, our method reduces RTE from 
+
+0.293 m of GICP to 0.116 m , with an error reduction of about 
+
+60 .4 % . This performance gap clearly illustrates the significant advantage of our proposed method of fusion of intensity and geometric information in highly dynamic and structurally variable environments. We further assess the impact of intensity features by dis-abling the corresponding branch. Without intensity, RTE and RYE increase significantly (e.g., RTE rises from 0.0918 m 
+
+to 0.4080 m in Seq. 01, with an error increase of about 
+
+344 % ), confirming the importance of power density-intensity alignment between 4D radar and LiDAR for accurate cross-modal registration. 
+
+Robustness Evaluation Under Pose Perturbations: Ad-ditionally, we evaluate the robustness of our proposed CMR network under perturbed pose priors. We simulate yaw pertur-bations by adding Gaussian noises of varying magnitudes to the pose prior. Tab. III and Tab. IV show that RTE remains below 0.15 m for perturbations up to 15 ◦, significantly better than baseline methods (e.g., GICP and ICP exceed 0.4 m ). Only at perturbations beyond 20 ◦ does error notably increase, highlighting the boundary conditions of robustness. With large perturbations of 30 ◦, a large estimate error emerges, but our dual-branch architecture still outperforms other comparative methods, highlighting its resilience against inaccuracies in the match prior. 14 IEEE TRANSACTIONS ON ROBOTICS. PREPRINT VERSION. ACCEPTED MAY, 2026 
+
+Fig. 11: The point cloud overlay via registration in the VoD dataset. Grey and color points are LiDAR and radar point cloud, respectively. Zoomed color overlays highlight CMR network’s superior alignment accuracy over baseline methods and robustness to inaccurate pose priors. TABLE V: Difficulty Metrics for the Teach Paths                                                             
+
+> Tag Range Elevation Pitch Min radius Challenges
+> A1325.8m 9.6m 8◦1.32m Long range B516.7m 7.6m 6◦1.24m Parked Cars C293.4m 1.0m 3◦1.16m Pedestrains D353.7m 3.0m 5◦1.38m Riverbank E439.2m 0.4m 1◦0.89m Narrow pathway F643.3m 4.2m 4◦1.38m Long corridor G711.8m 0.9m 30 ◦1.21m Large pitch oscillation Finetune1 246.6m 0.2m 3◦1.37m Scene change Finetune2 380.7m 0.4m 5◦1.54m Scene change Smoke 105.1m 0.1m 2◦1.01m Smoke Large-scale 4627m 26.25m 16.4 ◦1.01m Largescale
+
+C. Closed-Loop Navigation in Real-World Environments 
+
+We evaluate the closed-loop navigation performance of the proposed LTR 2 system across seven experimental trajectories (A to G) deployed in a university campus, as shown in Fig. 12. Each trajectory presents distinct environmental challenges, summarized in Tab. V. It is worth pointing out that the LiDAR odometry is employed only for point cloud visualization and trajectory ground truth. Both LiDAR and radar data collected from trajectory A to F are used to train the CMR network in the pre-training phase. Once trained, the network weights are kept fixed unless updated during fine-tuning. Trajectory A spans over 1.327 km and covers a variety of campus scenes and serves as the primary benchmark for comparing different navigation solutions. We evaluated four categories of methods:  
+
+> •
+
+SLAM-based navigation: The tightly coupled LIO-SAM [51] is used to construct a point cloud map and local-ization during the teaching phase, followed by constant 
+
+Fig. 12: Display of the real-world experimental trajectory on satellite map, which illustrates multiple teach-and-repeat trajectories across diverse environments within a university campus. localization on the map and trajectory tracking during the repeating phase;  
+
+> •
+
+LiDAR T &R navigation: Both GICP and learning-based Regformer [58] methods are implemented for point cloud registration;  
+
+> •
+
+Radar T &R navigation: Three different point cloud reg-istration methods including GICP, ADPGICP, and NDT are implemented for 4D radar-only registration;  
+
+> •
+
+Cross-modal T&R navigation: A cross-modal regis-tration baseline using GICP, ADPGICP [61], and our proposed deep learning-based CMR method has been established. Since the only open-source system VT &R3 [7] is developed based on the ROS2 environment, but only XIAO et al. : LIDAR TEACH, RADAR REPEAT: ROBUST CROSS-MODAL NAVIGATION IN DEGENERATE AND VARYING ENVIRONMENTS 15 
+
+TABLE VI: Navigation Performance Comparison in Trajectory A [ATE ( m)↓, YAE ( ◦)↓, ATE STD (m) ↓, YAE STD ( ◦)↓]                                                                                       
+
+> Category Methods Success Rate Max Run Distance ATE YAE ATE STD YAE STD Registration Frequency SLAM-based LIO-SAM 3 / 3 1325m / 1325m 0.071 1.180 0.056 1.305 23.16Hz
+> LiDAR T &RGICP 3 / 3 1325m / 1325m 0.083 2.158 0.052 2.340 20.15Hz
+> Regformer 3 / 3 1325m / 1325m 0.116 2.835 0.086 2.244 18.83Hz
+> Radar T &RGICP 0 / 3 380.4m / 1325m /////
+> ADPGICP 0 / 3 349.5m / 1325m /////
+> NDT 0 / 3 378.6m / 1325m /////
+> Cross-modal T &RCT-ICP 0 / 3 93.2m / 1325m /////
+> GICP 0 / 3 44.8m / 1325m /////
+> ADPGICP 0 / 3 51.6m / 1325m /////
+> Ours (w/o Intensity) 3 / 3 1325m / 1325m 0.126 2.922 0.084 1.401 17.92Hz
+> Ours 3 / 3 1325m / 1325m 0.073 1.481 0.051 1.147 16.11Hz
+
+Best performance in bold , second best underlined. 
+
+TABLE VII: ATE of Closed-loop Performance Comparison Across Trajectories B-G [ATE ( m)↓, ATE STD ( m)↓]                                                                             
+
+> Methods BCDEFGATE ATE STD ATE ATE STD ATE ATE STD ATE ATE STD ATE ATE STD ATE ATE STD LiDAR-LiDAR(GICP) 0.073 0.049 0.089 0.060 0.068 0.038 0.083 0.043 0.085 0.068 0.080 0.067
+> LiDAR-LiDAR(Regformer) 0.113 0.066 0.107 0.098 0.073 0.037 0.080 0.058 0.104 0.079 0.074 0.069
+> LiDAR SLAM 0.060 0.040 0.068 0.054 0.057 0.031 //0.065 0.034 0.063 0.045 Ours (w/o Intensity) 0.078 0.052 0.106 0.102 0.082 0.043 //0.105 0.090 //
+> Ours 0.071 0.044 0.080 0.058 0.067 0.033 0.067 0.042 0.069 0.044 0.077 0.066
+
+Best performance in bold , second best underlined. 
+
+TABLE VIII: YAE of Closed-Loop Performance Comparison Across Trajectories B-G [YAE ( ◦)↓, YAE STD ( ◦)↓]                                                                             
+
+> Methods BCDEFGYAE YAE STD YAE YAE STD YAE YAE STD YAE YAE STD YAE YAE STD YAE YAE STD LiDAR-LiDAR(GICP) 2.262 2.976 3.503 4.150 2.600 1.844 2.882 2.200 3.213 3.089 2.792 2.658
+> LiDAR-LiDAR(Regformer) 3.506 3.404 4.747 4.530 2.454 1.897 3.021 2.790 4.665 4.427 2.825 3.177
+> LiDAR SLAM 1.971 2.008 2.166 2.476 1.695 1.152 //1.279 1.645 2.055 1.874 Ours (w/o Intensity) 3.456 3.177 4.433 4.414 3.515 2.430 //3.537 3.234 //
+> Ours 2.657 2.544 2.468 3.146 2.326 1.547 2.151 1.693 1.982 2.030 2.949 3.139
+
+Best performance in bold , second best underlined. 
+
+Fig. 13: Illustration of the repeat error in trajectory A. 
+
+The color-coded path shows centimeter-level positioning errors between the teach-and-repeat trajectories. a ROS1-based driver is provided for our used 4D radar, we select CT-ICP [13] from the registration module of VT &R3 and replace it with our localization block for comparative experiments. Furthermore, our CMR network without the radar power LiDAR intensity alignment branch is also implemented for ablation study of the closed-loop system. The methods that fail on trajectory A are excluded from subsequent evaluations on trajectories B-F. 
+
+Performance Comparison: Unlike open-loop experiments that evaluates only the cross-modal registration methods, we evaluate three complete T &R pipelines with different modali-ties, that is LiDAR T &R, Radar T &R and cross-modal T &R, together with the SLAM-based navigation baseline in terms of navigation success and localization accuracy. As to navigation success rate, only the SLAM-based method, LiDAR T &R, and our proposed CMR method com-plete all trajectory repeats successfully in trajectory A (see Tab. VI) and thus are further evaluated on trajectories B to F. As shown in Tab. VI, all single-modal radar T &R methods fail to maintain stable registration during long-range navigation. Radar T &R suffers from the limited FOV of 4D radar, which is exacerbated during agile movement of the robot, as evidenced in Fig. 14 (a), the 4D radar T &R system fails easily on slopes where the yaw angle of AGV changes fast. The SLAM-based method exhibits high global accuracy and consistency due to map-based localization, but shows spatially non-uniform error distribution, which undermines local accuracy. In contrast, the CMR network maintains uni-formly low location errors at discrete repeat nodes, enabling more robust long-range navigation in narrow or complex environments. This is further verified in Fig. 14 (b), where the baseline method LIO-SAM collides with the pole, but the LTR 2 navigates successfully through the narrow space between 16 IEEE TRANSACTIONS ON ROBOTICS. PREPRINT VERSION. ACCEPTED MAY, 2026 
+
+(a) Ours, ADPGICP in Slope (b) Ours, LIO-SAM in Narrow Area 
+
+(c) Ours, CT-ICP with Dynamic Vehicles (d) Ours, Regformer with Dynamic Pedestrians Fig. 14: Screenshots of different navigation methods in four representative and challenging scenarios. The white trajectory indicates the teach path, while the colored arrows represent projections of run-time positions onto the current-view image. Compared to representative baselines ADPGICP (Radar T &R), LIO-SAM (SLAM-based), CT-ICP (Cross-modal T&R), Regformer (LiDAR T &R), and our LTR 2 system avoids trajectory repeat failures. poles. Similarly, existing cross-modal registration methods strug-gle to match dense omnidirectional LiDAR with sparse 4D radar scans. As further verified in Fig. 14 (c), CT-ICP still fails when optimizing its ICP factor, highlighting the limitation of geometry-based features alone for cross-modal registration between LiDAR and 4D radar. By contrast, our CMR network achieves stable and accurate localization comparable to LiDAR T&R approaches, as evidenced by the consistently centimeter-level repeat error in Fig. 13. The ablation study of our model with and without the intensity alignment branch is conducted. The one without the intensity alignment branch performs significantly worse and even fails in trajectories E and G (Bottom rows in both Tab. VII and Tab. VIII), highlighting the necessity of aligning radar power density with LiDAR intensity for cross-modal registration. In highly dynamic scenarios (e.g., bicycle parking areas, pedestrian zones, or traffic-heavy roads covered in trajectories B and C), the LiDAR-only methods exhibit large localization drift and inconsistent trajectory-repeating navigation. On the contrary, the 4D radar with its ability to perceive beyond-line-of-sight consistently captures static scene features, maintaining high repeat accuracy in our LTR 2 system. This is further ver-ified in Fig. 14 (d) where the LiDAR-only baseline Reformer fails due to moving vehicles and pedestrians, but our LTR 2
+
+navigates successfully. 
+
+Large-Scale Validation: To test the generalization of our LTR 2 system, we deployed it on a 4.627 km trajectory differ-ent from all trajectories A-G without any additional training or fine-tuning. As shown in Fig. 1(b), many scenes had never been encountered during the CMR pretraining phase. Nonetheless, the LTR 2 maintained stable navigation over kilometer-scale trajectories for periods exceeding one hour achieving an average ATE of approximately 0.093 m , which shows the robustness and scalability of our CMR network-TABLE IX: Performance Comparison of Node Selection Methods on Trajectory A [EWA ATE ↑, EWA YAE ↑]                                                
+
+> Threshold ATE YAE Storage #Node EWA ATE EWA YAE
+> 0.5m/5 ◦0.065 1.163 5068.5 2816 1.937 0.108 1m/10 ◦0.076 1.410 2586.9 1436 1.810 0.098 2m/15 ◦0.078 1.723 1302.8 724 1.974 0.088 3m/30 ◦0.102 2.833 876.1 487 1.584 0.057 5m/45 ◦0.158 4.261 538.1 299 1.110 0.041 8m/60 ◦//428.4 238 //
+> Ours 0.073 1.481 888.3 492 2.210 0.109
+
+based navigation system. 
+
+D. Node Selection Strategy Comparison 
+
+We compare our proposed adaptive node selection strategy with the fixed threshold-based ones on trajectory A. Tradi-tional T &R systems often rely on a simple threshold of trav-elling distance and yaw changes to determine nodes. However, this heuristic approach leads to either excessive storage or navigation failure depending on the manual threshold settings. As shown in Tab. IX and Fig. 15, a bigger threshold reduces storage burden but increases trajectory repeat errors and even fails in trajectory tracking, while a smaller threshold improves trajectory repeat accuracy but increases storage burden. More-over, fixed thresholds fail to adapt to varying scene complexity along a trajectory. To assess both localization accuracy and storage efficiency, we define a dimensionless metric: 
+
+EWA error = 1
+
+ error /e 0
+
+ · log N , (33) where error denotes the localization error (ATE or YAE), N
+
+is the number of target nodes, and e0 is a constant with the same unit as error. We use et 
+
+> 0
+
+= 1 m for ATE and er 
+
+> 0
+
+= 1 ◦ for YAE. The logarithmic term accounts for diminishing returns XIAO et al. : LIDAR TEACH, RADAR REPEAT: ROBUST CROSS-MODAL NAVIGATION IN DEGENERATE AND VARYING ENVIRONMENTS 17 
+
+TABLE X: Quantitative Analysis for Fine-tuning [ATE ( m)↓, YAE ( ◦)↓, ATE STD ( m)↓, YAE STD ( ◦)↓]                                                                                 
+
+> Method Finetune 01 Finetune 02 TimeStamp ATE YAE ATE STD YAE STD TimeStamp ATE YAE ATE STD YAE STD Current
+> LiDAR-LiDAR (GICP) 2024-11-19 0.099 1.861 0.068 1.831 2024-11-04 0.128 3.160 0.073 2.113 LiDAR SLAM (LIO-SAM) 2024-11-19 0.059 1.325 0.041 1.320 2024-11-04 0.061 2.031 0.040 1.666 Ours 2024-11-19 0.084 1.667 0.051 1.440 2024-11-04 0.064 2.094 0.048 1.720
+> After 2 Months
+> LiDAR-LiDAR (GICP) //////////LiDAR SLAM (LIO-SAM) 2025-01-14 0.097 1.863 0.078 1.976 2025-01-14 0.084 2.771 0.042 2.640 Ours (Before finetuning) 2025-01-14 0.134 2.281 0.231 2.304 2025-01-14 0.194 3.008 0.324 3.710 Ours (After Finetuning) 2025-01-14 0.089 1.930 0.062 1.721 2025-01-14 0.084 2.398 0.050 1.858
+
+Fig. 15: Visualization of storage requirements of different node selection strategies on Trajectory A. 
+
+with increased node density. The larger EWA error means the more accurate localization with less nodes. As shown in Tab. IX, our adaptive node selection method achieves the best trade-off between navigation accuracy and storage burden. Fig. 15 illustrates that in our node selection method, the node density is automatically adjusted based on scene complexity: sparser in open regions and denser in challenging areas, which removes the need for manual threshold tuning. 
+
+E. Robustness in Smoke-Filled Environments 
+
+To demonstrate the advantage of radar-based repeat naviga-tion under degraded visibility, we conducted experiments in a smoke-filled environment. A LiDAR-based teaching trajectory was recorded on a clear day. During the repeating phase, dense chemical smoke was filled over a 20 m × 20 m area to simulate harsh visual degradation. As shown in Fig. 16, 4D radar perception remained unaffected, while LiDAR perfor-mance degraded significantly due to occlusion and scattering of smoke particles. SLAM-based ground truth could not be reliably obtained in heavy smoke, so we globally aligned repeat trajectories based on the same start/end nodes and the registered teach and repeat nodes. As shown in Fig. 1(a), the two trajectories are very close to each other, validating the resilience of the CMR network and the reliable navigation of LTR 2 system under adverse conditions. 
+
+F. CMR Network Finetuning 
+
+In this subsection, we assess the long-term adaptability of LTR 2 to static environmental changes. Two trajectories termed 
+
+Fig. 16: Perception comparison of different sensors when repeating in a heavy smoke environment. LiDAR data experiences severe perception degradation, while 4D Radar maintains robust perception. The visual image is only for visualization, not used in navigation. Finetune1 and Finetune2 were recorded two months after their respective teaching phases. As illustrated in the upper row of Fig. 17 (a)-(b), the two scenes encountered new construction and demolition in some areas, though many stable structures remained after two months. As described in Subsection III-E, the evaluation identifies the large deviation of error in trajectory segments, as shown in Fig. 18. Tab. X indicates that LTR 2 after finetuning provides a more accurate trajectory repeat, maintaining the reliability of navigation against static environment changes. A deeper insight into the adaptive finetuning is also provided in the lower rows of Fig. 17 (a) and (b), which visualizes the distribution shift of attention weighting of the CMR network before and after finetuning. After finetuning, the attention mechanism refocuses from altered areas (red and green boxes) to stable areas (yellow boxes). In comparison, all three com-peting methods suffer degraded performance against static 18 IEEE TRANSACTIONS ON ROBOTICS. PREPRINT VERSION. ACCEPTED MAY, 2026 
+
+(a) Finetune1 
+
+(b) Finetune2 Fig. 17: Visualization of static environmental changes. The top rows in (a) and (b) illustrate repeat trajectories before and after fine-tuning. Structures marked by green boxes denote newly constructed elements, red boxes indicate demolished elements, and yellow boxes represent persistent, unchanged structures. Bottom rows display distribution shifts of attention mechanisms corresponding to environmental changes. environmental changes due to the lack of adaptive update mechanisms. 
+
+G. Cross-Platform Feasibility Demonstration 
+
+To further examine the robustness of the proposed CMR network under substantial platform and teach-side sensing differences, we conducted a qualitative cross-platform teach-and-repeat demonstration using different robot platforms for teaching and repeating. Unlike the previous closed-loop eval-uations, this part is intended as a feasibility study to test whether the same CMR network can still support route reuse when the teach trajectory is provided by substantially different platforms. Specifically, the teaching phase was performed separately using a data collection vehicle and a point-legged 
+
+(a) Finetune1 qualitative evaluation 
+
+(b) Finetune1 quantitative evaluation 
+
+(c) Finetune2 qualitative evaluation 
+
+(d) Finetune2 quantitative evaluation Fig. 18: Trajectory evaluation of fine-tuning. Larger lo-calization errors occur against static environmental changes, and are mitigated after the fine-tuning. The red and blue shadowed regions denote where negative and positive samples are collected, respectively. biped robot, as shown in Fig. 19 (a), while the repeat phase was always carried out by the AGV platform using the same CMR network as in the previous closed-loop experiments. The data collection vehicle was equipped with a 128-channel Ruby plus LiDAR mounted at approximately 1.6 m , whereas the point-legged biped robot used a 32-channel Helios LiDAR mounted at approximately 0.6 m when standing upright. In addition to the different LiDAR configurations, the platforms also differ markedly in body morphology, mounting geometry, and motion characteristics. The point-legged biped robot and the data collection vehicle are standard research platforms without integrated 4D radar sensors, so the teach node selection was sampled at a fixed sampling rate of 14 Hz . Then the AGV platform repeated the path using the same CMR network as that employed in the previous closed-loop experiments. As shown in Fig. 19 (b) and (c), the AGV was able to complete route repetition in both cases. These results demon-XIAO et al. : LIDAR TEACH, RADAR REPEAT: ROBUST CROSS-MODAL NAVIGATION IN DEGENERATE AND VARYING ENVIRONMENTS 19 
+
+(a) The robot platforms used for trajectory teaching, including a vehicle and a point-legged bipedal robot. 
+
+(b) Trajectory repeat error for vehicle-based teach. 
+
+(c) Trajectory repeat error for bipedal robot-based teach. Fig. 19: Visualization of cross-platform navigation. 
+
+strate that the proposed CMR network can support cross-platform route reuse at the localization and route-following level, showing robustness to substantial differences in teach-side sensor configuration and platform. The full cross-platform demonstration is also provided in the supplementary video. VI. C ONCLUSION 
+
+In this paper, we propose a novel omnidirectional LiDAR-forward 4D radar cross-modal registration method, integrated into a LiDAR-teach-and-radar-repeat navigation system. To address the limited geometric resolution of raw radar data, we incorporate a Doppler-based motion prior for FOV align-ment and introduce a physics-informed radar power LiDAR intensity alignment mechanism. An adaptive node selection strategy is adopted to maintain viewpoint consistency and registration success while minimizing storage overhead. A CMR network fine-tuning strategy is proposed to adapt to static environmental changes, ensuring robust cross-modal registration and long-term navigation. Experimental results demonstrate consistently accurate positioning and navigation under degenerate and changing environments. Future work will investigate how to enhance 4D mmWave radar occupancy mapping to support reliable planning and obstacle avoidance, thereby increasing the safety of cross-modal T &R navigation system. REFERENCES [1] S. Lowry, N. S¨ underhauf, P. Newman, J. J. Leonard, D. Cox, P. Corke, and M. J. Milford, “Visual Place Recognition: A Survey,” IEEE Trans-actions on Robotics , vol. 32, no. 1, pp. 1–19, 2015. [2] W. Churchill and P. Newman, “Experience-based Navigation for Long-Term Localisation,” The International Journal of Robotics Research ,vol. 32, no. 14, pp. 1645–1661, 2013. [3] T. Barfoot, J. Kelly, and G. Sibley, “Special Issue on Long-Term Autonomy,” The International Journal of Robotics Research , vol. 32, no. 14, pp. 1609–1610, 2013. [4] X. Qiao, A. Krawciw, S. Lilge, and T. D. Barfoot, “Radar teach and repeat: Architecture and initial field testing,” in 2025 IEEE International Conference on Robotics and Automation (ICRA) , 2025, pp. 13 021– 13 027. [5] P. King, A. Vardy, and A. L. Forrest, “Teach-and-Repeat Path Following for an Autonomous Underwater Vehicle,” Journal of Field Robotics ,vol. 35, no. 5, pp. 748–763, 2018. [6] D. Baril, S.-P. Deschˆ enes, O. Gamache, M. Vaidis, D. LaRocque, J. Laconte, V. Kubelka, P. Gigu` ere, and F. Pomerleau, “Kilometer-Scale Autonomous Navigation in Subarctic Forests: Challenges and Lessons Learned,” Field Robotics , vol. 2, pp. 1628–1660, 2021. [Online]. Available: https://api.semanticscholar.org/CorpusID:244714919 [7] P. Furgale and T. D. Barfoot, “Visual Teach and Repeat for Long-Range Rover Autonomy,” Journal of Field Robotics , vol. 27, no. 5, pp. 534– 560, 2010. [8] A. Akemoto and F. Zhu, “Cooperative Lunar Surface Exploration using Transfer Learning with Multi-Agent Visual Teach and Repeat,” in 2023 IEEE Aerospace Conference . IEEE, 2023, pp. 1–9. [9] C. McManus, P. Furgale, B. Stenning, and T. D. Barfoot, “Lighting-invariant Visual Teach and Repeat Using Appearance-based LiDAR,” 
+
+Journal of Field Robotics , vol. 30, no. 2, pp. 254–287, 2013. [10] P. Kr¨ usi, B. B¨ ucheler, F. Pomerleau, U. Schwesinger, R. Siegwart, and P. Furgale, “Lighting-invariant Adaptive Route Following Using Iterative Closest Point Matching,” Journal of Field Robotics , vol. 32, no. 4, pp. 534–564, 2015. [11] T. Rouˇ cek, A. S. Amjadi, Z. Rozsyp´ alek, G. Broughton, J. Blaha, K. Kusumam, and T. Krajn´ ık, “Self-Supervised Robust Feature Matching Pipeline for Teach and Repeat Navigation,” Sensors , vol. 22, no. 8, p. 2836, 2022. [12] L. Sun, M. Taher, C. Wild, C. Zhao, Y. Zhang, F. Majer, Z. Yan, T. Krajn´ ık, T. Prescott, and T. Duckett, “Robust and Long-term Monoc-ular Teach and Repeat Navigation using a Single-experience Map,” in 2021 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, 2021, pp. 2635–2642. [13] K. Burnett, Y. Wu, D. J. Yoon, A. P. Schoellig, and T. D. Barfoot, “Are We Ready for Radar to Replace LiDAR in All-Weather Mapping and Localization?” IEEE Robotics and Automation Letters , vol. 7, no. 4, pp. 10 328–10 335, 2022. [14] C. Sprunk, G. D. Tipaldi, A. Cherubini, and W. Burgard, “LiDAR-based Teach-and-Repeat of Mobile Robot Trajectories,” in 2013 IEEE/RSJ International Conference on Intelligent Robots and Systems . IEEE, 2013, pp. 3144–3149. [15] D. Cattaneo and A. Valada, “Cmrnext: Camera to lidar matching in the wild for localization and extrinsic calibration,” IEEE Transactions on Robotics , 2025. [16] D. Adolfsson, M. Magnusson, A. Alhashimi, A. J. Lilienthal, and H. Andreasson, “LiDAR-Level Localization with Radar? the CFEAR Approach to Accurate, Fast, and Robust Large-Scale Radar Odometry in Diverse Environments,” IEEE Transactions on Robotics , vol. 39, no. 2, pp. 1476–1495, 2022. [17] K. Harlow, H. Jang, T. D. Barfoot, A. Kim, and C. Heckman, “A New Wave in Robotics: Survey on Recent mmWave Radar Applications in Robotics,” IEEE Transactions on Robotics , vol. 40, pp. 4544–4560, 2024. [18] J. Zhang, R. Xiao, H. Li, Y. Liu, X. Suo, C. Hong, Z. Lin, and D. Wang, “4DRT-SLAM: Robust SLAM in Smoke Environments using 4D Radar and Thermal Camera based on Dense Deep Learnt Features,” in 2023 IEEE International Conference on Cybernetics and Intelligent Systems (CIS) and IEEE Conference on Robotics, Automation and Mechatronics (RAM) . IEEE, 2023, pp. 19–24. [19] Y. Zhang, R. Xiao, Z. Hong, L. Hu, and J. Liu, “Adaptive Visual-Aided 4D Radar Odometry Through Transformer-Based Feature Fusion,” in 
+
+2024 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, 2024, pp. 12 529–12 535. 20 IEEE TRANSACTIONS ON ROBOTICS. PREPRINT VERSION. ACCEPTED MAY, 2026 
+
+[20] Y. S. Park, Y.-S. Shin, J. Kim, and A. Kim, “3d ego-Motion Estimation Using low-Cost mmWave Radars via Radar Velocity Factor for Pose-Graph SLAM,” IEEE Robotics and Automation Letters , vol. 6, no. 4, pp. 7691–7698, 2021. [21] R. Xiao, W. Liu, Y. Zhang, Y. Chen, J. Chen, Z. Wang, and L. Hu, “Rad-gs: Radar-vision integration for 3d gaussian splatting slam in outdoor environments,” IEEE Robotics and Automation Letters , vol. 10, no. 12, pp. 13 359–13 366, 2025. [22] H. Yin, Y. Wang, L. Tang, and R. Xiong, “Radar-on-LiDAR: Metric Radar Localization on Prior LiDAR Maps,” in 2020 IEEE International Conference on Real-Time Computing and Robotics (RCAR) . IEEE, 2020, pp. 1–7. [23] H. Yin, R. Chen, Y. Wang, and R. Xiong, “RaLL: End-to-End Radar Localization on LiDAR Map Using Differentiable Measurement Model,” 
+
+IEEE Transactions on Intelligent Transportation Systems , vol. 23, no. 7, pp. 6737–6750, 2021. [24] H. Yin, X. Xu, Y. Wang, and R. Xiong, “Radar-to-LiDAR: Heteroge-neous Place Recognition via Joint Learning,” Frontiers in Robotics and AI , vol. 8, p. 661199, 2021. [25] Y. Ma, X. Zhao, H. Li, Y. Gu, X. Lang, and Y. Liu, “RoLM: Radar on LiDAR Map Localization,” in 2023 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2023, pp. 3976–3982. [26] Y. Ma, H. Li, X. Zhao, Y. Gu, X. Lang, L. Li, and Y. Liu, “FMCW Radar on LiDAR Map Localization in Structural Urban Environments,” 
+
+Journal of Field Robotics , vol. 41, no. 3, pp. 699–717, 2024. [27] Y. S. Park, J. Kim, and A. Kim, “Radar Localization and Mapping for Indoor Disaster Environments via Multi-modal Registration to Prior LiDAR Map,” in 2019 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, 2019, pp. 1307–1314. [28] A. Nayak, D. Cattaneo, and A. Valada, “RaLF: Flow-based Global and Metric Radar Localization in LiDAR Maps,” in 2024 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2024, pp. 5097–5103. [29] L. Kunze, N. Hawes, T. Duckett, M. Hanheide, and T. Krajn´ ık, “Artificial Intelligence for Long-Term Robot Autonomy: A Survey,” IEEE Robotics and Automation Letters , vol. 3, no. 4, pp. 4023–4030, 2018. [30] W. Churchill and P. Newman, “Practice Makes Perfect? Managing and Leveraging Visual Experiences for Lifelong Navigation,” in 2012 IEEE International Conference on Robotics and Automation . IEEE, 2012, pp. 4525–4532. [31] T. Krajn´ ık, F. Majer, L. Halodov´ a, and T. Vintr, “Navigation Without Localisation: Reliable Teach and Repeat Based on the Convergence Theorem,” in 2018 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , 2018, pp. 1657–1664. [32] X. Liu, Z. Rozsyp´ alek, and T. Krajn´ ık, “Self-Supervised Learning for Fusion of IR and RGB Images in Visual Teach and Repeat Navigation,” in 2023 European Conference on Mobile Robots (ECMR) . IEEE, 2023, pp. 1–7. [33] T. Rouˇ cek, Z. Rozsyp´ alek, J. Blaha, J. Ulrich, and T. Krajn´ ık, “Predictive Data Acquisition for Lifelong Visual Teach, Repeat and Learn,” IEEE Robotics and Automation Letters , vol. 9, no. 11, pp. 10 042–10 049, 2024. [34] S.-P. Deschˆ enes, D. Baril, V. Kubelka, P. Gigu` ere, and F. Pomerleau, “LiDAR Scan Registration Robust to Extreme Motions,” in 2021 18th Conference on Robots and Vision (CRV) . IEEE, 2021, pp. 17–24. [35] S. H. Cen and P. Newman, “Precise Ego-Motion Estimation with Millimeter-Wave Radar under Diverse and Challenging Conditions,” in 2018 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2018, pp. 6045–6052. [36] D. Lisus, K. Burnett, D. J. Yoon, R. Poulton, J. Marshall, and T. D. Barfoot, “Are doppler velocity measurements useful for spinning radar odometry?” IEEE Robotics and Automation Letters , vol. 10, no. 1, pp. 224–231, 2025. [37] W. Maddern, G. Pascoe, C. Linegar, and P. Newman, “1 Year, 1000 Km: The Oxford RobotCar Dataset,” The International Journal of Robotics Research , vol. 36, no. 1, pp. 3–15, 2017. [38] M. Milford, “Vision-based Place Recognition: How Low Can You Go?” 
+
+The International Journal of Robotics Research , vol. 32, no. 7, pp. 766– 789, 2013. [39] Y. Wang, Y. Fan, J. Wang, and W. Chen, “Long-term navigation for autonomous robots based on spatio-temporal map prediction,” Robotics and Autonomous Systems , vol. 174, p. 104724, 2024. [40] T. Krajn´ ık, J. P. Fentanes, J. M. Santos, and T. Duckett, “Frequency map enhancement for long-term mobile robot autonomy in changing environments,” IEEE Transactions on Robotics , vol. 33, no. 4, pp. 964– 977, 2017. [41] P. Neubert, N. S¨ underhauf, and P. Protzel, “Superpixel-based appearance change prediction for long-term navigation across seasons,” Robotics and Autonomous Systems , vol. 69, pp. 1–13, 2015. [42] H. Gil, D. Lee, G. Kim, and A. Kim, “Ephemerality meets LiDAR-based Lifelong Mapping,” in Proceedings of the IEEE International Conference on Robotics and Automation (ICRA) , Atlanta, GA, USA, May 2025. [43] L. Yang, S. M. Prakhya, S. Zhu, and Z. Liu, “Lifelong 3D Mapping Framework for Hand-held & Robot-mounted LiDAR Mapping Systems,” 
+
+IEEE Robotics and Automation Letters , vol. 9, no. 11, pp. 9446–9453, 2024. [44] S. Woo, D. Jung, and S.-W. Kim, “No More Potentially Dynamic Objects: Static Point Cloud Map Generation based on 3D Object Detection and Ground Projection,” arXiv Preprint ArXiv:2407.01073 ,2024. [45] L. Halodov´ a, E. Dvoˇ rr´ akov´ a, F. Majer, T. Vintr, O. M. Mozos, F. Dayoub, and T. Krajn´ ık, “Predictive and Adaptive Maps for Long-Term Visual Navigation in Changing Environments,” in 2019 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , 2019, pp. 7033– 7039. [46] N. V¨ odisch, D. Cattaneo, W. Burgard, and A. Valada, “Continual slam: Beyond lifelong simultaneous localization and mapping through con-tinual learning,” in The International Symposium of Robotics Research .Springer, 2022, pp. 19–35. [47] R. Clark, S. Wang, A. Markham, N. Trigoni, and H. Wen, “VidLoc: A Deep Spatio-Temporal Model for 6-DoF Video-Clip Relocalization,” in 
+
+Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition , 2017, pp. 6856–6864. [48] S. Hausler, S. Garg, M. Xu, M. Milford, and T. Fischer, “Patch-NetVLAD: Multi-Scale Fusion of Locally-Global Descriptors for Place Recognition,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2021, pp. 14 141–14 152. [49] N. Radwan, A. Valada, and W. Burgard, “VLocNet++: Deep Multi-task Learning for Semantic Visual Localization and Odometry,” IEEE Robotics and Automation Letters , vol. 3, no. 4, pp. 4407–4414, 2018. [50] A. Krawciw and T. D. Barfoot, “Local maps are all you need: A review of topometric teach and repeat navigation,” Annual Review of Control, Robotics, and Autonomous Systems , vol. 9, 2025. [51] T. Shan, B. Englot, D. Meyers, W. Wang, C. Ratti, and D. Rus, “LIO-SAM: Tightly-coupled LiDAR Inertial Odometry via Smoothing and Mapping,” in 2020 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, 2020, pp. 5135–5142. [52] T. D. Barfoot, State Estimation for Robotics . Cambridge University Press, 2024. [53] C. Doer and G. F. Trommer, “An EKF Based Approach to Radar Inertial Odometry,” in 2020 IEEE International Conference on Multisensor Fusion and Integration for Intelligent Systems (MFI) . IEEE, 2020, pp. 152–159. [54] R. C. Coulter et al. , Implementation of the Pure Pursuit Path Tracking Algorithm . Carnegie Mellon University, The Robotics Institute, 1992. [55] M. I. Skolnik, Radar Handbook . New York: McGraw-Hill, 1970. [56] T. Fujii and T. Fukuchi, Eds., Laser Remote Sensing . Boca Raton: CRC Press, 2005. [57] Z. Liu, Y. Lin, Y. Cao, H. Hu, Y. Wei, Z. Zhang, S. Lin, and B. Guo, “Swin Transformer: Hierarchical Vision Transformer using Shifted Win-dows,” in 2021 IEEE/CVF International Conference on Computer Vision (ICCV) , 2021, pp. 10 012–10 022. [58] J. Liu, G. Wang, Z. Liu, C. Jiang, M. Pollefeys, and H. Wang, “RegFormer: An Efficient Projection-Aware Transformer Network for Large-Scale Point Cloud Registration,” in 2023 IEEE/CVF International Conference on Computer Vision (ICCV) , 2023, pp. 8417–8426. [59] W. Wu, Z. Y. Wang, Z. Li, W. Liu, and L. Fuxin, “PointPWC-Net: Cost Volume on Point Clouds for (Self-) Supervised Scene Flow Estimation,” in Computer Vision–ECCV 2020: 16th European Conference, Glasgow, UK, August 23–28, 2020, Proceedings, Part V 16 . Springer, 2020, pp. 88–107. [60] A. Palffy, E. Pool, S. Baratam, J. F. P. Kooij, and D. M. Gavrila, “Multi-class Road User Detection with 3+1D Radar in the View-of-Delft Dataset,” IEEE Robotics and Automation Letters , vol. 7, no. 2, pp. 4961–4968, 2022. [61] J. Zhang, H. Zhuge, Z. Wu, G. Peng, M. Wen, Y. Liu, and D. Wang, “4DRadarSLAM: A 4D Imaging Radar SLAM System for Large-scale Environments based on Pose Graph Optimization,” in 2023 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2023, pp. 8333–8340. [62] F. Ding, A. Palffy, D. M. Gavrila, and C. X. Lu, “Hidden Gems: 4D Radar Scene Flow Learning Using Cross-Modal Supervision,” in XIAO et al. : LIDAR TEACH, RADAR REPEAT: ROBUST CROSS-MODAL NAVIGATION IN DEGENERATE AND VARYING ENVIRONMENTS 21 
+
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , June 2023, pp. 9340–9349. [63] F. Lu, G. Chen, Y. Liu, L. Zhang, S. Qu, S. Liu, R. Gu, and C. Jiang, “HRegNet: A Hierarchical Network for Efficient and Accurate Outdoor LiDAR Point Cloud Registration,” IEEE Transactions on Pattern Anal-ysis and Machine Intelligence , vol. 45, no. 10, pp. 11 884–11 897, 2023.
