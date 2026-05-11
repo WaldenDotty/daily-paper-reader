@@ -1,0 +1,2021 @@
+Title: Stochastic Differential Dynamic Programming for Trajectory Optimization under Partial Observability
+
+URL Source: https://arxiv.org/pdf/2605.07529v1
+
+Published Time: Mon, 11 May 2026 01:14:21 GMT
+
+Number of Pages: 43
+
+Markdown Content:
+# Stochastic Differential Dynamic Programming for Trajectory Optimization under Partial Observability 
+
+Masahiro Fujiwara ∗ and Naoya Ozaki †
+
+Designing spacecraft trajectories remains challenging in the presence of stochastic effects such as maneuver execution errors and observation uncertainties. Although covariance control and belief-space planning provide useful tools for designing robust control policies and information-aware trajectories under uncertainty, practical methods remain limited for partially observable trajectory optimization problems in which trajectory design, orbit determination, and correction maneuver planning are tightly coupled. This paper presents a stochastic differential dynamic programming algorithm for such coupled problems. The proposed method optimizes the nominal control sequence and feedback gains subject to belief dynamics and general mission constraints, explicitly accounting for the dependence of covariance propagation on the nominal trajectory without relying on the separation principle. Numerical examples demonstrate that the proposed algorithm produces navigation-aware and uncertainty-robust solutions across a range of dynamical systems, observation models, and uncertainty levels. In particular, the circular restricted three-body problem shows that the proposed method can exploit the coupling between trajectory design and orbit determination to obtain navigation-aware solutions with substantially lower fuel consumption than those from deterministic local optimization starting from the same initial guess. 
+
+## Nomenclature 
+
+0𝑛 = 𝑛 -dimensional zero vector 
+
+𝐼 𝑛 = 𝑛 × 𝑛 identity matrix 
+
+N ( 𝒎 , 𝑃 ) = multivariate Gaussian distribution with mean 𝒎 and covariance 𝑃 𝑛 𝑢 = control dimension 
+
+𝑛 𝑤 = dynamical noise dimension 
+
+𝑛 𝑥 = state dimension 
+
+> ∗
+
+Researcher, Research and Development Directorate, Japan Aerospace Exploration Agency, 3-1-1 Yoshinodai, Chuo-ku, Sagamihara, Kanagawa, 252-5210, Japan; fujiwara.masahiro@jaxa.jp. 
+
+> †
+
+Associate Professor, Institute of Space and Astronautical Science, Japan Aerospace Exploration Agency, 3-1-1 Yoshinodai, Chuo-ku, Sagamihara, Kanagawa, 252-5210, Japan; naoya.ozaki@jaxa.jp. 
+
+> arXiv:2605.07529v1 [eess.SY] 8 May 2026
+
+𝑛 𝑦 = observation dimension 
+
+𝑂 𝑛 = 𝑛 × 𝑛 zero matrix 
+
+𝑂 𝑛 ×𝑚 = 𝑛 × 𝑚 zero matrix 
+
+𝑝 (·) = probability density function 
+
+R𝑛 = 𝑛 -dimensional real vector space 
+
+𝑡 = time 
+
+∥·∥ = Euclidean norm for vectors and spectral norm for matrices 
+
+∥ · ∥ 𝑊 = weighted Euclidean norm, defined by ∥𝒙 ∥𝑊 := √𝒙 ⊤𝑊 𝒙 
+
+Cov [·] = covariance operator 
+
+E [·] = expectation operator 
+
+P [·] = probability 
+
+tr (·) = trace operator 
+
+vec (·) = vectorization operator 
+
+## I. Introduction 
+
+Spacecraft trajectory design under uncertainty becomes particularly challenging when the orbit-determination process depends on the nominal trajectory. In such problems, maneuver design and navigation design cannot be treated independently, because the trajectory determines the measurement geometry and the achievable navigation accuracy. This coupling is especially important in scenarios with weak observability, such as angles-only navigation or missions with limited tracking opportunities. Although high-quality measurements are often available in conventional missions, for example, through radiometric tracking with Delta-DOR in deep-space missions [ 1 ] or GNSS measurements in LEO missions [ 2], increasing mission complexity and operational cadence can limit such tracking opportunities. These considerations motivate a unified framework for partially observable trajectory optimization problems, in which maneuver design, orbit determination, and correction maneuver planning are tightly coupled under uncertainty. In spaceflight applications, covariance control approaches [ 3] have been developed to design maneuver policies under uncertainty using a variety of optimization techniques, including differential dynamic programming (DDP), nonlinear programming (NLP), and sequential convex programming (SCP). Refs. [ 4, 5] derive tube stochastic DDP, in which DDP is applied to a stochastic dynamical system sampled by the unscented transform. As a higher-fidelity approach, Ref. [ 6]presents an NLP-based method for optimal impulsive control in belief space, incorporating the orbit-determination process into uncertainty propagation via polynomial chaos expansion. Ref. [ 7] improves convergence of NLP with covariance dynamics by exploiting the forward–backward structure and introducing a feedback-gain parameterization that reduces the search space. SCP-based methods have also been extensively studied due to their tractability and 2the availability of efficient convex optimization solvers. For example, Ref. [ 8] formulates convexified discrete-time dynamics, costs, and constraints that can be solved iteratively even for nonlinear trajectory optimization, and Ref. [ 9 ]incorporates stochastic mass dynamics and the orbit-determination process into an SCP framework. Because the feedback gain is parameterized as a block lower-triangular matrix that depends on past states at the discretization nodes in many of these approaches, the computational effort increases quadratically with the number of nodes. To improve the efficiency of covariance control with chance constraints, sequential semidefinite programming methods have also been proposed [10, 11] and applied to astrodynamics problems in Ref. [12]. Planning under dynamical and observation uncertainties has also been studied extensively in the robotics community, where the problem is often formulated as a partially observable Markov decision process and addressed via belief-space planning [ 13 ]. Because belief-space planning is generally intractable due to its infinite-dimensional state space, practical methods often assume Gaussian beliefs and perform local approximations around a nominal trajectory. Ref. [ 14 ]applies a linear quadratic regulator (LQR) to deterministic Gaussian belief-space dynamics under the assumption of maximum-likelihood observation (MLO). Refs. [ 15 , 16 ] remove the MLO assumption and propose iterative local optimization methods in belief space by expanding the cost function and dynamics around the nominal trajectory to obtain time-varying affine feedback policies. Ref. [ 17 ] further extends the framework by introducing random binary variables to model missed observations. Related active-sensing trajectory generation methods [ 18 , 19 ] have also been developed to improve estimation performance by shaping the nominal trajectory according to information-related criteria. These approaches are closely related to belief-space planning in that they exploit the coupling between motion and estimation. These two lines of research offer complementary strengths. Covariance control approaches provide powerful tools for robust control policy design under uncertainty, whereas belief-space planning methods are effective for information-aware decision-making. However, partially observable trajectory optimization problems in which trajectory design, orbit determination, and correction maneuver planning must be addressed in a unified manner remain insufficiently studied. Many covariance control formulations simplify the coupling by assuming that the orbit-determination process can be separated from the trajectory optimization problem. As a result, they are not primarily designed to generate navigation-aware solutions in which the nominal trajectory is deliberately shaped to pass through information-rich regions. In contrast, belief-space planning methods primarily emphasize information gathering through nominal-trajectory design and generally do not explicitly optimize feedback policies under general mission constraints. Thus, the joint optimization of informative nominal trajectories and feedback policies under general mission constraints remains a challenging problem in spacecraft mission design. To address this gap, we develop a partially observable stochastic differential dynamic programming (PO-SDDP) framework for partially observable trajectory optimization problems. The proposed framework enables simultaneous optimization of the nominal control and feedback gains while explicitly accounting for state estimation and covariance 3propagation under general mission constraints. The main technical contributions are as follows. First, we formulate a generalized belief-space DDP framework by augmenting the belief dynamics with the state-estimate covariance and by treating the feedback gain as an optimization variable. Second, we develop a practical formulation for spacecraft mission design by combining an augmented Lagrangian method with regularized or smooth approximations of representative cost functions and constraints, including thrust magnitude and guidance accuracy constraints. Third, we develop a semi-analytic method for efficiently computing the state transition matrices of the covariance dynamics, together with automatic differentiation for model-dependent derivatives and model-independent tensor operations for covariance propagation. From an algorithmic perspective, the proposed method is rooted in stochastic differential dynamic programming [ 20 ]and related DDP-based covariance control methods for nonlinear stochastic systems [ 21 ]. The main distinction is that the proposed method formulates the local optimization problem in belief space, explicitly accounting for the dependence of navigation performance on the nominal trajectory. An observability-aware DDP approach [ 22 ] is also closely related to the present work. Compared with that approach, the proposed method can be interpreted as a stochastic extension that incorporates covariance propagation and feedback-gain optimization into the DDP recursion. An earlier version of this work appeared in Ref. [ 23 ]. This manuscript extends the conference paper by providing a more rigorous derivation of the dynamics, additional implementation details, and an expanded numerical analysis. We demonstrate the proposed algorithm through three numerical examples: the light-dark domain problem, an Earth-to-Mars planar transfer, and a periodic-orbit transfer in the Earth–Moon circular restricted three-body problem (CR3BP). These examples show that the method can address a broad range of problems, from information-aware trajectory shaping to robust correction maneuver design. The remainder of this paper is organized as follows. Section II derives a belief-space transition model defined by the dynamics, observation model, and uncertainty model. In Section III, we introduce the partially observable stochastic DDP algorithm. Section IV presents semi-analytic computations of the state transition matrices for the covariance dynamics, together with representative cost functions and constraints applicable to space mission design using smoothed approximations. Section V presents the numerical results, and Section VI concludes the paper. 
+
+## II. Belief Propagation for Partially Observable Trajectory Optimization Problems 
+
+This section derives a tractable belief-space transition model for partially observable trajectory optimization. In belief-space planning, decisions are made based on a belief over the state rather than the unobserved true state. Our objective is to construct belief-space dynamics for mission design when future observations are unknown. To this end, we approximate the belief using moments up to second order and derive propagation equations for two covariance matrices: the estimation-error covariance and the state-estimate covariance, starting from continuous-time stochastic dynamics. These moment dynamics, together with the nominal dynamics, constitute the belief-space transition model 4used in the subsequent DDP algorithm. 
+
+A. Dynamics, observations, and time discretization 
+
+We consider a controlled stochastic system over the mission design interval 𝑡 ∈ [ 𝑡 0, 𝑡 𝑓 ], with state 𝒙 (𝑡 ) ∈ R𝑛 𝑥 and control 𝒖 (𝑡 ) ∈ R𝑛 𝑢 . The true state evolves according to the continuous-time stochastic dynamics 
+
+d𝒙 = 𝒇 (𝒙 , 𝒖 , 𝑡 )d𝑡 + 𝐺 𝑥 (𝒙 , 𝒖 )d𝒘 𝑥 (1) where 𝒇 : R𝑛 𝑥 × R𝑛 𝑢 × R → R𝑛 𝑥 represents the deterministic part of the dynamics, d𝒘 𝑥 ∈ R𝑛 𝑤 is a Brownian-motion increment, and 𝐺 𝑥 (𝒙 , 𝒖 ) : R𝑛 𝑥 × R𝑛 𝑢 → R𝑛 𝑥 ×𝑛 𝑤 is a weighting matrix that determines the process-noise intensity as a function of the state and control, for example, to model maneuver errors that depend on thrust magnitude and direction. To discretize the stochastic dynamics in Eq. (1), the interval [𝑡 0, 𝑡 𝑓 ] is partitioned by maneuver and observation epochs. Let 𝑁 𝑗 (𝑘 ) denote the number of observation epochs between the 𝑘 -th and (𝑘 + 1)-th maneuver epochs. When 
+
+𝑁 𝑗 (𝑘 ) > 0, these observation epochs are ordered as 
+
+𝑡 𝑘 < 𝑡 𝑘, 1 < · · · < 𝑡 𝑘, 𝑁 𝑗 (𝑘 ) ≤ 𝑡 𝑘 +1 𝑘 = 0, . . . , 𝑁 − 1 (2) where epochs with a single subscript, except for the terminal epoch 𝑡 𝑁 = 𝑡 𝑓 , correspond to maneuver epochs, whereas epochs with double subscripts correspond to observation epochs. Without loss of generality, we define 𝑡 𝑘, 0 := 𝑡 𝑘 
+
+and 𝑡 𝑘, 𝑁 𝑗 (𝑘 )+ 1 := 𝑡 𝑘 +1. Thus, although 𝑁 𝑗 (𝑘 ) denotes the number of observation epochs, the interval between two consecutive maneuver epochs contains 𝑁 𝑗 (𝑘 ) + 1 intermediate transitions. Here, the final observation epoch between two consecutive maneuver epochs is allowed to coincide with the latter maneuver epoch. In such a case, the observation is obtained just before performing the maneuver using the latest orbit-determination result, and therefore 
+
+𝑡 𝑘, 𝑁 𝑗 (𝑘 ) = 𝑡 𝑘, 𝑁 𝑗 (𝑘 )+ 1 = 𝑡 𝑘 +1. Moreover, different observation sources may be available at different observation epochs. This partitioning is applicable to general space mission design problems. Observations at each epoch are modeled as 
+
+𝒚 𝑘, 𝑗 = 𝒉 𝑘, 𝑗 (𝒙 𝑘, 𝑗 ) + 𝐺 𝑦 𝑘, 𝑗 (𝒙 𝑘, 𝑗 )𝒘 𝑦 𝑘, 𝑗 (3) where 𝒉 𝑘, 𝑗 : R𝑛 𝑥 → R𝑛 𝑦 𝑘, 𝑗 is the observation model at epoch 𝑡 𝑘, 𝑗 , 𝒘 𝑦 𝑘, 𝑗 ∈ R𝑛 𝑦 𝑘, 𝑗 is an independent Gaussian noise vector, and 𝐺 𝑦 𝑘, 𝑗 : R𝑛 𝑥 → R𝑛 𝑦 𝑘, 𝑗 ×𝑛 𝑦 𝑘, 𝑗 is a weighting matrix for state-dependent observation noise, with covariance 
+
+𝑊 −1 
+
+> 𝑘, 𝑗
+
+(𝒙 𝑘, 𝑗 ) := 𝐺 𝑦 𝑘, 𝑗 (𝒙 𝑘, 𝑗 )𝐺 𝑦 𝑘, 𝑗 (𝒙 𝑘, 𝑗 )⊤ (4) 5Here, 𝑊 𝑘, 𝑗 (𝒙 𝑘, 𝑗 ) is defined as the inverse matrix of the observation noise covariance. We assume that 𝒉 𝑘, 𝑗 and 𝐺 𝑦 𝑘, 𝑗 
+
+may vary with the epoch 𝑡 𝑘, 𝑗 , thereby allowing different observation types and dimensions across epochs, and that 𝒘 𝑦 𝑘, 𝑗 
+
+is mutually independent across epochs and independent of the process noise 𝒘 𝑥 .
+
+B. Belief representation 
+
+Given the past nominal control sequence ¯𝒖 0: 𝑘 = { ¯𝒖 0, . . . , ¯𝒖 𝑘 } and the observation histories 𝒚 𝑘, 1: 𝑗 = {𝒚 𝑘, 1, . . . , 𝒚 𝑘, 𝑗 }
+
+and 𝒀 𝑘 −1 = {𝒀 0, . . . , 𝒀 𝑘 −1 }, where 𝒀 𝑗 = {𝒚 𝑗, 1, . . . , 𝒚 𝑗, 𝑁 𝑗 ( 𝑗 ) }, the belief is defined as the conditional distribution of the state: 
+
+𝒃 (𝒙 𝑘, 𝑗 ) = 𝑝 (𝒙 𝑘, 𝑗 | ¯𝒖 0: 𝑘 , 𝒀 𝑘 −1, 𝒚 𝑘, 1: 𝑗 ) (5) Given a new observation 𝒚 𝑘, 𝑗 +1, the belief is propagated by Bayesian filtering: 
+
+𝒃 (𝒙 𝑘, 𝑗 +1) = 𝜂 𝑘, 𝑗 +1 𝑝 (𝒚 𝑘, 𝑗 +1 | 𝒙 𝑘, 𝑗 +1, ¯𝒖 0: 𝑘 , 𝒀 𝑘 −1, 𝒚 𝑘, 1: 𝑗 ) 𝑝 (𝒙 𝑘, 𝑗 +1 | ¯𝒖 0: 𝑘 , 𝒀 𝑘 −1, 𝒚 𝑘, 1: 𝑗 )
+
+= 𝜂 𝑘, 𝑗 +1 𝑝 (𝒚 𝑘, 𝑗 +1 | 𝒙 𝑘, 𝑗 +1, ¯𝒖 0: 𝑘 , 𝒀 𝑘 −1, 𝒚 𝑘, 1: 𝑗 )
+
+∫
+
+𝑝 (𝒙 𝑘, 𝑗 +1 | 𝒙 𝑘, 𝑗 , ¯𝒖 𝑘 ) 𝒃 (𝒙 𝑘, 𝑗 ) d𝒙 𝑘, 𝑗 
+
+(6) Here, 𝜂 𝑘, 𝑗 +1 is a normalizing constant independent of 𝒙 𝑘, 𝑗 +1. In general, Eq. (6) yields an infinite-dimensional probability distribution that does not admit a closed-form representation. To address this issue, we first define the state estimate and the estimation-error covariance as 
+
+ˆ𝒙 𝑘, 𝑗 := E𝒙 𝑘, 𝑗 | ¯𝒖 0: 𝑘 , 𝒀 𝑘 −1, 𝒚 𝑘, 1: 𝑗 
+
+ (7a) 
+
+˜𝑃 𝑘, 𝑗 := E(𝒙 𝑘, 𝑗 − ˆ𝒙 𝑘, 𝑗 )( 𝒙 𝑘, 𝑗 − ˆ𝒙 𝑘, 𝑗 )⊤ | ¯𝒖 0: 𝑘 , 𝒀 𝑘 −1, 𝒚 𝑘, 1: 𝑗 
+
+ (7b) and then approximate the belief 𝒃 (𝒙 𝑘, 𝑗 ) by a Gaussian distribution: 
+
+𝒃 (𝒙 𝑘, 𝑗 ) ≈ N   ˆ𝒙 𝑘, 𝑗 , ˜𝑃 𝑘, 𝑗 
+
+ (8) Under this Gaussian approximation, the conditional distribution of the estimation error ˜𝒙 𝑘, 𝑗 := 𝒙 𝑘, 𝑗 − ˆ𝒙 𝑘, 𝑗 is also Gaussian: 
+
+𝑝 ( ˜𝒙 𝑘, 𝑗 | ¯𝒖 0: 𝑘 , 𝒀 𝑘 −1, 𝒚 𝑘, 1: 𝑗 ) ≈ N  0𝑛 𝑥 , ˜𝑃 𝑘, 𝑗 
+
+ (9) In the mission design phase, future observations have not yet been realized. Therefore, ˆ𝒙 𝑘, 𝑗 and ˜𝑃 𝑘, 𝑗 are treated as random variables induced by the process and observation noises along the nominal trajectory. We further define the 6nominal state and the state-estimate covariance as 
+
+¯𝒙 𝑘, 𝑗 := E ˆ𝒙 𝑘, 𝑗 
+
+ (10a) 
+
+ˆ𝑃 𝑘, 𝑗 := E( ˆ𝒙 𝑘, 𝑗 − ¯𝒙 𝑘, 𝑗 )( ˆ𝒙 𝑘, 𝑗 − ¯𝒙 𝑘, 𝑗 )⊤ (10b) and assume that ˆ𝒙 𝑘, 𝑗 also follows a Gaussian distribution: 
+
+ˆ𝒙 𝑘, 𝑗 ≈ N   ¯𝒙 𝑘, 𝑗 , ˆ𝑃 𝑘, 𝑗 
+
+ (11) By the law of total expectation, the expectation of the true state coincides with that of the state estimate: 
+
+E𝒙 𝑘, 𝑗 
+
+ = EE𝒙 𝑘, 𝑗 | ¯𝒖 0: 𝑘 , 𝒀 𝑘 −1, 𝒚 𝑘, 1: 𝑗 
+
+  = E ˆ𝒙 𝑘, 𝑗 
+
+ = ¯𝒙 𝑘, 𝑗 (12) and the covariance of the true state is given by 
+
+𝑃 𝑘, 𝑗 := E(𝒙 𝑘, 𝑗 − ¯𝒙 𝑘, 𝑗 )( 𝒙 𝑘, 𝑗 − ¯𝒙 𝑘, 𝑗 )⊤
+
+= Cov E𝒙 𝑘, 𝑗 | ¯𝒖 0: 𝑘 , 𝒀 𝑘 −1, 𝒚 𝑘, 1: 𝑗 
+
+  + ECov 𝒙 𝑘, 𝑗 | ¯𝒖 0: 𝑘 , 𝒀 𝑘 −1, 𝒚 𝑘, 1: 𝑗 
+
+  
+
+= ˆ𝑃 𝑘, 𝑗 + E ˜𝑃 𝑘, 𝑗 
+
+
+
+≈ ˆ𝑃 𝑘, 𝑗 + ˜𝑃 nom 
+
+> 𝑘, 𝑗
+
+(13) where ˜𝑃 nom  
+
+> 𝑘, 𝑗
+
+is approximated as a deterministic function of the nominal state ¯𝒙 𝑘, 𝑗 , the nominal control ¯𝒖 𝑘 , and the assumed process- and observation-noise statistics. Eq. (12) and Eq. (13) are consistent with the derivation in Ref. [ 24 ]. Under the assumption that the true state lies in the vicinity of the nominal state, we approximate ˜𝑃 𝑘, 𝑗 ≈ ˜𝑃 nom  
+
+> 𝑘, 𝑗
+
+; that is, the estimation-error covariance obtained from the Bayesian filter is close to its nominal value. This approximation is justified when the deviation from the nominal trajectory remains sufficiently small. Therefore, the estimation-error covariance is evaluated along the nominal trajectory and treated deterministically under this approximation. Figure 1 illustrates the relationships among the true state 𝒙 𝑘, 𝑗 , nominal state ¯𝒙 𝑘, 𝑗 , state estimate ˆ𝒙 𝑘, 𝑗 , estimation error ˜𝒙 𝑘, 𝑗 ,estimation-error covariance ˜𝑃 𝑘, 𝑗 , and state-estimate covariance ˆ𝑃 𝑘, 𝑗 .To obtain a deterministic propagation of the first- and second-order moments that represent the approximate belief-state transition model, the prior distributions of the initial state estimate ˆ𝒙 0 and the initial estimation error ˜𝒙 0 are 7Nominal trajectory 
+
+¯𝒙 𝑘, 𝑗 
+
+ˆ𝒙 𝑘, 𝑗 
+
+𝒙 𝑘, 𝑗 
+
+˜𝒙 𝑘, 𝑗 
+
+ˆ𝑃 𝑘, 𝑗 
+
+˜𝑃 𝑘, 𝑗 
+
+Fig. 1 Schematic illustration of the nominal state, state estimate, true state, and associated covariances 
+
+also assumed to be Gaussian: 
+
+ˆ𝒙 0 ∼ N   ¯𝒙 0, ˆ𝑃 0
+
+ (14a) 
+
+˜𝒙 0 ∼ N  0𝑛 𝑥 , ˜𝑃 0
+
+ (14b) where ¯𝒙 0 is the nominal initial state, and ˆ𝑃 0 and ˜𝑃 0 denote the initial covariance matrices of the state estimate and the estimation error, respectively. The quantities ¯𝒙 0, ˆ𝑃 0, and ˜𝑃 0 are assumed to be fixed and known. 
+
+C. Linearization of dynamics 
+
+Given a nominal trajectory ( ¯𝒙 (𝑡 ), ¯𝒖 (𝑡 )) , the linearized dynamics describing the evolution of the state deviation 
+
+𝛿 𝒙 (𝑡 ) are given by 
+
+d𝛿 𝒙 (𝑡 ) =   ¯𝐴 (𝑡 )𝛿 𝒙 (𝑡 ) + ¯𝐵 (𝑡 )𝛿 𝒖 (𝑡 ) d𝑡 + ¯𝐺 𝑥 (𝑡 )d𝒘 𝑥 (15) where ¯𝐴 (𝑡 ) = 𝜕 𝒇 /𝜕 𝒙 | ¯𝒙 , ¯𝒖 , ¯𝐵 (𝑡 ) = 𝜕 𝒇 /𝜕 𝒖 | ¯𝒙 , ¯𝒖 , and ¯𝐺 𝑥 (𝑡 ) = 𝐺 𝑥 ( ¯𝒙 (𝑡 ), ¯𝒖 (𝑡 )) . Here, the bilinear terms (𝜕𝐺 𝑥 /𝜕 𝒙 · 𝛿 𝒙 ) d𝒘 𝑥 
+
+and (𝜕𝐺 𝑥 /𝜕 𝒖 · 𝛿 𝒖 ) d𝒘 𝑥 are neglected under a small-noise or locally small-deviation assumption. The nominal control is parameterized as a zero-order-hold continuous thrust input: 
+
+¯𝒖 (𝑡 ) = ¯𝒖 𝑘 , 𝑡 ∈ [ 𝑡 𝑘 , 𝑡 𝑘 +1) (16) Integrating Eq. (15) from 𝑡 𝑘, 𝑗 to the next epoch 𝑡 𝑘, 𝑗 +1 yields the following discrete-time linearized dynamics: 
+
+𝛿 𝒙 𝑘, 𝑗 +1 = 𝐴 𝑘, 𝑗 𝛿 𝒙 𝑘, 𝑗 + 𝐵 𝑘, 𝑗 𝛿 𝒖 𝑘, 𝑗 + ¯𝐺 𝑥 𝑘, 𝑗 𝒘 𝑥 𝑗 = 0, . . . , 𝑁 𝑗 (𝑘 ) (17) 8where 𝒘 𝑥 denotes an independent Gaussian random vector with zero mean and identity covariance. The matrices 𝐴 𝑘, 𝑗 
+
+and 𝐵 𝑘, 𝑗 are given by 
+
+𝐴 𝑘, 𝑗 := 𝜕 𝒙 𝑘, 𝑗 +1
+
+𝜕 𝒙 𝑘, 𝑗 
+
+= Φ 𝐴 (𝑡 𝑘, 𝑗 +1, 𝑡 𝑘, 𝑗 ) (18a) 
+
+𝐵 𝑘, 𝑗 := 𝜕 𝒙 𝑘, 𝑗 +1
+
+𝜕 𝒖 𝑘, 𝑗 
+
+=
+
+∫ 𝑡 𝑘, 𝑗 +1
+
+> 𝑡 𝑘, 𝑗
+
+Φ𝐴 (𝑡 𝑘, 𝑗 +1, 𝑡 ) ¯𝐵 (𝑡 )d𝑡 (18b) where Φ𝐴 (𝑡 2, 𝑡 1) denotes the state transition matrix along the nominal trajectory from 𝑡 1 to 𝑡 2.The matrix ¯𝐺 𝑥 𝑘, 𝑗 is chosen such that the covariance of the discrete process noise ¯𝐺 𝑥 𝑘, 𝑗 𝒘 𝑥 matches 
+
+¯𝑄 𝑘, 𝑗 =
+
+∫ 𝑡 𝑘, 𝑗 +1
+
+> 𝑡 𝑘, 𝑗
+
+Φ𝐴 (𝑡 𝑘, 𝑗 +1, 𝑡 ) ¯𝐺 𝑥 (𝑡 ) ¯𝐺 𝑥 (𝑡 )⊤Φ𝐴 (𝑡 𝑘, 𝑗 +1, 𝑡 )⊤d𝑡 (19) where ¯𝐺 𝑥 (𝑡 ) is the square-root process-noise matrix evaluated at ( ¯𝒙 (𝑡 ), ¯𝒖 (𝑡 )) , and ¯𝑄 𝑘, 𝑗 := ¯𝐺 𝑥 𝑘, 𝑗 ¯𝐺 ⊤ 
+
+> 𝑥 𝑘, 𝑗
+
+. The details of how to compute the matrices 𝐴 𝑘, 𝑗 , 𝐵 𝑘, 𝑗 are described in Appendix A, and the computation of ¯𝐺 𝑥 𝑘, 𝑗 is described in Section IV.B. 
+
+D. Linearization of observations and statistical residuals 
+
+Since 𝒉 𝑘, 𝑗 is assumed to be known, the predicted observation is obtained by evaluating the observation model at the prior state estimate: 
+
+ˆ𝒚 𝑘, 𝑗 − = 𝒉 𝑘, 𝑗 ( ˆ𝒙 𝑘, 𝑗 − ), 𝑗 = 1, . . . , 𝑁 𝑗 (𝑘 ) (20) where ˆ𝒙 𝑘, 𝑗 − is the prior state estimate at time 𝑡 𝑘, 𝑗 .By substituting Eq. (17) and Eq. (20) into Eq. (3) and linearizing the observation model about the nominal trajectory, the first-order approximation of the observation residual is obtained as 
+
+𝛿 𝒚 𝑘, 𝑗 − := 𝒚 𝑘, 𝑗 − ˆ𝒚 𝑘, 𝑗 −
+
+= 𝐶 𝑘, 𝑗 
+
+ 𝛿 𝒙 𝑘, 𝑗 − 𝛿 ˆ𝒙 𝑘, 𝑗 −
+
+ + ¯𝐺 𝑦 𝑘, 𝑗 𝒘 𝑦 𝑘, 𝑗 
+
+= 𝐶 𝑘, 𝑗 ˜𝒙 𝑘, 𝑗 − + ¯𝐺 𝑦 𝑘, 𝑗 𝒘 𝑦 𝑘, 𝑗 
+
+=
+
+
+
+𝐶 𝑘, 𝑗 ¯𝐺 𝑦 𝑘, 𝑗 
+
+  
+
+˜𝒙 ⊤ 
+
+> 𝑘, 𝑗 −
+
+𝒘 ⊤
+
+> 𝑦 𝑘, 𝑗
+
+⊤
+
+= 𝐷 𝑘, 𝑗 𝝃 𝑘, 𝑗 −
+
+(21) where ˜𝒙 𝑘, 𝑗 − := 𝒙 𝑘, 𝑗 − ˆ𝒙 𝑘, 𝑗 − is the prior estimation error, 𝐶 𝑘, 𝑗 = 𝜕 𝒉 𝑘, 𝑗 /𝜕 𝒙 ¯𝒙 𝑘, 𝑗 is the observation sensitivity matrix, 9¯𝐺 𝑦 𝑘, 𝑗 = 𝐺 𝑦 𝑘, 𝑗 ( ¯𝒙 𝑘, 𝑗 ), and 
+
+𝝃 𝑘, 𝑗 − :=
+
+
+
+˜𝒙 ⊤ 
+
+> 𝑘, 𝑗 −
+
+𝒘 ⊤
+
+> 𝑦 𝑘, 𝑗
+
+⊤
+
+(22) collects random quantities affecting the observation residual. The first- and second-order moments of 𝝃 𝑘, 𝑗 − are given by 
+
+E𝝃 𝑘, 𝑗 −
+
+ = 0𝑛 𝑥 +𝑛 𝑦 𝑘, 𝑗 (23a) 
+
+𝑃 𝜉 𝑘, 𝑗 − := E
+
+h
+
+𝝃 𝑘, 𝑗 − 𝝃 ⊤
+
+> 𝑘, 𝑗 −
+
+i
+
+=
+
+
+
+˜𝑃 𝑘, 𝑗 − 𝑂 𝑛 𝑥 ×𝑛 𝑦 𝑘, 𝑗 
+
+𝑂 𝑛 𝑦 𝑘, 𝑗 ×𝑛 𝑥 𝐼 𝑛 𝑦 𝑘, 𝑗 
+
+
+
+(23b) and the covariance of the observation residual is defined as 
+
+𝑃 𝑦 𝑘, 𝑗 − := E
+
+h
+
+𝛿 𝒚 𝑘, 𝑗 − 𝛿 𝒚 ⊤
+
+> 𝑘, 𝑗 −
+
+i
+
+= 𝐷 𝑘, 𝑗 𝑃 𝜉 𝑘, 𝑗 − 𝐷 ⊤ 
+
+> 𝑘, 𝑗
+
+(24) The residual 𝛿 𝒚 𝑘, 𝑗 − , commonly referred to as the observed-minus-computed (O-C) term in spacecraft orbit determination, is evaluated from the actual observation data and the prior state estimate. In this study, 𝛿 𝒚 𝑘, 𝑗 − is treated as a random variable characterized by 𝝃 𝑘, 𝑗 − .
+
+E. Filtered and nominal dynamics 
+
+Following Ref. [ 25 ], we adopt the extended Kalman filter (EKF) formulation for state-dependent observation noise derived from Bayes’ theorem (cf. Eq. (6)). The posterior estimate ˆ𝒙 𝑘, 𝑗 +1 is given by the maximum a posteriori (MAP) estimate, i.e., the solution of 
+
+ˆ𝒙 𝑘, 𝑗 +1 = arg min 
+
+> 𝝌 𝑘, 𝑗 +1
+
+𝑙 ( 𝝌 𝑘, 𝑗 +1) (25a) 
+
+𝑙 ( 𝝌 𝑘, 𝑗 +1) := 12 𝒅 ⊤ 
+
+> 𝑘, 𝑗 +1
+
+˜𝑃 −1 
+
+> 𝑘, 𝑗 +1−
+
+𝒅 𝑘, 𝑗 +1 + 12 𝒆 ⊤
+
+> 𝑘, 𝑗 +1
+
+𝑊 𝑘, 𝑗 +1 ( 𝝌 𝑘, 𝑗 +1)𝒆 𝑘, 𝑗 +1 + 12 log det 𝑊 −1 
+
+> 𝑘, 𝑗 +1
+
+( 𝝌 𝑘, 𝑗 +1) + const . (25b) where ˜𝑃 𝑘, 𝑗 +1− is the prior estimation-error covariance at 𝑡 𝑘, 𝑗 +1, 𝒅 𝑘, 𝑗 +1 = 𝝌 𝑘, 𝑗 +1 − ˆ𝒙 𝑘, 𝑗 +1− , and 𝒆 𝑘, 𝑗 +1 = 𝒚 𝑘, 𝑗 +1 −
+
+𝒉 𝑘, 𝑗 +1 ( 𝝌 𝑘, 𝑗 +1). The log det 𝑊 −1 
+
+> 𝑘, 𝑗 +1
+
+( 𝝌 𝑘, 𝑗 +1) term arises from the state dependence of the observation-noise covariance and is absent in the standard state-estimation problem. Here, 𝝌 𝑘, 𝑗 +1 denotes a candidate state in the minimization problem and is introduced to distinguish the optimization variable from the true state 𝒙 𝑘, 𝑗 +1.Since the observation 𝒚 𝑘, 𝑗 +1 is uncertain and treated as a random variable in the mission design phase, we approximate the state-dependent noise covariance by fixing 𝑊 −1 
+
+> 𝑘, 𝑗 +1
+
+at the nominal state ¯𝒙 𝑘, 𝑗 +1. We define the fixed 10 observation-noise covariance as 
+
+¯𝑊 −1 
+
+> 𝑘, 𝑗 +1
+
+:= 𝑊 −1 
+
+> 𝑘, 𝑗 +1
+
+( ¯𝒙 𝑘, 𝑗 +1) = ¯𝐺 𝑦 𝑘, 𝑗 +1 ¯𝐺 ⊤ 
+
+> 𝑦 𝑘, 𝑗 +1
+
+(26) Consequently, the MAP estimate is approximated as 
+
+ˆ𝒙 𝑘, 𝑗 +1 = ˆ𝒙 𝑘, 𝑗 +1− + Λ−1 
+
+> 𝑘, 𝑗 +1
+
+𝒔 𝑘, 𝑗 +1 (27) Here, Λ𝑘, 𝑗 +1 is the posterior information matrix defined as 
+
+Λ𝑘, 𝑗 +1 := E
+
+" 𝜕 2𝑙 ( 𝝌 𝑘, 𝑗 +1)
+
+𝜕 𝝌 𝑘, 𝑗 +1𝜕 𝝌 ⊤
+
+> 𝑘, 𝑗 +1
+
+#
+
+= ˜𝑃 −1 
+
+> 𝑘, 𝑗 +1−
+
++ 𝑆 𝑘, 𝑗 +1 (28) and 𝒔 𝑘, 𝑗 +1 and 𝑆 𝑘, 𝑗 +1 are given by 
+
+𝒔 𝑘, 𝑗 +1 = 𝐶 ⊤ 
+
+> 𝑘, 𝑗 +1
+
+¯𝑊 𝑘, 𝑗 +1 𝒆 𝑘, 𝑗 +1 (29a) 
+
+𝑆 𝑘, 𝑗 +1 = 𝐶 ⊤ 
+
+> 𝑘, 𝑗 +1
+
+¯𝑊 𝑘, 𝑗 +1𝐶 𝑘, 𝑗 +1 (29b) The prior state estimate and estimation-error covariance at 𝑡 𝑘, 𝑗 +1 are propagated from the posterior quantities at 𝑡 𝑘, 𝑗 
+
+as 
+
+ˆ𝒙 𝑘, 𝑗 +1− = 𝒇 𝑘, 𝑗 ( ˆ𝒙 𝑘, 𝑗 , 𝒖 𝑘, 𝑗 ) (30a) 
+
+˜𝑃 𝑘, 𝑗 +1− = 𝐴 𝑘, 𝑗 ˜𝑃 𝑘, 𝑗 𝐴 ⊤ 
+
+> 𝑘, 𝑗
+
++ ¯𝐺 𝑥 𝑘, 𝑗 ¯𝐺 ⊤ 
+
+> 𝑥 𝑘, 𝑗
+
+(30b) where 𝒇 𝑘, 𝑗 ( ˆ𝒙 𝑘, 𝑗 , 𝒖 𝑘, 𝑗 ) denotes the discrete-time nonlinear dynamics obtained by numerically integrating the deterministic part of Eq. (1). Under the Gaussian-belief assumption, the MAP estimate in Eq. (27) coincides with the conditional expectation E𝒙 𝑘, 𝑗 +1 | ¯𝒖 0: 𝑘 , 𝒀 𝑘 −1, 𝒚 𝑘, 1: 𝑗 +1
+
+, because the posterior is Gaussian and its mean and mode are identical. Note that this equivalence does not hold in general for non-Gaussian posteriors. The posterior estimation-error covariance can be approximated by the inverse of the information matrix: 
+
+˜𝑃 𝑘, 𝑗 +1 ≈ Λ−1 
+
+> 𝑘, 𝑗 +1
+
+(31) Since all terms in Eq. (27), Eq. (28), and Eq. (29) are evaluated along the nominal trajectory, e.g., at ¯𝒙 𝑘, 𝑗 and ¯𝒙 𝑘, 𝑗 +1, the resulting propagation is more accurately described as a linearized Kalman filter than as a standard EKF, in which the matrices are evaluated at the latest state estimate ˆ𝒙 𝑘, 𝑗 .11 Under the first-order approximation 𝒆 𝑘, 𝑗 +1 = 𝛿 𝒚 −
+
+> 𝑘, 𝑗 +1
+
+, substituting Eq. (21) into Eq. (29a) yields 
+
+𝒔 𝑘, 𝑗 +1 = 𝐶 ⊤ 
+
+> 𝑘, 𝑗 +1
+
+¯𝑊 𝑘, 𝑗 +1 𝐷 𝑘, 𝑗 +1𝝃 𝑘, 𝑗 +1− (32) Accordingly, the intermediate propagation with state estimation can be written as 
+
+ˆ𝒙 𝑘, 𝑗 +1 = 𝒇 𝑘, 𝑗 ( ˆ𝒙 𝑘, 𝑗 , 𝒖 𝑘, 𝑗 ) + ˜𝑃 𝑘, 𝑗 +1𝐶 ⊤ 
+
+> 𝑘, 𝑗 +1
+
+¯𝑊 𝑘, 𝑗 +1 𝐷 𝑘, 𝑗 +1𝝃 𝑘, 𝑗 +1− (33) and the propagation of the estimation-error covariance is then approximated by 
+
+˜𝑃 𝑘, 𝑗 +1 ≈ Λ−1
+
+> 𝑘, 𝑗 +1
+
+=
+
+h ˜𝑃 −1 
+
+> 𝑘, 𝑗 +1−
+
++ 𝑆 𝑘, 𝑗 +1
+
+i −1
+
+=
+
+
+
+𝐴 𝑘, 𝑗 ˜𝑃 𝑘, 𝑗 𝐴 ⊤ 
+
+> 𝑘, 𝑗
+
++ ¯𝐺 𝑥 𝑘, 𝑗 ¯𝐺 ⊤
+
+> 𝑥 𝑘, 𝑗
+
+ −1
+
++ 𝑆 𝑘, 𝑗 +1
+
+ −1
+
+(34) By taking the expectation of both sides of Eq. (33) and applying the first-order approximation, the nominal dynamics are approximated as 
+
+¯𝒙 𝑘, 𝑗 +1 = E 𝒇 𝑘, 𝑗 ( ˆ𝒙 𝑘, 𝑗 , 𝒖 𝑘, 𝑗 ) + ˜𝑃 𝑘, 𝑗 +1𝐶 ⊤ 
+
+> 𝑘, 𝑗 +1
+
+¯𝑊 𝑘, 𝑗 +1 𝐷 𝑘, 𝑗 +1E
+
+h
+
+𝝃 −
+
+> 𝑘, 𝑗 +1
+
+i
+
+= E 𝒇 𝑘, 𝑗 ( ˆ𝒙 𝑘, 𝑗 , 𝒖 𝑘, 𝑗 )
+
+≈ 𝒇 𝑘, 𝑗 
+
+ E ˆ𝒙 𝑘, 𝑗 
+
+ , E𝒖 𝑘, 𝑗 
+
+  
+
+= 𝒇 𝑘, 𝑗 ( ¯𝒙 𝑘, 𝑗 , ¯𝒖 𝑘 )
+
+(35) where ¯𝒙 𝑘, 𝑗 +1 := E ˆ𝒙 𝑘, 𝑗 +1
+
+ and E𝒖 𝑘, 𝑗 
+
+ = ¯𝒖 𝑘 because E𝛿 ˆ𝒙 𝑘, 𝑗 
+
+ = 0𝑛 𝑥 .
+
+F. Belief-state transition model 
+
+Although the nominal control ¯𝒖 𝑘 and feedback gain 𝐾 𝑘 are held fixed within each stage, the feedback correction is recomputed at each intermediate epoch using the latest state estimate. Thus, for 𝑡 ∈ [ 𝑡 𝑘, 𝑗 , 𝑡 𝑘, 𝑗 +1), the applied control is modeled as 
+
+𝒖 𝑘, 𝑗 = ¯𝒖 𝑘 + 𝐾 𝑘 ( ˆ𝒙 𝑘, 𝑗 − ¯𝒙 𝑘, 𝑗 )
+
+= ¯𝒖 𝑘 + 𝐾 𝑘 𝛿 ˆ𝒙 𝑘, 𝑗 
+
+(36) 12 Because E𝛿 ˆ𝒙 𝑘, 𝑗 
+
+ = 0𝑛 𝑥 , the expected applied control satisfies E𝒖 𝑘, 𝑗 
+
+ = ¯𝒖 𝑘 . The control deviation is defined as 
+
+𝛿 𝒖 𝑘, 𝑗 := 𝒖 𝑘, 𝑗 − ¯𝒖 𝑘 and its covariance is given by 
+
+𝑃 𝑢 𝑘, 𝑗 := E
+
+h
+
+𝛿 𝒖 𝑘, 𝑗 𝛿 𝒖 ⊤
+
+> 𝑘, 𝑗
+
+i
+
+= 𝐾 𝑘 ˆ𝑃 𝑘, 𝑗 𝐾 ⊤ 
+
+> 𝑘
+
+(37) By substituting Eq. (36) into Eq. (33) and expanding to first order about the nominal trajectory, the propagation of the estimate deviation is approximated as 
+
+𝛿 ˆ𝒙 𝑘, 𝑗 +1 ≈ 𝐴 𝑘, 𝑗 𝛿 ˆ𝒙 𝑘, 𝑗 + 𝐵 𝑘, 𝑗 𝛿 𝒖 𝑘, 𝑗 + ˜𝑃 𝑘, 𝑗 +1 𝒔 𝑘, 𝑗 +1
+
+=  𝐴 𝑘, 𝑗 + 𝐵 𝑘, 𝑗 𝐾 𝑘 
+
+ 𝛿 ˆ𝒙 𝑘, 𝑗 + ˜𝑃 𝑘, 𝑗 +1 𝒔 𝑘, 𝑗 +1
+
+(38) The propagation of the state-estimate covariance is then given by 
+
+ˆ𝑃 𝑘, 𝑗 +1 = A𝑘, 𝑗 ˆ𝑃 𝑘, 𝑗 A⊤ 
+
+> 𝑘, 𝑗
+
++ F 𝑘, 𝑗 +1 𝑃 𝜉 𝑘, 𝑗 +1− F ⊤ 
+
+> 𝑘, 𝑗 +1
+
+(39) where 
+
+A𝑘, 𝑗 = 𝐴 𝑘, 𝑗 + 𝐵 𝑘, 𝑗 𝐾 𝑘 (40a) 
+
+F𝑘, 𝑗 +1 = ˜𝑃 𝑘, 𝑗 +1𝐶 ⊤ 
+
+> 𝑘, 𝑗 +1
+
+¯𝑊 𝑘, 𝑗 +1 𝐷 𝑘, 𝑗 +1 (40b) By vectorizing the belief state, we define the augmented state as 
+
+𝑿 𝑘, 𝑗 =
+
+
+
+¯𝒙 ⊤ 
+
+> 𝑘, 𝑗
+
+vec ( ˜𝑃 𝑘, 𝑗 )⊤ vec ( ˆ𝑃 𝑘, 𝑗 )⊤
+
+⊤
+
+(41) and define the augmented control as 
+
+𝑼 𝑘 =
+
+
+
+¯𝒖 ⊤ 
+
+> 𝑘
+
+vec (𝐾 𝑘 )⊤
+
+⊤
+
+(42) Accordingly, the intermediate belief-state transition model can be written as 
+
+𝑿 𝑘, 𝑗 +1 = 𝑭 𝑘, 𝑗 
+
+ 𝑿 𝑘, 𝑗 , 𝑼 𝑘 
+
+ 𝑗 = 0, . . . , 𝑁 𝑗 (𝑘 ) (43) 13 where 
+
+𝑭 𝑘, 𝑗 
+
+ 𝑿 𝑘, 𝑗 , 𝑼 𝑘 
+
+ =
+
+
+
+𝒇 𝑘, 𝑗 ( ¯𝒙 𝑘, 𝑗 , ¯𝒖 𝑘 )
+
+vec 
+
+
+
+𝐴 𝑘, 𝑗 ˜𝑃 𝑘, 𝑗 𝐴 ⊤ 
+
+> 𝑘, 𝑗
+
++ ¯𝐺 𝑥 𝑘, 𝑗 ¯𝐺 ⊤
+
+> 𝑥 𝑘, 𝑗
+
+ −1
+
++ 𝑆 𝑘, 𝑗 +1
+
+ −1!
+
+vec 
+
+
+
+A𝑘, 𝑗 ˆ𝑃 𝑘, 𝑗 A⊤ 
+
+> 𝑘, 𝑗
+
++ F 𝑘, 𝑗 +1 𝑃 𝜉 𝑘, 𝑗 +1− F ⊤
+
+> 𝑘, 𝑗 +1
+
+
+
+(44) If no observation is associated with an epoch 𝑡 𝑘, 𝑗 +1, including the case 𝑁 𝑗 (𝑘 ) = 0, the corresponding measurement-update terms are omitted by setting 𝑆 𝑘, 𝑗 +1 = 𝑂 𝑛 𝑥 and removing the term F𝑘, 𝑗 +1 𝑃 𝜉 𝑘, 𝑗 +1− F ⊤ 
+
+> 𝑘, 𝑗 +1
+
+from the propagation of 
+
+ˆ𝑃 𝑘, 𝑗 +1. Under this convention, Eq. (43) remains valid. Without the separation principle, the coefficients appearing in the covariance propagation are evaluated along the nominal trajectory being optimized and therefore vary with the nominal state and control. In particular, matrices such as 𝐴 𝑘, 𝑗 , ¯𝐺 𝑥 𝑘, 𝑗 , 𝐶 𝑘, 𝑗 +1, 𝑆 𝑘, 𝑗 +1, A𝑘, 𝑗 , and F𝑘, 𝑗 +1 depend on ( ¯𝒙 𝑘, 𝑗 , ¯𝒖 𝑘 ), while the propagation of ˆ𝑃 𝑘, 𝑗 also depends explicitly on 𝐾 𝑘 . Consequently, the augmented dynamics in Eq. (44) must be differentiated with respect to the full augmented state and control. The DDP algorithm uses the first- and second-order state transition matrices (STMs) of these augmented dynamics to construct local quadratic subproblems. These STMs capture the cross-sensitivities among the nominal state, the estimation-error covariance, the state-estimate covariance, the nominal control, and the feedback gain. As a result, the control updates can modify the nominal trajectory and feedback policy in a coordinated manner, depending on the specified cost functions and constraints. For use in trajectory optimization algorithms, the stage-to-stage belief-state transition must be written directly as a function of 𝑿 𝑘 and 𝑼 𝑘 , because 𝑿 𝑘, 𝑗 is an intermediate variable determined by these quantities. Letting 𝑿 𝑘 := 𝑿 𝑘, 0, the belief-state transition model from 𝑡 𝑘 to 𝑡 𝑘 +1 is obtained by sequentially applying Eq. (43) over the intermediate epochs: 
+
+𝑿 𝑘 +1 = 𝑭 𝑘 ( 𝑿 𝑘 , 𝑼 𝑘 ) (45) Figure 2 illustrates the sequential state-propagation process described by Eq. (45). To obtain the posterior distribution 𝑝 (𝒙 𝑘 +1 | 𝒀 𝑘 , 𝑼 𝑘 ), Bayes’ rule may also be applied directly, as in Ref. [ 17 ]. In that case, only the distribution linking 𝒙 𝑘 and 𝒙 𝑘 +1 conditioned on the observation sequence 𝒀 𝑘 is of interest, since all intermediate states 𝒙 𝑘, 𝑗 can be marginalized out. However, when the dynamical system contains process noise, filtering conditioned on 𝒀 𝑘 induces strong correlations among observations, as shown in Ref. [ 26 , Eq. (12)]. These correlations lead to cumbersome algorithmic implementation, particularly in the STMs of the belief-state transition model. For this reason, sequential propagation with intermediate states is adopted in this study. The dimensions of the augmented state and control are 𝑛 𝑋 = 𝑛 𝑥 + 2𝑛 2 
+
+> 𝑥
+
+and 𝑛 𝑈 = 𝑛 𝑢 + 𝑛 𝑢 𝑛 𝑥 , respectively. Using square-root factors of the covariance matrices exploits symmetric structure and reduces the dimension of the augmented 14 𝑭 𝑘 ( 𝑿 𝑘 , 𝑼 𝑘 )
+
+𝑿 𝑘 𝑿 𝑘, 𝑗 𝑿 𝑘, 𝑗 +1· · · · · · 𝑿 𝑘 +1
+
+> 𝑭 𝑘, 𝑗
+
+𝑼 𝑘 
+
+Fig. 2 Block diagram of the sequential propagation of the belief-state dynamics 
+
+state to 𝑛 𝑥 +𝑛 𝑥 (𝑛 𝑥 +1). Although square-root representations may improve numerical stability and reduce dimensionality, we deliberately retain the full covariance matrices in this study because evaluating the state transition matrices of the belief-state transition model is simpler than for the square-root factors, which require QR decompositions and differentiation through them up to second order. 
+
+## III. Partially Observable Stochastic Differential Dynamic Programming 
+
+This section presents the PO-SDDP algorithm for solving partially observable trajectory optimization problems. To handle general nonlinear constraints, an augmented Lagrangian framework is incorporated into the DDP recursion. A trust-region method is further introduced to ensure that the local control update provides a descent direction and remains within the region where the quadratic approximation is valid. 
+
+A. Problem definition 
+
+Consider the following optimization problem: 
+
+min     
+
+> 𝑼 0,𝑼 1,..., 𝑼 𝑁 −1
+> 𝑁 −1
+
+∑︁ 
+
+> 𝑘 =0
+
+𝐿 𝑘 ( 𝑿 𝑘 , 𝑼 𝑘 ) + 𝜑 ( 𝑿 𝑁 ) (46a) 
+
+s.t. 𝑿 𝑘 +1 = 𝑭 𝑘 ( 𝑿 𝑘 , 𝑼 𝑘 ) (46b) 
+
+𝒄 𝑘, I ( 𝑿 𝑘 , 𝑼 𝑘 ) ≤ 0𝑛 𝑐 𝑘, I (46c) 
+
+𝒄 𝑘, E ( 𝑿 𝑘 , 𝑼 𝑘 ) = 0𝑛 𝑐 𝑘, E (46d) 
+
+𝝓 ( 𝑿 𝑁 ) ≤ 0𝑛 𝜙 (46e) 
+
+𝝍 ( 𝑿 𝑁 ) = 0𝑛 𝜓 (46f) where 𝐿 𝑘 ( 𝑿 𝑘 , 𝑼 𝑘 ) : R𝑛 𝑋 × R𝑛 𝑈 → R and 𝜑 ( 𝑿 𝑁 ) : R𝑛 𝑋 → R denote the stage and terminal cost functions, respectively, and 𝑿 𝑘 and 𝑼 𝑘 denote the augmented state and augmented control at time step 𝑘 . The functions 
+
+𝒄 𝑘, I ( 𝑿 𝑘 , 𝑼 𝑘 ) : R𝑛 𝑋 × R𝑛 𝑈 → R𝑛 𝑐 𝑘, I and 𝒄 𝑘, E ( 𝑿 𝑘 , 𝑼 𝑘 ) : R𝑛 𝑋 × R𝑛 𝑈 → R𝑛 𝑐 𝑘, E denote the stage inequality and equality constraints, and the functions 𝝓 ( 𝑿 𝑁 ) : R𝑛 𝑋 → R𝑛 𝜙 and 𝝍 ( 𝑿 𝑁 ) : R𝑛 𝑋 → R𝑛 𝜓 represent the terminal inequality and equality constraints, respectively. 15 B. Augmented Lagrangian method 
+
+Although various approaches have been developed to handle constraints in DDP, including active-set methods [ 27 , 28 ]and interior-point DDP [ 29 ], the proposed method adopts the augmented Lagrangian DDP (AL-DDP) framework [ 30 , 31 ]. AL-DDP incorporates the stage and terminal constraints into the objective by introducing the augmented cost function: 
+
+𝐽 0 = 
+
+> 𝑁 −1
+
+∑︁ 
+
+> 𝑘 =0
+
+˜𝐿 𝑘 ( 𝑿 𝑘 , 𝑼 𝑘 ) + ˜𝜑 ( 𝑿 𝑁 ) (47) with 
+
+˜𝐿 𝑘 = 𝐿 𝑘 ( 𝑿 𝑘 , 𝑼 𝑘 ) + 𝝀 ⊤ 
+
+> 𝑘, I
+
+𝒄 𝑘, I ( 𝑿 𝑘 , 𝑼 𝑘 ) + 𝝀 ⊤  
+
+> 𝑘, E
+
+𝒄 𝑘, E ( 𝑿 𝑘 , 𝑼 𝑘 ) + 𝜎 𝑘, I ∥ 𝒈 𝑘, I ∥2 + 𝜎 𝑘, E ∥𝒄 𝑘, E ( 𝑿 𝑘 , 𝑼 𝑘 )∥ 2 (48a) 
+
+˜𝜑 ( 𝑿 𝑁 ) = 𝜑 ( 𝑿 𝑁 ) + 𝝀 ⊤ 
+
+> 𝑁 , I
+
+𝝓 ( 𝑿 𝑁 ) + 𝝀 ⊤  
+
+> 𝑁 , E
+
+𝝍 ( 𝑿 𝑁 ) + 𝜎 𝑁 , I ∥ 𝒈 𝑁 , I ∥2 + 𝜎 𝑁 , E ∥𝝍 ( 𝑿 𝑁 )∥ 2 (48b) 
+
+𝒈 𝑘, I =
+
+
+
+max 
+
+
+
+0𝑛 𝑐 𝑘, I , 𝒄 𝑘, I ( 𝑿 𝑘 , 𝑼 𝑘 )
+
+
+
+, 𝑘 = 0, . . . , 𝑁 − 1max 
+
+
+
+0𝑛 𝜙 , 𝝓 ( 𝑿 𝑁 )
+
+
+
+, 𝑘 = 𝑁 
+
+(48c) where 𝝀 𝑘, I ∈ R𝑛 𝑐 𝑘, I and 𝝀 𝑘, E ∈ R𝑛 𝑐 𝑘, E denote the Lagrange multipliers, and 𝜎 𝑘, I ∈ R and 𝜎 𝑘, E ∈ R denote the penalty parameters associated with the inequality and equality constraints, respectively. The maximum operation is applied componentwise. The AL-DDP algorithm consists of an inner loop and an outer loop. In the inner loop, DDP locally optimizes the control sequence by solving the unconstrained problem defined by the augmented cost function. After the inner loop reaches approximate convergence, the outer loop updates the Lagrange multipliers and penalty parameters. 
+
+C. Algorithmic overview 
+
+The inner loop of PO-SDDP consists of a backward sweep and a forward sweep for the unconstrained trajectory optimization subproblem. In the backward sweep, local control updates are computed backward in time based on Bellman’s principle of optimality. In the forward sweep, a new reference trajectory is propagated using the updated control sequence. These two sweeps are repeated until the convergence criteria are satisfied. Algorithm 1 summarizes the overall procedure of the proposed method. In the backward sweep, if the Hessian of the cost-to-go function with respect to the augmented control at stage 𝑘 ,denoted by 𝐽 𝑈𝑈,𝑘 , is not positive definite, the resulting control update may fail to satisfy a descent condition. To address this issue, the algorithm incorporates a trust-region method that regularizes 𝐽 𝑈𝑈,𝑘 and restricts the control update 𝛿 𝑼 𝑘 
+
+16 Algorithm 1 PO-SDDP 
+
+Input: Initial nominal state ¯𝑿 0, initial nominal control sequence ¯𝑼 0: 𝑁 −1
+
+Output: Locally optimal nominal control sequence ¯𝑼 ∗  
+
+> 0: 𝑁 −1
+> 1:
+
+Propagate the initial reference trajectory ¯𝑿 0: 𝑁  
+
+> 2:
+
+while overall convergence criteria are not satisfied do  
+
+> 3:
+
+while approximate convergence criteria are not satisfied do  
+
+> 4:
+
+Perform the backward sweep to compute local control updates  
+
+> 5:
+
+Perform the forward sweep to propagate a new reference trajectory  
+
+> 6:
+
+Accept or reject the candidate trajectory  
+
+> 7:
+
+Update the trust-region radius  
+
+> 8:
+
+end while  
+
+> 9:
+
+Update the Lagrange multipliers and penalty parameters  
+
+> 10:
+
+end while  
+
+> 11:
+
+¯𝑼 ∗  
+
+> 0: 𝑁 −1
+
+← ¯𝑼 0: 𝑁 −1 
+
+> 12:
+
+return ¯𝑼 ∗ 
+
+> 0: 𝑁 −1
+
+to a region where the quadratic approximation remains valid. The trust-region subproblem is given by 
+
+min 
+
+> 𝛿 𝑼 𝑘
+
+𝐽 ⊤ 
+
+> 𝑈,𝑘
+
+𝛿 𝑼 𝑘 + 12 𝛿 𝑼 ⊤ 
+
+> 𝑘
+
+𝐽 𝑈𝑈,𝑘 𝛿 𝑼 𝑘 (49a) 
+
+s.t. ∥𝐷 tr 𝛿 𝑼 𝑘 ∥ ≤ Δ (49b) where 𝐽 𝑈,𝑘 is the first-order derivative of the cost-to-go function with respect to 𝑼 𝑘 , 𝐷 tr is a positive definite scaling matrix, and Δ is the trust-region radius. The matrix 𝐷 tr defines a hyperellipsoid in the control space of 𝑼 𝑘 . The trust-region radius Δ is adjusted adaptively according to the agreement between the expected and actual reductions in the augmented cost. 
+
+## IV. Implementation Details 
+
+In this section, we describe implementation details that enhance the numerical stability and computational efficiency of the proposed framework. Specifically, we compute the first- and second-order derivatives of the covariance dynamics semi-analytically by reusing derivatives of the nominal dynamics, and introduce representative cost and constraint formulations for space mission design, smoothed by using Schatten-norm surrogates. 
+
+A. Partial derivatives of covariance propagation 
+
+The most computationally expensive part of the framework is the computation of the first- and second-order STMs required for covariance propagation. Direct application of finite differences or automatic differentiation (AD) is computationally prohibitive because of the high dimensionality of the augmented dynamics. By exploiting the dependence of the covariance matrices on the nominal state and control, the STMs for covariance propagation can instead be computed from analytic derivatives expressed in terms of the STMs of the nominal-state dynamics. For 17 example, the derivatives of the prior estimation-error covariance with respect to the nominal state can be written in terms of tensor multiplications as 
+
+𝜕 ˜𝑃 𝑎𝑏 𝑘, 𝑗 +1−
+
+𝜕𝑥 𝑐 𝑘, 𝑗 
+
+= 𝜕 𝐴 𝑎 𝛼 𝑘, 𝑗 
+
+𝜕𝑥 𝑐 𝑘, 𝑗 
+
+˜𝑃 𝛼𝛽 𝑘, 𝑗 𝐴 𝑏𝛽 𝑘, 𝑗 + 𝐴 𝑎 𝛼 𝑘, 𝑗 ˜𝑃 𝛼𝛽 𝑘, 𝑗 
+
+𝜕 𝐴 𝑏𝛽 𝑘, 𝑗 
+
+𝜕𝑥 𝑐 𝑘, 𝑗 
+
++ 𝜕 ¯𝐺 𝑎 𝛼 𝑥 𝑘, 𝑗 
+
+𝜕𝑥 𝑐 𝑘, 𝑗 
+
+¯𝐺 𝑏 𝛼 𝑥 𝑘, 𝑗 + ¯𝐺 𝑎 𝛼 𝑥 𝑘, 𝑗 
+
+𝜕 ¯𝐺 𝑏 𝛼 𝑥 𝑘, 𝑗 
+
+𝜕𝑥 𝑐 𝑘, 𝑗 
+
+(50) where repeated superscripts follow the summation convention. On the right-hand side, the derivative of 𝐴 𝑘, 𝑗 with respect to 𝑥 𝑘, 𝑗 corresponds to the second-order STMs of the nominal dynamics, whereas the derivative of ¯𝐺 𝑥 𝑘, 𝑗 with respect to 𝑥 𝑘, 𝑗 can be obtained through AD. The concrete procedure for computing the STMs of the nominal dynamics and the tensor contractions required for the derivatives of the covariance dynamics is summarized in Appendices A and B, respectively. Because the derivatives derived in these appendices correspond to the belief-state transition over each intermediate interval from 𝑡 𝑘, 𝑗 to 𝑡 𝑘, 𝑗 +1,the method for computing the stage-to-stage STMs is described in Appendix C. Accordingly, the problem-dependent implementation effort is largely reduced to specifying the dynamics, observation models, and uncertainty models. The corresponding model-dependent derivatives can be evaluated using AD, whereas the tensor operations associated with covariance propagation are handled independently of the model. 
+
+B. Approximation of discretized process noise 
+
+As described in Section II.C, the discretized process-noise matrix ¯𝐺 𝑥 𝑘, 𝑗 must be computed in the discretization procedure. This section introduces the approximation approach used in this study. A direct approach is to integrate the continuous-time Lyapunov equation for ¯𝑄 (𝑡 ):
+
+¤¯𝑄 (𝑡 ) = ¯𝐴 (𝑡 ) ¯𝑄 (𝑡 ) + ¯𝑄 (𝑡 ) ¯𝐴 ⊤ (𝑡 ) + ¯𝐺 (𝑡 ) ¯𝐺 ⊤ (𝑡 ) (51) from 𝑡 𝑘, 𝑗 to 𝑡 𝑘, 𝑗 +1 with the initial condition ¯𝑄 (𝑡 𝑘, 𝑗 ) = 𝑂 𝑛 𝑥 . The matrix ¯𝐺 𝑥 𝑘, 𝑗 can then be obtained from a Cholesky decomposition of ¯𝑄 𝑘, 𝑗 . Because the additional numerical integration of ¯𝑄 (𝑡 ) increases the computational cost, the PO-SDDP algorithm instead uses the trapezoidal rule to approximate ¯𝐺 𝑥 𝑘, 𝑗 . Using the first-order STM 𝐴 𝑘, 𝑗 , Eq. (19) is approximated as 
+
+¯𝑄 𝑘, 𝑗 ≈ Δ𝑡 𝑘, 𝑗 
+
+2
+
+
+
+𝐴 𝑘, 𝑗 ¯𝐺 𝑘, 𝑗 ¯𝐺 ⊤ 
+
+> 𝑘, 𝑗
+
+𝐴 ⊤ 
+
+> 𝑘, 𝑗
+
++ ¯𝐺 𝑘, 𝑗 +1 ¯𝐺 ⊤
+
+> 𝑘, 𝑗 +1
+
+
+
+(52) where Δ𝑡 𝑘, 𝑗 = 𝑡 𝑘, 𝑗 +1 − 𝑡 𝑘, 𝑗 , ¯𝐺 𝑘, 𝑗 = 𝐺 𝑥 ( ¯𝒙 𝑘, 𝑗 , ¯𝒖 𝑘 ), and ¯𝐺 𝑘, 𝑗 +1 = 𝐺 𝑥 ( ¯𝒙 𝑘, 𝑗 +1, ¯𝒖 𝑘 ). Accordingly, ¯𝐺 𝑥 𝑘, 𝑗 can be written as 
+
+¯𝐺 𝑥 𝑘, 𝑗 =√︂ Δ𝑡 𝑘, 𝑗 
+
+2
+
+
+
+𝐴 𝑘, 𝑗 ¯𝐺 𝑘, 𝑗 ¯𝐺 𝑘, 𝑗 +1
+
+
+
+(53) 18 so that ¯𝑄 𝑘, 𝑗 = ¯𝐺 𝑥 𝑘, 𝑗 ¯𝐺 ⊤ 
+
+> 𝑥 𝑘, 𝑗
+
+. This approximation is significantly faster than numerically integrating Eq. (51) and more accurate than the Euler approximation used in Refs. [20, 21]. 
+
+C. Representative cost functions and constraints 
+
+Since the covariance matrices ˜𝑃 𝑘 and ˆ𝑃 𝑘 , together with the linear feedback gain 𝐾 𝑘 , are included in the state and control vectors, the costs and constraints can be formulated explicitly as functions of these quantities. In other words, the proposed method can handle stochastic costs and chance constraints expressed in terms of moments up to second order. Here, we introduce representative cost functions and constraints commonly used in spacecraft trajectory design, including minimum-fuel costs with covariance penalties, a stochastic thrust magnitude constraint, terminal covariance constraints, and linear state chance constraints. The cost functions and constraints introduced here are twice continuously differentiable with respect to the reference trajectory ( ¯𝑿 𝑘 , ¯𝑼 𝑘 ) and can therefore be incorporated into the proposed method. If different cost functions or constraints are introduced, their derivatives can also be evaluated using AD, although analytic implementations are significantly faster in practice. 
+
+1. Cost functions 
+
+The stage and terminal cost functions are defined as the sum of the smoothed ℓ2-norm of the nominal control and quadratic penalties on the deviations of the state and control from the nominal trajectory: 
+
+𝐿 𝑘 (𝒙 𝑘 , 𝒖 𝑘 ) = Δ 𝑡 𝑘 √︁ ∥ ¯𝒖 𝑘 ∥2 + 𝜖 𝑢 + Δ𝑡 𝑘 E
+
+h
+
+∥𝒙 𝑘 − ¯𝒙 𝑘 ∥2 
+
+> 𝑄 𝑘
+
++ ∥ 𝒖 𝑘 − ¯𝒖 𝑘 ∥2
+
+> 𝑅 𝑘
+
+i
+
+(54a) 
+
+𝜑 (𝒙 𝑁 ) = E
+
+h
+
+∥𝒙 𝑁 − ¯𝒙 𝑁 ∥2
+
+> 𝑄 𝑁
+
+i
+
+(54b) where Δ𝑡 𝑘 := 𝑡 𝑘 +1 − 𝑡 𝑘 is the discretization time step, 𝜖 𝑢 is a small mass-leak parameter, and 𝑄 𝑘 ⪰ 𝑂 𝑛 𝑥 and 𝑅 𝑘 ≻ 𝑂 𝑛 𝑢 
+
+are weighting matrices. From the definitions of the covariances in Eq. (7b) and Eq. (10b), together with the relation in Eq. (13), Eq. (54a) and Eq. (54b) can be rewritten as 
+
+𝐿 𝑘 ( 𝑿 𝑘 , 𝑼 𝑘 ) = Δ 𝑡 𝑘 
+
+√︁ 
+
+∥ ¯𝒖 𝑘 ∥2 + 𝜖 𝑢 + tr  ˆ𝑃 𝑘 𝑄 𝑘 
+
+ + tr  ˜𝑃 𝑘 𝑄 𝑘 
+
+ + tr 𝑃 𝑢 𝑘 𝑅 𝑘 
+
+ 
+
+(55a) 
+
+𝜑 ( 𝑿 𝑁 ) = tr  ˆ𝑃 𝑁 𝑄 𝑁 
+
+ + tr  ˜𝑃 𝑁 𝑄 𝑁 
+
+ (55b) where 𝑃 𝑢 𝑘 := 𝑃 𝑢 𝑘, 0 = 𝐾 𝑘 ˆ𝑃 𝑘 𝐾 ⊤ 
+
+> 𝑘
+
+; thus, the stochastic control penalty is evaluated only at the maneuver epochs. The optimization results depend on the choice of the weighting matrices. With small weighting matrices, the solution is nearly fuel-optimal. In contrast, with large weighting matrices, the resulting solution becomes more observability-aware or uncertainty-robust: the optimized reference trajectory passes through a highly observable region, or the feedback gain keeps the spacecraft close to the reference trajectory, thereby reducing the covariances. 19 2. Thrust magnitude constraint 
+
+The chance constraint on the thrust magnitude is given by 
+
+P [∥ 𝒖 𝑘 ∥ ≤ 𝑢 max ] ≥ 1 − 𝜀 𝑢 (56) where 𝒖 𝑘 := 𝒖 𝑘, 0, 𝑢 max is the maximum thrust magnitude, and 𝜀 𝑢 is a risk bound. The sufficient condition derived in Ref. [9] has the following convex form: 
+
+∥ ¯𝒖 𝑘 ∥ + 𝑛 𝜎 (𝜀 𝑢 , 𝑛 𝑢 )√︁ ∥𝑃 𝑢 𝑘 ∥ ≤ 𝑢 max (57) where 𝑛 𝜎 (𝜀 𝑢 , 𝑛 𝑢 ) =√︁ Q𝑋 ∼𝜒 2 (𝑛 𝑢 ) (1 − 𝜀 𝑢 ), and Q𝑋 ∼𝜒 2 (𝑛 𝑢 ) (1 − 𝜀 ) denotes the quantile function of the chi-squared distribution with 𝑛 𝑢 degrees of freedom evaluated at probability 1 − 𝜀 .However, this convex formulation is not straightforward to handle in our algorithm because the derivatives of the first term are singular when ∥ ¯𝒖 𝑘 ∥ = 0, and the derivatives of ∥𝑃 𝑢 𝑘 ∥ are also ill-conditioned when 𝑃 𝑢 𝑘 has repeated eigenvalues. We approximate Eq. (57) using a smooth function based on the Schatten 𝑝 -norm: √︁ 
+
+∥ ¯𝒖 𝑘 ∥2 + 𝜖 𝑢 + 𝑛 𝜎 (𝜀 𝑢 , 𝑛 𝑢 )√︃ tr (𝑃 𝑝 𝑢 𝑘 )1/ 𝑝 ≤ 𝑢 max (58) where the first term is regularized by the mass-leak parameter also used in Eq. (55a), and, in the second term, the spectral norm in Eq. (57) is replaced by the Schatten 𝑝 -norm. In this constraint, 𝑃 𝑢 𝑘 is also evaluated at the maneuver epoch, i.e., 𝑃 𝑢 𝑘 = 𝑃 𝑢 𝑘, 0 .The square root of the Schatten 𝑝 -norm of the matrix 𝑃 𝑢 𝑘 satisfies √︁ 
+
+∥𝑃 𝑢 𝑘 ∥ ≤ √︃ tr (𝑃 𝑝 𝑢 𝑘 )1/ 𝑝 ≤ 𝑛 1/2 𝑝 𝑢 √︁ ∥𝑃 𝑢 𝑘 ∥ (59) Equation (59) indicates that the Schatten 𝑝 -norm provides a conservative approximation of the spectral norm. The Schatten surrogate in Eq. (58) overestimates √︁ ∥𝑃 𝑢 𝑘 ∥ by a factor of 𝑛 1/2 𝑝 𝑢 in the worst case. Since a larger 𝑝 reduces the smoothness of the approximating function, there is a trade-off between numerical stability and approximation accuracy. 
+
+3. Terminal covariance constraint 
+
+The terminal covariance constraint is generally formulated as the matrix inequality 
+
+𝑃 𝑁 ≈ ˜𝑃 𝑁 + ˆ𝑃 𝑁 ⪯ 𝑃 𝑓 (60) 20 where 𝑃 𝑓 represents the target state covariance. Since Eq. (60) requires 𝑃 𝑓 − ( ˜𝑃 𝑁 + ˆ𝑃 𝑁 ) to be positive semidefinite, it is equivalent to the following matrix inequality 
+
+𝑃 − 12
+
+> 𝑓
+
+  ˜𝑃 𝑁 + ˆ𝑃 𝑁 
+
+ 𝑃 − 12 
+
+> 𝑓
+
+⪯ 𝐼 𝑛 𝑥 (61) Using the largest eigenvalue of the matrix on the left-hand side, the scalar inequality equivalent to Eq. (61) can be written as 
+
+∥S 𝑁 ∥ − 1 ≤ 0 (62) where 
+
+S𝑁 = 𝑃 − 12
+
+> 𝑓
+
+  ˜𝑃 𝑁 + ˆ𝑃 𝑁 
+
+ 𝑃 − 12 
+
+> 𝑓
+
+(63) As mentioned in Section IV.C.2, the derivatives of the spectral norm are singular when the matrix S𝑁 has repeated eigenvalues. For numerical stability, the logarithm of the normalized Schatten 𝑝 -norm of S𝑁 is introduced here: 
+
+1
+
+𝑝 log 
+
+" tr  S 𝑝 𝑁 
+
+
+
+𝑛 𝑥 
+
+#
+
+≤ 0 (64) Note that the proposed surrogate does not provide a sufficient condition for Eq. (62). For S𝑁 ⪰ 0, we have 
+
+1
+
+𝑝 log tr (S 𝑝 𝑁 )
+
+𝑛 𝑥 
+
+!
+
+≤ log (∥S 𝑁 ∥) (65) Thus, the surrogate can underestimate ∥S 𝑁 ∥. Since the argument of the logarithm satisfies 
+
+∥S 𝑁 ∥
+
+𝑛 1/ 𝑝 𝑥 
+
+≤ tr (S 𝑝 𝑁 )
+
+𝑛 𝑥 
+
+!1/ 𝑝 
+
+≤ ∥S 𝑁 ∥ (66) the worst-case underestimation factor is 1/𝑛 1/ 𝑝 𝑥 . Consequently, Eq. (64) may admit solutions that violate Eq. (62); nevertheless, the surrogate constraint is smooth and typically facilitates the computation of feasible iterates. 
+
+4. Linear state chance constraint 
+
+A linear state chance constraint can be formulated as 
+
+P 𝒂 ⊤ 
+
+> 𝑠
+
+𝒙 𝑘 ≤ 𝑏 𝑠 
+
+ ≥ 1 − 𝜀 𝑥 (67) 21 where 𝒂 𝑠 and 𝑏 𝑠 define a feasible half-space in which the spacecraft can move, and 𝜀 𝑥 is a risk bound. Under a Gaussian belief, the deterministic constraint that is necessary and sufficient for Eq. (67) can be expressed as 
+
+𝒂 ⊤ 
+
+> 𝑠
+
+¯𝒙 𝑘 + Ψ−1 (1 − 𝜀 𝑥 )   ˜𝑃 𝑘 + ˆ𝑃 𝑘 
+
+ 12 𝒂 𝑠 − 𝑏 𝑠 ≤ 0 (68) where Ψ−1 (1 − 𝜀 𝑥 ) denotes the inverse cumulative distribution function at probability 1 − 𝜀 𝑥 . This constraint can be handled in our algorithm without approximation. 
+
+## V. Numerical Examples 
+
+In this section, Algorithm 1 is demonstrated through three scenarios: the light-dark domain problem, the Earth-to-Mars transfer problem, and the halo orbit transfer in the Earth–Moon CR3BP. All computations are performed on a desktop computer (Intel Core i9-14900KF, 3.2 GHz). In all scenarios, the stage and terminal cost functions are defined by Eq. (54a) and Eq. (54b), respectively. To demonstrate the robustness to the initial guess, the initial augmented controls are set to zero, i.e., 𝑼 𝑘 = 0𝑛 𝑈 for all 𝑘 ,and the initial Lagrange multipliers for all constraints are also initialized with zero vectors. The Vern7 integrator from 
+
+DifferentialEquations.jl [ 32 ] is used to discretize the continuous dynamics, except for the light-dark domain problem, where the dynamics are linear. To validate the optimization results, Monte Carlo analysis is conducted using 500 random initial states sampled from N ( 𝒙 0, ˜𝑃 0 + ˆ𝑃 0), with dynamical disturbances and random observations. For each sampled trajectory, the state is estimated using the standard EKF and controlled by the optimal policy given in Eq. (36). In the Monte Carlo analysis, the process-noise covariance is computed by numerically integrating the Lyapunov equation in Eq. (51) to assess the accuracy of the trapezoidal approximation used in the optimization. 
+
+A. Light-dark domain problem 
+
+Here, we consider the light-dark domain problem in which observation uncertainty varies with distance from a landmark. The state is defined by the two-dimensional position and velocity, 𝒙 = [𝑟 𝑥 𝑟 𝑦 𝑣 𝑥 𝑣 𝑦 ]⊤, and the dynamics are modeled as a double integrator described by the following discrete-time linear system: 
+
+𝒙 𝑘 +1 = 𝐴 𝑘 𝒙 𝑘 + 𝐵 𝑘 𝒖 𝑘 + 𝐺 𝑥 𝑘 𝒘 𝑥 (69) 22 with system matrices 
+
+𝐴 𝑘 =
+
+
+
+1 0 Δ𝑡 𝑘 00 1 0 Δ𝑡 𝑘 
+
+0 0 1 00 0 0 1
+
+
+
+, 𝐵 𝑘 =
+
+
+
+0.5Δ𝑡 2 
+
+> 𝑘
+
+00 0.5Δ𝑡 2
+
+> 𝑘
+
+Δ𝑡 𝑘 00 Δ𝑡 𝑘 
+
+
+
+, 𝐺 𝑥 𝑘 =
+
+
+
+𝜎 𝑝 0 0 00 𝜎 𝑝 0 00 0 𝜎 𝑣 00 0 0 𝜎 𝑣 
+
+
+
+(70) where 𝜎 𝑝 and 𝜎 𝑣 are positive scalars representing the disturbance intensities of the position and velocity, respectively. The observation is defined as the position with noise proportional to the distance from the landmark: 
+
+𝒚 𝑘, 𝑗 = 𝐶 𝑘, 𝑗 𝒙 𝑘, 𝑗 + 𝐺 𝑦 𝒘 𝑦 (71) with 
+
+𝐶 𝑘, 𝑗 =
+
+
+
+1 0 0 00 1 0 0
+
+
+
+, 𝐺 𝑦 =
+
+
+
+𝜎 𝑦, 0 + 𝑟 𝑘, 𝑗 𝜎 𝑦, 1 00 𝜎 𝑦, 0 + 𝑟 𝑘, 𝑗 𝜎 𝑦, 1
+
+
+
+, 𝑟 𝑘, 𝑗 =√︃ (𝑟 𝑥 𝑘, 𝑗 − 𝑙 𝑥 )2 + ( 𝑟 𝑦 𝑘, 𝑗 − 𝑙 𝑦 )2 (72) where 𝜎 𝑦, 0 is a fixed observation-noise term and 𝜎 𝑦, 1 is a coefficient for the noise proportional to the distance from the landmark position [𝑙 𝑥 𝑙 𝑦 ]⊤.The key parameters in this scenario are summarized in Table 2. For the cost function, the weighting matrices are set to 𝑄 𝑘 = 𝑂 𝑛 𝑥 and 𝑅 𝑘 = 𝐼 𝑛 𝑢 , the scaling matrix in the trust-region subproblem is chosen as the identity matrix, i.e., 
+
+𝐷 tr = 𝐼 𝑛 𝑈 , and the mass-leak parameter is set to 𝜖 𝑢 = 10 −8. The stochastic thrust magnitude, terminal covariance, and linear state constraints are imposed, together with the terminal nominal-state constraint 
+
+¯𝒙 𝑁 = 𝒙 𝑓 (73) where 𝒙 𝑓 denotes the target nominal state. The initial estimation-error and state-estimate covariances are both specified by the standard deviations ˜𝜎 𝑟 0 = ˆ𝜎 𝑟 0 = 4 × 10 −2 and ˜𝜎 𝑣 0 = ˆ𝜎 𝑣 0 = 10 −2, while the terminal target covariance is specified by 𝜎 𝑟 𝑓 = 2 × 10 −4 and 𝜎 𝑣 𝑓 = 10 −2. For the augmented Lagrangian method, the initial penalties are set to 1.0 for all constraints, the penalty scaling factor is set to 2.0, and the Schatten-norm parameters are chosen as 𝑝 = 1 for the thrust magnitude constraint and 𝑝 = 8 for the surrogate terminal covariance constraint. The nominal and sampled trajectories are shown in Fig. 3, where the nominal trajectory is plotted as a colored line, and the sampled trajectories are shown in gray. The nominal and sampled control profiles are also presented in Fig. 3. The region defined by 𝑦 > 3 in the left panel of Fig. 3 is designated as a keep-out zone. Under the obtained control 23 Table 2 Parameters in the light-dark domain scenario 
+
+Parameter Symbol Value Number of stages 𝑁 50 Time step Δ𝑡 𝑘, 𝑗 , ∀𝑘, 𝑗 0.2
+
+Number of observations per stage 𝑁 𝑗 (𝑘 ), ∀𝑘 1
+
+Initial nominal state ¯𝒙 0 [0 0 0 0 ]⊤
+
+Target nominal state 𝒙 𝑓 [10 0 0 0 ]⊤
+
+Position noise coefficient 𝜎 𝑝 10 −6
+
+Velocity noise coefficient 𝜎 𝑣 10 −6
+
+Landmark position [𝑙 𝑥 , 𝑙 𝑦 ] [5, 5]
+
+Fixed observation noise 𝜎 𝑦, 0 10 −4
+
+Distance-dependent noise coefficient 𝜎 𝑦, 1 10 −2
+
+Risk bound of state 𝜀 𝑥 10 −3
+
+Risk bound of control 𝜀 𝑢 10 −3
+
+Maximum acceleration 𝑢 max 2.0
+
+Half-space coefficient vector 𝒂 𝑠 [0 1 0 0 ]⊤
+
+Half-space bound 𝑏 𝑠 3
+
+policy, the nominal trajectory approaches the landmark while proceeding toward the target state to obtain lower-noise position measurements. The trajectory then changes direction slightly below 𝑦 = 3, leaving a margin to account for process noise and estimation error. The Monte Carlo sample trajectories also avoid entering the keep-out zone. For the thrust magnitude constraint, the nominal control sequence remains below the specified maximum acceleration, with a larger margin near the final stage. This increased margin is required because the system moves away from the landmark near the end of the trajectory, which increases the observation noise and requires additional margin to satisfy the terminal covariance constraint. To highlight the broader applicability of Algorithm 1, we compare it with belief-space iterative linear quadratic Gaussian (iLQG) [ 15 ] and the SCP-based approach. Belief-space iLQG corresponds to a variant of the proposed method in which the state-estimate covariance is excluded from the state variables and the second-order STMs of the augmented dynamics are omitted. The SCP-based approach is implemented according to Ref. [ 12 ] using JuMP.jl [33 ] for general optimization modeling and Clarabel.jl [34 ] as a semidefinite programming solver. The constraints and cost functions are selected to be consistent with the respective formulations of the methods being compared. In belief-space iLQG, the thrust magnitude, terminal covariance, and linear state constraints are imposed only for the nominal state and the estimation-error covariance. The cost function is defined without the state-estimate covariance term, since it is not included in the state variables. By contrast, the SCP-based approach can handle convex constraints expressed in terms of the spectral norm; therefore, Eqs. (57) and (60) are employed for the thrust magnitude and terminal covariance constraints, respectively. The cost function for the SCP-based approach follows the formulation in Ref. [ 12 ]. However, the target covariance used in the SCP-based approach is set to 2.5 times that used in the other methods, because the 24 SCP-based approach does not converge when the same target covariance is imposed. Figures 4 and 5 show the nominal and sampled trajectories obtained by belief-space iLQG and the SCP-based method, along with the corresponding control sequences. In the Monte Carlo analysis of belief-space iLQG, the feedback policy obtained in the backward sweep is applied to the estimated state. The nominal trajectory generated by belief-space iLQG approaches the landmark in the same manner as that of the proposed method in order to reduce the estimation error. Because the state-estimate covariance and feedback gain are not included as optimization variables, the sampled trajectories and control sequences violate the keep-out zone and thrust magnitude constraints. As shown in Fig. 5, the SCP-based method yields a minimum-fuel solution with a robust feedback gain that guides the system directly to the target state while controlling the covariance to satisfy the terminal constraints. Table 3 summarizes the nominal total Δ𝑉 , the terminal guidance errors quantified by Eq. (63) from the predicted covariances and Monte Carlo samples, and the iterations and runtimes required for convergence. The required Δ𝑉 
+
+increases as the trajectory approaches the landmark, whereas the SCP-based method yields the minimum-fuel solution. As shown in Eq. (63), the terminal covariance constraint is satisfied when ∥S 𝑁 ∥ < 1. However, the proposed method and belief-space iLQG yield predicted ∥S 𝑁 ∥ values about 10% above the target threshold due to the Schatten-norm approximation. For the proposed method, the Monte Carlo value of ∥S 𝑁 ∥ agrees reasonably well with the predicted value; in contrast, no such agreement is observed for belief-space iLQG. This discrepancy arises because belief-space iLQG evaluates the predicted ∥S 𝑁 ∥ without accounting for the state-estimate covariance or the feedback gain, whereas the Monte Carlo evaluation includes both effects. Because the achievable terminal accuracy depends on system parameters, such as the dynamical and observation noise levels and the observation variables, the target covariance is better interpreted as a design parameter rather than a strict requirement in the present mission-design setting. Accordingly, the Schatten-norm approximation remains practical for obtaining useful approximate solutions efficiently. If strict satisfaction of the constraint is required, either continuation methods that progressively tighten the constraint by increasing 𝑝 or re-optimization using a convex approach may be employed. For the SCP-based method, the predicted 
+
+∥S 𝑁 ∥ is less than 2.5, implying 𝑃 𝑁 ⪯ 2.5𝑃 𝑓 . This result shows that the SCP-based method can find a solution satisfying the relaxed matrix inequality by convex optimization. However, it fails to solve the problem with the tighter target covariance adopted in the proposed method and belief-space iLQG, because it fixes the EKF-related matrices around the nominal trajectory during convexification and provides no incentive to steer the trajectory toward the landmark. Although belief-space iLQG converges much faster because of its lower dimensionality, the proposed method and the SCP-based method require nearly the same runtime. Note that the iteration count for the SCP-based method denotes the number of convex subproblems solved, whereas that for the proposed method and belief-space iLQG denotes the number of forward sweeps. 25 x  
+
+> 0510
+> y
+> 0.0 2.5 5.0
+
+Initial Target Landmark     
+
+> 0510
+> u x
+> -1.0 0.0 1.0 0510
+> u y
+> -2.0 -1.0 0.0 1.0
+
+t  
+
+> 0510
+> || u||
+> 0.0 0.5 1.0 1.5 2.0
+
+Fig. 3 Nominal and sampled trajectories and control profiles in the light-dark domain problem x  
+
+> 0510
+> y
+> 0.0 2.5 5.0
+
+Initial Target Landmark     
+
+> 0510
+> u x
+> -4.0 -2.0 0.0 2.0 4.0 0510
+> u y
+> -5.0 0.0 5.0
+
+t  
+
+> 0510
+> || u||
+> 0.0 2.0 4.0 6.0 8.0
+
+Fig. 4 Nominal and sampled trajectories and control profiles obtained by belief-space iLQG B. Earth-to-Mars transfer 
+
+Next, Algorithm 1 is applied to the design of a planar Earth-to-Mars transfer with low-thrust propulsion and radiometric tracking. The state consists of the spacecraft position 𝒓 ∈ R2 and velocity 𝒗 ∈ R2 in the heliocentric inertial frame, i.e., 𝒙 = [𝒓 ⊤ 𝒗 ⊤]⊤. The deterministic part of the continuous-time dynamics is given by 
+
+𝒇 tb =
+
+
+
+𝒗 
+
+−𝜇 𝑠 𝒓 /∥ 𝒓 ∥3 + 𝒖 
+
+
+
+(74) where 𝜇 𝑠 is the gravitational parameter of the Sun. The process noise is modeled using a two-dimensional reformulation of the Gates error model [ 35 ]. In the original Gates model, the shutoff and resolution errors contribute to the uncertainty along the commanded thrust direction, whereas the pointing and autopilot errors contribute to the uncertainty orthogonal to that direction. The corresponding 26 x  
+
+> 0510
+> y
+> 0.0 2.5 5.0
+
+Initial Target Landmark     
+
+> 0510
+> u x
+> -2.0 -1.0 0.0 1.0 2.0 0510
+> u y
+> -0.2 0.0 0.2
+
+t  
+
+> 0510
+> || u||
+> 0.0 0.5 1.0 1.5 2.0
+
+Fig. 5 Nominal and sampled trajectories and control profiles obtained by the SCP-based method Table 3 Comparison of the solutions for the light-dark domain scenario 
+
+Method Nominal Δ𝑉 , n.d. ∥S 𝑁 ∥ (pred.) ∥S 𝑁 ∥ (MC) Iterations Runtime, s PO-SDDP 3.87 1.0904 1.1707 2123 29 Belief-space iLQG 3.60 1.0905 2.0749 1106 3.8 SCP-based 2.12 2.4997 2.8162 80 26 noise weighting matrix 𝐺 𝑥 (𝒙 , 𝒖 ) is defined as 
+
+𝐺 𝑥 (𝒙 , 𝒖 ) = 𝑇 u 𝑀 sqrt (𝒖 ), 𝑇 u =
+
+
+
+𝑂 2 𝐼 2
+
+⊤
+
+(75) The square-root factor of the covariance is written as 
+
+𝑀 sqrt = 𝜎 ⊥ 𝐼 2 +  𝜎 ∥ − 𝜎 ⊥
+
+ ˆ𝒛 ˆ𝒛 ⊤ (76) where the standard deviations orthogonal and parallel to the commanded thrust direction are defined by 
+
+𝜎 ⊥ =√︃ 𝜎 2ap + 𝜎 2pt ∥𝒖 ∥2 (77a) 
+
+𝜎 ∥ =√︃ 𝜎 2res + 𝜎 2sh ∥𝒖 ∥2 (77b) Here, 𝜎 ap , 𝜎 pt , 𝜎 res , and 𝜎 sh denote the autopilot, pointing, resolution, and shutoff errors, respectively. The commanded thrust direction is regularized as 
+
+ˆ𝒛 = 𝒖 √︁ 
+
+∥𝒖 ∥2 + 𝜖 𝑢 
+
+(78) For ∥𝒖 ∥2 ≫ 𝜖 𝑢 , this representation yields standard deviations approximately equal to 𝜎 ∥ along the commanded thrust 27 direction and 𝜎 ⊥ in the orthogonal direction. The regularized direction vector preserves the directional structure of the original Gates model while keeping the noise model differentiable near zero thrust. Range and range-rate observations between the spacecraft and Earth are modeled as 
+
+𝒚 𝑘, 𝑗 =
+
+
+
+∥ 𝝆 𝑟 ∥( 𝝆 𝑟 · 𝝆 𝑣 ) /∥ 𝝆 𝑟 ∥
+
+
+
++
+
+
+
+𝜎 𝑦,𝑟 00 𝜎 𝑦,𝑣 
+
+
+
+𝒘 𝑦 (79) where 𝝆 𝑟 = 𝒓 − 𝒓 e, 𝝆 𝑣 = 𝒗 − 𝒗 e, 𝒓 e and 𝒗 e denote the Earth’s position and velocity, respectively. The initial and target states are listed in Table 4, and the key parameters for this scenario are summarized in Table 5. The transfer duration and the initial and target states are based on those used in the numerical examples of Refs. [ 5 , 8 ], except that the initial state is slightly modified to avoid a singularity in the observation model. In this scenario, Algorithm 1 is applied with three different shutoff-error values to compare the resulting solutions. To demonstrate that the proposed method can accommodate multiple observations, range and range-rate measurements are assumed to be available at three equally spaced epochs over each stage, including the subsequent maneuver epoch. The maneuver sequence consists of 𝑁 = 40 stages. Specifically, two observation epochs are inserted between successive maneuver nodes, and an additional observation is performed at the subsequent maneuver epoch. Thus, each stage contains three observation updates and three intermediate belief-state transitions, resulting in 120 belief-state transitions for the 40-stage maneuver sequence. For the cost function, the weighting matrices are set to 𝑄 𝑘 = 𝑂 𝑛 𝑥 and 𝑅 𝑘 = 𝐼 𝑛 𝑢 , and the mass-leak parameter is set to 𝜖 𝑢 = 10 −8 (mm /s2)2. The thrust magnitude constraint is imposed together with terminal constraints on the nominal state and terminal covariance. The initial estimation-error and state-estimate covariances are both specified by the standard deviations ˜𝜎 𝑟 0 = ˆ𝜎 𝑟 0 = 10 km and ˜𝜎 𝑣 0 = ˆ𝜎 𝑣 0 = 0.1 km /s, while the terminal target covariance is specified by 
+
+𝜎 𝑟 𝑓 = 3.12 × 10 5 km and 𝜎 𝑣 𝑓 = 0.1 km /s. For the augmented Lagrangian method, the initial penalties are set to 1.0 for the thrust magnitude and terminal-state constraints and to 1 × 10 −6 for the surrogate terminal covariance constraint, while the penalty scaling factor is set to 2.0 for all constraints. The Schatten-norm parameters are chosen as 𝑝 = 1 for the thrust magnitude constraint and 𝑝 = 8 for the surrogate terminal covariance constraint. In the trust-region subproblem, the scaling matrix is set to 𝐷 tr = blkdiag (𝐼 𝑛 𝑢 , 0.1𝐼 𝑛 𝑢 𝑛 𝑥 ), so that the terms corresponding to the feedback gain are one order of magnitude smaller than those corresponding to the nominal control. Using the identity scaling matrix fails to yield a solution that satisfies the surrogate terminal covariance constraints because the updates to the nominal control and feedback gain are treated as having comparable scales. The physical parameters are nondimensionalized using the length and time-scale factors listed in Table 5 to improve numerical stability during the optimization. Figure 6 shows the nominal and sampled trajectories, with the deviations from the nominal trajectories exaggerated. The nominal control profiles and the sampled profiles from the Monte Carlo analysis are shown in Fig. 7, where the 28 Table 4 Initial and target states for the Earth-to-Mars transfer scenario 
+
+State 𝑥 , AU 𝑦 , AU 𝑣 𝑥 , km/s 𝑣 𝑦 , km/s Initial −0.94048 −0.34502 9.7746 −29 .078 
+
+Target −1.1543 1.1829 −16 .427 −14 .861 
+
+Table 5 Parameters for the Earth-to-Mars transfer scenario 
+
+Parameter Symbol Value Unit Number of stages 𝑁 40 -Transfer duration 𝑡 𝑁 − 𝑡 0 348 .79 days Gravitational parameter 𝜇 𝑠 1.3271 × 10 11 km 3/s2
+
+Number of observations per stage 𝑁 𝑗 (𝑘 ), ∀𝑘 3 -Time step Δ𝑡 𝑘, 𝑗 , ∀𝑘, 𝑗 2.9066 days Autopilot error 𝜎 ap 1 × 10 −3 mm /s2
+
+Pointing error 𝜎 pt 0.5 deg Resolution error 𝜎 res 1 × 10 −3 mm /s2
+
+Shutoff error 𝜎 sh 1.0 (low), 3.0 (medium), 4.0 (high) %Range noise 𝜎 𝑦,𝑟 10 2 km 
+
+Range-rate noise 𝜎 𝑦,𝑣 1 m/s
+
+Risk bound 𝜀 𝑢 10 −3 -Maximum acceleration 𝑢 max 1.0 mm /s2
+
+Length scale factor 𝐿 sf 10 8 km Time scale factor 𝑇 sf 10 7 sec thrust azimuth is defined as atan2 (𝑢 𝑦 , 𝑢 𝑥 ). Although the nominal trajectories are nearly identical across the different shutoff-error cases, the control histories exhibit bang-bang structures with different thrusting durations and different margins relative to the prescribed maximum acceleration. In addition, the trajectory correction maneuvers between thrusting arcs vary with the magnitude of the shutoff error. In this scenario, the proposed method primarily contributes to the design of a control policy robust to maneuver errors, rather than to navigation-aware reshaping of the nominal trajectory, because the observation geometry does not provide a strong incentive to reshape the nominal trajectory in this setting. Figure 8 compares the sampled state deviations from the nominal trajectory with the predicted 3𝜎 envelopes for the high-error case, which is used as a representative case with the largest maneuver uncertainty. Since most sampled trajectories remain within the predicted 3𝜎 envelopes, these results indicate that the trapezoidal approximation used to compute ¯𝐺 𝑥 𝑘, 𝑗 provides sufficient accuracy even for nonlinear dynamics and observation models. This also indicates that the feedback control regulates the spacecraft to a neighborhood of the nominal trajectory, where linear covariance propagation remains valid. For each shutoff-uncertainty level, Table 6 summarizes the same quantities reported for the light-dark domain scenario. Fuel consumption increases with shutoff uncertainty to maintain a sufficient margin from the prescribed 29 x, AU   
+
+> −101
+> y, AU
+> −101
+
+Low 
+
+> Earth Mars Sun
+
+x, AU   
+
+> −101
+> y, AU
+> −101
+
+Medium 
+
+> Earth Mars Sun
+
+x, AU   
+
+> −101
+> y, AU
+> −101
+
+High 
+
+> Earth Mars Sun
+
+Fig. 6 Nominal and sampled trajectories for different shutoff errors, with deviations from the corresponding nominal trajectories exaggerated by a factor of 5 
+
+maximum acceleration. As in the light-dark domain scenario, the values of ∥S 𝑁 ∥ predicted during the optimization are in reasonable agreement with the Monte Carlo results. For the low- and medium-error cases, the original spectral-norm constraint is slightly violated because the Schatten-norm approximation underestimates the true value, whereas the high-error case satisfies the original constraint with a larger margin. Despite the nonlinear dynamics, the nonlinear observation model, and the thrust-dependent maneuver uncertainty, the algorithm converges within a few minutes in all cases. 0 100 200 300 
+
+> Az, deg
+> −100 0100
+
+Low 
+
+t, days       
+
+> 0100 200 300
+> || u||, mm/s 2
+> 0.0 0.5 1.0
+> 0100 200 300
+> Az, deg
+> −100 0100
+
+Medium 
+
+t, days       
+
+> 0100 200 300
+> || u||, mm/s 2
+> 0.0 0.5 1.0
+> 0100 200 300
+> Az, deg
+> −100 0100
+
+High 
+
+t, days    
+
+> 0100 200 300
+> || u||, mm/s 2
+> 0.0 0.5 1.0
+
+Fig. 7 Nominal and sampled control profiles for different shutoff errors C. Halo orbit transfer in Earth–Moon CR3BP 
+
+As a third demonstration, Algorithm 1 is applied to an 𝐿 2-halo-to-𝐿 1-halo transfer in the Earth–Moon CR3BP with radiometric tracking. The state consists of the three-dimensional position 𝒓 ∈ R3 and velocity 𝒗 ∈ R3 in the rotating 30 0 100 200 300 
+
+> x − x̄ , km
+
+−2.50×10 ⁶
+
+02.50×10 ⁶
+
+t, days 
+
+0 100 200 300 
+
+> y − ȳ , km
+
+−5.0×10 ⁶
+
+05.0×10 ⁶
+
+0 100 200 300 
+
+> v x − v̄ x, km/s
+
+−0.5 0.0 0.5 
+
+t, days 
+
+0 100 200 300 
+
+> v y − v̄ y, km/s
+
+−1.0 
+
+−0.5 0.0 0.5 1.0 Fig. 8 Time histories of position and velocity errors relative to the nominal trajectory for the high-error case, together with the predicted 3𝜎 envelopes Table 6 Comparison of Earth-to-Mars transfer solutions 
+
+Shutoff-error case Nominal Δ𝑉 , km/s ∥S 𝑁 ∥ (pred.) ∥S 𝑁 ∥ (MC) Iterations Runtime, s Low 10.3 1.19 1.25 2158 72 Medium 10.5 1.18 1.13 3241 99 High 10.9 0.69 0.70 3732 101 frame with the origin at the barycenter of the system: 
+
+𝒙 =
+
+
+
+𝑟 𝑥 𝑟 𝑦 𝑟 𝑧 𝑣 𝑥 𝑣 𝑦 𝑣 𝑧 
+
+⊤
+
+The continuous-time dynamics are given by 
+
+𝒇 crtbp (𝒙 , 𝒖 ) =
+
+
+
+𝒗 𝒂 crtbp (𝒓 , 𝒗 ) + 𝒖 
+
+
+
+, 𝒂 crtbp (𝒓 , 𝒗 ) =
+
+
+
+2𝑣 𝑦 + 𝑟 𝑥 − (1−𝜇 ) ( 𝑟 𝑥 +𝜇 )
+
+> 𝜌 31
+
+− 𝜇 (𝑟 𝑥 −1+𝜇 )
+
+> 𝜌 32
+
+−2𝑣 𝑥 + 𝑟 𝑦 − (1−𝜇 )𝑟 𝑦 
+
+> 𝜌 31
+
+− 𝜇𝑟 𝑦 
+
+> 𝜌 32
+
+− (1−𝜇 )𝑟 𝑧 
+
+> 𝜌 31
+
+− 𝜇𝑟 𝑧 
+
+> 𝜌 32
+
+
+
+(80) where 𝜇 = 𝑚 2/( 𝑚 1 + 𝑚 2) is the mass parameter of the CR3BP, and 𝑚 1 and 𝑚 2 denote the masses of the primary and secondary bodies, respectively. The relative position vectors to the two primaries are defined as 
+
+𝝆 1 =
+
+
+
+𝑟 𝑥 + 𝜇 𝑟 𝑦 𝑟 𝑧 
+
+⊤
+
+, 𝝆 2 =
+
+
+
+𝑟 𝑥 − ( 1 − 𝜇 ) 𝑟 𝑦 𝑟 𝑧 
+
+⊤
+
+with 𝜌 1 = ∥ 𝝆 1 ∥ and 𝜌 2 = ∥ 𝝆 2 ∥. The dynamical noise is modeled by a three-dimensional Gates error model obtained by extending the two-dimensional model described in Eq. (75) and Eq. (76). The observations are modeled as range 31 Table 7 Initial and target states for the halo orbit transfer scenario 
+
+State 𝑥 𝑦 𝑧 𝑣 𝑥 𝑣 𝑦 𝑣 𝑧 
+
+Initial 1.16 0.0 −0.122697 0.0 −0.207128 0.0
+
+Target 0.85 0.0 0.173890 0.0 0.262114 0.0
+
+Table 8 Parameters for the halo-orbit transfer scenario 
+
+Parameter Symbol Value Unit Number of stages 𝑁 120 -Transfer duration 𝑡 𝑁 − 𝑡 0 19 .1 days Number of observations per stage 𝑁 𝑗 (𝑘 ), ∀𝑘 1 -Time step for control Δ𝑡 𝑘, 𝑗 , ∀𝑘, 𝑗 3.8 hours Autopilot error 𝜎 ap 10 −3 mm /s2
+
+Pointing error 𝜎 pt 0.5 deg Resolution error 𝜎 res 10 −3 mm /s2
+
+Shutoff error 𝜎 sh 1.0 %Range noise 𝜎 𝑦,𝑟 10 2 km 
+
+Range-rate noise 𝜎 𝑦,𝑣 1 m/s
+
+Risk bound 𝜀 𝑢 10 −3 -Maximum acceleration 𝑢 max 0.75 mm /s2
+
+and range-rate measurements from the Earth in the rotating frame, as described in Eq. (79), with 𝒓 e = [− 𝜇 0 0 ]⊤ and 
+
+𝒗 e = 0.The initial and target states are taken from Ref. [ 36 ], as listed in Table 7, and the key parameters are summarized in Table 8. In this scenario, two state-weighting matrices, 𝑄 𝑘 = 10 𝐼 𝑛 𝑥 and 𝑄 𝑘 = 500 𝐼 𝑛 𝑥 for all 𝑘 , are considered in the cost function to compare the resulting solutions, while the control-weighting matrix is fixed at 𝑅 𝑘 = 𝐼 𝑛 𝑢 and the mass-leak parameter is set to 𝜖 𝑢 = 7.4 × 10 −8 (mm /s2)2. For the trust-region method, the scaling matrix in the trust-region subproblem is chosen as the identity matrix, i.e., 𝐷 tr = 𝐼 𝑛 𝑈 . Here, the thrust magnitude constraint and the terminal constraint on the nominal state are imposed. For the augmented Lagrangian method, the initial penalties for the thrust magnitude and terminal-state constraints are both set to 1.0, and the penalty scaling factor is set to 2.0 for both constraints. The Schatten-norm parameter is chosen as 𝑝 = 1 for the thrust magnitude constraint. The initial estimation-error covariance and state-estimate covariance are both defined from the standard deviations 
+
+˜𝜎 𝑟 = ˆ𝜎 𝑟 = 10 km and ˜𝜎 𝑣 = ˆ𝜎 𝑣 = 0.1 m /s.For comparison, the AL-DDP solution to the corresponding deterministic problem is also presented. The nominal trajectories projected onto each two-dimensional plane are shown in Fig. 9, and the nominal control profiles are shown in Fig. 10, where the thrust azimuth and elevation are computed as atan2 (𝑢 𝑦 , 𝑢 𝑥 ) and arcsin (𝑢 𝑧 /∥ 𝒖 ∥) , respectively. When the weighting matrix in the proposed method is small, i.e., 𝑄 𝑘 = 10 𝐼 𝑛 𝑥 , the resulting solution yields more robust control profiles than the deterministic solution while maintaining a nominal trajectory similar to that of DDP. By contrast, when 32 the weighting matrix is large, i.e., 𝑄 𝑘 = 500 𝐼 𝑛 𝑥 , the nominal trajectory evolves along a different manifold from those obtained with the small weighting matrix and DDP. This result indicates that, when the coefficients for the covariances are weighted more heavily, the proposed method improves robustness not only by strengthening the feedback policy but also by selecting a nominal trajectory that is more favorable from geometric and informational perspectives. Although four thrusting arcs are required in all cases, the second and third maneuvers in the solution with the large weighting matrix are much shorter and smaller than those in the other cases. The Monte Carlo results for the solutions obtained by the proposed method with different weighting matrices are illustrated in Fig. 11, together with the corresponding control sequences shown in Fig. 12. In the small-weighting case, the deviations from the nominal trajectory are larger than those in the large-weighting case, although trajectory-correction maneuvers are performed after the second and third thrusting arcs to keep the spacecraft close to the nominal trajectory. In the large-weighting case, less corrective maneuvering is required than in the small-weighting case. To clarify the differences between the solutions, nonlinearity and information analyses are conducted along the nominal trajectories. The results are shown in Fig. 13, where the nonlinearity index is defined using the finite-time Lyapunov exponent (FTLE) as 
+
+Nonlinearity index = 1
+
+Δ𝑡 𝑘 
+
+log √︁ ∥Φ𝐴 (𝑡 𝑘 +1, 𝑡 𝑘 )⊤Φ𝐴 (𝑡 𝑘 +1, 𝑡 𝑘 )∥ 
+
+and the information index is defined from the cumulative information matrix with respect to the initial state: 
+
+Information index = log det 
+
+
+
+˜𝑃 −10 +
+
+> 𝑘
+
+∑︁ 
+
+> 𝑗 =1
+
+Φ𝐴 (𝑡 𝑗 , 𝑡 0)⊤𝐶 ⊤ 
+
+> 𝑗
+
+𝑊 𝑗 𝐶 𝑗 Φ𝐴 (𝑡 𝑗 , 𝑡 0)
+
+
+
+where 𝐶 𝑗 and 𝑊 𝑗 denote the observation sensitivity matrix and the inverse observation-noise covariance matrix at each stage, respectively. The nonlinearity index reflects the local sensitivity of the dynamics, whereas the information index quantifies the cumulative information gain with respect to the initial state. As seen in Fig. 9 and Fig. 13, the PO-SDDP solution with the large weighting matrix avoids the strongly nonlinear region near the Moon while still passing through informative regions that contribute to a reduction in estimation error. Table 9 summarizes the total Δ𝑉 along the nominal trajectory, the terminal guidance errors, quantified by the trace of the terminal true-state covariance as predicted by the proposed method and estimated from the Monte Carlo samples, and the number of iterations and runtime required for convergence. For DDP, only the total Δ𝑉 , the number of iterations, and the runtime are listed. The solution obtained with the small weighting matrix can be interpreted as a robustified version of the DDP solution: it satisfies the thrust magnitude constraint in the sampled trajectories at the cost of a slight increase in fuel consumption relative to the deterministic minimum-fuel solution. By contrast, when the weighting matrix is large, the nominal manifold changes, and the resulting solution reduces the fuel consumption to approximately 60% of 33 x, n.d. 
+
+0.75 1.00 1.25 
+
+> y, n.d.
+
+−0.2 
+
+−0.1 0.0 0.1 0.2 
+
+y, n.d. 
+
+−0.2 −0.1 0.0 0.1 0.2 
+
+> z, n.d.
+
+−0.2 
+
+−0.1 0.0 0.1 0.2 
+
+x, n.d. 
+
+0.75 1.00 1.2 5
+
+> z, n.d.
+
+−0.2 
+
+−0.1 0.0 0.1 0.2 PO-SDDP (Q ₖ = 10I ₙₓ ) PO-SDDP (Q ₖ = 500I ₙₓ ) DDP Initial Target Moon Fig. 9 Nominal trajectories projected onto the coordinate planes 0 5 10 15 20 
+
+> Az, deg
+
+−100 0100 0 5 10 15 20 
+
+> El, deg
+
+−50 050 
+
+t, days 
+
+0 5 10 15 20 
+
+> || u||, mm/s 2
+
+0.0 0.2 0.4 0.6   
+
+> PO-SDDP (Q ₖ= 10I ₙₓ )PO-SDDP (Q ₖ= 500I ₙₓ )DDP
+
+Fig. 10 Nominal control profiles for the halo-orbit transfer scenario 
+
+that of the other solutions. The traces in the large-weighting case indicate terminal guidance errors approximately 2.5 times smaller than those in the small-weighting case. For strongly nonlinear problems such as the CR3BP, these results suggest that the proposed method can generate trajectories that are advantageous in terms of nonlinearity, observability, and fuel consumption by explicitly accounting for uncertainty. In addition, the proposed method converges within several minutes to approximately one hour even in this CR3BP setting, demonstrating its computational tractability. 
+
+Table 9 Comparison of the halo-orbit transfer solutions 
+
+Method Nominal Δ𝑉 , km/s tr (𝑃 𝑁 ) (pred.), n.d. tr (𝑃 𝑁 ) (MC), n.d. Iterations Runtime, s DDP 0.510 – – 4520 145 PO-SDDP ( 𝑄 𝑘 = 10 𝐼 𝑛 𝑥 ) 0.511 3.94 × 10 −5 4.32 × 10 −5 13284 2970 PO-SDDP ( 𝑄 𝑘 = 500 𝐼 𝑛 𝑥 ) 0.318 1.71 × 10 −5 1.74 × 10 −5 1803 343 34 (a) 𝑄 𝑘 = 10 𝐼 𝑛 𝑥    
+
+> (b) 𝑄 𝑘 =500 𝐼 𝑛 𝑥
+
+Fig. 11 Nominal and sampled trajectories for the halo-orbit transfer scenario, with deviations from the corresponding nominal trajectories exaggerated by a factor of 3 
+
+## VI. Conclusion 
+
+This paper presents a stochastic differential dynamic programming framework for partially observable spacecraft trajectory optimization problems. The proposed method formulates belief propagation as augmented dynamics consisting of the nominal dynamics, a linearized Kalman filter, and covariance propagation with a linear feedback gain. Within this framework, the control update is computed while explicitly accounting for the coupled evolution of the nominal trajectory, navigation process, and feedback gain, without relying on the separation principle. General mission constraints, including thrust magnitude, terminal-state, and covariance-related constraints, are handled through an augmented Lagrangian formulation. To improve computational efficiency, the method employs semi-analytic state transition matrices for the covariance dynamics, along with automatic differentiation for model-dependent derivative evaluation. Because the tensor operations associated with covariance propagation are model-independent, and model-dependent derivatives can be evaluated through automatic differentiation, the framework is applicable to other mission design problems, with additional implementation primarily required for problem-specific costs and constraints. 35 Fig. 12 Nominal and sampled control profiles for the halo-orbit transfer solutions with different weighting parameters 0 5 10 15 20 Nonlinearity index 0510 
+
+t, days        
+
+> 0510 15 20 Information index 02468PO-SDDP (Q ₖ= 10I ₙₓ )PO-SDDP (Q ₖ= 500I ₙₓ )
+
+Fig. 13 Nonlinearity and information indices along the nominal trajectories 
+
+The numerical results demonstrate three distinct capabilities of the proposed approach. In the light-dark domain problem, the method generates a navigation-aware solution that exploits an informative region while satisfying constraints. In the Earth-to-Mars transfer, it produces uncertainty-robust solutions under nonlinear dynamics, nonlinear observations, and maneuver execution errors. In the periodic-orbit transfer in the Earth–Moon CR3BP, it identifies solutions that exploit the coupling between trajectory design and orbit determination in a strongly nonlinear and partially observable dynamical environment. These examples indicate that the proposed framework is applicable not only to specific benchmark problems but also to a broader class of mission design problems under partial observability. 36 Appendix A. Computation of State Transition Matrices for Nominal-State Dynamics 
+
+The first- and second-order STMs can be obtained by numerically integrating the corresponding variational equations. The first-order differential equations for 𝐴 𝑘, 𝑗 and 𝐵 𝑘, 𝑗 are given by 
+
+¤Φ𝐴 (𝑡, 𝑡 𝑘, 𝑗 ) = ¯𝐴 (𝑡 )Φ𝐴 (𝑡, 𝑡 𝑘, 𝑗 ) (A.1a) 
+
+¤Φ𝐵 (𝑡, 𝑡 𝑘, 𝑗 ) = ¯𝐴 (𝑡 )Φ𝐵 (𝑡, 𝑡 𝑘, 𝑗 ) + ¯𝐵 (𝑡 ) (A.1b) where Φ𝐴 (𝑡, 𝑡 𝑘, 𝑗 ) and Φ𝐵 (𝑡, 𝑡 𝑘, 𝑗 ) denote the state transition matrix and control sensitivity matrix from 𝑡 𝑘, 𝑗 to 𝑡 ,respectively. The matrices 𝐴 𝑘, 𝑗 and 𝐵 𝑘, 𝑗 are given by Φ𝐴 (𝑡 𝑘, 𝑗 +1, 𝑡 𝑘, 𝑗 ) and Φ𝐵 (𝑡 𝑘, 𝑗 +1, 𝑡 𝑘, 𝑗 ) obtained by integrating Eq. (A.1a) and Eq. (A.1b) with the initial conditions Φ𝐴 (𝑡 𝑘, 𝑗 , 𝑡 𝑘, 𝑗 ) = 𝐼 𝑛 𝑥 and Φ𝐵 (𝑡 𝑘, 𝑗 , 𝑡 𝑘, 𝑗 ) = 0𝑛 𝑥 ×𝑛 𝑢 . By differentiating Eq. (A.1a) and Eq. (A.1b) with respect to the initial state 𝒙 𝑘, 𝑗 and the control 𝒖 𝑘, 𝑗 , the second-order variational equations are obtained as 
+
+¤Φ𝑖,𝑎𝑏 𝑥 𝑥 = ¯𝐴 𝑖, 𝛼 Φ𝛼,𝑎𝑏 𝑥 𝑥 + ¯𝐴 𝑖, 𝛼𝛽 𝑥 Φ𝛼,𝑎 𝐴 Φ𝛽,𝑏 𝐴 (A.2a) 
+
+¤Φ𝑖,𝑎𝑏 𝑢𝑥 = ¯𝐴 𝑖, 𝛼 Φ𝛼,𝑎𝑏 𝑢𝑥 + ¯𝐴 𝑖, 𝛼𝛽 𝑥 Φ𝛼,𝑎 𝐵 Φ𝛽,𝑏 𝐴 + ¯𝐵 𝑖,𝑎 𝛼 𝑥 Φ𝛼,𝑏 𝐴 (A.2b) 
+
+¤Φ𝑖,𝑎𝑏 𝑢𝑢 = ¯𝐴 𝑖, 𝛼 Φ𝛼,𝑎𝑏 𝑢𝑢 + ¯𝐴 𝑖, 𝛼𝛽 𝑥 Φ𝛼,𝑎 𝐵 Φ𝛽,𝑏 𝐵 + ¯𝐵 𝑖,𝑎 𝛼 𝑥 Φ𝛼,𝑏 𝐵 + ¯𝐵 𝑖,𝑏 𝛼 𝑥 Φ𝛼,𝑎 𝐵 + ¯𝐵 𝑖,𝑎𝑏 𝑢 (A.2c) where Φ𝑖,𝑎𝑏 𝑥 𝑥 , Φ𝑖,𝑎𝑏 𝑢𝑥 , and Φ𝑖,𝑎𝑏 𝑢𝑢 are the second-order STMs, and ¯𝐴 𝑖,𝑎𝑏 𝑥 , ¯𝐵 𝑖,𝑎𝑏 𝑥 , and ¯𝐵 𝑖,𝑎𝑏 𝑢 are second-order derivatives of the dynamics, defined as 
+
+Φ𝑖,𝑎𝑏 𝑥 𝑥 := 𝜕 2𝑥 𝑖 
+
+𝜕𝑥 𝑎 𝜕𝑥 𝑏 , Φ𝑖,𝑎𝑏 𝑢𝑥 := 𝜕 2𝑥 𝑖 
+
+𝜕𝑢 𝑎 𝜕𝑥 𝑏 , Φ𝑖,𝑎𝑏 𝑢𝑢 := 𝜕 2𝑥 𝑖 
+
+𝜕𝑢 𝑎 𝜕𝑢 𝑏 (A.3a) 
+
+¯𝐴 𝑖,𝑎𝑏 𝑥 := 𝜕 2 𝑓 𝑖 
+
+𝜕𝑥 𝑎 𝜕𝑥 𝑏 𝒙 = ¯𝒙 ,𝒖 = ¯𝒖 
+
+, ¯𝐵 𝑖,𝑎𝑏 𝑥 := 𝜕 2 𝑓 𝑖 
+
+𝜕𝑢 𝑎 𝜕𝑥 𝑏 𝒙 = ¯𝒙 ,𝒖 = ¯𝒖 
+
+, ¯𝐵 𝑖,𝑎𝑏 𝑢 := 𝜕 2 𝑓 𝑖 
+
+𝜕𝑢 𝑎 𝜕𝑢 𝑏 𝒙 = ¯𝒙 ,𝒖 = ¯𝒖 
+
+(A.3b) where the dependence on time 𝑡 is omitted for notational simplicity. The second-order STMs can also be obtained by numerically integrating these equations from 𝑡 𝑘, 𝑗 to 𝑡 𝑘, 𝑗 +1 with the initial conditions Φ𝑖,𝑎𝑏 𝑥 𝑥 = 0, Φ𝑖,𝑎𝑏 𝑢𝑥 = 0, and 
+
+Φ𝑖,𝑎𝑏 𝑢𝑢 = 0.In practice, implementing derivatives of the dynamics up to second order, i.e., ¯𝐴 , ¯𝐵 , ¯𝐴 𝑖,𝑎𝑏 𝑥 , ¯𝐵 𝑖,𝑎𝑏 𝑥 , and ¯𝐵 𝑖,𝑎𝑏 𝑢 , is cumbersome because these derivatives depend on the specific structure of the dynamics. To avoid additional and tedious manual derivations of the differential equations, AD can be applied directly to the discrete-time nonlinear dynamics 
+
+𝒇 𝑘, 𝑗 (𝒙 𝑘, 𝑗 , 𝒖 𝑘, 𝑗 ) to evaluate the STMs. We use several Julia packages to compute the nominal-state STMs. First, 
+
+DifferentialEquations.jl [ 32 ] is used to discretize the continuous dynamics 𝒇 (𝒙 , 𝒖 ) to a prescribed numerical 37 accuracy. Then, ForwardDiff.jl [37 ] is applied to the discretized nonlinear dynamics 𝒇 𝑘, 𝑗 (𝒙 𝑘, 𝑗 , 𝒖 𝑘, 𝑗 ), providing an easy-to-use and computationally efficient interface for forward-mode AD. Even the second-order STMs can be obtained through a nested approach by simply applying AD to the first-order derivatives. 
+
+## B. Analytic Partial Derivatives of Covariance Propagation 
+
+Using the derivative of a matrix inverse given by Ref. [ 38 ], differentiating Eq. (34) with respect to the state 𝒙 𝑘, 𝑗 
+
+yields 
+
+𝜕 ˜𝑃 𝑎𝑏 𝑘, 𝑗 +1
+
+𝜕𝑥 𝑐 𝑘, 𝑗 
+
+= 𝜕 Λ−1
+
+> 𝑘, 𝑗 +1
+
+ 𝑎𝑏 
+
+𝜕𝑥 𝑐 𝑘, 𝑗 
+
+= − ˜𝑃 𝑎 𝛼 𝑘, 𝑗 +1
+
+𝜕 Λ𝛼𝛽 𝑘, 𝑗 +1
+
+𝜕𝑥 𝑐 𝑘, 𝑗 
+
+˜𝑃 𝛽𝑏 𝑘, 𝑗 +1 (B.1) Since ˜𝑃 𝑘, 𝑗 +1− = Λ −1 
+
+> 𝑘, 𝑗 +1−
+
+, the derivatives of Λ𝑘, 𝑗 +1 with respect to 𝒙 𝑘, 𝑗 are obtained by differentiating Eq. (34) with respect to 𝒙 𝑘, 𝑗 :
+
+𝜕 Λ𝑎𝑏 𝑘, 𝑗 +1
+
+𝜕𝑥 𝑐 𝑘, 𝑗 
+
+= 𝜕  ˜𝑃 −1
+
+> 𝑘, 𝑗 +1−
+
+ 𝑎𝑏 
+
+𝜕𝑥 𝑐 𝑘, 𝑗 
+
++ 𝜕𝑆 𝑎𝑏 𝑘, 𝑗 +1
+
+𝜕𝑥 𝑐 𝑘, 𝑗 
+
+(B.2) Applying the derivative of the matrix inverse to the preceding equation yields the derivative of ˜𝑃 −1 
+
+> 𝑘, 𝑗 +1−
+
+with respect to 
+
+𝒙 𝑘, 𝑗 as 
+
+𝜕  ˜𝑃 −1
+
+> 𝑘, 𝑗 +1−
+
+ 𝑎𝑏 
+
+𝜕𝑥 𝑐 𝑘, 𝑗 
+
+= −Λ𝑎 𝛼 𝑘, 𝑗 +1−
+
+𝜕 ˜𝑃 𝛼𝛽 𝑘, 𝑗 +1−
+
+𝜕𝑥 𝑐 𝑘, 𝑗 
+
+Λ𝛽𝑏 𝑘, 𝑗 +1− (B.3) where 𝜕 ˜𝑃 𝑘, 𝑗 +1− /𝜕 𝒙 𝑘, 𝑗 is given by Eq. (50). The derivative of 𝑆 𝑘, 𝑗 +1 with respect to 𝒙 𝑘, 𝑗 in Eq. (B.2) can be computed as 
+
+𝜕𝑆 𝑎𝑏 𝑘, 𝑗 +1
+
+𝜕𝑥 𝑐 𝑘, 𝑗 
+
+= 𝜕𝐶 𝛼𝑎 𝑘, 𝑗 +1
+
+𝜕𝑥 𝑐 𝑘, 𝑗 
+
+¯𝑊 𝛼𝛽 𝑘, 𝑗 +1𝐶 𝛽𝑏 𝑘, 𝑗 +1 + 𝐶 𝛼𝑎 𝑘, 𝑗 +1
+
+𝜕 ¯𝑊 𝛼𝛽 𝑘, 𝑗 +1
+
+𝜕𝑥 𝑐 𝑘, 𝑗 
+
+𝐶 𝛽𝑏 𝑘, 𝑗 +1 + 𝐶 𝛼𝑎 𝑘, 𝑗 +1 ¯𝑊 𝛼𝛽 𝑘, 𝑗 +1
+
+𝜕𝐶 𝛽𝑏 𝑘, 𝑗 +1
+
+𝜕𝑥 𝑐 𝑘, 𝑗 
+
+(B.4) The derivative of ˜𝑃 𝑘, 𝑗 with respect to 𝒙 𝑘, 𝑗 is a zero tensor because ˜𝑃 𝑘, 𝑗 is treated as an independent component of the augmented state in the local derivative calculation. Thus, the first-order derivative of the covariance of the state estimate with respect to 𝒙 𝑘, 𝑗 is given by 
+
+𝜕 ˆ𝑃 𝑎𝑏 𝑘, 𝑗 +1
+
+𝜕𝑥 𝑐 𝑘, 𝑗 
+
+= 𝜕 A𝑎 𝛼 𝑘, 𝑗 
+
+𝜕𝑥 𝑐 𝑘, 𝑗 
+
+ˆ𝑃 𝛼𝛽 𝑘, 𝑗 A𝑏𝛽 𝑘, 𝑗 + A 𝑎 𝛼 𝑘, 𝑗 ˆ𝑃 𝛼𝛽 𝑘, 𝑗 
+
+𝜕 A𝑏𝛽 𝑘, 𝑗 
+
+𝜕𝑥 𝑐 𝑘, 𝑗 
+
++ 𝜕 F 𝑎 𝛼 𝑘, 𝑗 +1
+
+𝜕𝑥 𝑐 𝑘, 𝑗 
+
+𝑃 𝛼𝛽 𝜉 𝑘, 𝑗 +1− F 𝑏𝛽 𝑘, 𝑗 +1 + F 𝑎 𝛼 𝑘, 𝑗 +1 𝑃 𝛼𝛽 𝜉 𝑘, 𝑗 +1−
+
+𝜕 F 𝑏𝛽 𝑘, 𝑗 +1
+
+𝜕𝑥 𝑐 𝑘, 𝑗 
+
+(B.5) 38 where 
+
+𝜕 A𝑎𝑏 𝑘, 𝑗 
+
+𝜕𝑥 𝑐 𝑘, 𝑗 
+
+= 𝜕 𝐴 𝑎𝑏 𝑘, 𝑗 
+
+𝜕𝑥 𝑐 𝑘, 𝑗 
+
++ 𝜕𝐵 𝑎 𝛼 𝑘, 𝑗 
+
+𝜕𝑥 𝑐 𝑘, 𝑗 
+
+𝐾 𝛼𝑏 𝑘 (B.6) and 
+
+𝜕 F 𝑎𝑏 𝑘, 𝑗 +1
+
+𝜕𝑥 𝑐 𝑘, 𝑗 
+
+= 𝜕 ˜𝑃 𝑎 𝛼 𝑘, 𝑗 +1
+
+𝜕𝑥 𝑐 𝑘, 𝑗 
+
+𝐶 𝛽 𝛼 𝑘, 𝑗 +1 ¯𝑊 𝛽𝛾 𝑘, 𝑗 +1 𝐷 𝛾𝑏 𝑘, 𝑗 +1 + ˜𝑃 𝑎 𝛼 𝑘, 𝑗 +1
+
+𝜕𝐶 𝛽 𝛼 𝑘, 𝑗 +1
+
+𝜕𝑥 𝑐 𝑘, 𝑗 
+
+¯𝑊 𝛽𝛾 𝑘, 𝑗 +1 𝐷 𝛾𝑏 𝑘, 𝑗 +1
+
++ ˜𝑃 𝑎 𝛼 𝑘, 𝑗 +1𝐶 𝛽 𝛼 𝑘, 𝑗 +1
+
+𝜕 ¯𝑊 𝛽𝛾 𝑘, 𝑗 +1
+
+𝜕𝑥 𝑐 𝑘, 𝑗 
+
+𝐷 𝛾𝑏 𝑘, 𝑗 +1 + ˜𝑃 𝑎 𝛼 𝑘, 𝑗 +1𝐶 𝛽 𝛼 𝑘, 𝑗 +1 ¯𝑊 𝛽𝛾 𝑘, 𝑗 +1
+
+𝜕𝐷 𝛾𝑏 𝑘, 𝑗 +1
+
+𝜕𝑥 𝑐 𝑘, 𝑗 
+
+(B.7) because the derivatives of ˆ𝑃 𝑘, 𝑗 , 𝑃 𝜉 𝑘, 𝑗 +1− , and 𝐾 𝑘 with respect to 𝒙 𝑘, 𝑗 are zero tensors. Since the derivatives of 𝐴 𝑘, 𝑗 and 𝐵 𝑘, 𝑗 with respect to the state 𝒙 𝑘, 𝑗 correspond to the second-order STMs, namely, 
+
+Φ𝑥 𝑥 and Φ𝑢𝑥 , the remaining derivatives to be computed are those associated with ¯𝐺 𝑥 𝑘, 𝑗 , 𝐶 𝑘, 𝑗 +1, ¯𝑊 𝑘, 𝑗 +1, and 𝐷 𝑘, 𝑗 +1.The derivative of ¯𝐺 𝑥 𝑘, 𝑗 can be constructed from that of ¯𝐺 𝑘, 𝑗 , whereas the derivative of 𝐷 𝑘, 𝑗 +1 can be assembled according to Eq. (21). The derivative of ¯𝑊 𝑘, 𝑗 +1 is obtained by combining the product rule for ¯𝑊 −1 
+
+> 𝑘, 𝑗 +1
+
+= ¯𝐺 𝑦 𝑘, 𝑗 +1 ¯𝐺 ⊤
+
+> 𝑦 𝑘, 𝑗 +1
+
+with the derivative of a matrix inverse. The derivatives of ¯𝐺 𝑘, 𝑗 can be computed by differentiating 𝐺 𝑥 (𝒙 , 𝒖 ) at 𝒙 𝑘, 𝑗 .The derivatives of ¯𝐺 𝑘, 𝑗 +1, 𝐶 𝑘, 𝑗 +1, and ¯𝑊 𝑘, 𝑗 +1 can then be obtained by the chain rule: 
+
+𝜕 ¯𝐺 𝑎𝑏 𝑘, 𝑗 +1
+
+𝜕𝑥 𝑐 𝑘, 𝑗 
+
+= 𝜕 ¯𝐺 𝑎𝑏 𝑘, 𝑗 +1
+
+𝜕𝑥 𝛼 𝑘, 𝑗 +1
+
+𝜕𝑥 𝛼 𝑘, 𝑗 +1
+
+𝜕𝑥 𝑐 𝑘, 𝑗 
+
+= 𝜕 ¯𝐺 𝑎𝑏 𝑘, 𝑗 +1
+
+𝜕𝑥 𝛼 𝑘, 𝑗 +1
+
+𝐴 𝛼𝑐 𝑘, 𝑗 (B.8a) 
+
+𝜕𝐶 𝑎𝑏 𝑘, 𝑗 +1
+
+𝜕𝑥 𝑐 𝑘, 𝑗 
+
+= 𝜕 𝜕𝑥 𝑐 𝑘, 𝑗 
+
+𝜕ℎ 𝑎 𝑘, 𝑗 +1
+
+𝜕𝑥 𝑏 𝑘, 𝑗 +1
+
+= 𝜕 2 ℎ𝑎 𝑘, 𝑗 +1
+
+𝜕𝑥 𝛼 𝑘, 𝑗 +1𝜕𝑥 𝑏 𝑘, 𝑗 +1
+
+𝜕𝑥 𝛼 𝑘, 𝑗 +1
+
+𝜕𝑥 𝑐 𝑘, 𝑗 
+
+= 𝜕 2 ℎ𝑎 𝑘, 𝑗 +1
+
+𝜕𝑥 𝛼 𝑘, 𝑗 +1𝜕𝑥 𝑏 𝑘, 𝑗 +1
+
+𝐴 𝛼𝑐 𝑘, 𝑗 (B.8b) 
+
+𝜕 ¯𝑊 𝑎𝑏 𝑘, 𝑗 +1
+
+𝜕𝑥 𝑐 𝑘, 𝑗 
+
+= 𝜕 ¯𝑊 𝑎𝑏 𝑘, 𝑗 +1
+
+𝜕𝑥 𝛼 𝑘, 𝑗 +1
+
+𝜕𝑥 𝛼 𝑘, 𝑗 +1
+
+𝜕𝑥 𝑐 𝑘, 𝑗 
+
+= 𝜕 ¯𝑊 𝑎𝑏 𝑘, 𝑗 +1
+
+𝜕𝑥 𝛼 𝑘, 𝑗 +1
+
+𝐴 𝛼𝑐 𝑘, 𝑗 (B.8c) Thus, these derivatives are obtained through tensor multiplications between the derivatives of ¯𝐺 𝑘, 𝑗 +1, 𝐶 𝑘, 𝑗 +1, and 
+
+¯𝑊 𝑘, 𝑗 +1 at 𝑡 𝑘, 𝑗 +1, which can be computed using AD, and the state transition matrix 𝐴 𝑘, 𝑗 .The derivatives with respect to the control 𝒖 𝑘, 𝑗 can be derived analogously by replacing derivatives with respect to 
+
+𝒙 𝑘, 𝑗 by derivatives with respect to 𝒖 𝑘, 𝑗 and replacing the chain-rule factor 𝐴 𝑘, 𝑗 by 𝐵 𝑘, 𝑗 where appropriate. Moreover, the derivatives with respect to ˜𝑃 𝑘, 𝑗 , ˆ𝑃 𝑘, 𝑗 , and 𝐾 𝑘 follow in a similar manner. Although the explicit expressions are omitted for brevity, the second-order derivatives can be obtained by further differentiating the first-order derivatives with respect to the state and control variables. As is clear from Eqs. (50) and (B.6) , the second-order derivatives involve 39 third-order STMs, for example, 
+
+𝜕 2 𝐴 𝑎𝑏 𝑘, 𝑗 
+
+𝜕𝑥 𝑐 𝑘, 𝑗 𝜕𝑥 𝑑 𝑘, 𝑗 
+
+= 𝜕 3𝑥 𝑎 𝑘, 𝑗 +1
+
+𝜕𝑥 𝑏 𝑘, 𝑗 𝜕𝑥 𝑐 𝑘, 𝑗 𝜕𝑥 𝑑 𝑘, 𝑗 
+
+This term becomes the computational bottleneck even when AD is applied to the second-order STMs. To reduce the computational burden, our implementation neglects terms involving third-order STMs. The effect of this approximation is controlled in practice by the trust-region method in the backward sweep, which limits the update when the quadratic expansion does not accurately predict the cost reduction. 
+
+## C. State Transition Matrices Between Stages 
+
+The stage-to-stage STMs, Φ1 
+
+> 𝑘
+
+and Φ2 
+
+> 𝑘
+
+, are then obtained by repeated application of the chain rule over the intermediate epochs. The first-order STM is obtained by matrix multiplication: 
+
+Φ1 
+
+> 𝑘
+
+= Φ 1     
+
+> (𝑡 𝑘, 𝑁 𝑗 (𝑘 )+ 1,𝑡 𝑘, 𝑁 𝑗 (𝑘 ))
+
+. . . Φ1   
+
+> (𝑡 𝑘, 1,𝑡 𝑘, 0)
+
+(C.1) where Φ1   
+
+> (𝑡 𝑘, 𝑗 +1,𝑡 𝑘, 𝑗 )
+
+denotes the first-order STM from 𝑡 𝑘, 𝑗 to 𝑡 𝑘, 𝑗 +1. The second-order STM is obtained recursively in chronological order, for example, as 
+
+Φ𝑖,𝑎𝑏    
+
+> (𝑡 𝑘, 𝑗 +2,𝑡 𝑘, 𝑗 )
+
+= Φ 𝑖, 𝛼    
+
+> (𝑡 𝑘, 𝑗 +2,𝑡 𝑘, 𝑗 +1)
+
+Φ𝛼,𝑎𝑏    
+
+> (𝑡 𝑘, 𝑗 +1,𝑡 𝑘, 𝑗 )
+
++ Φ𝑖, 𝛼𝛽    
+
+> (𝑡 𝑘, 𝑗 +2,𝑡 𝑘, 𝑗 +1)
+
+Φ𝛼,𝑎    
+
+> (𝑡 𝑘, 𝑗 +1,𝑡 𝑘, 𝑗 )
+
+Φ𝛽,𝑏    
+
+> (𝑡 𝑘, 𝑗 +1,𝑡 𝑘, 𝑗 )
+
+(C.2) where Φ𝑖,𝑎𝑏    
+
+> (𝑡 𝑘, 𝑗 +2,𝑡 𝑘, 𝑗 )
+
+represents the second-order STM from 𝑡 𝑘, 𝑗 to 𝑡 𝑘, 𝑗 +2, which can be rewritten as 
+
+Φ𝑖,𝑎𝑏    
+
+> (𝑡 𝑘, 𝑗 +2,𝑡 𝑘, 𝑗 )
+
+= 𝜕 2𝑥 𝑖 𝑘, 𝑗 +2
+
+𝜕𝑥 𝑎 𝑘, 𝑗 𝜕𝑥 𝑏 𝑘, 𝑗 
+
+(C.3) 
+
+## Code Availability 
+
+The source code implementing the proposed algorithm, together with the scripts and configuration files required to reproduce the numerical examples, will be made publicly available upon publication at https://github.com/ mfuji074/PO-SDDP.jl .
+
+## Funding Sources 
+
+This work was supported by JSPS KAKENHI Grant Number 24K17449. 40 Acknowledgment 
+
+The authors used ChatGPT (OpenAI) during manuscript preparation to improve wording, readability, and clarity. All technical content and final edits were verified by the authors. 
+
+## References 
+
+[1] Tapley, B. D., Schutz, B. E., and Born, G. H., Statistical Orbit Determination , Academic Press, 2004. [2] Allahvirdi-Zadeh, A., Wang, K., and El-Mowafy, A., “Precise Orbit Determination of LEO Satellites Based on Undifferenced GNSS Observations,” Journal of Surveying Engineering , Vol. 148, No. 1, 2022, p. 03121001. https://doi.org/10.1061/(ASCE) SU.1943-5428.0000382. [3] Hotz, A., and Skelton, R. E., “Covariance Control Theory,” International Journal of Control , Vol. 46, No. 1, 1987, pp. 13–32. https://doi.org/10.1080/00207178708933880. [4] Ozaki, N., Campagnola, S., Funase, R., and Yam, C. H., “Stochastic Differential Dynamic Programming with Unscented Transform for Low-Thrust Trajectory Design,” Journal of Guidance, Control, and Dynamics , Vol. 41, No. 2, 2018, pp. 377–387. https://doi.org/10.2514/1.G002367. [5] Ozaki, N., Campagnola, S., and Funase, R., “Tube Stochastic Optimal Control for Nonlinear Constrained Trajectory Optimization Problems,” Journal of Guidance, Control, and Dynamics , Vol. 43, No. 4, 2020, pp. 645–655. https://doi.org/10.2514/1.G004363. [6] Greco, C., Campagnola, S., and Vasile, M., “Robust Space Trajectory Design Using Belief Optimal Control,” Journal of Guidance, Control, and Dynamics , Vol. 45, No. 6, 2022, pp. 1060–1077. https://doi.org/10.2514/1.G005704. [7] Varghese, J., and Oguri, K., “Trajectory Optimization under Uncertainty with Nonlinear Programming and Forward–Backward Shooting,” Journal of Guidance, Control, and Dynamics , Vol. 49, No. 1, 2026, pp. 59–77. https://doi.org/10.2514/1.G009259. [8] Ridderhof, J., Pilipovsky, J., and Tsiotras, P., “Chance-Constrained Covariance Control for Low-Thrust Minimum-Fuel Trajectory Optimization,” AAS/AIAA Astrodynamics Specialist Conference , 2020. AAS Paper 20-618. [9] Oguri, K., and Lantoine, G., “Stochastic Sequential Convex Programming for Robust Low-Thrust Trajectory Design under Uncertainty,” AAS/AIAA Astrodynamics Specialist Conference , 2022. AAS Paper 22-708. [10] Rapakoulias, G., and Tsiotras, P., “Discrete-Time Optimal Covariance Steering via Semidefinite Programming,” 2023 62nd IEEE Conference on Decision and Control (CDC) , 2023, pp. 1802–1807. https://doi.org/10.1109/CDC49753.2023.10384118. [11] Pilipovsky, J., and Tsiotras, P., “Computationally Efficient Chance Constrained Covariance Control with Output Feedback,” 2024 IEEE 63rd Conference on Decision and Control (CDC) , 2024, pp. 677–682. https://doi.org/10.1109/CDC56724.2024.10885876. [12] Kumagai, N., and Oguri, K., “Robust Cislunar Low-Thrust Trajectory Optimization under Uncertainties via Sequential Covariance Steering,” Journal of Guidance, Control, and Dynamics , Vol. 48, No. 12, 2025, pp. 2725–2743. https://doi.org/10. 2514/1.G009092. 
+
+41 [13] Kaelbling, L. P., Littman, M. L., and Cassandra, A. R., “Planning and Acting in Partially Observable Stochastic Domains,” 
+
+Artificial Intelligence , Vol. 101, No. 1–2, 1998, pp. 99–134. https://doi.org/10.1016/S0004-3702(98)00023-X. [14] Platt, R., Tedrake, R., Kaelbling, L., and Lozano-Pérez, T., “Belief Space Planning Assuming Maximum Likelihood Observations,” Robotics: Science and Systems VI , 2010. https://doi.org/10.15607/RSS.2010.VI.037. [15] van den Berg, J., Patil, S., and Alterovitz, R., “Motion Planning under Uncertainty Using Iterative Local Optimization in Belief Space,” The International Journal of Robotics Research , Vol. 31, No. 11, 2012, pp. 1263–1278. https://doi.org/10.1177/ 0278364912456319. [16] van den Berg, J., Patil, S., and Alterovitz, R., “Motion Planning under Uncertainty Using Differential Dynamic Programming in Belief Space,” Robotics Research , Springer Tracts in Advanced Robotics, Vol. 100, Springer International Publishing, Cham, 2017, pp. 473–490. https://doi.org/10.1007/978-3-319-29363-9_27. [17] Indelman, V., Carlone, L., and Dellaert, F., “Planning in the Continuous Domain: A Generalized Belief Space Approach for Autonomous Navigation in Unknown Environments,” The International Journal of Robotics Research , Vol. 34, No. 7, 2015, pp. 849–882. https://doi.org/10.1177/0278364914561102. [18] Cognetti, M., Salaris, P., and Robuffo Giordano, P., “Optimal Active Sensing with Process and Measurement Noise,” 2018 IEEE International Conference on Robotics and Automation (ICRA) , 2018, pp. 2118–2125. https://doi.org/10.1109/ICRA.2018. 8460476. [19] Salaris, P., Cognetti, M., Spica, R., and Giordano, P. R., “Online Optimal Perception-Aware Trajectory Generation,” IEEE Transactions on Robotics , Vol. 35, No. 6, 2019, pp. 1307–1322. https://doi.org/10.1109/TRO.2019.2931137. [20] Theodorou, E., Tassa, Y., and Todorov, E., “Stochastic Differential Dynamic Programming,” Proceedings of the 2010 American Control Conference , 2010, pp. 1125–1132. https://doi.org/10.1109/ACC.2010.5530971. [21] Yi, Z., Cao, Z., Theodorou, E., and Chen, Y., “Nonlinear Covariance Control via Differential Dynamic Programming,” 2020 American Control Conference , 2020, pp. 3571–3576. https://doi.org/10.23919/ACC45564.2020.9147531. [22] Fujiwara, M., and Funase, R., “Observability-Aware Differential Dynamic Programming with Impulsive Maneuvers,” Journal of Guidance, Control, and Dynamics , Vol. 47, No. 9, 2024, pp. 1905–1919. https://doi.org/10.2514/1.G007798. [23] Fujiwara, M., and Ozaki, N., “Stochastic Differential Dynamic Programming under Coupled Control and Observation,” 
+
+AAS/AIAA Astrodynamics Specialist Conference , 2024. AAS Paper 24-424. [24] Ridderhof, J., Okamoto, K., and Tsiotras, P., “Chance-Constrained Covariance Control for Linear Stochastic Systems with Output Feedback,” Proceedings of the 59th IEEE Conference on Decision and Control , 2020, pp. 1758–1763. https://doi.org/10.1109/CDC42340.2020.9303731. [25] Spinello, D., and Stilwell, D. J., “Nonlinear Estimation with State-Dependent Gaussian Observation Noise,” IEEE Transactions on Automatic Control , Vol. 55, No. 6, 2010, pp. 1358–1366. https://doi.org/10.1109/TAC.2010.2042006. 
+
+42 [26] Carpenter, J. R., “The Epoch-State Filter, Revisited,” Journal of Guidance, Control, and Dynamics , Vol. 46, No. 7, 2023, pp. 1228–1242. https://doi.org/10.2514/1.G007330. [27] Lantoine, G., and Russell, R. P., “A Hybrid Differential Dynamic Programming Algorithm for Constrained Optimal Control Problems. Part 1: Theory,” Journal of Optimization Theory and Applications , Vol. 154, No. 2, 2012, pp. 382–417. https://doi.org/10.1007/s10957-012-0039-0. [28] Xie, Z., Liu, C. K., and Hauser, K., “Differential Dynamic Programming with Nonlinear Constraints,” 2017 IEEE International Conference on Robotics and Automation , 2017, pp. 695–702. https://doi.org/10.1109/ICRA.2017.7989086. [29] Pavlov, A., Shames, I., and Manzie, C., “Interior Point Differential Dynamic Programming,” IEEE Transactions on Control Systems Technology , Vol. 29, No. 6, 2021, pp. 2720–2727. https://doi.org/10.1109/TCST.2021.3049416. [30] Howell, T. A., Jackson, B. E., and Manchester, Z., “ALTRO: A Fast Solver for Constrained Trajectory Optimization,” 
+
+2019 IEEE/RSJ International Conference on Intelligent Robots and Systems , 2019, pp. 7674–7679. https://doi.org/10.1109/ IROS40897.2019.8967788. [31] Pellegrini, E., and Russell, R. P., “A Multiple-Shooting Differential Dynamic Programming Algorithm. Part 1: Theory,” Acta Astronautica , Vol. 170, 2020, pp. 686–700. https://doi.org/10.1016/j.actaastro.2019.12.037. [32] Rackauckas, C., and Nie, Q., “DifferentialEquations.jl—A Performant and Feature-Rich Ecosystem for Solving Differential Equations in Julia,” Journal of Open Research Software , Vol. 5, No. 1, 2017, p. 15. https://doi.org/10.5334/jors.151. [33] Lubin, M., Dowson, O., Dias Garcia, J., Huchette, J., Legat, B., and Vielma, J. P., “JuMP 1.0: Recent Improvements to a Modeling Language for Mathematical Optimization,” Mathematical Programming Computation , Vol. 15, No. 3, 2023, pp. 581–589. https://doi.org/10.1007/s12532-023-00239-3. [34] Goulart, P. J., and Chen, Y., “Clarabel: An Interior-Point Solver for Conic Programs with Quadratic Objectives,” arXiv preprint arXiv:2405.12762 , 2024. https://doi.org/10.48550/arXiv.2405.12762. [35] Gates, C. R., “A Simplified Model of Midcourse Maneuver Execution Errors,” Tech. Rep. 32-504, Jet Propulsion Laboratory, Pasadena, CA, 1963. [36] Aziz, J. D., Scheeres, D. J., and Lantoine, G., “Hybrid Differential Dynamic Programming in the Circular Restricted Three-Body Problem,” Journal of Guidance, Control, and Dynamics , Vol. 42, No. 5, 2019, pp. 963–975. https://doi.org/10.2514/1.G003617. [37] Revels, J., Lubin, M., and Papamarkou, T., “Forward-Mode Automatic Differentiation in Julia,” arXiv preprint arXiv:1607.07892 ,2016. https://doi.org/10.48550/arXiv.1607.07892. [38] Petersen, K. B., and Pedersen, M. S., The Matrix Cookbook , 2012. Version 20121115. 
+
+43

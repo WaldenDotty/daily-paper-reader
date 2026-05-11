@@ -1,0 +1,564 @@
+Title: PISTO: Proximal Inference for Stochastic Trajectory Optimization
+
+URL Source: https://arxiv.org/pdf/2605.07215v1
+
+Published Time: Mon, 11 May 2026 00:46:50 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# PISTO: Proximal Inference for Stochastic Trajectory Optimization 
+
+Hongzhe Yu, Zinuo Chang, and Yongxin Chen 
+
+Abstract —Stochastic trajectory optimization methods like STOMP enable planning with non-differentiable costs, offering substantial flexibility over gradient-based approaches. We show that STOMP implicitly minimizes the KL divergence from a Boltzmann trajectory distribution, revealing an elegant Varia-tional Inference (VI) structure underlying its updates. Building on this insight, we propose the Proximal Inference for Stochastic Trajectory Optimization (PISTO) algorithm that stabilizes the updates by augmenting the objective with a KL regularization between successive Gaussian proposals. This proximal formula-tion admits a trust-region interpretation and yields closed-form mean updates computable as expectations under a surrogate distribution. We estimate these expectations via importance-weighted Monte Carlo sampling, producing a simple, derivative-free algorithm that inherits STOMP’s ability to handle non-differentiable and discontinuous costs without modification. On robot arm motion planning benchmarks, PISTO achieves an 89% success rate—outperforming CHOMP (63%) and STOMP (68%)—while producing shorter, smoother paths at twice the speed of competing stochastic methods. We further validate PISTO on contact-rich MuJoCo locomotion and manipulation tasks, where it consistently outperforms both CEM and MPPI baselines in reward. 
+
+I. I NTRODUCTION 
+
+Motion planning is central to robotics, enabling autonomous systems to generate collision-free, dynamically feasible tra-jectories in cluttered environments. While sampling-based methods such as PRM and RRT ⋆ [8, 16] provide strong exploration and asymptotic guarantees, their trajectories of-ten require substantial post-processing for smoothness and dynamic feasibility. Consequently, trajectory optimization has become essential for high-performance planning in manipula-tion, mobile robotics, and aerial systems. Optimization-based planners—including CHOMP [18, 28], sequential convex programming [20], and Gaussian process methods [11, 12]—represent trajectories in continuous time and optimize for smoothness, collision avoidance, and dy-namic constraints. These approaches achieve impressive speed and scalability, but they rely on differentiable cost repre-sentations and remain susceptible to local minima in highly nonconvex environments. Stochastic trajectory optimization broadens the class of tractable objectives by introducing sampling. STOMP [6] and path-integral methods such as PI 2 [21] perturb candidate trajectories and update them via cost-weighted averaging, en-abling optimization under non-differentiable and discontinuous                    
+
+> H. Yu and Y. Chen are with the School of Aerospace Engineer-ing, Z. Chang is with the School of Electrical and Computer Engineer-ing, Georgia Institute of Technology, Atlanta, GA; {hyu419, zchang40, yongchen}@gatech.edu
+
+costs. A natural question arises: what objective does STOMP implicitly optimize? We show that STOMP minimizes the reverse KL diver-gence from a Boltzmann trajectory distribution, revealing an elegant variational inference structure underlying its updates. This connection places STOMP within a broader inference-based planning framework [3, 7, 22], where trajectory costs define a Boltzmann distribution whose high-probability mass concentrates on desirable plans. Gaussian variational inference formulations (GVIMP) [27] approximate this distribution with a structured Gaussian family, providing uncertainty quantifi-cation and a principled KL-divergence objective. Building on this insight, we develop a proximal inference algorithm that stabilizes STOMP’s updates. Proximal meth-ods [4, 13] augment each iterate with a penalty on the distance from the current solution, effectively creating a trust region that prevents overly aggressive steps. In the distributional setting, this naturally extends to KL-divergence penalties between successive proposals, controlling how rapidly the trajectory distribution evolves. By combining the variational inference perspective with proximal regularization, we ob-tain closed-form mean updates computable via importance-weighted Monte Carlo sampling—a simple, derivative-free algorithm that inherits STOMP’s flexibility while offering principled stability guarantees. 
+
+Contributions:  
+
+> •
+
+We reveal that STOMP implicitly minimizes KL diver-gence from a Boltzmann trajectory distribution, estab-lishing its variational inference structure and motivating principled algorithmic improvements.  
+
+> •
+
+We propose Proximal Inference for Stochastic Trajectory Optimization (PISTO) , which augments the reverse-KL objective with a proximal penalty between successive Gaussian proposals. This formulation admits a trust-region interpretation, stabilizes optimization dynamics, and yields closed-form mean updates computable via importance-weighted Monte Carlo sampling.  
+
+> •
+
+We demonstrate PISTO’s effectiveness across diverse robotics tasks: on motion planning benchmarks, PISTO achieves 89% success rate—outperforming CHOMP (63%), STOMP (68%), and natural gradient descent (76%)—while running twice as fast as competing stochastic methods. On contact-rich MuJoCo tasks, PISTO consistently outperforms CEM and MPPI base-lines in reward despite non-differentiable dynamics. 
+
+> arXiv:2605.07215v1 [cs.RO] 8 May 2026
+
+II. R ELATED WORK 
+
+a) Planning as Inference: The interpretation of optimal control as probabilistic inference connects to linearly-solvable control [22], path-integral methods [7], and variational formu-lations in RL [10]. Within motion planning, Toussaint [24] applied message passing on graphical models, while Stein Variational approaches [17] maintain trajectory distributions via particle-based inference. Our work builds on the Planning as Inference paradigm [2, 5, 14, 15, 27] , which showed that trajectory optimization with control-energy regularization is equivalent to KL-divergence minimization from a Boltz-mann distribution. We solve the inference problem using a proximal inference algorithm that provides stable optimization and efficient Monte Carlo estimation. Other works under this paradigm are closely related. The variational and heteroscedas-ticity GP planners [5, 14] either rely on pre-defined kernels, induction point approximations, or start and goal states, which cannot be easily extended to control space optimization. Mix-tures of Gaussian Processes for Trajectory Optimization (MG-PTO) [15] obtains a multi-modal trajectory using a STOMP-style cost-weighted stochastic gradient estimate. P-GVIMP [2] leverages GPU parallel computation to accelerate the mean and covariance updates in a gradient-descent landscape. 
+
+b) Trajectory Optimization: Gradient-based methods such as CHOMP [18, 28], TrajOpt [20], and GPMP [11] achieve fast convergence but require differentiable costs. Sampling-based methods relax this requirement: STOMP [6] uses cost-weighted averaging, path integral methods (PI 2 [21], MPPI [25]) derive updates from stochastic control, and CEM [19] fits distributions to elite samples. Our method dif-fers by: (i) revealing STOMP’s variational inference structure via KL-divergence; (ii) introducing proximal regularization for trust-region stability; and (iii) deriving closed-form updates amenable to importance sampling. Our method introduces three key innovations over these ap-proaches: (i) an explicit connection between STOMP’s objec-tive and KL-divergence minimization, revealing its variational inference structure; (ii) proximal regularization that stabilizes updates with a trust-region interpretation; and (iii) a reversed KL formulation yielding closed-form mean updates amenable to unbiased importance sampling. III. S TOCHASTIC TRAJECTORY OPTIMIZATION AS 
+
+VARIATIONAL INFERENCE PLANNING 
+
+In this section, we establish the theoretical foundation of our approach by connecting classical stochastic trajectory op-timization with variational inference. We begin by introducing the STOMP framework, followed by its interpretation as a variational inference problem. 
+
+A. Stochastic Trajectory Optimization (STOMP) 
+
+Stochastic Trajectory Optimization for Motion Planning (STOMP) [6] is a gradient-free optimization framework de-signed to handle non-differentiable and discontinuous cost functions. It explores the trajectory space by generating stochastic perturbations around a nominal trajectory and up-dating it based on the exponentiated cost of these samples. Let Y ∈ Rn(T +1) represent the mean of a T -length state trajectory, defined as Y ≜ {xt}Tt=0 . STOMP seeks to minimize the expectation of a cost functional over a proposal Gaussian distribution ˜Y ∼ N (Y, Σ) :
+
+min  
+
+> Y
+
+J1(Y ) ≜ E ˜Y
+
+
+
+S( ˜Y ) + 12 ˜Y ⊤R ˜Y
+
+
+
+, (1) where S( ˜Y ) = PTt=0 V ( ˜Yt) is the state-dependent poten-tial (e.g., obstacle avoidance) and R = A⊤A is the con-trol cost matrix for double integrator dynamics, with A ∈
+
+R(T −1) ×(T +1) the finite-difference acceleration operator ap-plying the stencil [1 , −2, 1] /∆t2 at interior nodes. This stochastic formulation allows the planner to "smooth" the cost landscape, effectively escaping local minima that often trap purely gradient-based methods. 
+
+B. Variational Inference Interpretation of STOMP 
+
+The objective (1) admits a Variational Inference (VI) inter-pretation that recasts trajectory optimization as approximating an optimal path distribution. Any cost function over trajecto-ries induces a Boltzmann distribution 
+
+p⋆( ˜Y ) ∝ exp 
+
+
+
+−S( ˜Y )
+
+
+
+, (2) where low-cost trajectories receive high probability mass; this construction underlies the connection between optimal control and inference [7, 22] and path-integral methods [21]. In (1), the state-dependent potential S( ˜Y ) captures task-specific objectives such as obstacle avoidance, while the control cost 12 ˜Y ⊤R ˜Y with R = A⊤A corresponds to a Gaussian smoothness prior N (0 , R −1) favoring low-acceleration paths. Combining the two yields the main result connecting STOMP to VI. 
+
+Theorem 1 (Variational Inference Formulation of STOMP) .
+
+Consider the stochastic trajectory optimization objective (1) .Let Σ ≻ 0 be a fixed covariance and R ≻ 0 be the control cost matrix. Minimizing J1 over the mean trajectory Y is equivalent to solving the variational inference problem: 
+
+min  
+
+> Y
+
+DKL (N (Y, Σ) ∥ Y⋆) , (3) 
+
+where the target distribution is the energy-based posterior: 
+
+Y⋆ ∝ exp 
+
+
+
+−S( ˜Y )
+
+
+
+N (0 , R −1). (4) 
+
+Proof: See Appendix A-(a). IV. P ROXIMAL INFERENCE FOR STOCHASTIC 
+
+TRAJECTORY OPTIMIZATION 
+
+We introduce a novel paradigm for solving the motion planning inference problem: Proximal Inference for Stochastic Trajectory Optimization (PISTO). PISTO reverses the argu-ment order in the KL divergence and augments the objective with a Gaussian proximal term, converting each iteration into a proximal inference minimization whose optimizer admits a closed-form expectation representation amenable to Monte Carlo estimation. A. Solution to the Reverse KL Minimization Problem 
+
+We first introduce an important moment-matching solution result in reverse KL minimization problems. 
+
+Lemma 1 (Reverse KL Minimization and Moment-matching Solution) . Consider the reverse KL objective obtained by swapping distributions in (3) :
+
+min  
+
+> Y
+
+DKL (Y⋆ ∥ N (Y, Σ)) , (5) 
+
+where Y⋆ ∝ e−S( ˜Y )N (0 , R −1). The gradient of the objective 
+
+(5) with respect to Y is 
+
+∇Y DKL (Y⋆ ∥ N (Y, Σ)) = EY⋆
+
+h
+
+−Σ−1( ˜Y − Y )
+
+i
+
+, (6) 
+
+and the optimal mean is given by 
+
+Y ⋆ = EY⋆ [ ˜Y ]. (7) 
+
+With the choice Σ = R−1 and proposal distribution ˜Y ∼N (Y, R −1), the importance sampling estimator is 
+
+ˆY ⋆ =
+
+> M
+
+X
+
+> m=1
+
+¯wm(Y + εm), ¯wm = e−(S(Y +εm)+ ε⊤ 
+
+> mRY )
+
+PMj=1 e−(S(Y +εj )+ ε⊤   
+
+> jRY )
+
+,
+
+(8) 
+
+where εm ∼ N (0 , R −1) are i.i.d. samples. 
+
+The proof of Lemma 1 can be found in [26]. 
+
+B. The main PISTO Formulation 
+
+Theorem 2 (Proximal Inference Update) . Consider the prox-imal update for the VI problem (3) :
+
+Yk+1 = arg min  
+
+> Y
+
+DKL (N (Y, Σ) ∥ Y⋆) (9) 
+
++ 1
+
+η DKL (N (Y, Σ) ∥ N (Yk, Σ)) , (10) 
+
+where η > 0 is the step size parameter, Yk is the current iterate, and Y⋆ ∝ e−S( ˜Y )N (0 , R −1) is the target distribution. Then the proximal update is equivalent to KL projection onto a surrogate distribution: 
+
+Yk+1 = arg min  
+
+> Y
+
+DKL (N (Y, Σ) ∥ Y⋆k) , (11) 
+
+where the surrogate target Y⋆k admits the explicit form 
+
+Y⋆k ∝
+
+
+
+e−S( ˜Y )N (0 , R −1)
+
+ ηη+1 
+
+(N (Yk, Σ)) 1 
+
+> η+1
+
+. (12) 
+
+Proof: Appendix A-(c). 
+
+Remark 1. The surrogate distribution Y⋆k geometrically inter-polates between the true target Y⋆ and the current Gaussian approximation N (Yk, Σ) . As η → ∞ , the surrogate converges to the true target, recovering standard VI. For finite η, the proximal term regularizes the update, improving numerical stability and convergence. C. Moment-matching Solution to the Proximal Inference 
+
+Eq. (11) indicates that each proximal iteration is itself a VI problem with respect to the surrogate distribution Y⋆k,which is typically easier to handle than the original Boltzmann distribution. To compute the update, we solve the reverse KL-minimization projection 
+
+Yk+1 = arg min  
+
+> Y
+
+DKL (Y⋆k ∥ N (Y, Σ)) . (13) To sample from Y⋆k, we rewrite it in a tilted-Gaussian form by completing the square. Letting γ ≜ ηη+1 , we obtain 
+
+log Y⋆k ∝ − γS ( ˜Y ) − 12 ( ˜Y − μk)⊤P ( ˜Y − μk), (14) where P = γR + (1 − γ)Σ −1 and μk = (1 − γ)P −1Σ−1Yk.This representation reveals that Y⋆k behaves like a Gaussian whose mean is shifted by the proximal term, modulated by an exponential tilt involving the cost function: 
+
+Y⋆k ∝ e−γS ( ˜Y )N ( ˜Y ; μk, P −1). (15) Applying the gradient identity from (6) to the reverse KL-minimizing objective (13) and setting it to zero yields the following result. 
+
+Theorem 3 (Moment-Matching Update) . The solution to the reverse KL-minimization projection (13) satisfies the condition 
+
+∇Y DKL (Y⋆k ∥ N (Y, Σ)) = EY⋆k
+
+h
+
+−Σ−1( ˜Y − Y )
+
+i
+
+= 0 ,
+
+(16) 
+
+which admits the closed-form moment-matching update 
+
+Yk+1 = EY⋆k [ ˜Y ]. (17) 
+
+That is, the next iterate is simply the mean of the surrogate distribution Y⋆k.D. Importance Sampling 
+
+To estimate the expectation in (17), we employ importance sampling from a Gaussian proposal distribution. Similar to Eq. (8), the weight at iteration k is 
+
+wk( ˜Y ) ≜ e−γS ( ˜Y )N ( ˜Y ; μk, P −1)
+
+N ( ˜Y ; Yk, P −1) ∝ e−γS ( ˜Y )− ˜Y T P (Yk −μk ).
+
+In the common choice Σ = R−1, the expression simplifies considerably, as P = R and μk = (1 − γ)Yk:
+
+wk( ˜Y ) ∝ e−γ(S( ˜Y )+ ˜Y T RY k ). (18) Using these weights, we obtain a Monte-Carlo estimation of the proximal update: 
+
+Yk+1 ≈
+
+> M
+
+X
+
+> m=1
+
+e−γ(S(Yk +εm)+ εTmRY k )
+
+PMj=1 e−γ(S(Yk +εj )+ εTj RY k ) (Yk + εm), (19) where εm ∼ N (0 , R −1), m = 1 , . . . , M are sampled inde-pendently. This Monte Carlo estimator completes the proximal inference update, providing a stable and efficient mechanism for refining the Gaussian approximation at each iteration. (a) Box Scene (b) Kitchen Scene (c) Bookshelf Scene (d) Table Scene 
+
+Fig. 1: Results of PISTO in different motion planning benchmarking scenes. 
+
+Algorithm 1 PISTO 
+
+Require: Accumulated cost S(·), smoothness matrix R,Cholesky factor L with LL ⊤ = R−1, sample size M ,proximal parameter η, current iterate Yk, temperature τ
+
+Ensure: Updated iterate Yk+1  
+
+> 1:
+
+Compute γ ← ηη + 1  
+
+> 2:
+
+Sample: Draw {εm}Mm=1 where εm = Lz m, zm ∼N (0 , I ) 
+
+> 3:
+
+Evaluate: For each m = 1 , . . . , M , compute importance weights 
+
+wm ← exp 
+
+
+
+− γτ S(Yk + εm) − (εm)⊤R Y k
+
+ 
+
+> 4:
+
+Normalize: Compute normalized weights 
+
+¯wm ← wm
+
+PMj=1 w(j) , ∀m 
+
+> 5:
+
+Update: Compute weighted mean 
+
+Yk+1 ← Yk +
+
+> M
+
+X
+
+> m=1
+
+¯wm εm 
+
+> 6:
+
+return Yk+1 
+
+E. Policy Optimization for Contact-Rich Tasks 
+
+We now extend PISTO to policy optimization in the action space, where the decision variable is the control sequence 
+
+U = {ut}T −1 
+
+> t=0
+
+and states evolve according to known dynamics models. 
+
+a) Formulation: Given initial state x0 ∈ Rdx , consider the finite-horizon optimal control problem: 
+
+min  
+
+> UT−1
+
+X
+
+> t=0
+
+c(xt, u t) (20) subject to the dynamics and control constraints: 
+
+xt+1 = g(xt, u t), t = 0 , . . . , T − 1, (21) 
+
+ut ∈ U ⊆ Rdu , t = 0 , . . . , T − 1, (22) where U = ( u0, . . . , u T −1) ∈ RT ×du , c : Rdx × Rdu → R is the stage cost, g : Rdx × Rdu → Rdx is the dynamics model, and U = [ u, ¯u] is the admissible control set. 
+
+b) Composite Structure of the Objective: The state trajec-tory is uniquely determined by the initial condition and control sequence via recursive application of (21). We formalize this through the flow map ϕt : Rdx × Rt×du → Rdx :
+
+xt = ϕt(x0, u 0: t−1) ≜ g ◦ g ◦ · · · ◦ g
+
+| {z } 
+
+> ttimes
+
+(x0, u 0: t−1), (23) with the convention ϕ0(x0) = x0. Substituting into (20) and defining the rollout cost 
+
+S(U ; x0) ≜ 
+
+> T−1
+
+X
+
+> t=0
+
+c ϕt(x0, u 0: t−1), u t
+
+, (24) the optimal control problem reduces to the form of (1): 
+
+min  
+
+> U
+
+E ˜U
+
+
+
+S( ˜U ; x0) + 12 ˜U ⊤R ˜U
+
+
+
+, (25) where the quadratic term 12 ˜U ⊤R ˜U regularizes the control se-quence for temporal smoothness. Algorithm 1 applies directly in this setting, with each sample ˜U (i) ∼ N (U, Σ) evaluated by rolling out the dynamics ϕt to obtain S( ˜U (i); x0). This formulation enables PISTO to optimize directly in control space without requiring differentiability of g or c, and admits efficient parallelization of rollouts on modern GPU hardware. 
+
+F. Covariance and Proximal Step Size Annealing 
+
+To balance exploration and exploitation, we implement covariance scheduling with adaptive temperature scaling. We scale the smoothness matrix, ¯R = σk ×R, and use ¯R matrix as the actual matrix that we sample from. The covariance scale 
+
+σk follows cosine annealing: 
+
+σk = σfinal + 12 (σinit − σfinal )
+
+
+
+1 + cos 
+
+ πk Kmax 
+
+ 
+
+, (26) where k is the current iteration and Kmax the maximum. We introduce an adaptive annealing scheme for the proximal step size parameter η governing the exploration-exploitation trade-off in importance-weighted trajectory optimization. We also introduce an additional temperature parameter τ to scale the impact of the adaptive proximal step size. The importance weights are wm ∝ exp  − γτ S(Yk + εm) − (εm)⊤RY k
+
+. We anneal η from small to large values via an exponential (a) The PushT Task. Optimization time: 260 .62( s).
+
+(b) The Humanoid Running Task. Optimization time: 142 .21( s).
+
+(c) The Humanoid Standing Up Task. Optimization time: 168 .11( s).
+
+Fig. 2: The optimization results for contact-rich tasks. schedule η(t) = ηinitial · (ηfinal /η initial )t/T , where small η
+
+encourages exploration through nearly uniform weights while large η exploits high-reward samples with peaked weights. The temperature τ amplifies only the energy term, leaving regularization unaffected, enabling independent control over reward sensitivity and trajectory smoothness . V. E XPERIMENTS 
+
+All experiments were run on a computer with an Intel Core i7-12800H CPU. The MuJoCo experiments were run on a computer with an NVIDIA RTX 4090 GPU. The code for this paper is implemented in C++ for the motion planning tasks, and in Python for the trajectory optimization tasks in MuJoCo. 
+
+> 0For STOMP, we employed the official implementation https://github. com/ros-industrial/stomp
+
+A. Motion Planning for Robot Arms 
+
+For collision avoidance, we define the state cost V (Yt) using two formulations. The signed-distance cost approximates the robot as a union of spheres and evaluates 
+
+Vcoll (Yt) = hδ (dsdf (F (Yt))) 2Σobs 
+
+, (27) where F (·) is the forward kinematics, dsdf (·) queries a pre-computed signed distance field (SDF), and the hinge func-tion hδ (·) penalizes penetrations within margin δ. The non-differentiable indicator cost, used in MoveIt benchmarking experiments, imposes a fixed penalty on detected collision: 
+
+Vcoll (Yt) = Wobs 1CollisionDetected( Yt). (28) The weights Σobs and Wobs are task-dependent hyper-parameters. (a) PISTO (b) NGD (c) STOMP (d) CHOMP 
+
+Fig. 3: Results of different planners in the Kitchen scene in the database.    
+
+> (a) Success Rate (b) Planning Time (c) Path Length (d) Path Clearance
+
+Fig. 4: Benchmark Performance Statistics 
+
+B. Policy Optimization Tasks 
+
+We tested the PISTO algorithm on various tasks defined in MuJoCo [23]. We used Bayesian optimization-based pa-rameter sweeping to obtain the recommended parameters for each task. Figure 2 illustrates the optimization process for a standing up task for a 17 -DOF humanoid robot. Table I records the achieved rewards for different tasks. Planning and Runtime Results: Table I records PISTO’s performance in contact-rich trajectory optimization tasks, compared with CEM and MPPI methods. The results are averaged over 50 independent runs. Our proposed PISTO algorithm significantly outperforms both baselines across all five contact-rich tasks, achieving approximately 1.5× improvement on Walker2d and 2.8× on HumanoidRun compared to the best baseline, while converting negative MPPI performance on PushT ( −0.17 ) into a positive reward of 0.46 . PISTO also runs 1.4×–3.2× faster than baselines on most tasks, with particularly notable speedups on HumanoidRun ( 36 .5s vs. ∼115s). The tight standard de-viations indicate reliable convergence despite discontinuous contact dynamics. Notably, PISTO achieves successful results for the 17 -DOF humanoid running and standing-up tasks within minutes. These results validate PISTO’s robustness for trajectory optimization in hybrid dynamical systems. 
+
+C. Benchmarking with MoveIt Motion Planning Algorithms 
+
+We further benchmark PISTO against several representative optimization-based baselines using MoveIt, including the of-ficial implementations of STOMP and CHOMP, as well as a natural gradient descent (NGD) method [27]. Experiments are conducted on the Franka Emika Panda across seven manipu-lation environments from the MotionBenchMaker [1] dataset, including Kitchen , Bookshelf Tall , Bookshelf Thin , Table Pick ,
+
+Table Under Pick , Box , and Cage , with over 300 planning tasks in total. For a fair comparison, all planners are initialized using the same joint-space straight-line interpolation between the start and goal configurations. We repeat each planning task 20 times with different random seeds. A run is considered successful if the resulting trajectory is collision-free and satisfies joint limits. Figure 4 summarizes the benchmarking results in terms of success rate, planning time, path length, and path clearance. VI. C ONCLUSION 
+
+We presented the Proximal Inference for Stochastic Trajec-tory Optimization (PISTO), a principled algorithm for motion planning formulated as Gaussian variational inference. By re-vealing STOMP’s implicit variational structure, we introduced a proximal formulation that regularizes updates via KL penal-ties, yielding closed-form moment-matching updates amenable to importance sampling. The resulting algorithm is simple, derivative-free, and parallelizable. Experiments demonstrated that PISTO achieves 89% success on motion planning bench-marks—outperforming CHOMP, STOMP, and natural gradient baselines—while additional MuJoCo experiments validated its effectiveness for high-dimensional, contact-rich tasks. Future work includes incorporating gradients when available, jointly optimizing mean and covariance, and extending to receding-horizon MPC. TABLE I: Benchmarking Results: Motion Planning and Trajectory Optimization                                                                                                                      
+
+> Task Method Success/Reward Time (s) Path Length Path Clearance
+> Motion Planning (7-DOF Manipulator)
+> CHOMP 63.05% 0.498 8.519 0.108 STOMP 67.59% 0.481 8.424 0.113 NGD 75.76% 0.499 8.838 0.161
+> PISTO 88.57 %0.237 8.421 0.124
+> Reward (Per step) Runtime Task PISTO CEM MPPI PISTO CEM MPPI
+> Trajectory Optimization for Contact-Rich Tasks
+> PushT 0.4559 ±0.1291 0.1004 ±0.1416 −0.1715 ±0.1407 134 .6235 s±0.8061 s229 .17 s±1.48 s228 .55 s±1.44 s
+> Hopper 1.2645 ±0.0201 0.6931 ±0.1390 0.9195 ±0.1222 49 .13 s1.51 s58 .76 s±2.61 s58 .53 s±2.47 s
+> Walker2d 1.2622 ±0.0828 0.8603 ±0.1107 0.7505 ±0.1642 65 .99 s±1.50 s75 .13 s±2.57 s75 .14 s±2.72 s
+> HumanoidRun 1.3385 ±0.2921 0.4106 ±0.2509 0.485 ±0.3104 36 .48 s±1.64 s117 .62 s±14 .42 s112 .91 s±12 .98 s
+> HumanoidStandUp 0.679 ±0.058 0.4609 ±0.008 0.529 ±0.0390 65 .29 s±2.02 s55 .18 s±1.44 s54 .24 s±2.94 s
+
+APPENDIX 
+
+A. Proofs a) Proof of Theorem 1: Define the accumulated state cost 
+
+S( ˜Y ) = PTt=0 V ( ˜Yt). Since the covariance Σ is fixed, the expectation of the quadratic deviation term simplifies via the trace identity E[( ˜Y − Y )⊤R( ˜Y − Y )] = tr( RΣ) . Thus, 
+
+J1 = E ˜Y [S( ˜Y )] + 12 tr( RΣ) + 12 Y ⊤RY. 
+
+We recognize that E ˜Y [S( ˜Y )] = −E ˜Y [log e−S( ˜Y )]. Combin-ing this with the KL divergence between Gaussians, 
+
+DKL 
+
+ N (Y, Σ) ∥N (0 , R −1)
+
+= 12
+
+ tr( RΣ) + Y ⊤RY − log det(Σ R) − (T + 1) 
+
+where the last two terms are constants, we obtain 
+
+J1 = DKL (N (Y, Σ) ∥Y⋆) + const , (29) by introducing the un-normalized Y⋆ ∝ e−S( ˜Y )N (0 , R −1).Here, the constant is independent of Y . Since only the mean 
+
+Y is optimized, minimizing J1 is equivalent to minimizing the KL divergence to the target posterior Y⋆.
+
+b) Proof of Theorem 2: Let qY and qYk denote the density functions of N (Y, Σ) and N (Yk, Σ) , respectively. The proximal objective can be written as 
+
+Jk = DKL (N (Y, Σ) ∥ Y⋆) + 1
+
+η DKL (N (Y, Σ) ∥ N (Yk, Σ)) = EN (Y, Σ) 
+
+ 
+
+1 + 1
+
+η
+
+
+
+log qY − log Y⋆ − 1
+
+η log qYk
+
+
+
+.
+
+Factoring out the coefficient η+1  
+
+> η
+
+yields 
+
+Jk = η + 1 
+
+η EN (Y, Σ) 
+
+h
+
+log qY − log 
+
+
+
+(Y⋆) ηη+1 (qYk ) 1
+
+> η+1
+
+i 
+
+∝ DKL (N (Y, Σ) ∥ Y⋆k) ,
+
+where we identify the surrogate distribution as 
+
+Y⋆k ∝ (Y⋆) ηη+1 (qYk ) 1 
+
+> η+1
+
+.
+
+Substituting the explicit form of Y⋆ completes the proof. 
+
+B. Implementation Details a) Elite Sample Selection: To improve convergence and reduce variance, we incorporate elite-set selection within the importance sampling step. Given M rollouts, we define an elite subset Me ⊂ { 1, . . . , M } containing samples in the lowest 
+
+Kelite -th percentile of cost. Importance weights for m / ∈ M e
+
+are set to zero, while for m ∈ M e:
+
+wm = exp( −γJ (Ym)/τ )
+
+P 
+
+> j∈M e
+
+exp( −γJ (Yj )/τ ) , (30) where J(·) is the trajectory cost and τ is an adaptive temper-ature. This selective pressure ensures updates are driven by successful explorations, enabling efficient navigation of non-convex cost landscapes. 
+
+b) Momentum-Accelerated Exponential Moving Average: 
+
+To stabilize convergence and accelerate optimization, we apply a momentum-based update scheme. Let ˆYk+1 denote the can-didate trajectory computed as the weighted expectation over the elite set ˆYk+1 = P 
+
+> m∈M e
+
+wm(Yk + εm). We compute the update direction ∆k = ˆYk+1 − Yk and maintain a momentum buffer vk via exponential moving average: 
+
+vk+1 = βv k + (1 − β)∆ k,
+
+where β ∈ [0 , 1) is the momentum decay coefficient. The trajectory is then updated as: Yk+1 = Yk + λv k+1 , where 
+
+λ ∈ (0 , 1] is the step size. This two-stage temporal regulariza-tion dampens oscillations through directional smoothing while providing momentum for navigating non-smooth cost regions. We also allow the Adam-type [9] gradient update rule as an option. REFERENCES 
+
+[1] Constantinos Chamzas, Carlos Quintero-Pena, Zachary Kingston, Andreas Orthey, Daniel Rakita, Michael Gle-icher, Marc Toussaint, and Lydia E Kavraki. Motion-benchmaker: A tool to generate and benchmark motion planning datasets. IEEE Robotics and Automation Let-ters , 7(2):882–889, 2021. [2] Zinuo Chang, Hongzhe Yu, Patricio Vela, and Yongxin Chen. Efficient iterative proximal variational inference motion planning. Robotics and Autonomous Systems ,page 105267, 2025. [3] Yongxin Chen, Tryphon T Georgiou, and Michele Pavon. On the relation between optimal transport and schrödinger bridges: A stochastic control viewpoint. 
+
+Journal of Optimization Theory and Applications , 169 (2):671–691, 2016. [4] Yongxin Chen, Sinho Chewi, Adil Salim, and Andre Wibisono. Improved analysis for a proximal algorithm for sampling. In Conference on Learning Theory , pages 2984–3014. PMLR, 2022. [5] Lucas C Cosier, Rares Iordan, Sicelukwanda NT Zwane, Giovanni Franzese, James T Wilson, Marc Deisenroth, Alexander Terenin, and Yasemin Bekiroglu. A unify-ing variational framework for gaussian process motion planning. In International Conference on Artificial Intel-ligence and Statistics , pages 1315–1323. PMLR, 2024. [6] M. Kalakrishnan, S. Chitta, E. Theodorou, P. Pastor, and S. Schaal. Stomp: Stochastic trajectory optimization for motion planning. In 2011 IEEE International Conference on Robotics and Automation (ICRA) , pages 4569–4574. IEEE, 2011. [7] Hilbert J Kappen. Path integrals and symmetry breaking for optimal control theory. Journal of statistical mechan-ics: theory and experiment , 2005(11):P11011, 2005. [8] Sertac Karaman and Emilio Frazzoli. Sampling-based al-gorithms for optimal motion planning. The International Journal of Robotics Research , 30(7):846–894, 2011. [9] Diederik P Kingma and Jimmy Ba. Adam: A method for stochastic optimization. arXiv preprint arXiv:1412.6980 ,2014. [10] Sergey Levine. Reinforcement learning and control as probabilistic inference: Tutorial and review. arXiv preprint arXiv:1805.00909 , 2018. [11] Mustafa Mukadam, Ching-An Dong, Xinyan Yan, and Byron Boots. Gaussian process motion planning. In 
+
+2017 IEEE International Conference on Robotics and Automation (ICRA) , pages 5216–5223. IEEE, 2017. [12] Mustafa Mukadam, Ching-An Dong, Xinyan Yan, and Byron Boots. Gaussian process motion planning for multi-robot systems. The International Journal of Robotics Research , 37(11):1374–1394, 2018. [13] Neal Parikh and Stephen Boyd. Proximal algorithms. 
+
+Foundations and Trends in Optimization , 1(3):127–239, 2014. [14] Luka Petrovi´ c, Juraj Perši´ c, Marija Seder, and Ivan Markovi´ c. Stochastic optimization for trajectory plan-ning with heteroscedastic gaussian processes. In 2019 European Conference on Mobile Robots (ECMR) , pages 1–6. IEEE, 2019. [15] Luka Petrovi´ c, Ivan Markovi´ c, and Ivan Petrovi´ c. Mix-tures of gaussian processes for robot motion planning using stochastic trajectory optimization. IEEE Transac-tions on Systems, Man, and Cybernetics: Systems , 52(12): 7378–7390, 2022. [16] Mike Phillips and Maxim Likhachev. Asymptotically optimal motion planning using incremental sampling-based algorithms. In Robotics: Science and Systems (RSS) , 2012. [17] Thomas Power and Dmitry Berenson. Constrained stein variational trajectory optimization. IEEE Transactions on Robotics , 2024. [18] Nathan Ratliff, Matt Zucker, J Andrew Bagnell, and Siddhartha Srinivasa. Chomp: Gradient optimization techniques for efficient motion planning. In IEEE International Conference on Robotics and Automation (ICRA) , pages 489–494, 2009. [19] Reuven Rubinstein. The cross-entropy method for com-binatorial and continuous optimization. Methodology and Computing in Applied Probability , 1(2):127–190, 1999. [20] John Schulman, Jonathan Ho, Alex Lee, Ilya Awwal, Henry Bradlow, and Pieter Abbeel. Motion planning with sequential convex optimization and convex colli-sion checking. The International Journal of Robotics Research , 33(9):1251–1270, 2014. [21] Evangelos Theodorou, Jonas Buchli, and Stefan Schaal. A generalized path integral control approach to reinforce-ment learning. 11(Nov):3137–3181, 2010. [22] Emanuel Todorov. Efficient computation of optimal ac-tions. Proceedings of the National Academy of Sciences ,106(28):11478–11483, 2009. [23] Emanuel Todorov, Tom Erez, and Yuval Tassa. Mujoco: A physics engine for model-based control. In 2012 IEEE/RSJ international conference on intelligent robots and systems , pages 5026–5033. IEEE, 2012. [24] Marc Toussaint. Robot trajectory optimization using approximate inference. In International Conference on Machine Learning , pages 1049–1056, 2009. [25] Grady Williams, Paul Drews, Brian Goldfain, James M Rehg, and Evangelos A Theodorou. Model predictive path integral control: From theory to parallel computa-tion. 40(2):344–357, 2017. [26] Grady Williams, Paul Drews, Brian Goldfain, James M Rehg, and Evangelos A Theodorou. Information-theoretic model predictive control: Theory and applica-tions to autonomous driving. 34(6):1603–1622, 2018. [27] Hongzhe Yu and Yongxin Chen. A gaussian variational inference approach to motion planning. IEEE Robotics and Automation Letters , 8(5):2518–2525, 2023. [28] Matt Zucker, Nathan Ratliff, Anca Dragan, Michael Piv-toraiko, Matthew Klingensmith, Chris Dellin, J Andrew Bagnell, and Siddhartha Srinivasa. Chomp: Covariant hamiltonian optimization for motion planning. The International Journal of Robotics Research , 32(9–10): 1164–1193, 2013.
