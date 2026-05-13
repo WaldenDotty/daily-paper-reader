@@ -1,0 +1,1051 @@
+Title: Distributed Pose Graph Optimization via Continuous Riemannian Dynamics
+
+URL Source: https://arxiv.org/pdf/2605.11210v1
+
+Published Time: Wed, 13 May 2026 00:18:18 GMT
+
+Number of Pages: 14
+
+Markdown Content:
+# Distributed Pose Graph Optimization via Continuous Riemannian Dynamics 
+
+Jaeho Shin, Maani Ghaffari, and Yulun Tian 
+
+University of Michigan Ann Arbor, MI 48109, USA Email: {jaehos,maanigj,yulunt }@umich.edu 
+
+Abstract —We present a framework for distributed Pose Graph Optimization (PGO) by formulating the problem as a second-order continuous-time dynamical system evolving on Lie groups. By modeling pose variables as massive particles subject to damping, the equilibrium points of the resulting Riemannian dynamics coincide with first-order critical points of the original PGO problem. Using the governing damped Euler–Poincar´ eequations and a semi-implicit geometric integrator, we design an optimization algorithm that generalizes existing algorithms such as Riemannian gradient descent and Gauss–Newton. In multi-robot settings, we present a fully distributed and parallel method based on block-diagonal mass and damping matrices, where each robot solves an ordinary differential equation for its own poses with minimal communication overhead. Moreover, modeling both state and velocity enables principled neighbor prediction that significantly improves convergence under delayed communica-tion. Theoretically, we present an analysis and establish sufficient condition that ensures energy dissipation under the employed geometric discretization scheme. Experiments on benchmark PGO datasets demonstrate that the proposed solver achieves superior performance compared to state-of-the-art distributed baselines in both synchronous and asynchronous regimes. 
+
+I. I NTRODUCTION 
+
+Multi-robot collaborative SLAM (CSLAM) is a critical capability for enabling scalable and globally consistent sit-uational awareness in GPS-denied environments. By allowing multiple robots to jointly estimate their trajectories and build shared maps from noisy relative measurements, CSLAM sig-nificantly extends the spatial and temporal scope achievable by single-robot systems. Recent advances have led to robust, fielded multi-robot SLAM systems operating over large teams and long durations, even under intermittent communication and limited bandwidth [1–5]. At the core of these systems lies pose graph optimization (PGO), which serves as the primary back-end for fusing intra- and inter-robot measurements into a coherent global estimate. To address scalability, communication, and privacy con-straints, a growing body of recent work has investigated distributed pose graph optimization based on distributed op-timization [6–8] or probabilistic message passing frameworks [9]. Compared to centralized PGO solvers, these approaches eliminate single points of failure and allow flexible deploy-ment across robot teams. However, existing distributed PGO methods face persistent limitations in convergence speed and robustness. Generic solvers based on first-order primal (e.g., [10]) or primal–dual (e.g., [7]) iterations are broadly applicable 𝑡 = 1          
+
+> 𝑡 =2
+> 𝑡 =3
+> 𝑡 =1
+> 𝑡 =2
+> 𝑡 =3
+> Proposed
+> Jacobi
+
+Fig. 1: The proposed approach formulates pose graph optimization (PGO) as a continuous-time dynamical system evolving on the direct product M of SE(3) Lie groups governed by a damped Euler-Poincar´ e equation. Using a suitable geometric integration scheme, we obtain optimization trajectory (shown in solid black) that converges to a first-order critical point of PGO. Each point along the trajectory represents a full pose graph estimate, where colors correspond to different robots. By modeling inertia and damping, the proposed approach suppresses oscillatory behavior and converges significantly faster than existing methods such as Jacobi (gray trajectory). 
+
+but often converge slowly in large, loosely coupled graphs, par-ticularly under asynchronous updates and stale neighbor infor-mation. Other state-of-the-art methods achieve acceleration by carefully exploiting problem-specific algebraic structure [8]. Frequently, this design requires substantial domain expertise and tightly couples the resulting algorithm to specific problem formulations. To address the aforementioned limitations, we propose a novel distributed PGO solver based on continuous-time Riemannian dynamics (Fig. 1), which naturally introduces inertia and neighbor state prediction to enables accelerated convergence even under asynchronous optimization. Our ap-proach draws inspiration from the revered field of geometric mechanics [11], which has played a central role in geometric control and motion planning (e.g., [12, 13]) yet has so far remained largely unexplored in the context of SLAM back-end optimization. By studying the variational characterization of this system, we derive the governing equations of motion and show that appropriate choices of kinetic energy and geometric discretization lead to effective update rules that can be executed fully in a parallel and distributed manner. 
+
+> arXiv:2605.11210v1 [cs.RO] 11 May 2026
+
+Contributions. In summary, we present three contributions, (i) We present CORD (Continuous-time Riemannian Dynamics), a general distributed PGO solver based on a second-order ordinary differential equation (ODE) evolving on Lie Groups, achieving acceleration even under delayed communication; (ii) We give a theoretical analysis that precisely character-izes the energy dissipation properties of the discretized Riemannian dynamics; (iii) Extensive experimental results show that CORD achieves state-of-the-art performance in synchronous PGO with both chordal and geodesic metrics, while maintaining robustness under diverse asynchronous con-ditions through the proposed neighbor state prediction. II. R ELATED WORK 
+
+Distributed Pose Graph Optimization. DDF-SAM [14, 15] is a pioneering work that introduced a fully distributed SLAM back-end in which agents exchange compact sum-maries of their local factor graphs obtained via Gaussian elimination. DGS [16] proposes a two-stage iterative optimiza-tion procedure that uses successive over-relaxation to solve chordal rotation initialization and a single Gauss-Newton up-date. AMM-PGO [8] introduces a majorization–minimization framework that supports Nesterov acceleration and adap-tive restart strategies in fully distributed settings. In [6], RBCD and its accelerated variant RBCD++ performs non-linear block-coordinate descent with first-order convergence guarantees, and attains certifiable global optimality for dis-tributed PGO when used within a semidefinite relaxation framework [17, 18]. IRBCD [19] improves convergence and scalability through enhanced graph partitioning strategies. In [10], Tian et al. develops a variant of RBCD for asynchronous optimization. The resulting ASAPP solver enjoys provable first-order convergence under bounded communication delay albeit with slower convergence speed. Recently, primal-dual iterations based on the Alternating Direction Method of Mul-tipliers (ADMM) has gained increasing attention [7, 20, 21]. MESA [7] and its incremental variant iMESA [20] applies on-manifold consensus ADMM to distributed SLAM, and demonstrates flexible communication schedules and empirical robustness to intermittent connectivity. Gaussian belief prop-agation (GBP) [9] proposes a probabilistic message-passing framework that enables fully asynchronous operation and naturally provides estimates of marginal uncertainty, though the convergence behavior can be sensitive to graph topology and noise characteristics. To address this issue, recent work [22] introduces a hybrid method that integrates maximum a-posteriori optimization with belief propagation and uses Hellinger-distance-based damping to guarantee convergence on loopy graphs. In contrast to prior methods, we propose a unifying framework for distributed PGO based on continuous-time Riemannian dynamics. To the best of our knowledge, our approach is the first to achieve acceleration even under asynchronous communication. 
+
+Dynamical System Perspective in Optimization. Su et al. [23] is among the first to study Nesterov’s accelerated gradient method [24] using a continuous-time second-order ODE. Subsequent work [25, 26] generalize this perspective by introducing a Bregman Lagrangian whose Euler–Lagrange equations define a family of continuous-time dynamics, and show that appropriate discretizations of these dynamics re-cover existing accelerated optimization methods. Recent meth-ods [27, 28] further place this framework in a Hamiltonian setting and show that symplectic integration [29] is essential for preserving acceleration when passing from continuous to discrete time. Parallel efforts [30, 31] study the continuous-time dynamics perspective for optimization over Riemannian manifolds. In robotics, [32–37] study the related problem of point cloud registration from the dynamical system perspective. Golyanik et al. [32] formulate registration as a damped N-body dynamical system, where template points evolve under gravitational forces induced by the reference points. This approach is extended in [34] that introduces a nonlinear least squares optimization over an altered potential and uses Barnes–Hut tree to accelerate point interaction. Yang et al. [37] generalizes [32–34] and models a broader range of pose estimation problems across point, primitive, and category-level settings. This work extends dynamical systems–based optimization to distributed pose graph optimization, a signif-icantly higher-dimensional and poorly-conditioned estimation problem, and explicitly accounts for communication delays that fundamentally challenge existing distributed solvers. III. P ROBLEM FORMULATION 
+
+We use G and g to denote a matrix Lie group and its associated Lie algebra. In particular, we use SE(3) to denote the special Euclidean group in three dimensions, and SE(3) n
+
+to denote the direct product of n copies of SE(3) .Let X ≡ X(t) ∈ G denote a trajectory evolving on G.We formulate the dynamics using the body velocity ξ, defined by left-translating the time derivative ˙X to the Lie algebra g
+
+associated with G:
+
+ξ := X−1 ˙X ∈ g. (1) In classical mechanics, the evolution of a system is de-scribed using a Lagrangian L = T − C , defined as the difference between kinetic energy T and potential energy C.When the configuration space is a Lie group, this formulation extends naturally to equations of motion that evolve directly on the manifold and respect its geometric structure [11]. This perspective serves as the foundation of the proposed method introduced in later sections. 
+
+A. Pose Graph Optimization (PGO) 
+
+A pose graph is represented by a directed graph G = ( V, E),where each node u ∈ V corresponds to an unknown robot pose Xu ∈ SE(3) , and each edge (u, v ) ∈ E encodes a noisy relative pose measurement Xuv ∈ SE(3) between nodes u
+
+and v. The objective of PGO is to estimate the set of poses {Xu}u∈V that best agree with the relative measurements. In this paper, we study two widely used formulations of PGO cor-responding to geodesic and chordal distance metrics on SE(3) ,which together cover the objective functions underlying state-of-the-art solvers such as GTSAM [38] and SE-Sync [17]. 
+
+Problem 1 (Pose Graph Optimization) .
+
+min 
+
+> X∈SE(3) N
+
+C(X) := X
+
+> (u,v )∈E
+
+∥ruv (Xu, X v )∥2Ωuv ,ruv (Xu, X v ) = 
+
+(log  X−1 
+
+> uv
+
+X−1 
+
+> u
+
+Xv
+
+ , (Geodesic) ,XuXuv − Xv , (Chordal) .
+
+(2) 
+
+Here, X ∈ SE(3) N collects all N := |V| pose variables and Ωuv ≻ 0 denotes the information matrix associated with edge (u, v ) ∈ E . The weighted squared norm is defined as ∥ruv ∥2Ωuv := r⊤ 
+
+> uv
+
+Ωuv ruv for the case of the geodesic residual. For the chordal residual, ruv is matrix-valued and the weighted norm is defined as ∥ruv ∥2Ωuv := tr  ruv Ωuv r⊤
+
+> uv
+
+,where Ωuv = blkdiag( ωRuv I3, ω tuv ) weights the rotational and translational components [17, 18]. 
+
+In distributed PGO, the pose graph is naturally partitioned across robots, with each robot estimating a subset of pose variables corresponding to its own trajectory. Edges include both intra-robot measurements (e.g., odometry and local loop closures) and inter-robot measurements arising from loop closures established when different robots observe the same place. The objective in distributed PGO is to solve Problem 1 collectively and without a central coordinator, using only local computation and limited information exchange between neighboring robots; see Fig. 2. IV. P ROPOSED METHOD 
+
+In this section, we develop the proposed CORD framework for distributed PGO. Sec. IV-A converts PGO to a continuous-time dynamical system evolving on the product of SE(3) 
+
+manifolds, and show that its equilibrium states correspond to first-order critical points (FOCPs) of the PGO problem. Sec. IV-B then derives the optimization algorithm resulting from geometric semi-implicit integration. Lastly, Sec. IV-C specializes to fully distributed optimization that remains robust under asynchronous communication. 
+
+A. From PGO to Riemannian Dynamics 
+
+The majority of optimization algorithms for solving Prob-lem 1 iteratively linearizes the residual rij and obtain adescent direction toward a FOCP. In contrast, our algorithm first formulates a continuous-time dynamical system with a potential energy based on the PGO cost C and a suitably chosen kinetic energy T . Define the body velocity for each pose as ξi := ( X−1 
+
+> i
+
+˙X)∨ ∈ R6 where the operator (·)∨ maps a Lie algebra element to a vector in R6. Given a generalized inertia (“mass”) matrix M ∈ R6N ×6N to be specified later, the total kinetic energy is defined as T := 12 ξ⊤M ξ , where 
+
+ξ = [ ξ⊤ 
+
+> 1
+
+, · · · , ξ ⊤ 
+
+> N
+
+]⊤. Denoting the Lagrangian of the system as L := T − C , we can then derive the equation of motion for the system using the Euler-Poincar´ e formula [11]. Under the principle of least action, this system has equilibrium configurations corresponding to FOCPs of the potential energy 
+
+C. Nevertheless, in the absence of dissipative forces, the total energy of the system is conserved, which results in persistent oscillations rather than convergence. To ensure convergence to the FOCP, we introduce an additional positive definite damping matrix D ≻ 0 to enable energy dissipation. The equation of motion can then be derived using the Lagrange-d’Alembert principle [11], as shown in the appendix in detail. 
+
+Proposition 1 (Damped Euler-Poincar´ e Equation) . Given pos-itive definite mass matrix M and damping matrix D, the system dynamics on SE(3) N are governed by, 
+
+ddt (M ξ ) = −∇C − Dξ + ad ∗ 
+
+> ξ
+
+(M ξ ). (3) In (3), ad ∗ 
+
+> ξ
+
+denotes the co-adjoint operator associated with the Lie algebra element ξ, defined via ⟨ad ∗ 
+
+> ξ
+
+μ, η ⟩ =
+
+⟨μ, ad ξ η⟩ = ⟨μ, [ξ, η ]⟩ where [·, ·] denotes the Lie bracket on g. Intuitively, this term in (3) captures curvature-induced coupling between velocity and momentum that arises when dynamics evolve on a Lie group (e.g., SE(3) ), and it vanishes in Euclidean spaces. In the proposed method, we allow M to be either constant or state-dependent, i.e., M ≡ M (X). In the latter case, the left-hand side time derivative in (3) expands as ddt 
+
+ M ξ  =
+
+M ˙ξ + ˙M ξ . Moving the second term ˙M ξ to the right-hand side of (3), 
+
+M ˙ξ = −∇C − Dξ + ad ∗ 
+
+> ξ
+
+(M ξ ) − ˙M ξ. (4) Intuitively, the resulting dynamics includes a corresponding correction term to account for the varying value of M . When 
+
+M is constant, the ˙M ξ term also vanishes. 
+
+Remark 1. We note that any steady-state solution of (3) 
+
+satisfies the FOCP condition of Problem 1: at steady state, 
+
+˙ξ = ξ = 0 so that (3) reduces to ∇C = 0 .B. Optimization via Geometric Discretization 
+
+To numerically integrate the continuous-time dynamics in (3), we use a geometric semi-implicit Euler scheme as shown in Alg. 1. At each iteration, we first evaluate the induced forces according to Prop. 1 (lines 5–8). Specifically, line 5 evaluates the potential-induced force Fgrad = −∇C (Xk) that drives the state toward a FOCP. Line 6 computes the damping term needed for convergence, and line 7 corresponds to the co-adjoint term in (3) that accounts for the Lie-group geometry in the momentum dynamics. When the mass matrix is state-dependent, the additional term FvarM in line 8 serves as a discrete approximation of the ˙M ξ term in (4). Given the computed forces, lines 10–12 then performs a forward Euler step on the velocity. In lines 14, we use a semi-implicit scheme so that the update uses the new velocity ξk+1 rather than 
+
+ξk. This choice significantly improves stability over a fully explicit update Xk+1 = Xk exp(( ξk∆t)∧) while avoiding the nonlinear solves required by fully implicit integrators. Finally, Algorithm 1 Riemannian ODE Solver                                                                                 
+
+> Require: Initial state (Xi
+> 0, ξ i
+> 0)∈ { SE (3) ×R6}N, Initial mass M0∈
+> R6N×6N, Damping D∈R6N×6N, Step size ∆t
+> 1: Initialize body velocity ξ0←06N
+> 2: k←0
+> 3: while k < MaxIter do
+> 4: 1. Compute Forces:
+> 5: Fgrad ← −∇C (Xk)
+> 6: Fdamp ← − Dξ k
+> 7: Fcor ←ad ∗
+> ξk(Mkξk)
+> 8: FvarM ← −
+> Mk−Mk−1
+> ∆t
+> 
+> ξk
+> 9: 2. Numerical Integration:
+> 10: Ftotal ←Fgrad +Fdamp +Fcor +FvarM
+> 11: ak←M−1
+> kFtotal
+> 12: ξk+1 ←ξk+ak∆t
+> 13: 3. Manifold Update:
+> 14: Xk+1 ←Xkexp(( ξk+1 ∆t)∧)
+> 15: Update Mass Matrix Mk+1 based on Xk+1
+> 16: k←k+ 1
+> 17: end while
+> 18: return Optimized pose Xk
+
+if M depends on the current state, we refresh Mk+1 using the updated pose (line 15). Before proceeding, we present a connection between the proposed second-order dynamics and existing optimization algorithms via an overdamped limiting argument. Specifically, consider scaling the mass matrix as M = ε fM with ε > 0
+
+and taking the limit ε → 0. In this regime, the inertial term vanishes and the body velocity becomes Dξ = −∇C ,
+
+yielding a first-order gradient flow on the manifold. Under an explicit time discretization with step size ∆t, this induces the update Xk+1 = Xk exp(∆ t ξ ∧ 
+
+> k
+
+). Choosing D = I recovers Riemannian gradient descent [39]. Alternatively, choosing the damping matrix as D = J⊤ΩJ yields the Gauss–Newton direction ξ = −(J⊤ΩJ)−1∇C , where J denotes the Jacobian of the stacked residuals with respect to the pose variables and 
+
+Ω is the block-diagonal information matrix collecting Ωij for all edges [38]. Viewed from this perspective, gradient descent and Gauss–Newton arise as first-order and overdamped limits 
+
+of the proposed second-order Riemannian dynamics. 
+
+C. Distributed Riemannian Dynamics for Multi-Robot PGO 
+
+In this section, we specialize our formulation to distributed PGO. Specifically, by choosing the mass and damping matrices to be block-diagonal with respect to a robot-wise partition of the pose graph, the resulting dynamics naturally decompose across robots while preserving the original global objective. Concretely, we select M = blkdiag( M 1, . . . , M R) and D =blkdiag( D1, . . . , D R), where M i, D i ∈ R6ni×6ni correspond to robot i and ni is the number of poses owned by that robot. Under this choice, the inertial, damping, and co-adjoint terms in (3) are entirely local, yielding the decomposed Riemannian dynamics for each robot i,
+
+ddt (M iξi) = −∇C i − Diξi + ad ∗ 
+
+> ξi
+
+(M iξi). (5) In (5), ∇C i denotes the block of the Riemannian gradient that corresponds to robot i’s variables. For robot i to compute ∇C i,note that the portion of the global PGO cost involving its pose variables can be written as 
+
+Ci = X
+
+> (u,v )∈E intra
+> i
+
+∥ruv ∥2Ωuv 
+
+| {z }
+
+> Intra-robot
+
++ X
+
+> j∈N i
+
+X
+
+> (u,v )∈E inter
+> ij
+
+∥ruv (Xu, ¯Xv )∥2Ωuv 
+
+| {z }
+
+> Inter-robot
+
+,
+
+(6) where Eintra  
+
+> i
+
+denotes edges connecting poses owned by robot 
+
+i, Einter  
+
+> ij
+
+denotes edges between robot i and its neighbor 
+
+j, and ¯Xv denotes the pose of a neighbor robot (treated as fixed). The Riemannian gradient block ∇C i in (5) is obtained by differentiating (6) with respect to robot i’s pose variables. The intra-robot contribution depends only on locally available states, while the inter-robot contribution requires pose information from neighboring robots connected by inter-robot edges. As a result, ∇C i can be evaluated using a single round of neighbor communication, without requiring global information or centralized coordination. 
+
+Choice of Mass and Damping Matrices . We design the block-diagonal mass and damping matrices to exploit second-order information of the PGO objective while preserving a fully distributed implementation. Let H = J⊤ΩJ + λI denote the Levenberg–Marquardt approximation of the global Hessian of C, and let Hi ∈ R6ni×6ni denote the diagonal block of 
+
+H corresponding to the pose variables owned by robot i.We define the mass and damping matrices for robot i as 
+
+M i = m H i and Di = ( d/t + ϵd) Hi, where m, d, ϵ d are scalar coefficients. For D, the time-decaying factor d/t yields behavior analogous to accelerated gradient flows [23] while the small constant ϵd > 0 preserves positive definiteness. With this choice, the resulting dynamics are naturally preconditioned by (Hi)−1, aligning the gradient-induced acceleration with a local Levenberg–Marquardt direction. Similar to the gradient computation, we remark that both M i and Di can be formed in a distributed manner: since the block Hi depends only on second-order contributions from intra-robot edges and inter-robot edges incident to robot i, it can be assembled using local information and one round of neighbor communication. Substituting M i and Di into (5), we obtain, 
+
+M i ˙ξi = −∇C i − Diξi + ad ∗ 
+
+> ξi
+
+(M iξi) − ˙M iξi, (7) which is the analog of (4) in the distributed setting. As before, the dynamics in (7) are integrated numerically using the geometric semi-implicit scheme. Recall that the proposed framework also allows constant choices of M i and Di. In this case, Hi is computed once at the initial estimate and held fixed afterwards, and the ˙M iξi term in (7) becomes zero. In our ablation study (Sec. VI-D), we show that the constant setting remains competitive for PGO, thus enabling a trade-off between computational cost and adaptivity. Unlike Gauss-Seidel-style [6, 16] schemes that update blocks (robots) sequentially, the distributed dynamics in (7) can be integrated in a fully distributed and parallel manner. Under the assumption of full synchronization, each robot up-dates its state using the neighbor poses in the previous round. In contrast to sequential update, which imposes sequential Algorithm 2 Distributed Riemannian ODE Solver (Robot i)                                                                               
+
+> Require: Initial state (Xi
+> 0, ξ i
+> 0), Mass Mi, Damping Di, Step size ∆t.1: k←0
+> 2: while k < MaxIter do
+> 3: 1. Read & Predict Neighbors:
+> 4: for j∈ N ido
+> 5: Read latest packet (Xjτ, ξ jτ)with τ < t k.6: ˆXjk←Xjτ·exp
+>  ξjτ(tk−τ)∧
+> 7: end for
+> 8: 2. Compute Forces:
+> 9: Fi
+> grad ← −∇C i
+> intra (Xik)−P
+> j∈N i∇C ij
+> inter (Xik,ˆXjk)
+> 10: Fi
+> dyn ← − Diξik+ ad ∗
+> ξik
+> (Mikξik)−
+> Mik−Mik−1
+> ∆t
+> 
+> ξik
+> 11: 3. Semi-Implicit Integration:
+> 12: ξik+1 ←ξik+ ( Mik)−1(Fi
+> grad +Fi
+> dyn )∆ t
+> 13: Xik+1 ←Xik·exp
+> 
+> (ξik+1 ∆t)∧
+> 
+> 14: k←k+ 1
+> 15: end while
+
+dependencies that often force agents to wait, our approach eliminates such idle time ensuring that all robots compute their updates simultaneously. This independence simplifies the system architecture, and allows communication and optimiza-tion to be implemented intuitively. Moreover, the inertia and damping built in our formulation helps avoid the instability of standard Jacobi-style [16] updates. 
+
+Asynchronous Optimization via Delay Compensation . In multi-robot SLAM, communication between robots is often subject to latency, packet loss, and asynchronous message arrival, making it impractical to assume access to up-to-date neighbor states at every iteration. Thus, distributed PGO algorithms must explicitly account for delayed information when evaluating inter-robot constraints. To this end, we note that the proposed dynamics naturally admit a principled delay-compensation mechanism. Alg. 2 presents our algorithm from the point of view of a single robot i. In addition to exchanging pose estimates, each robot also transmits its body velocity, which is cached locally upon reception. Since the system state evolves continuously on the Lie group and is driven by body velocities, a robot can predict a neighbor’s current pose even when the received information is outdated. Specifically, let X and ξ denote the most recently received pose and body velocity of a neighboring robot, and let δt denote the elapsed time since the message timestamp. The predicted neighbor pose is then computed as ˆX = X exp  (ξ δt )∧, as shown in lines 3-7. Using the predicted pose, the resulting preconditioned dynamics (7) are then integrated using the geometric semi-implicit scheme (lines 8-13), similar to Sec. IV-B. This allows all robots to advance their states in parallel without requiring synchronized communication. V. C ONVERGENCE ANALYSIS 
+
+This section presents a theoretical analysis for the general Algorithm 1 in Sec. IV. The results also extend to the distributed Algorithm 2 under synchronous communication as a special case. Our current analysis assumes the mass matrix 
+
+M to be constant. In this case, we show that the proposed semi-implicit integrator admits a clear energy dissipation char-acterization, which leads to an explicit sufficient condition on the choice of step size that decreases the total system energy. As a result, the analysis establishes a rigorous the-oretical justification for the proposed dynamics and provides practical guidance for step-size selection in both centralized and distributed implementations. The main idea is to derive the condition for the total energy of the system E = T + C to dissipate every time step. We present a general analysis by building on the Lipschitz-type gradient property for pullbacks introduced in [40]. Boumal et al. [40] showed that this property holds on compact matrix submanifolds under mild conditions. In [6], Tian et al. showed that the chordal distance formulation of PGO satisfies this condition within the sublevel set of the cost function. 
+
+Assumption 1 (Lipschitz-type gradient [40]) . Let gXk :
+
+R6N → R be the pullback of the cost function C defined on the tangent space at Xk as: 
+
+gXk (η) := C(Xk exp( η∧)) . (8) 
+
+C has Lipschitz-type gradient if the following holds for any update step η ∈ R6N ,
+
+gXk (η) ≤ gXk (0) + ⟨∇ gXk (0) , η ⟩ + L
+
+2 ∥η∥2. (9) This property states that the cost function is locally well-behaved with the second-order terms upper bounded by the squared norm of the step on the tangent space. Given As-sumption 1, we establish an upper bound on the total energy difference ∆Ek = Ek+1 −Ek after a single step of integration. 
+
+Lemma 1 (Upper Bound on Energy Change) . Under Assump-tion 1, the change in total energy is bounded as follows: 
+
+∆Ek ≤∆t2(a⊤ 
+
+> k
+
+∇C k + L
+
+2 || ξk+1 || 2 
+
+> M
+
++12 || ak|| 2 
+
+> M
+
+) − ∆tξ ⊤ 
+
+> k
+
+Dξ k,
+
+(10) 
+
+where Ck := C(Xk) and ak := M −1(−∇C k − Dξ k +ad ∗ 
+
+> ξk
+
+(M ξ k)) .
+
+The result of Lemma 1 can be separated into two terms which differ by the order of multiplied ∆t. The terms in-volving quadratic factors represent numerical errors arising from discretization. As the time step ∆t decreases, yielding more precise integration, the damping term becomes dominant. Indeed, divide both sides of (10) by ∆t and taking the limit for ∆t → 0, we recover the continuous-time derivative of the total energy, 
+
+˙E = −ξ⊤Dξ < 0, when ξ̸ = 0 . (11) Thus, under the ideal continuous-time evolution, the energy strictly decays due to the positive definite damping D. The central challenge is to extend such energy dissipation result to the discrete-time system. Our key insight is that by appro-priately selecting the step size ∆t, the discretization errors (on the right-hand side of (10)) can be bounded so that the TABLE I: Optimality gap achieved by synchronous (left) and asynchronous (right) methods after 100 iterations. Best and second best methods are shown in bold and underline, respectively. For CORD, we report results with both dataset-specific parameter tuning and a constant, dataset-independent parameter setting, denoted as CORD (const.).                                                                                                                                                                                                                       
+
+> Dataset # Nodes # Edges C(0) C∗
+> C(100)
+> Synchronous Asynchronous AMM-PGO [8] DJ CORD CORD (const.) Delay = 5 Rand. Delay DJ CORD CORD (const.)
+> Sm. Grid 125 297 1.5614 ×10 31.0254 ×10 31.0254 ×10 31.0299 ×10 31.0254 ×10 31.0256 ×10 31.0377 ×10 31.0349 ×10 31.0313 ×10 3
+> Sphere 2500 4949 1.9709 ×10 31.6870 ×10 31.6870 ×10 31.6881 ×10 31.6872 ×10 31.6872 ×10 31.6998 ×10 31.6966 ×10 31.6886 ×10 3
+> Torus 5000 9048 2.4668 ×10 42.4227 ×10 42.4227 ×10 42.4230 ×10 42.4227 ×10 42.4227 ×10 42.4257 ×10 42.4250 ×10 42.4233 ×10 4
+> Grid 8000 22236 8.7265 ×10 48.4319 ×10 48.4319 ×10 48.4327 ×10 48.4319 ×10 48.4319 ×10 48.4356 ×10 48.4346 ×10 48.4328 ×10 4
+> Cubicle 5750 16869 8.3504 ×10 27.1713 ×10 27.1799 ×10 27.2222 ×10 27.1752 ×10 27.1756 ×10 27.2902 ×10 27.2729 ×10 27.2351 ×10 2
+> Rim 10195 29743 8.0840 ×10 35.4609 ×10 35.4817 ×10 35.6688 ×10 35.4748 ×10 35.4748 ×10 35.8761 ×10 35.8424 ×10 35.7364 ×10 3
+> Garage 1661 6275 1.4175 ×10 01.2625 ×10 01.2683 ×10 01.2761 ×10 01.2655 ×10 01.2655 ×10 01.2866 ×10 01.2857 ×10 01.2797 ×10 0
+
+damping term dominates, yielding a net decrease in total energy. The following theorem formalizes this intuition by deriving a sufficient condition on ∆t for which the discrete-time system preserves the energy dissipation property of the continuous-time dynamics, thereby ensuring the stability of the proposed algorithm. 
+
+Theorem 1 (Energy dissipation of Algorithm 1) . Under Assumption 1 and with constant and positive definite M and 
+
+D, if the time step ∆t satisfies the following condition at each iteration k, then the total energy Ek is non-increasing along the iterates of Algorithm 1: 
+
+∆t ≤ ξ⊤ 
+
+> k
+
+Dξ k 
+
+> 12
+
+∥∇C k∥2  
+
+> M−1
+
++ L 
+
+> 2
+
+∥ξk+1 ∥2 
+
+> M
+
++ ∥ak∥2
+
+> M
+
+. (12) Theorem 1 provides theoretical guidance for selecting a sufficiently small step size that preserves the energy dissipation property. We note that the result covers the distributed algo-rithm in Algorithm 2 with synchronized communication as a special case, where we use block-diagonal mass and damping matrices (M, D ) that decompose the global dynamics into parallel robot-wise subsystems. While Theorem 1 suggests the resulting dynamics converge to a FOCP, CORD is still a local optimization solver as are AMM-PGO [8] and ASAPP [10]. Global optimality guarantees could be pursued by augmenting the local search with an additional distributed verification as in DC2-PGO [6]. VI. E XPERIMENT 
+
+In this section, we evaluate the proposed method on standard PGO benchmarks under both synchronous and asynchronous communication. Our results demonstrate that the proposed Riemannian dynamics consistently achieve faster convergence and lower final cost than existing distributed baselines, and is particularly competitive for asynchronous optimization. 
+
+Experiment Setup. Throughout the evaluation, we denote our proposed approach (Algorithm 2) as CORD. Following prior work [6–8], we generate distributed PGO problem by partitioning each pose graph dataset to simulate multiple robots (by default five); see Fig. 2. Inter-robot communication is modeled using a packet-based simulation with configurable delays. At each iteration, robots exchange pose and velocity estimates with neighbors, and delayed packets are buffered to emulate asynchronous communication. The proposed approach is implemented in Python using PyTorch. Consistent with prior work [10, 41], the step size, mass, and damping parameters were determined empirically and reported in the appendix. All experiments are conducted on a workstation with Intel Core Ultra 9 285K CPU and 64GB memory. 
+
+Metrics and Baselines. For quantitative evaluation, we use GTSAM [38] and SE-Sync [17] to compute the central-ized reference solution for the geodesic and chordal distance formulations, respectively. Following prior work [6, 8], we report performance by computing the relative optimality gap 
+
+(C−C ∗)/C∗, where C and C∗ denote the achieved and reference costs. For the chordal distance formulation, we select AMM-PGO [8] as our baseline as it has been shown to outperform other techniques including RBCD++ [6] and DGS [16]. For the geodesic distance formulation, we select the state-of-the-art MESA solver [7] as the baseline. We note that the original MESA implementation adopts an edge-based communication model, in which only a single pair of robots communicates at each iteration. To ensure a fair comparison with our fully parallel update scheme, we modify the MESA implementation so that all robots update their local variables at every iteration. All remaining hyperparameters for all baselines are set to the default values. Lastly, for both the chordal and geodesic distance formulations, we also include a distributed Jacobi (DJ) baseline in which each robot performs a preconditioned gradient descent update using the diagonal block of the Hessian corresponding to its local variables. For the main asynchronous experiments, we use DJ as the primary baseline, which is equivalent to the update rule used in ASAPP [6] in this setting. AMM-PGO is not included because the method is designed for synchronous optimization, and extending it to delayed communication would require nontrivial modifications because stale updates interact with its Nesterov acceleration and adaptive restart mechanisms. In addition, MESA is not included in the main experiment as it considers a different edge-based communication regime [7]. However, in Table III, we report a separate experiment that evaluates CORD against (a) Sphere  (b) Torus   
+
+> (d) Cubicle (e) Rim (f) Garage
+> (c) Grid
+
+Fig. 2: Trajectory estimates returned by the proposed algorithm on benchmark datasets. Different colors correspond to different robots. 
+
+MESA under the edge-based regime as in [7]. 
+
+A. Evaluation under Synchronous Communication 
+
+In this subsection, we perform experiments under the syn-chronous regime without communication delay. All meth-ods are initialized using the same initialization scheme as implemented in AMM-PGO [8]. In Tab. I and Tab. II, we report the cost achieved by each method after 100 iterations. The costs of the initial and reference solutions are shown as C(0) and C∗, respectively. In addition, Tab. I also show the size of each dataset including the number of nodes and edges. CORD achieved the lowest error across nearly all 3D benchmark datasets for both metrics, with the exception of the Sphere dataset where AMM-PGO performed better, and the Rim dataset where MESA was better. Notably, our method outperforms AMM-PGO on the Cubicle , Rim , and 
+
+Garage , demonstrating the validity of our algorithm on real-world data. Across all chordal datasets, CORD consistently achieves lower error than the DJ baseline, indicating a strict improvement over first-order preconditioned updates. This gap highlights the benefit of the proposed dynamical system formulation, where inertial and damping effects lead to faster convergence than purely gradient-based iterations. Following [8], we also report the performance profile [42], which visualizes the percentage of problems solved by as a function of iterations. Given tolerance ∆, we introduce a threshold for determining if each problem is solved as 
+
+C∆ = C∗ + ∆( C(0) − C ∗). At each iteration, if the cost falls below the threshold, the dataset is regarded as solved by that method. The results for evaluated tolerances ∆ = 0 .005 are presented in Fig. 3. We plot the performance profiles over 1000 iterations. The results indicate that CORD and AMM-PGO ex-hibit comparable performance, whereas DJ yields the smallest area under the curve (AUC), as expected. For chordal distance, CORD achieves an AUC of 851.36, comparable to AMM-PGO’s 855.93. Notably, while AMM-PGO is specialized to chordal PGO, our framework is versatile to handle other cost functions including geodesic distance formulation. In the case of geodesic distance, CORD significantly outperforms the baseline algorithms, with the exception of Rim dataset. In particular, MESA is not included in the performance profile, as we observe that with its default parameter settings the method 
+
+TABLE II: Optimality gap achieved by synchronous methods after 100 iterations, under the geodesic distance formulation of PGO. Best and second best methods shown in bold and underline, respectively.                                                                                                                          
+
+> Dataset C(0) C∗C(100)
+> MESA [7] DJ CORD
+> Sm. Grid 6.5821 ×10 23.4130 ×10 23.5365 ×10 23.4414 ×10 23.4320 ×10 2
+> Sphere 7.6392 ×10 25.7657 ×10 25.8044 ×10 25.7719 ×10 25.7671 ×10 2
+> Torus 9.2693 ×10 38.9719 ×10 38.9770 ×10 38.9736 ×10 38.9720 ×10 3
+> Grid 3.3123 ×10 43.0968 ×10 43.0986 ×10 43.0973 ×10 43.0968 ×10 4
+> Cubicle 3.9095 ×10 23.2086 ×10 23.2337 ×10 23.2383 ×10 23.2226 ×10 2
+> Rim 3.8709 ×10 32.2367 ×10 32.2476 ×10 32.3991 ×10 32.2753 ×10 3
+> Garage 0.7083 ×10 00.6234 ×10 00.6582 ×10 00.6309 ×10 00.6252 ×10 0100
+> 80
+> 60
+> 40
+> 20
+> 0
+> Percentage of problems solved (%)
+> Iterations
+> 0200 400 600 800 1000
+> Iterations
+> 0200 400 600 800 1000
+> 100
+> 80
+> 60
+> 40
+> 20
+> 0
+> Percentage of problems solved (%)
+> 800
+> AMM -PGO
+> DJ DJ
+> CORD
+> CORD
+
+Fig. 3: Performance profiles of synchronous methods over 1,000 iterations with an evaluation tolerance of ∆ = 0 .005 on 3D SLAM benchmark datasets. Left and right figures show chordal and geodesic PGO evaluations, respectively. 
+
+converges prematurely across all datasets and fails to reach the prescribed accuracy threshold. The dominant cost in solving distributed PGO is approx-imately solving a local pose graph using second-order in-formation each iteration. In CORD and DJ this appears as the Hessian inversion (Algorithm 2, Line 12); in AMM-PGO [8] and MESA [7] it appears as minimizing the local majorized or augmented Lagrangian objective. To quantify the practical overhead, we report average iteration runtime and communication packet size on the largest Rim dataset using 32-bit floats, and compare against DJ since other baselines are implemented in C++. CORD requires 101.9 ms (vs. 43.0 ms for DJ) and 5.9 KB (vs. 3.2 KB for DJ), while using 80 iterations (vs. 924 for DJ) to achieve ∆ = 10 −2. This shows a favorable trade-off since CORD achieves substantially faster convergence while incurring modest overhead. 
+
+B. Evaluation on Asynchronous Communication 
+
+We validated our approach under asynchronous conditions using both public benchmarks and simulation data. For the simulation, we evaluate on a different and more challenging initialization condition. Specifically, we obtain the initial so-lution by propagating odometry measurements for each robot starting from its known initial pose in the global frame. For the public benchmarks, a uniform delay of 5 steps is applied across all datasets, and results are summarized in the “Async.” column of Tab. I. In the presence of communication delays, the use of outdated neighbor poses induces larger errors in the inter-robot edge gradients compared to the synchronized case. This error acts as a perturbation to the denominator in (12). Consequently, maintaining the same ∆t as in the 0 200  400  600  800  1000 
+
+> Iterations
+> Optimality gap (Log scale)  10 -1
+> 10 -2
+> 10 -3
+> 10 -4
+> 10 -5
+> CORD (Delay = 3)
+> CORD (Delay = 7)
+> CORD (Delay = 10)
+> DJ (Delay = 10)
+> DJ (Delay = 7)
+> DJ (Delay = 3)
+
+Fig. 4: Optimality gap for varying delay steps in asynchronous simulations, plotted on a log scale. Solid lines indicate the mean performance averaged over 20 Monte Carlo runs, and shaded areas represent the standard deviation.                            
+
+> TABLE III: Evaluation under edge-based regime and geodesic distance. CORD uses a constant set of parameters: d= 4 ,m= 0 .7,∆t= 0 .1.Method Sphere Torus Garage
+> MESA [7] 7.1935 ×10 21.3321 ×10 40.7045 ×10 0
+> CORD (const.) 6.9539 ×10 21.2158 ×10 40.6537 ×10 0
+
+synchronized setting would compromise convergence guaran-tees. To mitigate this, we employ a conservative step size by reducing ∆t by more than 90%. Despite this restriction, CORD consistently achieved a lower final cost than DJ. The inherent inertia allows the system to achieve acceleration even under delayed communication, thereby compensating for the reduced step size and facilitating faster convergence. To provide further insights on the algorithm performance, we include additional simulation experiments with varying delay conditions. We simulate a multi-robot SLAM scenario shown in Fig. 1 with four robots where each robot follows a 3D grid trajectory consisting of 125 nodes. The robots are distributed in a two by two grid formation. Loop closures were generated within a 1.4 m radius with a probability of 0.2 for intra-robot edges and 0.3 for inter-robot edges. Measurements were corrupted by Gaussian noise where standard deviations were uniformly sampled from ranges of 0.05 m to 0.15 m for translation and 1.0 degree to 3.0 degrees for rotation for intra-robot edges. For inter-robot edges, we employ higher noise ranges of 0.10 m to 0.30 m for translation and 3.0 degrees to 10.0 degrees for rotation. Fig. 4 shows the optimality gap over 1000 iterations. Regarding DJ, using the standard step size of 1.0 causes severe oscillations and divergence. Similar to ASAPP [10], we empirically determine the maximum step size for DJ that ensured convergence through manual tuning. Overall, CORD achieved a lower final cost than DJ across all delay steps. When comparing performance under identical delay conditions, CORD initially exhibits a higher cost due to the lower step size. However, the DJ trajectory exhibits oscillations proportional to the delay length, leading to significant slowdown in convergence. This vulnerability stems from the fully parallel nature of the DJ update scheme, which is highly susceptible to outdated neighbor information. 
+
+TABLE IV: Ablation study results reporting optimality gap. State Dep. : using state-dependent mass M and damping D; Nbr. Pred :using predicted neighbor pose from velocity-based extrapolation. Results are shown as Mean ± Std. Dev. across 3 datasets.                                       
+
+> State Dep. Nbr. Pred. Opt. Gap ↓(Mean ±Std.)
+> ××1.53 ×10 −2±0.23 ×10 −2
+> ✓×1.61 ×10 −2±0.18 ×10 −2
+> ×✓0.29 ×10 −2±0.08 ×10 −2
+> ✓✓0.28 ×10 −2±0.09 ×10 −2
+
+As communication delays increase, the discrepancy between the available neighbor poses and their actual states increases. This mismatch induces erroneously large gradients along inter-robot edges, leading to the instability of system. In contrast, even though the proposed CORD framework also operates in a parallel manner, it remains robust to such perturbations due to the built-in inertia and damping of the system. Furthermore, by utilizing the communicated body velocities to predict the current states of neighbors, our method effectively compen-sates for communication latencies. This predictive mechanism results in the smooth convergence trajectory observed in the results, distinct from the oscillatory behavior of DJ. We further evaluate CORD under more challenging asyn-chronous communication conditions beyond constant delays. Specifically, we introduce 10% random packet loss and ran-domized communication delays in the range [1 , 10] while using the same fully parallel asynchronous update protocol and a single constant parameter setting, d = 4 , m = 0 .7,and ∆t = 0.2. As shown in the last column of Table I, CORD remains stable and continues to reduce the objective under these non-ideal communication conditions. These results provide additional evidence that the proposed dynamics are robust to packet loss and heterogeneous delays, beyond the constant-delay settings considered above. 
+
+C. Evaluation under Edge-Based Communication 
+
+To further evaluate CORD under an alternative distributed communication protocol, we adapt CORD to the edge-based regime used by MESA and compare on the three datasets considered in [7]. In this regime, one pair of neighboring robots communicates at each iteration without delay, providing a complementary setting to the fully parallel asynchronous protocol considered above. As shown in Table III, CORD achieves lower costs after 100 iterations using a single constant parameter setting, d = 4 , m = 0 .7, and ∆t = 0 .1.
+
+D. Ablation Study 
+
+In this ablation study, we investigate the impact of different features of the proposed algorithm. Specifically, we compare our approach against two variants: (i) fixing the mass and damping term M, D based on the initial Hessian, and (ii) using received neighbor poses directly without the predictive extrapolation as in line 6 of Algorithm 2. For this purpose, we generate a set of datasets using the same simulation suite described in Sec. VI-B and set a fixed communication delay of 7 steps. Performance was evaluated using the chordal distance optimality gap over 1000 iterations. As shown in Tab. IV, while the state-dependent M and D yield generally better per-formance, the improvement is overall marginal. This validates the constant setting as a competitive alternative that provides additional computational efficiency. In contrast, our results show that the neighbor pose prediction plays a critical role. Omitting the velocity-based prediction causes the system to diverge due to inaccurate neighbor information. This instability arises because large residuals in inter-robot edges increase the gradient ∇Ck in the denominator of (12). Consequently, a small value of ∆t is needed to prevent divergence, which inevitably leads to a higher final cost. VII. D ISCUSSION 
+
+A. Constant Mass Assumption 
+
+While the proposed CORD framework demonstrates strong performance in both synchronous and asynchronous dis-tributed PGO settings, the current convergence analysis is restricted to the synchronous case with a constant mass matrix. Extending the theory to explicitly account for communication delays and state-dependent M (X) would further close the gap between the analysis and the practical implementation. Nevertheless, we empirically observe that the constant-mass analysis remains informative for the state-dependent variant. Near the attained minimizers, the mass matrix changes slowly, and the resulting dynamics can be viewed as a small perturbation of the analyzed system. To support this observation, Fig. 5 reports the relative mass variation, 
+
+∥M k − M k−1∥F /∥M k∥F , together with the normalized en-ergy convergence, (Ek − E∗)/E ∗, for the state-dependent setup with a constant set of parameters. After a short initial transient, the relative mass variation remains below 0.1% for most iterations across all datasets, and the energy decreases monotonically except for a minor initial overshoot. A natural next step would be to formalize both state de-pendence and communication delay as bounded perturbations of the current dynamics, thereby extending the convergence guarantees to more realistic distributed settings. 
+
+B. Parameter Tuning 
+
+In the current implementation, the CORD parameters are selected according to their dynamical roles: the damping coefficient d controls early-stage energy dissipation, the mass 
+
+m affects acceleration, and ∆t determines the maximum inte-gration step size while ensuring numerical stability. Although some experiments use dataset-specific parameter tuning, we observe that CORD is not highly sensitive to the choice of parameters. In particular, a single constant setting, d = 2 ,
+
+m = 0 .8, and ∆t = 1 , achieves performance close to the per-dataset tuned setting in the synchronous chordal case, as shown in Table I. Under delayed communication, we further observe that m and d remain largely transferable across datasets, while 
+
+∆t should be reduced as the communication delay increases; see Table VII in the appendix. This behavior is consistent with the theoretical insight from ASAPP [10], where smaller step sizes improve stability under asynchronous updates. Adaptive parameter selection is an important direction for future work. Relative energy gap               
+
+> Iterations
+> 10 -2
+> 10 -3
+> 10 -4
+> 10 -5
+> 10 -6
+> 020 40 60 80 100
+> Relative  mass  variation
+> Iterations
+> 40 60 80 100 020
+> 10 -1
+> 10 -2
+> 10 -3
+> 10 -4
+> 10 -5
+> Sm. Grid
+> Sphere
+> Torus
+> Grid
+> Cubicle
+> Rim
+> Garage
+> Sm. Grid
+> Sphere
+> Torus
+> Grid
+> Cubicle
+> Rim
+> Garage
+> Fig. 5: Relative mass variation and energy convergence (state-dependent, synchronous, chordal) with constant parameters d= 2 , m = 0 .8,∆t= 1 .
+
+C. Extensions to General Factor Graphs 
+
+Although this work is formulated in the context of PGO, the underlying continuous-time Riemannian dynamics are not restricted to pairwise pose measurements. Because our formu-lation builds upon the continuous-time dynamics on matrix Lie groups studied in [11], it inherently applies to spaces beyond SE(3), although it does not generalize to arbitrary Riemannian manifolds. This theoretical foundation opens up an exciting direction for future work on distributed factor graph optimization [38] that involves optimization variables over other matrix Lie groups. VIII. C ONCLUSION 
+
+We presented CORD, a novel framework for distributed PGO by formulating the problem as a second-order continuous dynamical system on Riemannian manifolds. By modeling the optimization variables as massive particles subject to dissi-pation, we showed that the equilibrium states of the system correspond to the first-order critical points of the original optimization problem. Our derived equations of motion gener-alize classical update rules like Gauss-Newton and Riemannian Gradient Descent. Furthermore, we presented a convergence analysis of the proposed algorithm, and established conditions that guarantee energy dissipation after discretization. Numeri-cal evaluations on public benchmarks and simulation datasets validated the effectiveness of our approach. In synchronous settings, the proposed method achieved accuracy comparable to state-of-the-art distributed algorithms. More importantly, in asynchronous scenarios with varying communication delays, our solver demonstrated superior resilience and faster conver-gence speed, confirming the practical benefits of the proposed dynamical system-based solver. ACKNOWLEDGMENTS 
+
+M. Ghaffari was supported by AFOSR MURI FA9550-23-1-0400 and AFOSR YIP FA9550-25-1-0224. REFERENCES 
+
+[1] Kamak Ebadi, Lukas Bernreiter, Harel Biggie, Gavin Catt, Yun Chang, Arghya Chatterjee, Christopher E. Denniston, Simon-Pierre Deschˆ enes, Kyle Harlow, Shehryar Khattak, Lucas Nogueira, Matteo Palieri, Pavel Petr´ aˇ cek, Matˇ ej Petrl´ ık, Andrzej Reinke, V´ ıt Kr´ atk´ y, Shibo Zhao, Ali-akbar Agha-mohammadi, Kostas Alexis, Christoffer Heckman, Kasra Khosoussi, Navinda Kottege, Benjamin Morrell, Marco Hutter, Fred Pauling, Franc ¸ois Pomerleau, Martin Saska, Sebastian Scherer, Roland Siegwart, Jason L. Williams, and Luca Carlone. Present and Future of SLAM in Extreme Environments: The DARPA SubT Challenge. 
+
+IEEE Trans. on Robotics , 40:936–959, 2024. ISSN 1941-0468. doi: 10.1109/TRO.2023.3323938. [2] Yulun Tian, Yun Chang, Fernando Herrera Arias, Carlos Nieto-Granda, Jonathan P How, and Luca Carlone. Kimera-multi: Robust, distributed, dense metric-semantic slam for multi-robot systems. IEEE Transactions on Robotics , 38(4), 2022. [3] Xu Liu, Jiuzhou Lei, Ankit Prabhu, Yuezhan Tao, Igor Spa-sojevic, Pratik Chaudhari, Nikolay Atanasov, and Vijay Ku-mar. SlideSLAM: Sparse, Lightweight, Decentralized Metric-Semantic SLAM for Multi-Robot Navigation, July 2024. arXiv:2406.17249. [4] Pierre-Yves Lajoie and Giovanni Beltrame. Swarm-SLAM : Sparse Decentralized Collaborative Simultaneous Localization and Mapping Framework for Multi-Robot Systems. IEEE Robotics and Automation Letters , 9(1):475–482, January 2024. ISSN 2377-3766, 2377-3774. doi: 10.1109/LRA.2023.3333742. [5] Patrik Schmuck, Thomas Ziegler, Marco Karrer, Jonathan Per-raudin, and Margarita Chli. COVINS: Visual-Inertial SLAM for Centralized Collaboration. In 2021 IEEE Int. Symposium on Mixed and Augmented Reality Adjunct , pages 171–176, October 2021. doi: 10.1109/ISMAR-Adjunct54149.2021.00043. [6] Yulun Tian, Kasra Khosoussi, David M. Rosen, and Jonathan P. How. Distributed Certifiably Correct Pose-Graph Optimization. 
+
+IEEE Trans. on Robotics , 37(6):2137–2156, December 2021. ISSN 1941-0468. doi: 10.1109/TRO.2021.3072346. [7] Daniel McGann, Kyle Lassak, and Michael Kaess. Asynchronous Distributed Smoothing and Mapping via On-Manifold Consensus ADMM. In IEEE Int. Conf. on Robotics and Automation , pages 4577–4583, 2024. [8] Taosha Fan and Todd D. Murphey. Majorization Minimization Methods for Distributed Pose Graph Optimization. IEEE Trans. on Robotics , 40:22–42, 2024. ISSN 1941-0468. doi: 10.1109/ TRO.2023.3324818. [9] Riku Murai, Joseph Ortiz, Sajad Saeedi, Paul H. J. Kelly, and Andrew J. Davison. A Robot Web for Distributed Many-Device Localization. IEEE Trans. on Robotics , 40:121–138, 2024. ISSN 1941-0468. doi: 10.1109/TRO.2023.3324127. [10] Yulun Tian, Alec Koppel, Amrit Singh Bedi, and Jonathan P. How. Asynchronous and Parallel Distributed Pose Graph Op-timization. IEEE Robotics and Automation Letters , 5(4):5819– 5826, October 2020. ISSN 2377-3766. doi: 10.1109/LRA.2020. 3010216. [11] Anthony Bloch, PS Krishnaprasad, Jerrold E Marsden, and Tudor S Ratiu. The euler-poincar´ e equations and double bracket dissipation. Communications in mathematical physics , 175(1): 1–42, 1996. [12] Thai Duong, Abdullah Altawaitan, Jason Stanley, and Nikolay Atanasov. Port-hamiltonian neural ode networks on lie groups for robot dynamics learning and control. IEEE Transactions on Robotics , 2024. [13] Sangli Teng, Ashkan Jasour, Ram Vasudevan, and Maani Ghaf-fari. Convex geometric motion planning of multi-body systems on lie groups via variational integrators and sparse moment relaxation. The International Journal of Robotics Research , 44 (10-11):1784–1813, 2025. [14] Alexander Cunningham, Manohar Paluri, and Frank Dellaert. DDF-SAM: Fully distributed SLAM using Constrained Factor Graphs. In 2010 IEEE/RSJ Int. Conf. on Intelligent Robots and Systems , pages 3025–3030, 2010. doi: 10.1109/IROS.2010. 5652875. [15] Alexander Cunningham, Vadim Indelman, and Frank Dellaert. DDF-SAM 2.0: Consistent distributed smoothing and mapping. In 2013 IEEE Int. Conf. on Robotics and Automation , pages 5220–5227, 2013. doi: 10.1109/ICRA.2013.6631323. [16] Siddharth Choudhary, Luca Carlone, Carlos Nieto, John Rogers, Henrik I Christensen, and Frank Dellaert. Distributed mapping with privacy and communication constraints: Lightweight algo-rithms and object-based models. The Int. Journal of Robotics Research , 36(12):1286–1311, October 2017. ISSN 0278-3649, 1741-3176. doi: 10.1177/0278364917732640. [17] David M Rosen, Luca Carlone, Afonso S Bandeira, and John J Leonard. SE-Sync: A certifiably correct algorithm for synchro-nization over the special Euclidean group. The Int. Journal of Robotics Research , 38(2-3):95–125, 2019. doi: 10.1177/ 0278364918784361. [18] Jesus Briales and Javier Gonzalez-Jimenez. Cartan-sync: Fast and global se (d)-synchronization. IEEE Robotics and Automa-tion Letters , 2(4):2127–2134, 2017. [19] Cunhao Li, Guanghui Guo, Peng Yi, and Yiguang Hong. Distributed Pose-Graph Optimization With Multi-Level Partition-ing for Multi-Robot SLAM. IEEE Robotics and Automation Letters , 9(6):4926–4933, June 2024. ISSN 2377-3766. doi: 10.1109/LRA.2024.3382531. [20] D. McGann and M. Kaess. iMESA: Incremental distributed optimization for collaborative simultaneous localization and map-ping. In Proc. Robotics: Science and Systems (RSS) , Delft, NL, 2024. [21] Philipp B¨ anninger, Ignacio Alzugaray, Marco Karrer, and Mar-garita Chli. Cross-agent relocalization for decentralized collabo-rative slam. In 2023 IEEE International Conference on Robotics and Automation (ICRA) , pages 5551–5557. IEEE, 2023. [22] Xiangyu Liu and Margarita Chli. Distributed pose graph optimization via contractive belief sharing. IEEE Robotics and Automation Letters , 2026. [23] Weijie Su, Stephen Boyd, and Emmanuel J Candes. A dif-ferential equation for modeling nesterov’s accelerated gradient method: Theory and insights. Journal of Machine Learning Research , 2016. [24] Yurii Nesterov. A method for solving the convex programming problem with convergence rate o (1/k2). In Soviet Mathematics Doklady , 1983. [25] Andre Wibisono, Ashia C Wilson, and Michael I Jordan. Avariational perspective on accelerated methods in optimization. 
+
+proceedings of the National Academy of Sciences , 113(47), 2016. [26] Ashia C Wilson, Ben Recht, and Michael I Jordan. A lyapunov analysis of accelerated methods in optimization. Journal of Machine Learning Research , pages 1–34, 2021. [27] Michael Betancourt, Michael I Jordan, and Ashia C Wilson. On symplectic optimization. arXiv preprint arXiv:1802.03653 , 2018. [28] Valentin Duruisseaux and Melvin Leok. Practical perspectives on symplectic accelerated optimization. Optimization Methods and Software , 38(6):1230–1268, 2023. [29] Ernst Hairer, Christian Lubich, and Gerhard Wanner. Structure-preserving algorithms for ordinary differential equations. Geo-metric numerical integration , 31, 2006. [30] Adrian Hauswirth, Saverio Bolognani, Gabriela Hug, and Flo-rian D¨ orfler. Projected gradient descent on riemannian manifolds with applications to online power system optimization. In 2016 54th Annual Allerton Conference on Communication, Control, and Computing (Allerton) . IEEE, 2016. [31] Valentin Duruisseaux and Melvin Leok. Accelerated optimiza-tion on riemannian manifolds via discrete constrained variational integrators. Journal of Nonlinear Science , 32(4):42, 2022. [32] Vladislav Golyanik, Sk Aziz Ali, and Didier Stricker. Grav-itational approach for point set registration. In Proceedings of the IEEE conference on computer vision and pattern recognition ,2016. [33] Philipp Jauer, Ivo Kuhlemann, Ralf Bruder, Achim Schweikard, and Floris Ernst. Efficient registration of high-resolution feature enhanced point clouds. IEEE transactions on pattern analysis and machine intelligence , 41(5):1102–1115, 2018. [34] Vladislav Golyanik, Christian Theobalt, and Didier Stricker. Ac-celerated gravitational point set alignment with altered physical laws. In Proceedings of the IEEE/CVF International Conference on Computer Vision , pages 2080–2089, 2019. [35] Sk Aziz Ali, Vladislav Golyanik, and Didier Stricker. Nrga: Gravitational approach for non-rigid point set registration. In 
+
+2018 International Conference on 3D Vision (3DV) , pages 756– 765. IEEE, 2018. [36] Mingyang Zhao, Lei Ma, Xiaohong Jia, Dong-Ming Yan, and Tiejun Huang. Graphreg: Dynamical point cloud registration with geometry-aware graph signal processing. IEEE Transactions on Image Processing , 31:7449–7464, 2022. [37] Heng Yang, Chris Doran, and Jean-Jacques Slotine. Dynamical pose estimation. In Proceedings of the IEEE/CVF International Conference on Computer Vision , pages 5926–5935, 2021. [38] Frank Dellaert and GTSAM Contributors. borglab/gtsam, May 2022. URL https://github.com/borglab/gtsam. [39] P-A Absil, Robert Mahony, and Rodolphe Sepulchre. Optimiza-tion algorithms on matrix manifolds . Princeton University Press, 2008. [40] Nicolas Boumal, Pierre-Antoine Absil, and Coralia Cartis. Global rates of convergence for nonconvex optimization on manifolds. IMA Journal of Numerical Analysis , 39(1):1–33, 2019. [41] Xiangru Lian, Wei Zhang, Ce Zhang, and Ji Liu. Asyn-chronous decentralized parallel stochastic gradient descent. In 
+
+International conference on machine learning , pages 3043–3052. PMLR, 2018. [42] Elizabeth D Dolan and Jorge J Mor´ e. Benchmarking op-timization software with performance profiles. Mathematical programming , 91(2):201–213, 2002. Distributed Pose Graph Optimization via Continuous Riemannian Dynamics 
+
+# Appendix 
+
+I. V ARIATIONAL PRINCIPLES ON LIE GROUP 
+
+In this section, we describe two fundamental principles governing dynamic systems evolving on matrix Lie Groups. To this end, we adopt a variational approach based on Hamilton’s principle, which provides a unified framework for deriving both conservative and dissipative dynamics. Formally, the system dynamics are characterized by the standard Lagrangian L : T G → R, defined on the tangent bundle as the difference between the kinetic energy T (X, ˙X)
+
+and the potential energy V (X). Instead of using the standard definition, we employ the reduced Lagrangian l : G × g → R
+
+following [1]. By rewriting the kinetic energy in the body frame as 12 ⟨ξ, ξ ⟩I, where I is the symmetric positive-definite inertia tensor defining the metric on the algebra, we transition to the reduced Lagrangian l : G × g → R, defined as: 
+
+l(X, ξ ) := 12 ⟨ξ, ξ ⟩I − V (X), (13) where V (X) denotes the potential energy of the system. Specifically, Hamilton’s principle requires considering a family of variations of the trajectory. Since the configuration space is a Lie group, we define the variation X(t, ϵ ) ∈ G
+
+using the exponential map [2]: 
+
+X(t, ϵ ) = X(t) exp( ϵη (t)) , (14) where ϵ is a scalar parameter, and η(t) ∈ g is an arbitrary curve in the Lie algebra (vanishing at the endpoints) representing the virtual displacement in the body frame. The variation δX is then given by: 
+
+δX = ∂∂ϵ X(t, ϵ ) ϵ=0 
+
+= X(t)η(t). (15) Based on the definition of body velocity ξ = X−1 ˙X and under the standard assumption that the order of differentiating with respect of t and ϵ commutes, the variation δξ is derived as: 
+
+δξ = ∂∂ϵ (X−1 ˙X) ϵ=0 
+
+= ∂X −1
+
+∂ϵ ϵ=0 
+
+˙X + X−1 ∂ ˙X∂ϵ ϵ=0 
+
+= ( −X−1(δX )X−1) ˙X + X−1 ∂∂t (δX ).
+
+(16) Substituting δX = Xη from (15) into the above equation yields the following Lin constraint [3]: 
+
+δξ = −X−1(Xη )X−1 ˙X + X−1 ∂∂t (Xη )= −η(X−1 ˙X) + X−1( ˙Xη + X ˙η)= −ηξ + ξη + ˙ η
+
+= ˙ η + [ ξ, η ],
+
+(17) where we used the identity ˙X = Xξ and the Lie bracket 
+
+[ξ, η ] = ξη − ηξ .Now, we are ready to state Hamilton’s principle, which requires the variation of the action to be zero: 
+
+Definition 1 (Variational Principle for Conservative System [1]) . Consider a system with configuration space G and reduced Lagrangian l : G × g → R. For a curve X(t) ∈ G 
+
+with fixed endpoints, the action is stationary with respect to variations: 
+
+δS = δ
+
+Z
+
+l(X, ξ ) dt = 0 . (18) While Hamilton’s principle governs conservative dynamics, practical systems often involve non-conservative forces such as dissipation. The Lagrange-d’Alembert principle generalizes the variational condition to incorporate these effects. The variation of the action is no longer zero but equals the virtual work done by the non-conservative forces. Let f ∈ g∗
+
+denote the external force defined in the body frame, where 
+
+g∗ represents the dual space of the Lie algebra. Then, the dynamics are described by the following forced variational principle. 
+
+Definition 2 (Lagrange-d’Alembert Principle [1]) . Consider a system with configuration space G and reduced Lagrangian 
+
+l : G × g → R, subject to an external force f ∈ g∗ defined in the dual space of the Lie algebra. For a curve X(t) ∈ G with fixed endpoints, the dynamics satisfy the variational condition: 
+
+δ
+
+Z
+
+l(X, ξ ) dt +
+
+Z
+
+⟨f, η ⟩ dt = 0 , (19) 
+
+where ⟨· , ·⟩ denotes the duality pairing between the cotangent vector f and the tangent vector η.
+
+In the context of matrix Lie groups, we identify the Lie algebra g and the tangent space TX G with their respective dual spaces via the standard trace inner product, defined as 
+
+⟨A, B ⟩ := tr( A⊤B). Consequently, the duality pairing in (19) and the variational derivatives are expressed using this metric. II. P ROOFS 
+
+Proof of Proposition 1: Let the symmetric positive-definite inertia be denoted by I = M , the potential energy by 
+
+V (X) = C(X), and the external force by f = −Dξ . The reduced Lagrangian is then given by l = 12 ξ⊤M ξ − C (X).Taking the variation of the action functional yields: 
+
+δS =
+
+Z
+
+⟨ ∂l ∂ξ , δξ ⟩ + ⟨ ∂l ∂X , δX ⟩dt (20) 
+
+=
+
+Z
+
+⟨M ξ, δξ ⟩ − ⟨ ∂C
+
+∂X , δX ⟩dt 
+
+=
+
+Z
+
+⟨M ξ, ˙η + [ ξ, η ]
+
+| {z }
+
+> Lin constraint
+
+⟩ − ⟨ ∂C
+
+∂X , Xη ⟩dt 
+
+=
+
+Z
+
+⟨M ξ, ˙η⟩ + ⟨M ξ, ad ξ η⟩ − ⟨ ∂C
+
+∂X , Xη ⟩dt 
+
+=
+
+Z
+
+⟨ − ddt (M ξ )
+
+| {z }
+
+> Integration by Parts
+
+, η ⟩ + ⟨ad ∗ 
+
+> ξ
+
+(M ξ ), η ⟩ − ⟨ X⊤ ∂C
+
+∂X , η ⟩dt. 
+
+(21) To obtain the final expression, we applied integration by parts to the first term using the vanishing boundary conditions of 
+
+η. The second term is transformed using the definition of the co-adjoint operator, ⟨p, ad ξ η⟩ = ⟨ad ∗ 
+
+> ξ
+
+p, η ⟩. Finally, the third term utilizes the matrix trace identity ⟨A, XB ⟩ = ⟨X⊤A, B ⟩
+
+to isolate η. By including the virtual work done by the external force, we obtain: 
+
+Z
+
+⟨− ddt (M ξ ), η ⟩ + ⟨ad ∗ 
+
+> ξ
+
+(M ξ ), η ⟩ − ⟨ X⊤ ∂C ∂X , η ⟩ + ⟨f, η ⟩dt 
+
+(22) 
+
+=
+
+Z
+
+⟨− ddt (M ξ ) + ad ∗ 
+
+> ξ
+
+(M ξ ) − X⊤ ∂C ∂X − Dξ, η ⟩dt 
+
+=0 .
+
+Since the variation η is arbitrary, the integration must vanish. To rigorously identify the term X⊤ ∂C 
+
+> ∂X
+
+as the Riemannian gradient ∇C , we examine the time derivative of the cost function along a trajectory X(t). Recall that the body velocity is defined as ξ = X−1 ˙X ∈ g. By the definition of the gradient on the Lie algebra, the rate of change of the cost function is given by the inner product of the gradient and the velocity: 
+
+ddt C(X(t)) = lim 
+
+> h→0
+
+C(X · exp( tξ )) − C (X)
+
+t = ⟨∇C , ξ ⟩. (23) Alternatively, applying the chain rule directly in the ambient matrix space yields: 
+
+ddt C(X(t)) = 
+
+ ∂C
+
+∂X , ˙X
+
+
+
+(24) 
+
+=
+
+ ∂C
+
+∂X , Xξ 
+
+
+
+=
+
+
+
+X⊤ ∂C
+
+∂X , ξ 
+
+
+
+.
+
+Comparing (23) and (24), which must hold for any velocity 
+
+ξ, we identify the gradient as: 
+
+∇C = X⊤ ∂C
+
+∂X . (25) As a result, we arrive at the damped Euler-Poincar´ e equation: 
+
+ddt (M ξ ) = −∇C − Dξ + ad ∗ 
+
+> ξ
+
+(M ξ ). (26) 
+
+Proof of Lemma 1: Let us define ∆Tk := Tk+1 − Tk and 
+
+∆Ck := Ck+1 − C k. Using Assumption 1 with η = ξk+1 ∆t,we have: 
+
+∆Ck = gXk (ξk+1 ∆t) − gXk (0) (27) 
+
+≤ ⟨∇ gXk (0) , ξ k+1 ∆t⟩ + L
+
+2 ∥ξk+1 ∆t∥2
+
+> M
+
+= ∆ tξ ⊤
+
+> k+1
+
+∇C k + L∆t2
+
+2 ∥ξk+1 ∥2
+
+> M
+
+Furthermore, the change in kinetic energy is given by: 
+
+∆Tk = 12 ξ⊤
+
+> k+1
+
+M ξ k+1 − 12 ξ⊤ 
+
+> k
+
+M ξ k (28) 
+
+= 12 (ξ⊤ 
+
+> k
+
++ ∆ ta ⊤ 
+
+> k
+
+)M (ξk + ∆ ta k) − 12 ξ⊤ 
+
+> k
+
+M ξ k
+
+=∆ tξ ⊤ 
+
+> k
+
+M a k + ∆t2
+
+2 ∥ak∥2
+
+> M
+
+=∆ tξ ⊤ 
+
+> k
+
+(−∇C k − Dξ k) + ∆t2
+
+2 ∥ak∥2
+
+> M
+
+We obtain the final expression since the co-adjoint term included in M a k vanishes: 
+
+ξ⊤ 
+
+> k
+
+ad ∗ 
+
+> ξk
+
+(M ξ k) = ⟨ad ∗ 
+
+> ξk
+
+(M ξ k), ξ k⟩ (29) 
+
+=⟨M ξ k, ad ξk (ξk)⟩
+
+=⟨M ξ k, [ξk, ξ k]⟩
+
+=0 .
+
+Summing (27) and (28) yields: 
+
+∆Ek =∆ Tk + ∆ Ck (30) 
+
+≤∆t(ξ⊤ 
+
+> k+1
+
+− ξ⊤ 
+
+> k
+
+)∇C k + ∆ t2( L
+
+2 ∥ξk+1 ∥2 
+
+> M
+
++ 12 ∥ak∥2 
+
+> M
+
+)
+
+− ∆tξ ⊤ 
+
+> k
+
+Dξ k
+
+=∆ t2(a⊤ 
+
+> k
+
+∇C k + L
+
+2 ∥ξk+1 ∥2 
+
+> M
+
++ 12 ∥ak∥2 
+
+> M
+
+) − ∆tξ ⊤ 
+
+> k
+
+Dξ k
+
+Proof of Theorem 1: Recalling that ∥ · ∥ M denotes the norm induced by the metric M (i.e., ∥x∥M = √x⊤M x ), the generalized Cauchy-Schwarz and Young’s inequalities yield: 
+
+a⊤ 
+
+> k
+
+∇Ck ≤ ∥ ak∥M ∥∇C k∥M −1 ≤ 12 ∥ak∥2 
+
+> M
+
++ 12 ∥∇C k∥2  
+
+> M−1
+
+.
+
+(31) Consequently, using (30), ∆Ek is bounded by: 
+
+∆Ek ≤∆t2(a⊤ 
+
+> k
+
+∇C k + L
+
+2 ∥ξk+1 ∥2 
+
+> M
+
++ 12 ∥ak∥2 
+
+> M
+
+) − ∆tξ ⊤ 
+
+> k
+
+Dξ k
+
+≤∆t2( 12 ∥∇C k∥2  
+
+> M−1
+
++ L
+
+2 ∥ξk+1 ∥2 
+
+> M
+
++ ∥ak∥2 
+
+> M
+
+)
+
+− ∆tξ ⊤ 
+
+> k
+
+Dξ k
+
+:= Bk
+
+(32) A sufficient condition for energy dissipation (i.e., ∆Ek ≤ 0)is Bk ≤ 0. Solving this inequality for ∆t, we obtain: 
+
+∆t ≤ ξ⊤ 
+
+> k
+
+Dξ k 
+
+> 12
+
+∥∇C k∥2  
+
+> M−1
+
++ L 
+
+> 2
+
+∥ξk+1 ∥2 
+
+> M
+
++ ∥ak∥2
+
+> M
+
+. (33) III. E XPERIMENTAL DETAILS 
+
+In this section, we provide the detailed hyperparameter con-figurations used in our experiments to ensure reproducibility. Specifically, we list the values for the damping coefficient ( d), mass ( m), and discretization time step ( ∆t) across different datasets and evaluation metrics. As discussed in the main paper, these parameters are selected to balance the convergence speed and numerical stability of the Riemannian dynamics. Table V details the settings for the Chordal distance metric under both synchronous and asynchronous settings, while Table VI lists the parameters for the Geodesic distance metric. Finally, Table VII presents the parameter adjustments required for extreme communication delays. 
+
+TABLE V: Hyperparameter settings for benchmark datasets using the Chordal distance metric. The table distinguishes between syn-chronous and asynchronous communication protocols.                                                  
+
+> Dataset Synchronous Asynchronous
+> dm∆tdm∆t
+> Sm. Grid 1.5 10.65 40.7 0.1
+> Sphere 20.7 140.7 0.1
+> Torus 20.7 140.7 0.1
+> Grid 20.7 140.7 0.1
+> Cubicle 20.7 140.7 0.1
+> Rim 20.8 140.7 0.1
+> Garage 20.8 130.7 0.1
+
+TABLE VI: Hyperparameter settings for benchmark datasets using the Geodesic distance metric.                         
+
+> Dataset dm∆t
+> Sm. Grid 40.7 0.7
+> Sphere 20.7 0.7
+> Torus 20.7 0.7
+> Grid 20.7 1
+> Cubicle 30.7 0.7
+> Rim 610.65
+> Garage 20.7 0.7
+
+TABLE VII: Hyperparameter adjustments for the asynchronous de-lay robustness analysis. As the communication delay (Delay step) increases, the time step ∆t is adjusted to maintain system stability.             
+
+> Delay Step dm∆t
+> 350.45 0.12 750.45 0.075 10 50.45 0.05
+
+REFERENCES 
+
+[1] Anthony Bloch, PS Krishnaprasad, Jerrold E Marsden, and Tudor S Ratiu. The euler-poincar´ e equations and double bracket dissipation. Communications in mathematical physics , 175(1): 1–42, 1996. [2] Taeyoung Lee, Melvin Leok, and N Harris McClamroch. Lie group variational integrators for the full body problem. Computer Methods in Applied Mechanics and Engineering , 196(29-30): 2907–2924, 2007. [3] Hern´ an Cendra, Darryl D Holm, Jerrold E Marsden, and Tudor S Ratiu. Lagrangian reduction, the euler–poincar´ e equations, and semidirect products. arXiv preprint chao-dyn/9906004 , 1999.

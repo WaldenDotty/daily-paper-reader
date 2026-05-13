@@ -1,0 +1,889 @@
+Title: A Riemannian quasi-Newton algorithm for optimization with Euclidean bounds
+
+URL Source: https://arxiv.org/pdf/2605.10573v1
+
+Published Time: Tue, 12 May 2026 02:53:56 GMT
+
+Number of Pages: 15
+
+Markdown Content:
+# A R IEMANNIAN QUASI -N EWTON ALGORITHM FOR OPTIMIZATION WITH EUCLIDEAN BOUNDS 
+
+A P REPRINT 
+
+Mateusz Baran 
+
+AGH University of Krakow 30 Mickiewicz Ave., 30-059 Kraków, Poland 
+
+mbaran@agh.edu.pl 
+
+Ronny Bergmann 
+
+Department of Mathematical Sciences, Norwegian University of Science and Technology, NO-7041 Trondheim, Norway AGH University of Krakow 30 Mickiewicz Ave., 30-059 Kraków, Poland 
+
+ronny.bergmannn@ntnu.no 
+
+Patryk Przybysz 
+
+AGH University of Krakow 30 Mickiewicz Ave., 30-059 Kraków, Poland May 12, 2026 
+
+## ABSTRACT 
+
+We propose a Riemannian limited-memory BFGS method for optimization problems with Euclidean bounds. The method combines a limited-memory quasi-Newton update in the tangent space with a Riemannian adaptation of the generalized Cauchy point strategy from classical L-BFGS-B, enabling efficient handling of Euclidean bounds while exploiting the geometric structure of the optimization domain. This setting is important in several applications, including covariance matrix estimation with bounded variance, neuroimaging, EEG signal classification, and other signal processing or computer-vision tasks that couple manifold variables with constrained Euclidean parameters. We provide a generic algorithmic framework and an implementation of the algorithm in the Manopt.jl library. Numerical experiments on benchmark problems indicate only minor reduction in perfor-mance on Euclidean problems compared to the classical L-BFGS-B method, while outperforming interior-point methods. Furthermore, the algorithm was tested on two mixed manifold and bounded Euclidean problems: amplitude-limited blind source separation with Gaussianity penalization and bounded-variance maximum likelihood common principal components analysis. The proposed method outperforms existing methods by several orders of magnitude. 
+
+Keywords Nonlinear optimization · Differential geometry · Bound-constrained optimization · Limited-memory method · Quasi-Newton method 
+
+## 1 Introduction 
+
+Riemannian optimization is an important tool for solving optimization problems. Many real-world applications, such as machine learning [ 1], signal processing [ 2], and computer vision [ 3, 4 ], involve optimization over manifolds. For example, optimization over the manifold of positive definite matrices is common in gene expression data analysis [ 5, 6], neuroimaging [ 7, 8 ] and EEG signal classification [ 9]. Grassmann manifold has also been used for simulations in nuclear physics [ 10 ]. Geometric methods have also been more broadly applied in signal processing, for example in clustering [11], blind source separation [12], needle sensors [13] and microphone array signal processing [14]. Adding bounds constraints to the problem allows for more flexible modelling of such problems [ 15 ]. Constrains also offer a way to regularize a parameter estimation problem [ 16 ]. In this work we introduce an efficient, generic algorithm for solving such problems to eliminate the need to develop purpose-built solvers for specific problems. Quasi-Newton methods that effectively support bounds constraints, despite being known for a few decades, are still relevant in applications. For example the L-BFGS-B algorithm has been recently shown to be effective in network 
+
+> arXiv:2605.10573v1 [math.OC] 11 May 2026
+
+Riemannian L-BFGS-B A P REPRINT 
+
+traffic forecasting [ 17 ]. Variants of L-BFGS-B can also be used as sub-solvers in the developing area of constraint learning [ 18 ]. On the other hand, handling bounds constraints in the Riemannian setting is currently limited to a few algorithms like augmented Lagrangian method (ALM) [ 19 ], exact penalty method (EPN) [ 19 ] and interior point Newton method (IPN) [ 20 ] which are generic but at the price of being potentially slower than algorithms that that are specialized to bounds constraints. In this work, we consider problems of the form 
+
+min  
+
+> p=( pD,p M)∈D×M
+
+f (x) (1) where D is the hypercube [l1, u 1]×[l2, u 2]×· · ·× [ln, u n] for some n ≥ 0, M is a Riemannian manifold, f : D×M → R
+
+is a smooth objective function, and li, u i are the lower and upper bounds for the variables pD,i , i = 1 , . . . , n . We allow bounds to be infinite, that is, li = −∞ or ui = ∞ for some i. Such problems often arise in statistics and machine learning, for example when estimating covariance matrix in a statistical model together with some other bounded parameters [21, 22, 23], or covariance matrices with bounded covariances [5]. To solve this problem, we propose an approach that combines the Riemannian limited-memory BFGS algorithm [ 24 , 25 ]with our novel adaptation to the Riemannian setting of the generalized Cauchy point algorithm from the L-BFGS-B method [ 26 , 27 , 28 ]. We further provide an implementation within the framework of the Julia package Manopt.jl [ 29 ]. This framework allows to use the algorithm for arbitrary manifolds implemented within the interface defined in ManifoldsBase.jl, for example all manifolds provided in the Manifolds.jl [30] library. The remainder of this paper is organised as follows. We first repeat the necessary terms and notation in Section 2. Section 3 describes the proposed algorithm in detail. Next, in Section 4, we present numerical experiments that demonstrate the effectiveness of our method on a set of benchmark problems. Finally, Section 5 presents conclusions and discusses potential directions for future research. 
+
+## 2 Preliminaries & Notation 
+
+In this section we introduce the main notation used throughout the paper. We follow the textbooks [ 31 , 32 ] and refer to these for further details. We denote a Riemannian manifold by M and assume in the following that it is second-countable, Hausdorff, and complete. At every point p ∈ M we denote the tangent space by TpM. Elements of the tangent space are called tangent vectors and denoted by Xp, Y p, where we omit the p if it is clear from context. The disjoint union of all tangent spaces it the tangent bundle T M, which is itself again a Riemannian manifold. The Riemannian metric, is a family of inner products ⟨· , ·⟩ p, p ∈ M on the tangent spaces that smoothly varies in p and we denote the Levi-Cevita connection by ∇.The metric allows to introduce geodesics, i. e. acceleration free curves as well as the exponential map exp p : TpM → M ,which locally around 0 ∈ TpM can be inverted and gives rise to the logarithmic map log p. Similarly the parallel transport Pp,X : TpM → Tq M, q = exp p(X) allows to “move” a tangent vector from one tangent space to another. Numerically, these three operations might not be given in closed form for a certain manifold but require to solve an ODE. Then one can alternatively use a retraction retr p instead of an exponential map, a corresponding inverse retraction 
+
+retr −1 
+
+> p
+
+instead of the logarithmic map, and a vector transport Tp,X to q = retr p(X) instead of the parallel transport. For a smooth function f : M → R the Riemannian metric introduces the notion of a Riemannian gradient as its Riesz representer, that is, via the unique tangent vector grad f (p) ∈ TpM such that Df (p)[ X] = ⟨grad f (p), X and the covariant derivative of the gradient introduces the notion of a Hessian: we have Hess f (p)[ X] = ∇X grad f (p)
+
+While in general, the product of two manifolds M1 × M 2 is again a Riemannian manifold using the usual product metric, note that the hypercube D := [ l1, u 1] × [l2, u 2] × · · · × [ln, u n] is not a Riemannian manifold. But it can be considered as a manifold with [ 33 ]. Then the product D × M with a Riemannian manifold M also yields a new manifold with corners. For these, we introduce a projection operator Proj Tp(D×M ) : Tp(D × M ) → Tp(D × M ) as 
+
+Proj T(pD,p M)(D×M )(XD, X M) = ( YD, X M) where 
+
+YD,i =
+
+
+
+0 when pD,i = li and XD,i < 00 when pD,i = ui and XD,i > 0
+
+XD,i otherwise ,
+
+(2) for each i = 1 , 2, . . . , n . We further introduce a Riemannian metric thereon, namely also the product metric 
+
+⟨(X1, X 2), (Y2, Y 2)⟩(pD,p M) = X⊤ 
+
+> 1
+
+Y1 + ⟨X2, Y 2⟩pM on Tp(D × M ). Similarly, retractions, inverse retractions and vector transports on this product can be considered component-wise. 2Riemannian L-BFGS-B A P REPRINT 
+
+## 3 Methods 
+
+The general outline of the algorithm is similar to the Riemannian L-BFGS method [ 25 ] starting with an initial point p0
+
+on some manifold. Then the idea of a single kth step is to solve the Newton equation as in [ 31 , Algorithm 5]. This is relaxed, since both setting up that linear system Hess f (pk)[ Xk] = −grad f (pk) as well as solving it might be expensive. Instead, one aims to find approximations Hk ≈ Hess f (pk) either as a linear operator or as a coefficient matrix with respect to a certain basis of the tangent space at pk. Instead of approximating the Hessian, a popular alternative is to approximate the inverse Bk ≈ (Hess f (p)) −1. The advantage is, that computing the new direction Xk then simplifies to applying the linear operator Bk to the negative gradient. One prominent scheme here is the limited memory (L) variant of Broyden, Fletcher, Goldfarb, and Shanno (BFGS) which is based on differences of a certain limited amount of both iterates and gradients. On manifolds, this turns into inverse retractions of iterates and differences of two gradients, where on of them is transported to the tangent space of the other. Once a new direction has been found, the new iterate is obtained using a retraction as pk+1 = retr pk (αkXk), where αk is a step size, either as a fixed sequence of even employing some backtracking procedure. In our setting, we begin with an initial point p0 ∈ D × M . At each iterate pk, k = 0 , 1, . . . , k max a quadratic surrogate 
+
+mk : Tpk (D × M ) → R of the objective is constructed: 
+
+mk(X) = f (pk) + ⟨grad f (pk), X ⟩pk + 12 ⟨X, H k[X]⟩pk , (3) where Hk : Tpk (D × M ) → Tpk (D × M ) is a positive definite approximation of the Riemannian Hessian of f at 
+
+pk. Section 3.1 describes the details of construction of the Hessian approximation Hk and its inverse using a limited memory approach, adapting the Euclidean approach to the Riemannian setting. We compute the initial search direction by solving the subproblem dk = −Bk grad f (pk), where Bk is the inverse of Hk. It differs from the Euclidean L-BFGS-B method, where dk = ( dD,k , d M,k ) is selected as − grad f (pk). After computing the initial search direction, we solve the subproblem of finding the first minimum of mk along the piecewise linear function dPL (t) : [0 , ∞) → Tpk (D × M ), dPL (t) = ( dPL ,D(t), td M,k ) where dPL ,D is defined as 
+
+dPL ,D(t)i =
+
+
+
+li − pD,i if pD,i,t < l i
+
+td D,i if li ≤ pD,i,t ≤ ui
+
+ui − pD,i if pD,i,t > u i
+
+(4) where pD,i,t = pD,i + td D,k,i . Let the first minimizer of qk(t) = mk(dPL (t)) be attained at t∗,k . The generalized Cauchy direction is then defined as dGCD ,k = dPL (t∗,k ). To find the minimizer we adapt the generalized Cauchy point algorithm from [ 26 ] to the Riemannian setting; see Section 3.2 for details. Furthermore, the procedure returns the maximum allowed stepsize tGCD ,max ,k . Note that in the Euclidean L-BFGS-B method, exp pk (dGCD ,k ) is called the generalized Cauchy point [26]. Next, we perform a line search along dGCD ,k to ensure sufficient decrease in the objective function. The line search operates within the [0 , t GCD ,max ,k ] interval to find a suitable step size. 
+
+3.1 Hessian approximation 
+
+In this work we construct limited memory approximations to both the Hessian Hk and its inverse Bk simultaneously. This extends the standard Riemannian L-BFGS approach from [24, 25]. At each iteration k = 0 , 1, . . . , k max we define 
+
+sk = Tpk ,αd k (αd k) and yk = β−1 
+
+> k
+
+grad f (pk+1 ) − T pk ,αd k (grad f (pk)) , (5) where βk is a scaling factor as defined in [25]. At iteration k we have μk ≤ μ pairs of tangent vectors (sk,i , y k,i ), i = 1 , 2, . . . , μ k, where sk,i , y k,i ∈ Tpk D × M 
+
+for i = 1, 2, . . . , μ k. Initially μ0 = 0. At iteration k, k > 0, pairs (sk,i , y k,i ) for i ∈ 1, 2, . . . , μ k − 1
+
+are a subset of (ˆ sk,i , ˆyk,i ) := ( Tpk−1,αd k−1 sk−1,i , Tpk−1,αd k−1 yk−1,i ), i = 1 , 2, . . . , μ k−1. Elements such that 
+
+⟨ˆsk,i , ˆyk,i ⟩pk < ϵ ∥ˆyk,i ∥2 
+
+> pk
+
+for some small positive constant ϵ are discarded to ensure the positive definiteness of the Hessian approximation [ 26 ]. If μk−1 = μ and no pair was removed by enforcing the positive definiteness condition, the oldest pair (ˆ sk, 1, ˆyk, 1) is discarded. Finally, the new pair is added at the end, (sk,μ k , y k,μ k ) := ( sk, y k).We further define ρi = ⟨sk,i , y k,i ⟩−1 
+
+> pk
+
+and set the default Hessian scaling factor to θk = ⟨yk,μ k , y k,μ k ⟩2 
+
+> pk
+
+ρμk .3Riemannian L-BFGS-B A P REPRINT 
+
+To define the Hessian approximation, we first introduce some auxiliary functions. Linear functions Wy,k : Tpk (D ×M) → Rμk and Ws,k : Tpk (D × M ) → Rμk compute coefficients of an input vector X ∈ Tpk (D × M ) with respect to the stored yk,i and sk,i vectors, respectively: 
+
+Wy,k [X] = 
+
+
+
+⟨yk, 1, X ⟩pk
+
+⟨yk, 2, X ⟩pk
+
+...
+
+⟨yk,μ k , X ⟩pk
+
+ , Ws,k [X] = θk
+
+
+
+⟨sk, 1, X ⟩pk
+
+⟨sk, 2, X ⟩pk
+
+...
+
+⟨sk,μ k , X ⟩pk
+
+ . (6) Next, these coefficients are used in a quadratic form 
+
+HW,k (ξ, c y,X , c s,X , c y,Y , c s,Y ) = θkξ −
+
+cy,X 
+
+cs,X 
+
+⊤
+
+Mk
+
+cy,Y 
+
+cs,Y 
+
+
+
+, (7) where Mk is the block matrix 
+
+Mk =
+
+−Dk L⊤
+
+> k
+
+Lk Qk
+
+−1
+
+(8) composed from the following blocks: 
+
+Dk = diag( ρ1, . . . , ρ μk )−1, (9) 
+
+Qk = θk
+
+
+
+⟨sk, 1, s k, 1⟩pk · · · ⟨sk, 1, s k,μ k ⟩pk
+
+... . . . ...
+
+⟨sk,μ k , s k, 1⟩pk · · · ⟨sk,μ k , s k,μ k ⟩pk
+
+ , (10) and 
+
+Lk =
+
+
+
+0 0 · · · 0
+
+⟨sk, 2, y k, 1⟩pk 0 · · · 0
+
+... ... . . . ...
+
+⟨sk,μ k , y k, 1⟩pk ⟨sk,μ k , y k, 2⟩pk · · · 0
+
+ . (11) Note that the invertion in Eq. (8) can be performed efficiently using the following formula: 
+
+Mk =
+
+−D−1 
+
+> k
+
+− D−1 
+
+> k
+
+LkQ−1 
+
+> k
+
+L⊤ 
+
+> k
+
+D−1 
+
+> k
+
+D−1 
+
+> k
+
+LkQ−1
+
+> k
+
+Q−1 
+
+> k
+
+L⊤ 
+
+> k
+
+D−1 
+
+> k
+
+Q−1
+
+> k
+
+
+
+, (12) where only one inversion of a nondiagonal μk × μk matrix Qk is required. Finally, Hessian value ⟨X, H k[Y ]⟩pk , where Hk : Tpk D × M → Tpk D × M is then defined as 
+
+⟨X, H k[Y ]⟩pk = HW,k (⟨X, Y ⟩pk , W y,k [X], W s,k [X], W y,k [Y ], W s,k [Y ]) . (13) For the generalized Cauchy direction algorithm we only need to compute the quantities of the form ⟨X, H k[X]⟩pk ,
+
+⟨eb, H k[eb]⟩pk , ⟨eb, H k[X]⟩pk as well as the function HW,k , where eb for b = 1 , 2, . . . , n is the tangent vector at pk
+
+that has bth standard basis vector as the first component and the zero vector as the second component. 
+
+3.2 Generalized Cauchy direction 
+
+The input of the generalized Cauchy direction (GCD) algorithm is the current iterate p, the gradient grad f (p) = g =(gD, g M), the search direction d = −B grad f (p) = ( dD, d M), and the Hessian approximation H. We drop the outer iteration index k for clarity. Compared to the original generalized Cauchy point algorithm from [ 26 ], the output is the direction of descent dGCD , a status flag indicating whether the GCD was found limited by the bounds (and so the subsequent line search needs to operate within the [0 , t GCD ,max ] interval, where the upper bound is also computed), unlimited (line search may opt to perform bracketing) or not found (in which case the Hessian approximation needs to be discarded). We split the logic into a part that is independent of the Hessian approximation and a part that depends on H without increasing computational complexity. This makes it easier to adapt the algorithm to different Hessian approximations. Additionally, the algorithm works generically for any descent direction d, not only for the negative gradient direction. Despite these extensions, the computational complexity remains the same as in the original generalized Cauchy point algorithm. 4Riemannian L-BFGS-B A P REPRINT 
+
+The first step of the algorithm is to compute the sequence of breakpoints ti. For each i = 1 , 2, . . . , n we compute 
+
+ti =
+
+ 
+
+> pD,i −li
+> dD,i
+
+when dD,i < 0 
+
+> pD,i −ui
+> dD,i
+
+when dD,i > 0
+
+∞ when dD,i = 0 
+
+(14) Furthermore, we add the breakpoint t−1 corresponding to maximum allowed stepsize on M, which is usually taken as the injectivity radius of the exponential map of M at pM. Next, we sort the breakpoints in nondecreasing order and denote the sorted sequence by t(1) ≤ t(2) ≤ · · · ≤ t(n+1) .In the next step we calculate the initial linear and quadratic terms of the piecewise quadratic function q(t) = 
+
+m(dPL (t)) = q(0) + f ′t + 12 f ′′ t2 on the first segment [0 , t (1) ], f ′ = ⟨grad f (p), d ⟩p and f ′′ = ⟨d, H [d]⟩p. If either f ′ = 0 or f ′′ = 0 , then we return the zero tangent vector and the status NOT FOUND . Otherwise, we compute the minimizer of q(t) on the first segment, ∆tmin = − f ′  
+
+> f′′
+
+.Next, suppose we are examining the interval [t(j), t (j+1) ] for some j ∈ { 1, 2, . . . , n }. Denote Z(j) = dPL (t(j)),
+
+∆t = t − t(j), ∆t(j) = t(j+1) − t(j) and ˆd(j) = ( ˆdD, d M) where 
+
+ˆdD,i =
+
+dD,i when t(j) < t i
+
+0 otherwise, (15) for each i = 1 , 2, . . . , n . Now we can write 
+
+q(t(j) + ∆ t) = m(Z(j) + ∆ t ˆd(j))=f (p) + ⟨g, Z (j) + ∆ t ˆd(j)⟩p + 12 ⟨Z(j) + ∆ t ˆd(j), H [Z(j) + ∆ t ˆd(j)]⟩p
+
+=f (p) + ⟨g, Z (j)⟩p + 12 ⟨Z(j), H [Z(j)]⟩p
+
++ ∆ t
+
+
+
+⟨g, ˆd(j)⟩p + ⟨ ˆd(j), H [Z(j)]⟩p
+
+
+
++ 12 ∆t2⟨ ˆd(j), H [ ˆd(j)]⟩p.
+
+The quadratic surrogate ˆm(∆ t) on the current segment is then given by 
+
+ˆm(∆ t) = q(t(j) + ∆ t) = f(j) + f ′
+
+> (j)
+
+∆t + 12 f ′′ 
+
+> (j)
+
+∆t2, (16) where 
+
+f(j) = f (p) + ⟨g, Z (j)⟩p + 12 ⟨Z(j), H [Z(j)]⟩p,f ′ 
+
+> (j)
+
+= ⟨g, ˆd(j)⟩p + ⟨ ˆd(j), H [Z(j)]⟩p,f ′′  
+
+> (j)
+
+= ⟨ ˆd(j), H [ ˆd(j)]⟩p.
+
+Since we assume that H is positive definite ˆm has a minimizer ∆tmin = −f ′
+
+> (j)
+
+/f ′′ 
+
+> (j)
+
+. If t(j) + ∆ tmin lies within the current segment, then we have found the first minimizer of q(t). If t(j) + ∆ tmin < t (j), then the minimum lies at t(j).Otherwise, if t(j) + ∆ tmin > t (j+1) , then we need to proceed to the next segment. When proceeding to the next segment, we don’t have to recompute f ′ 
+
+> (j+1)
+
+and f ′′  
+
+> (j+1)
+
+from scratch. We can update them from f ′ 
+
+> (j)
+
+and f ′′ 
+
+> (j)
+
+. Let b be the index of the component that reached its bound at t(j+1) . Then, we have 
+
+ˆd(j+1) = ˆd(j) − dD,b eb and Z(j+1) = Z(j) + ∆ t(j) ˆd(j). Using these relations, we can derive the following update formulas: 
+
+f ′ 
+
+> (j+1)
+
+=⟨g, ˆd(j+1) ⟩p + ⟨ ˆd(j+1) , H [Z(j+1) ]⟩p
+
+=⟨g, ˆd(j) − dD,b eb⟩p + ⟨ ˆd(j) − dD,b eb, H [Z(j) + ∆ t(j) ˆd(j)]⟩p
+
+=⟨g, ˆd(j)⟩p − dD,b ⟨g, e b⟩p + ⟨ ˆd(j), H [Z(j)]⟩p + ∆ t(j)⟨ ˆd(j), H [ ˆd(j)]⟩p−
+
+dD,b ⟨eb, H [Z(j)]⟩p − dD,b ∆t(j)⟨eb, H [ ˆd(j)]⟩p
+
+=f ′ 
+
+> (j)
+
+− dD,b gD,b + ∆ t(j)f ′′  
+
+> (j)
+
+− dD,b ⟨eb, H [Z(j+1) ]⟩p.
+
+5Riemannian L-BFGS-B A P REPRINT 
+
+Similarly, we derive 
+
+f ′′  
+
+> (j+1)
+
+=⟨ ˆd(j+1) , H [ ˆd(j+1) ]⟩p
+
+=⟨ ˆd(j) − dD,b eb, H [ ˆd(j) − dD,b eb]⟩p
+
+=⟨ ˆd(j), H [ ˆd(j)]⟩p − 2dD,b ⟨eb, H [ ˆd(j)]⟩p + d2D,b ⟨eb, H [eb]⟩p
+
+=f ′′  
+
+> (j)
+
+− 2dD,b ⟨eb, H [ ˆd(j)]⟩p + d2D,b ⟨eb, H [eb]⟩p.
+
+Now, there are exactly three Hessian values that need to be computed in each segment transition: ⟨eb, H [eb]⟩p,
+
+⟨eb, H [ ˆd(j)]⟩p and ⟨eb, H [Z(j+1) ]⟩p. The first one can be computed statelessly in the selected Hessian approximation. The other two values require maintaining certain state between segment transitions to avoid recomputing them from scratch. Next, we prepare for iteration over the segments defined by the breakpoints. We denote: 
+
+py,(j) = [ ⟨y(i), ˆd(j)⟩p]i=1 ,2,...,μ ,ps,(j) = [ θ⟨s(i), ˆd(j)⟩p]i=1 ,2,...,μ ,cy,(j) = [ ⟨y(i), Z (j)⟩p]i=1 ,2,...,μ ,cs,(j) = [ θ⟨s(i), Z (j)⟩p]i=1 ,2,...,μ .
+
+Given these vectors, we can compute the required Hessian values as 
+
+⟨eb, H [ ˆd(j)]⟩p = HW(θd b, e D,b , e D,b , p y,(j), p s,(j)),
+
+⟨eb, H [Z(j)]⟩p = HW(θt (j), e D,b , e D,b , c y,(j), c s,(j)),
+
+see Eq. (7) for the definition of HW. Now, we can initialize the vectors at the start of the first segment as 
+
+py,(1) = [ ⟨y(i), d ⟩p]i=1 ,2,...,μ ,ps,(1) = [ θ⟨s(i), d ⟩p]i=1 ,2,...,μ ,cy,(1) = [0 , 0, . . . , 0] ⊤ ∈ Rμ,cs,(1) = [0 , 0, . . . , 0] ⊤ ∈ Rμ.
+
+Finally, we can update the vectors cy,(j), cs,(j), py,(j) and ps,(j) between segments as follows: 
+
+py,(j+1) = py,(j) − db[yD,i,b ]i=1 ,2,...,μ ,ps,(j+1) = ps,(j) − dbθ[sD,i,b ]i=1 ,2,...,μ ,cy,(j+1) = cy,(j) + ∆ t(j)py,(j),cs,(j+1) = cs,(j) + ∆ t(j)ps,(j).
+
+The part of the algorithm that depends on the Hessian approximation is encapsulated within functions 
+
+quadratic_segment_surrogate (Algorithm 1) and hessian_segment_values (Algorithm 2). It is de-fined by an implicit vector dz tangent to p, pointing at the end of the current segment. The function 
+
+quadratic_segment_surrogate initializes a temporary storage structure qs that is used to compute Hessian values in subsequent segments. The storage corresponds to variables p and c in the L-BFGS-B implementation from [ 26 ]. The function hessian_segment_values computes the required Hessian values in the current segment using qs.
+
+Algorithm 1 Quadratic segment surrogate initialization (L-BFGS-B variant) 
+
+Require: Current iterate p, search direction d = −B grad f (p), Hessian approximation H
+
+Ensure: Temporary storage structure qs required for calculation of Hessian values in subsequent segments 
+
+1: cs = [0 , 0, . . . , 0] ⊤ ∈ Rμ
+
+2: cy = [0 , 0, . . . , 0] ⊤ ∈ Rμ
+
+3: ps = θ[⟨si, d ⟩p]i=1 ,2,...,μ 
+
+4: py = [ ⟨yi, d ⟩p]i=1 ,2,...,μ 
+
+5: return qs = ( cs, c y , p s, p y )
+
+6Riemannian L-BFGS-B A P REPRINT 
+
+Algorithm 2 Hessian calculation for subsequent segments (L-BFGS-B variant). M is the precomputed matrix from Eq. (8) for the current iteration. 
+
+Require: Temporary storage qs, current iterate p, current step size t, length of the current segment ∆t, current index b,value of direction vector at index b, Hessian approximation H
+
+Ensure: v1 = ⟨eb, H [Z]⟩, v2 = ⟨eb, H [ ˆd]⟩ 
+
+> 1:
+
+cs, c y , p s, p y ← qs 
+
+> 2:
+
+cy ← cy + ∆ t · py 
+
+> 3:
+
+cs ← cs + ∆ t · ps 
+
+> 4:
+
+ξy ← [yD,i,b ]i=1 ,2,...,μ  
+
+> 5:
+
+ξs ← θ[sD,i,b ]i=1 ,2,...,μ  
+
+> 6:
+
+v1 ← θtd b + ξ⊤ 
+
+> y
+
+ξ⊤
+
+> s
+
+ M
+
+cy
+
+cs
+
+ 
+
+> 7:
+
+v2 ← θd b + ξ⊤ 
+
+> y
+
+ξ⊤
+
+> s
+
+ M
+
+py
+
+ps
+
+ 
+
+> 8:
+
+py ← py − dbξy 
+
+> 9:
+
+ps ← ps − dbξs 
+
+> 10:
+
+qs ← (cs, c y , p s, p y ) 
+
+> 11:
+
+return (v1, v 2)
+
+Evaluation of subsequent segments proceeds similarly to the original generalized Cauchy point algorithm from [ 26 ]. The loop has an additional stopping criterion that checks whether we have reached the maximum allowed stepsize on M. After the segment with the minimizer is found, we construct the direction dGCD by multiplying the original direction by the time step at which the minimum is found and fixing the components that reached their bounds at the corresponding breakpoints. Additionally, the maximum stepsize for the subsequent line search is also computed. The entire procedure is described by Algorithm 3. 
+
+## 4 Results 
+
+4.1 Euclidean test problems with bound constraints 
+
+Comparison with existing Euclidean solvers on problems with bounds constraints was performed to establish how much performance is lost by extending the domain from a pure hypercube D to the product D × M . Problems from the CUTEst set [ 34 , 35 ] with only bounds constraints were selected for this test. IPOPT [ 36 ], L-BFGS-B [ 26 ] and UNO solver [ 37 ] were initially considered as Euclidean baselines. Since the standard L-BFGS-B achieved the best performance on the selected problems, it was selected as a baseline for further analysis. UNO solver 0.3.0, IPOPT.jl 1.14.1 and LBFGSB.jl 0.4.1 were used for the experiments. The forthcoming version 0.6.0 of Manopt.jl was used for Riemannian L-BFGS-B implementation. Experiments were performed on a machine running Linux Mint 22.3 on an AMD Ryzen 9 9950X3D CPU. In the experiments the standard termination conditions of L-BFGS-B with the relative a posteriori cost change factor parameter equal to 1000, maximum number of iterations equal to 1000 and projected gradient norm tolerance parameter equal to 10 −12 . Summarized results are shown in Figure 4.1, while details are shown in Table 1. Riemannian L-BFGS-B is nearly on par with the standard L-BFGS-B. The UNO solver is significantly slower on most problems than both L-BFGS-B and Riemannian L-BFGS-B. 
+
+4.2 Amplitude-limited blind source separation with Gaussianity penalization 
+
+In the problem of blind source separation we have k independent signal sources of length n that are linearly mixed together, and we want to recover them from the data observed using r sensors. The observed data is collected in a matrix X ∈ Rr×n. Here we assume that the sources are bounded in amplitude, i.e., S ∈ [−A, A ]n for some A > 0.Additionally, we want to promote the non-Gaussianity of the recovered sources, which is a common approach in blind source separation problems. Here, we take an approach based on negentropy maximization through [ 38 ], which leads to the following optimization problem: 
+
+arg min  
+
+> W∈St( k,r ),S ∈[−A,A ]n
+
+12 ∥S − W X ∥2 − λ
+
+> n
+
+X
+
+> i=1
+
+log(cosh( Si)) , (17) 7Riemannian L-BFGS-B A P REPRINT 
+
+Algorithm 3 Generalized Cauchy direction computation 
+
+Require: Current iterate p, gradient X = grad f (p), search direction d = −B grad f (p), Hessian approximation H,maximum stepsize tM,max on M
+
+Ensure: New search direction dGCD 
+
+Ensure: Search result r (one of : FOUND LIMITED , FOUND UNLIMITED , NOT FOUND )
+
+Ensure: Maximum stepsize tGCD ,max for the subsequent line search, or −1 if the result is NOT FOUND 
+
+1: F ← { (t(i), i ) : t(i) > 0} ▷ min-heap of breakpoints 
+
+2: if there is a finite breakpoint in F then 
+
+3: fFL ← true 
+
+4: else 
+
+5: fFL ← false 
+
+6: end if 
+
+7: PUSH (F, (tM,max , −1) )
+
+8: f ′ ← ⟨ grad f (p), d ⟩p ▷ linear term of q(t) in the current segment 
+
+9: f ′′ ← ⟨ d, H [d]⟩p ▷ quadratic term of q(t) in the current segment 
+
+10: if f ′ = 0 or f ′′ = 0 then 
+
+11: return 0 · d, NOT FOUND , −1
+
+12: end if 
+
+13: ∆tmin ← − f ′ 
+
+> f′′
+
+14: told ← 0
+
+15: t, b ← POP _MIN (F) ▷ distance to and index of the next breakpoint 
+
+16: ∆t ← t
+
+17: qs ← QUADRATIC _SEGMENT _SURROGATE (p, d, H)
+
+18: while ∆tmin > ∆t and b̸ = −1 do ▷ examine the next segment 
+
+19: db ← dD,b 
+
+20: gb ← XD,b 
+
+21: v1, v 2 ← HESSIAN _SEGMENT _VALUES (qs, p, t, ∆t, b, db, H) ▷ Hessian values in the current segment 
+
+22: f ′ ← f ′ + ∆ t · f ′′ − db(gb + v1) ▷ update linear term of q(t)
+
+23: f ′′ ← f ′′ − 2dbv2 + d2 
+
+> b
+
+⟨eb, H [eb]⟩ ▷ update quadratic term of q(t)
+
+24: told ← t
+
+25: if f ′ = 0 or f ′′ = 0 then 
+
+26: ∆tmin ← 0
+
+27: break 
+
+28: end if 
+
+29: ∆tmin ← − f ′ 
+
+> f′′
+
+30: if IS _EMPTY (F) then 
+
+31: break 
+
+32: end if 
+
+33: t, b ← POP _MIN (F)
+
+34: ∆t ← t − told 
+
+35: end while 
+
+36: ∆tmin ← max(0 , ∆tmin )
+
+37: told ← told + ∆ tmin ▷ Beginning of the last searched segment plus distance to the minimizer in this segment 
+
+38: dGCD ← told · d ▷ initialize GCD direction 
+
+39: for i = 1 , 2, . . . , n do 
+
+40: if t(i) < t then ▷ the ith component was fixed at a bound 
+
+41: if dGCD ,D,i > 0 then 
+
+42: dGCD ,D,i ← ui − pD,i 
+
+43: else 
+
+44: dGCD ,D,i ← li − pD,i 
+
+45: end if 
+
+46: end if 
+
+47: end for 
+
+48: if fFL then 
+
+49: tni ← min {tM,max } ∪ { t(i) : t(i) > 0} ▷ distance to the nearest inactive bound or maximum stepsize on M
+
+50: return dGCD , FOUND LIMITED , max(1 , t ni /t old )
+
+51: else 
+
+52: return dGCD , FOUND UNLIMITED , ∞
+
+53: end if 
+
+8Riemannian L-BFGS-B A P REPRINT 
+
+> Table 1: Detailed results for Euclidean problems with bound constraints comparing our solver from Manopt.jl (M) with the Fortran L-BFGS-B.jl (F) and the UNO solver (U). Best values for each problem are shown in bold.
+> problem  time  [ms]  objective calls  gradient calls  objective value
+> M F U M F U M F U M F UALLINIT  0.040 27  0.055 24  2.481  28  18  51  18  18  51  1.671 ·10 1 1.671 ·10 1 1.671 ·10 1
+> BDEXP  11 .72  15 .13  651 .3 56  41  45  30  41  45  2.606 ·10 −10  1.336 ·10 −10  8.471 ·10 −7
+> BRANIN  0.032 93  0.028 44  1.132  24  14  20  16  14  20  3.979 ·10 −1 3.979 ·10 −1 3.979 ·10 −1
+> CAMEL6  0.0346  0.039 09  0.8864  21  16  17  13  16  17  −1.032  −1.032  −1.032
+> CHARDIS0  113 .3 81 .39  1.922  10  5 13 908  7 5 13 908  0 1.227 ·10 −28  2.399 ·10 −10
+> CHARDIS02  6918  49 .58  1.115  678  3 6445  369  3 6445  1.993 ·10 6 1.466 ·10 9 3.492 ·10 6
+> DGOSPEC  0.055 37  0.0189  5.555  33  12  116  18  12  116  −9.97  ·10 2 −9.97  ·10 2 −9.97  ·10 2
+> EG1  0.049 73  0.037 56  1.891  35  12  38  21  12  38  −1.132  −1.133  −1.133
+> EXPLIN  0.5643  4.646  3676  22  177  5500  21  177  5500  −6.986 ·10 7 −7.193 ·10 7 −7.192 ·10 7
+> EXPLIN2  0.5551  1.774  3835  22  66  5583  21  66  5583  −7.183 ·10 7 −7.2 ·10 7 −7.2 ·10 7
+> EXPQUAD  9.054  11 .76  3799  309  213  5461  177  213  5460  −3.685 ·10 9 −3.685 ·10 9 −3.649 ·10 9
+> GRIDGENA  71 .83  5.336  2.607  248  21  11 732  135  21  11 732  2.352 ·10 4 NaN  4.499 ·10 4
+> HADAMALS  0.9433  1.051  355 .4 23  20  654  14  20  654  7.312 ·10 3 7.312 ·10 3 6.412 ·10 3
+> HART6  0.067 53  0.058 76  4.304  37  21  79  21  21  79  −3.323  −3.323  −3.323
+> HIMMELP1  0.017 85  0.022 54  1.329  18  13  32  14  13  32  −2.39  ·10 1 −2.39  ·10 1 −6.205 ·10 1
+> HOLMES  75 .82  50 .89  134 .4 189  84  144  106  84  144  1.249 ·10 3 1.248 ·10 3 1.248 ·10 3
+> HS38  0.099 75  0.1116  15 .2 33  27  489  18  27  489  2.628 ·10 −18  5.221 ·10 −17  5.765 ·10 −18
+> HS4  0.003 78  0.003 649  0.5577  2 2 9 2 2 9 2.667  2.667  2.667
+> HS45  0.008 226  0.010 49  1.868  10  11  45  8 11  45  1 1 1
+> HS5  0.027 23  0.020 29  0.7825  18  9 12  12  9 12  −1.913  −1.913  −1.913
+> LOGROS  0.35  0.2756  16 .3 296  112  1067  208  112  1067  0 8.882 ·10 −16  0
+> MAXLIKA  0.7117  26 .67  91 .31  44  1038  1613  24  1038  1613  1.150 ·10 3 1.137 ·10 3 1.136 ·10 3
+> MCCORMCK  14 .41  5.647  325 .5 61  14  28  44  14  28  −4.567 ·10 3 −4.567 ·10 3 −4.567 ·10 3
+> MDHOLE  0.2427  0.2153  6.416  181  89  245  124  89  245  9.436 ·10 −28  1.43  ·10 −33  −1 ·10 −8
+> MINSURFO  158 .5 324 .8 1.099  437  544  709  220  544  709  2.507  2.507  2.507
+> POWELLBC  1809  6.225  3.938  1288  3 2 696  3 0 3.106 ·10 5 2.323 ·10 6 Inf PROBPENL  0.1115  0.0909  754 .8 5 4 638  4 4 638  3.992 ·10 −7 3.992 ·10 −7 −2.228 ·10 −5
+> QRTQUAD  69  78 .44  1.332  583  524  2159  338  524  2159  −1.218 ·10 9 −1.218 ·10 9 −1.217 ·10 9
+> S368  0.3501  0.062 45  1.68  143  13  22  117  13  22  −7.5 ·10 −1 −7.5 ·10 −1 −7.5 ·10 −1
+> SINEALI  3.733  1.436  3507  104  24  8754  71  24  8754  −9.99  ·10 4 −9.987 ·10 4 −9.972 ·10 4
+
+9Riemannian L-BFGS-B A P REPRINT 
+
+20 22 24 26 28 210 212 
+
+0
+
+0.2
+
+0.4
+
+0.6
+
+0.8
+
+1
+
+Performance ratio 
+
+> Fraction of problems solved
+
+Manopt.jl 
+
+L-BFGS-B 
+
+UNO Solver 
+
+Figure 1: Performance plot where W is the unmixing matrix, S are the reconstructed independent components, and λ is a nongaussianity penalty parameter. Gradients were computed using automatic differentiation with Zygote.jl [39]. Four solvers were considered: a simple gradient descent procedure with projection, Riemannian L-BFGS-B, Riemannian augmented Lagrangian method (ALM) [ 19 ] and Riemannian exact penalty method (EPM) [ 19 ]. In the first experiments, we set n = 50 , r = 3 , A = 1 , and λ = 0 .1. Averaged results over 20 random instances of the problem are shown in Figure 4.2. Gradient descent performs iterations very quickly but it requires very small step size to avoid divergence. ALM and EPM are more robust to the choice of parameters, but they require much more time per iteration and are only fast enough for very small problems. Riemannian L-BFGS-B is the best performing solver overall. 
+
+4.3 Bounded-variance maximum likelihood common principal components 
+
+In the common principal components problem, we want to extend principal component analysis to data that belongs to 
+
+k classes with in such way that all classes share principal components. Data from class i is represented by a matrix 
+
+Xi ∈ Rr×ni with ni samples and sample covariance matrix Si = 1 
+
+> ni
+
+XiX⊤ 
+
+> i
+
+. Additionally, we want to ensure that the variances are bounded between dmin and dmax . This leads to the following optimization problem: 
+
+arg min 
+
+> Q∈SO( r), D i∈D(r)
+> k
+
+X
+
+> i=1
+
+ni
+
+log det( Di) + trace D−1 
+
+> i
+
+⊙  Q⊤SiQ , (18) where Q is the common principal component matrix, Di are diagonal matrices representing the variances of the independent components for class i, D(r) is the set of all diagonal matrices in Rr×r with diagonal entries between 
+
+dmin and dmax , and ⊙ represents the element-wise (Hadamard) product. We have selected 19 standard datasets from the RDatasets repository [ 40 ] of different sizes, that possess clearly identifiable class column and at least 2 numerical features. We have used the same boundaries for variances for all datasets, with dmin = 0 .1 and dmax = 10 . The memory length was set to 2 for Riemannian L-BFGS-B, and the stopping criterion was set to 10 −6 for the norm of the projected negative Riemannian gradient or 1000 iterations, whichever is reached first. Table 2 shows the results for Riemannian L-BFGS-B and Riemannian ALM. Riemannian L-BFGS-B outperforms Riemannian ALM, achieving faster times with no constraint violations. In most cases Riemannian L-BFGS-B is much faster than Riemannian ALM and achieves similar objective values to ALM when both return a feasible solution. EPM solver is not included in the results as it performed significantly worse than ALM in preliminary experiments. 10 Riemannian L-BFGS-B A P REPRINT 
+
+10 −5 10 −4 10 −3 10 −2 10 −1 10 0 10 1 10 2
+
+−6
+
+−5.5
+
+−5
+
+−4.5
+
+−4
+
+−3.5
+
+−3
+
+−2.5
+
+−2
+
+Time [s] 
+
+> Objective Value
+
+Manopt LBFGSB 
+
+Custom GD 
+
+Manopt ALM 
+
+Manopt EPM 
+
+10 −4 10 −3 10 −2 10 −1 10 0
+
+−52 
+
+−50 
+
+−48 
+
+−46 
+
+−44 
+
+−42 
+
+Time [s] 
+
+> Objective Value
+
+Manopt LBFGSB 
+
+Custom GD 
+
+Figure 2: Objective history of different solvers for the amplitude-limited blind source separation problem (top plot: 
+
+n = 50 , r = 3 , bottom plot: n = 500 , r = 3 ). Series show the average over 20 random instances of the problem, and shaded areas represent 95% confidence intervals. The plots start after the first iteration, so the initial objective value is not shown. 11 Riemannian L-BFGS-B A P REPRINT 
+
+> Table 2: Detailed results for the bounded variance common principal components example. Best values for each problem are shown in bold.
+> dataset  features  samples  classes  time  [s]  final cost  violation
+> L-BFGS-B  ALM  L-BFGS-B  ALM  L-BFGS-B  ALM COUNT/lbw  9 189  2 0.197  38 .4 3.89  ·10 6 7.64  ·10 4 0 2.26  ·10 5
+> COUNT/medpar  9 1495  3 0.186  5.97  1.01  ·10 7 2.23  ·10 17  0 9.58  ·10 5
+> COUNT/rwm5yr  16  19 609  4 0.586  15 .1 7.64  ·10 9 7.9 ·10 11  0 4.12  ·10 6
+> Ecdat/Tuna  7 13 705  5 0.336  11 .1 9.84  ·10 8 1.11  ·10 8 0 8.62  ·10 5
+> HSAUR/bladdercancer  2 31  2 0.0571  0.447  2.92  ·10 2 2.92  ·10 2 0 0
+> ISLR/Caravan  85  5822  2 7.16  540  −4.5 ·10 4 4.96  ·10 16  0 2.07  ·10 2
+> KMsurv/kidney  2 119  2 0.134  0.682  8.50  ·10 2 8.50  ·10 2 0 3.81  ·10 −3
+> MASS/Pima.te  7 332  2 0.132  18 .9 4.04  ·10 4 4.04  ·10 4 0 1.07  ·10 −9
+> MASS/Pima.tr  7 200  2 0.23  19 .6 2.61  ·10 4 2.61  ·10 4 0 8.74  ·10 −10
+> MASS/Pima.tr2  4 300  2 0.159  3.89  2.65  ·10 4 2.65  ·10 4 0 1.1 ·10 −9
+> MASS/biopsy  8 699  2 0.229  4.78  8.03  ·10 3 8.03  ·10 3 0 4.44  ·10 −10
+> MASS/birthwt  10  189  2 0.329  40 .9 3.92  ·10 6 1.9 ·10 6 0 2.28  ·10 5
+> datasets/iris  4 150  3 0.189  4.02  −7.89  ·10 2 −7.89  ·10 2 0 1.63  ·10 −13
+> rpart/stagec  3 146  2 0.503  2.34  1.24  ·10 3 1.24  ·10 3 0 0
+> survey/nhanes  5 8591  4 1.35  0.906  4.74  ·10 11  3.87  ·10 10  0 1.04  ·10 9
+> survival/cancer  3 228  2 0.143  2.26  9.9 ·10 5 8.52  ·10 3 0 4.63  ·10 4
+> survival/heart  7 172  2 0.128  16 .3 1.72  ·10 6 4.51  ·10 5 0 2.08  ·10 5
+> survival/kidney  6 76  4 1.01  19 .3 1.33  ·10 5 1.97  ·10 5 0 3.13  ·10 4
+> survival/ovarian  5 26  2 0.176  8.81  1.64  ·10 5 2.55  ·10 3 0 8.6 ·10 4
+
+12 Riemannian L-BFGS-B A P REPRINT 
+
+## 5 Conclusions 
+
+In this paper we have presented Riemannian L-BFGS-B, a generalization of the L-BFGS-B algorithm to optimization problems on Riemannian manifolds with Euclidean bound constraints. The algorithm is implemented in the Manopt.jl package, and we have shown that it can be used to effectively solve a wide variety of nonlinear problems. In particular, we have shown that Riemannian L-BFGS-B can be used to solve large scale problems with bound constraints on the Euclidean space with minimal performance loss compared to pure Euclidean Fortran L-BFGS-B. We suspect that the main reason for lower performance is omitting the subspace minimization step in our implementation. This procedure is present in the Fortran L-BFGS-B and can significantly improve the performance when most of the variables are at the boundary of the feasible set, however it is difficult to generalize to Riemannian manifolds efficiently. Benchmarks on two non-Euclidean problems show that Riemannian L-BFGS-B can be used to solve large scale problems with bound constraints and manifolds, and it significantly outperforms other general-purpose solvers for these problems like the augmented Lagrangian method and the exact penalty method. Moreover, our solver guarantees that the iterates are always feasible, which is not the case for ALM and EPM. The proposed method provides an effective and generic tool for solving problems with both manifold and bounded Euclidean variables, enabling a new class of problems to be efficiently solvable without the need for purpose-built solvers. 
+
+## 6 Acknowledgements 
+
+RB would like to thank MB and the AGH University for the kind hospitality and discussions during a sabbatical stay in autumn 2025, where the main part of this paper stems from. This research project supported by the program „Excellence initiative – research university” for the AGH University under the application IDUB 15636 (action D11). 
+
+## References 
+
+[1] Yanhong Fei, Yingjie Liu, Chentao Jia, Zhengyu Li, Xian Wei, and Mingsong Chen. A Survey of Geometric Optimization for Deep Learning: From Euclidean Space to Riemannian Manifold. ACM Comput. Surv. , 57(5): 123:1–123:37, January 2025. ISSN 0360-0300. doi:10.1145/3708498. [2] Pau Closas, Lorenzo Ortega, Julien Lesouple, and Petar M. Djuri´ c. Emerging trends in signal processing and machine learning for positioning, navigation and timing information: special issue editorial. EURASIP Journal on Advances in Signal Processing , 2024(1):84, September 2024. ISSN 1687-6180. doi:10.1186/s13634-024-01182-8. [3] Pavan Turaga, Ashok Veeraraghavan, and Rama Chellappa. Statistical analysis on stiefel and grassmann manifolds with applications in computer vision. In 26th IEEE Conference on Computer Vision and Pattern Recognition, CVPR , page 4587733, 2008. doi:10.1109/CVPR.2008.4587733. [4] Pascal Mettes, Mina Ghadimi Atigh, Martin Keller-Ressel, Jeffrey Gu, and Serena Yeung. Hyperbolic Deep Learning in Computer Vision: A Survey. International Journal of Computer Vision , 132(9):3484–3508, September 2024. ISSN 1573-1405. doi:10.1007/s11263-024-02043-5. [5] Shuo Chen, Jian Kang, Yishi Xing, Yunpeng Zhao, and Donald K. Milton. Estimating large covariance matrix with network topology for high-dimensional biomedical data. Computational Statistics & Data Analysis , 127: 82–95, November 2018. ISSN 0167-9473. doi:10.1016/j.csda.2018.05.008. [6] N Krämer, J Schäfer, and Al Boulesteix. Regularized estimation of large-scale gene association networks using graphical Gaussian models. BMC bioinformatics , 10, November 2009. ISSN 1471-2105. doi:10.1186/1471-2105-10-384. [7] Ce Ju, Reinmar Kobler, Antoine Collas, Motoaki Kawanabe, Cuntai Guan, and Bertrand Thirion. SPD Matrix Learning for Neuroimaging Analysis: Perspectives, Methods, and Challenges, January 2026. arXiv:2504.18882 [cs]. [8] Ronny Bergmann and Daniel Tenbrinck. A Graph Framework for Manifold-Valued Data. SIAM Journal on Imaging Sciences , 11(1):325–360, January 2018. doi:10.1137/17M1118567. [9] Ahmed Tibermacine, Imad Eddine Tibermacine, Meftah Zouai, and Abdelaziz Rabehi. EEG Classifi-cation Using Contrastive Learning and Riemannian Tangent Space Representations. In 2024 Interna-tional Conference on Telecommunications and Intelligent Systems (ICTIS) , pages 1–7, December 2024. doi:10.1109/ICTIS62692.2024.10894645. 13 Riemannian L-BFGS-B A P REPRINT 
+
+[10] Hanyuan Gong, Binhang Zhang, Xianbao Yuan, Yonghong Zhang, Qingwen Xiong, Haibo Tang, Jianjun Zhou, Sen Zhang, and Yunlong Xiao. An Online Adaptive Physics-Constrained DMD Algorithm with Grassmann Manifold Spatial Mapping for Neutronic-Depletion Coupling Calculation. Computer Physics Communications ,page 110204, April 2026. ISSN 0010-4655. doi:10.1016/j.cpc.2026.110204. [11] Samy Labsir, Julien Lesouple, and Jean-Yves Tourneret. K-Means and Gaussian Mixture Models on Lie Groups: Application to Geometrical Clustering. IEEE Transactions on Signal Processing , pages 1–16, 2026. ISSN 1941-0476. doi:10.1109/TSP.2026.3678342. [12] Florent Bouchard, Jérôme Malick, and Marco Congedo. Riemannian Optimization and Approximate Joint Diagonalization for Blind Source Separation. IEEE Transactions on Signal Processing , 66(8):2041–2054, April 2018. ISSN 1941-0476. doi:10.1109/TSP.2018.2795539. [13] Dimitri A. Lezcano, Iulian I. Iordachita, and Jin Seob Kim. Lie-Group Theoretic Approach to Shape-Sensing Using FBG-Sensorized Needles Including Double-Layer Tissue and S-Shape Insertions. IEEE Sensors Journal ,pages 1–1, 2022. ISSN 1558-1748. doi:10.1109/JSEN.2022.3212209. [14] Amitay Bar and Ronen Talmon. On Interference-Rejection Using Riemannian Geometry for Direction of Arrival Estimation. IEEE Transactions on Signal Processing , 72:260–274, 2024. ISSN 1941-0476. doi:10.1109/TSP.2023.3322779. [15] Han Liu, Lie Wang, and Tuo Zhao. Sparse Covariance Matrix Estimation With Eigenvalue Con-straints. Journal of Computational and Graphical Statistics , 23(2):439–459, April 2014. ISSN 1061-8600. doi:10.1080/10618600.2013.782818. [16] Jörg K. Franke, Michael Hefenbrock, Gregor Koehler, and Frank Hutter. Improving Deep Learning Optimization through Constrained Parameter Regularization. Advances in Neural Information Processing Systems , 37:8984– 9025, December 2024. doi:10.52202/079017-0286. [17] Jin-Xian Liu and Jenq-Shiou Leu. ETCN-NNC-LB: Ensemble TCNs With L-BFGS-B Optimized No Negative Constraint-Based Forecasting for Network Traffic. IEEE Transactions on Network and Service Management , 22 (4):3692–3704, August 2025. ISSN 1932-4537. doi:10.1109/TNSM.2025.3563978. [18] Adejuyigbe O. Fajemisin, Donato Maragno, and Dick den Hertog. Optimization with constraint learning: A framework and survey. European Journal of Operational Research , 314(1):1–14, April 2024. ISSN 0377-2217. doi:10.1016/j.ejor.2023.04.041. [19] Changshuo Liu and Nicolas Boumal. Simple algorithms for optimization on riemannian manifolds with constraints. 82(3):949–981. ISSN 1432-0606. doi:10.1007/s00245-019-09564-3. [20] Zhijian Lai and Akiko Yoshise. Riemannian interior point methods for constrained optimization on manifolds. 
+
+Journal of Optimization Theory and Applications , 201(1):433–469, 2024. doi:10.1007/s10957-024-02403-8. [21] Sébastien Da Veiga and Amandine Marrel. Gaussian process modeling with inequality constraints. Annales de la Faculté des sciences de Toulouse : Mathématiques , 21(3):529–555, 2012. ISSN 2258-7519. doi:10.5802/afst.1344. [22] Laura P. Swiler, Mamikon Gulian, Ari L. Frankel, Cosmin Safta, and John D. Jakeman. A sur-vey of Constrained Gaussian Process Regression: Approaches and Implementation Challenges. Jour-nal of Machine Learning for Modeling and Computing , 1(2), 2020. ISSN 2689-3967, 2689-3975. doi:10.1615/JMachLearnModelComput.2020035155. [23] Andrew Pensoneault, Xiu Yang, and Xueyu Zhu. Nonnegativity-enforced Gaussian process regression. Theoretical and Applied Mechanics Letters , 10(3):182–187, March 2020. ISSN 2095-0349. doi:10.1016/j.taml.2020.01.036. [24] Wen Huang, K. A. Gallivan, and P.-A. Absil. A broyden class of quasi-newton methods for riemannian optimization. 25(3):1660–1685. ISSN 1052-6234. doi:10.1137/140955483. Publisher: Society for Industrial and Applied Mathematics. [25] Wen Huang, P.-A. Absil, and K. A. Gallivan. A riemannian bfgs method without differentiated retraction for non-convex optimization problems. SIAM Journal on Optimization , 28(1):470–495, 2018. doi:10.1137/17M1127582. [26] Richard H. Byrd, Peihuang Lu, Jorge Nocedal, and Ciyou Zhu. A Limited Memory Algorithm for Bound Constrained Optimization. SIAM Journal on Scientific Computing , 16(5):1190–1208, September 1995. ISSN 1064-8275. doi:10.1137/0916069. Publisher: Society for Industrial and Applied Mathematics. [27] Ciyou Zhu, Richard H. Byrd, Peihuang Lu, and Jorge Nocedal. Algorithm 778: L-BFGS-B: Fortran subroutines for large-scale bound-constrained optimization. ACM Trans. Math. Softw. , 23(4):550–560, December 1997. ISSN 0098-3500. doi:10.1145/279232.279236. [28] Richard H. Byrd, Jorge Nocedal, and Robert B. Schnabel. Representations of quasi-Newton matrices and their use in limited memory methods. Mathematical Programming , 63(1):129–156, January 1994. ISSN 1436-4646. doi:10.1007/BF01582063. 14 Riemannian L-BFGS-B A P REPRINT 
+
+[29] Ronny Bergmann. Manopt.jl: Optimization on manifolds in Julia. Journal of Open Source Software , 7(70):3866, 2022. doi:10.21105/joss.03866. [30] Seth D. Axen, Mateusz Baran, Ronny Bergmann, and Krzysztof Rzecki. Manifolds.Jl: An Extensible Ju-lia Framework for Data Analysis on Manifolds. ACM Transactions on Mathematical Software , 49(4), 2023. doi:10.1145/3618296. [31] P.-A. Absil, R. Mahony, and R. Sepulchre. Optimization Algorithms on Matrix Manifolds . Princeton University Press. doi:10.1515/9781400830244. [32] Nicolas Boumal. An Introduction to Optimization on Smooth Manifolds . Cambridge University Press. doi:10.1017/9781009166164. URL https://www.nicolasboumal.net/book .[33] Dominic Joyce. On manifolds with corners. URL http://arxiv.org/abs/0910.3518 .[34] Nicholas I. M. Gould, Dominique Orban, and Philippe L. Toint. CUTEst: a constrained and unconstrained testing environment with safe threads for mathematical optimization. 60(3):545–557. ISSN 1573-2894. doi:10.1007/s10589-014-9687-3. [35] Serge Gratton and Philippe L. Toint. S2MPJ and CUTEst optimization problems for Matlab, Python and Julia. [36] Andreas Wächter and Lorenz T. Biegler. On the implementation of an interior-point filter line-search algorithm for large-scale nonlinear programming. Mathematical Programming , 106(1):25–57, March 2006. ISSN 1436-4646. doi:10.1007/s10107-004-0559-y. [37] Charlie Vanaret and Sven Leyffer. Implementing a unified solver for nonlinearly constrained optimization. Accepted to Mathematical Programming Computation on Feb 22, 2026, 2026. [38] A. Hyvärinen and E. Oja. Independent component analysis: algorithms and applications. Neural Networks , 13(4): 411–430, June 2000. ISSN 0893-6080. doi:10.1016/S0893-6080(00)00026-5. [39] Michael Innes. Don’t Unroll Adjoint: Differentiating SSA-Form Programs. arXiv:1810.07951 [cs] , March 2019. arXiv: 1810.07951. [40] Vincent Arel-Bundock. Rdatasets: A collection of datasets originally distributed in various R packages , 2025. URL https://vincentarelbundock.github.io/Rdatasets . R package version 1.0.0. 15

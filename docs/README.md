@@ -6,58 +6,51 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-05-12
-- 运行时间：2026-05-12 20:37:42 UTC
+- 最新运行日期：2026-05-13
+- 运行时间：2026-05-13 21:38:47 UTC
 - 运行状态：成功
-- 本次总论文数：12
+- 本次总论文数：10
 - 精读区：1
-- 速读区：11
+- 速读区：9
 
 ### 今日简报（AI）
-今日聚焦 12 篇跨模态前沿进展，重点突破非合作航天器 6D 姿态估计的高精度融合难题。
-核心结论指出 RGB-D 融合 Transformer 在立体视觉深度推导中表现卓越，同时图联邦学习与轻量化观测智能体正成为多模态新热点。
-推荐优先研读 9.0 分的航天器姿态估计论文，掌握复杂空间环境下多源数据融合的最新实战范式。
-- 详情：[/202605/12/README](/202605/12/README)
+今日聚焦深空探测与仿真工程，重点攻克了零阶保持（ZOH）行星际轨道设计的实操难题。
+高分论文详述了行星际轨道段的工程实现，同时 Docker 与 Basilisk 的结合为 GN&C
+- 详情：[/202605/13/README](/202605/13/README)
 
 ### 精读区论文标签
-1. [Cross-Modal RGB-D Fusion Transformer for 6D Pose Estimation of Non-Cooperative Spacecraft with Stereo-Derived Depth](/202605/12/2605.08592v1-cross-modal-rgb-d-fusion-transformer-for-6d-pose-estimation-of-non-cooperative-spacecraft-with-stereo-derived-depth)  
-   标签：评分：9.0/10、query:cislunar-dyn-nav
-   evidence：航天器自主视觉导航与姿态估计
+1. [A practical guide to implementing zero-order-hold interplanetary trajectory legs](/202605/13/2605.11043v1-a-practical-guide-to-implementing-zero-order-hold-interplanetary-trajectory-legs)  
+   标签：评分：8.0/10、query:cislunar-dyn-nav
+   evidence：航天器轨迹优化与打靶法构建
 
 ### 速读区论文标签
-1. [UMEDA: Unified Multi-modal Efficient Data Fusion for Privacy-Preserving Graph Federated Learning via Spectral-Gated Attention and Diffusion-Based Operator Alignment](/202605/12/2605.08288v1-umeda-unified-multi-modal-efficient-data-fusion-for-privacy-preserving-graph-federated-learning-via-spectral-gated-attention-and-diffusion-based-operator-alignment)  
+1. [Basilisk and Docker for Reproducible GN&C Simulation: A Workflow Reference](/202605/13/2605.12443v1-basilisk-and-docker-for-reproducible-gnc-simulation-a-workflow-reference)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：异构传感器的多模态定位数据融合
-2. [Bridging Perception and Action: A Lightweight Multimodal Meta-Planner Framework for Robust Earth Observation Agents](/202605/12/2605.04777v1-bridging-perception-and-action-a-lightweight-multimodal-meta-planner-framework-for-robust-earth-observation-agents)  
+   evidence：用于航天器导航与控制研究的航天动力学仿真框架
+2. [Cooperative Multi-Static Target Localization for ISAC in Cluttered Industrial IoT Networks](/202605/13/2605.06256v1-cooperative-multi-static-target-localization-for-isac-in-cluttered-industrial-iot-networks)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：对地观测智能体的自主规划
-3. [Monitoring autonomous persistent surveillance missions using invariance](/202605/12/2605.06062v1-monitoring-autonomous-persistent-surveillance-missions-using-invariance)  
+   evidence：多站目标定位与传感器融合
+3. [Recovering Physical Dynamics from Discrete Observations via Intrinsic Differential Consistency](/202605/13/2605.08454v1-recovering-physical-dynamics-from-discrete-observations-via-intrinsic-differential-consistency)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：利用低维不变集进行监控
-4. [Temporal Attention for Adaptive Control of Euler-Lagrange Systems with Unobservable Memory](/202605/12/2605.06877v1-temporal-attention-for-adaptive-control-of-euler-lagrange-systems-with-unobservable-memory)  
+   evidence：从离散观测中恢复连续时间动力学
+4. [Safety-Critical LiDAR-Inertial Odometry with On-Manifold Deterministic Protection Level](/202605/13/2605.09383v1-safety-critical-lidar-inertial-odometry-with-on-manifold-deterministic-protection-level)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：具有不可观测状态的欧拉-拉格朗日系统自适应控制
-5. [InfoGeo: Information-Theoretic Object-Centric Learning for Cross-View Generalizable UAV Geo-Localization](/202605/12/2605.07099v1-infogeo-information-theoretic-object-centric-learning-for-cross-view-generalizable-uav-geo-localization)  
+   evidence：自主导航系统保护水平与状态估计
+5. [Learning-Based Spectrum Cartography in Low Earth Orbit Satellite Networks: An Overview](/202605/13/2605.10359v1-learning-based-spectrum-cartography-in-low-earth-orbit-satellite-networks-an-overview)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：GPS受限环境下的跨视图定位导航
-6. [On Composite Adaptive Continuous Finite-Time Control of a class of Euler-Lagrange systems](/202605/12/2605.08751v1-on-composite-adaptive-continuous-finite-time-control-of-a-class-of-euler-lagrange-systems)  
+   evidence：低轨卫星网络中的卫星辅助定位与空间推理
+6. [A Riemannian quasi-Newton algorithm for optimization with Euclidean bounds](/202605/13/2605.10573v1-a-riemannian-quasi-newton-algorithm-for-optimization-with-euclidean-bounds)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：具有不确定势能的欧拉-拉格朗日系统控制
-7. [PECMAN: Perception-enabled Collaborative Multi-Agent Navigation in Unknown Environments](/202605/12/2605.09344v1-pecman-perception-enabled-collaborative-multi-agent-navigation-in-unknown-environments)  
+   evidence：用于优化的黎曼拟牛顿算法
+7. [Improving D-Optimal Sensor Placement for Bearing-Only Localization via Maximum-Entropy Reweighting](/202605/13/2605.11116v1-improving-d-optimal-sensor-placement-for-bearing-only-localization-via-maximum-entropy-reweighting)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：未知环境下的协作多智能体导航
-8. [Metriplectic dynamical systems on contact manifolds](/202605/12/2605.09482v1-metriplectic-dynamical-systems-on-contact-manifolds)  
+   evidence：纯方位定位的传感器布置
+8. [Sensor Design for Accuracy-Bounded Estimation via Maximum-Entropy Likelihood Synthesis](/202605/13/2605.11120v1-sensor-design-for-accuracy-bounded-estimation-via-maximum-entropy-likelihood-synthesis)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：辛流形和泊松流形上的度量辛动力系统
-9. [Multi-Tier Labeling and Physics-Informed Learning for Orbital Anomaly Detection at Scale](/202605/12/2605.09790v1-multi-tier-labeling-and-physics-informed-learning-for-orbital-anomaly-detection-at-scale)  
+   evidence：精度受限估计的传感器设计与似然综合
+9. [Distributed Pose Graph Optimization via Continuous Riemannian Dynamics](/202605/13/2605.11210v1-distributed-pose-graph-optimization-via-continuous-riemannian-dynamics)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：轨道异常检测与物理启发学习
-10. [Lunar ejecta as the missing piece to resolve the lunar cratering asymmetry](/202605/12/2605.09884v1-lunar-ejecta-as-the-missing-piece-to-resolve-the-lunar-cratering-asymmetry)  
-   标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：地月系统撞击的数值模拟
-11. [Low-Cost GNSS Anti-Jamming Through 2-Bit Phase Shift Beamforming with Machine Learning](/202605/12/2605.10264v1-low-cost-gnss-anti-jamming-through-2-bit-phase-shift-beamforming-with-machine-learning)  
-   标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：GNSS 抗干扰与定位
+   evidence：多机器人导航的分布式位姿图优化
 
 
 <div class="dpr-home-promo-card">

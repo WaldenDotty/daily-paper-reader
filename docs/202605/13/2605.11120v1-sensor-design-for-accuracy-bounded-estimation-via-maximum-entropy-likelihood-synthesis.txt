@@ -1,0 +1,952 @@
+Title: Sensor Design for Accuracy-Bounded Estimation via Maximum-Entropy Likelihood Synthesis
+
+URL Source: https://arxiv.org/pdf/2605.11120v1
+
+Published Time: Wed, 13 May 2026 00:07:59 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# Sensor Design for Accuracy-Bounded Estimation via Maximum-Entropy Likelihood Synthesis 
+
+Raktim Bhattacharya 
+
+Department of Aerospace Engineering Texas A&M University College Station, TX, USA raktim@tamu.edu 
+
+Abstract —Determining the sensing architecture for large-scale spatio-temporal systems is nontrivial when estimation accuracy requirements are specified but sensor models are uncertain or unavailable. Classical design treats sensor placement and estima-tion sequentially, requiring valid forward models for each sensing modality. This paper inverts the design flow: given an estimation error budget, synthesize the measurement likelihood that enforces that budget while injecting minimal information beyond the dynamical prior. The likelihood is constructed via constrained optimization: among all posteriors satisfying a prescribed dis-tributional accuracy bound relative to a desired target, select the one minimizing Kullback-Leibler divergence from the prior. The solution is a maximum-entropy posterior in relative-entropy form, and the induced likelihood is recovered as the Radon-Nikodym derivative. The framework accommodates arbitrary discrepancy functionals and is instantiated here for Wasserstein distance, maximum mean discrepancy, f -divergences, moment constraints, and hybrid metrics. For each choice, we derive the discrete particle-level optimization problem, discuss the structure of the resulting convex or convex-relaxed program, and describe practical solvers with complexity scaling. A closed-form solution is given for the symmetric exponential-tilt case, and a distillation procedure converts nonparametric likelihood samples into compact parametric representations. A two-layer sensor design architecture embeds the synthesized likelihood in the predict-update loop of recursive state estimation, connecting accuracy budgets to physical sensor placement, precision, and configuration. Numerical experiments comparing four accuracy metrics on unimodal and multimodal scenarios confirm that the distributional accuracy constraints are reliably enforced and reveal how metric choice determines both the amount and spatial distribution of injected information. 
+
+Index Terms —Particle filtering, maximum entropy, likelihood synthesis, optimal transport, Wasserstein distance, sensor design. 
+
+I. I NTRODUCTION 
+
+Bayesian filtering proceeds in two stages: prediction, which propagates the prior through a dynamical model, and update, which incorporates measurement information via a likelihood function. When the dynamical model is well understood but the measurement model is not, the update step becomes the weak link in the estimation pipeline. This situation arises in sensor fusion under model uncertainty [4], [5], in tracking with uncharacterized or heterogeneous sensors [6], in data assimilation when observation operators are approximate [7], and in machine-learning-augmented state estimation where learned components lack calibrated likelihoods [8]. Large-scale spatio-temporal systems make the problem more difficult because the sensing architecture itself is a design variable. Environmental monitoring networks, distributed in-frastructure systems, and multi-sensor arrays require decisions about sensor placement, measurement precision, and infor-mation fusion strategy. The classical workflow is sequential: derive a measurement likelihood from sensor physics, then optimize placement to minimize a predictive error criterion. This presupposes accurate forward models for each sensing modality. When such models are unavailable, unreliable, or prohibitively complex, or when system-level accuracy re-quirements must be satisfied without detailed component-level characterization, the forward design path fails. The approach developed here reverses the workflow. Given an estimation accuracy budget, we synthesize the measurement likelihood that enforces that budget while injecting minimal information beyond the dynamical prior. This establishes a direct path from error tolerance to sensing architecture. The standard response to likelihood uncertainty is robus-tification: minimax filters, covariance inflation, or adaptive methods that tune likelihood parameters online [9]–[11]. These approaches presuppose a parametric likelihood family and seek protective settings within it. An alternative philosophy, pursued here, is to synthesize a likelihood from posterior design goals rather than from a forward sensor model. The starting observation is that in many applications a practitioner can articulate a meaningful prior π− 
+
+> k
+
+(from the prediction step) and a desired posterior π⋆k (from external information, physics-based constraints, or a reference estima-tor), but cannot reliably specify the likelihood function that should connect them. Traditional Bayesian filtering derives the posterior from a likelihood via Bayes’ rule. This paper inverts the process: solve an optimization problem to find a posterior 
+
+π+ 
+
+> k
+
+that is close to the desired target π⋆k while remaining conservative relative to the prior π− 
+
+> k
+
+, then recover the implied likelihood as a Radon-Nikodym derivative. The likelihood becomes a design artifact, synthesized to achieve distributional goals, rather than a physical sensor model derived from first principles. The synthesized likelihood, once parameterized, specifies what information structure must be provided by the sensing architecture and can be inverted to determine sensor placement, precision, and configuration that realize the desired estimation performance. 
+
+> arXiv:2605.11120v1 [cs.IT] 11 May 2026
+
+Remark 1 (Data-free construction) . The entire framework operates without measurement data. The likelihood is not es-timated from observations; it is synthesized from an accuracy specification and the prior. No sensor hardware, measurement noise model, or calibration data is required. The output is a prescription for what a sensor should measure, not a model of what it does measure. A. Related Work 
+
+Maximum-entropy distribution construction under con-straints originates with Jaynes [1], [2] and Csisz´ ar [3]; its connection to exponential families is classical [21]. Distri-butionally robust filtering using relative entropy constraints was studied by Levy and Nikoukhah [13], and Wasserstein distributionally robust optimization by Shafieezadeh-Abadeh et al. [12]. Optimal transport enters filtering through ensemble transforms [14], [15], where transport maps move particles from prior to posterior; our formulation uses transport dis-tance as a constraint on accuracy rather than as the update mechanism. Particle filtering [16], [17] provides the computa-tional backbone, and the weight-rebalancing view connects to approximate Bayesian computation [18], though our approach is optimization-based. 
+
+B. Contributions 
+
+The main contributions are: 1) A discrepancy-agnostic framework for likelihood syn-thesis via KL-minimization subject to distributional ac-curacy constraints, with particle-level formulations for nonparametric updates and likelihood recovery (Sec-tion II). 2) Instantiation for Wasserstein distance, MMD, f -divergences, moment constraints, and hybrid metrics, with structural analysis and complexity scaling (Sec-tion III). 3) A closed-form exponential-tilt solution for the sym-metric case and a distillation procedure for parametric likelihood recovery (Sections IV, V). 4) A two-layer sensor design architecture connecting accuracy-bounded estimation to physical sensor config-uration (Section V). 5) Numerical experiments comparing four accuracy metrics on unimodal and multimodal scenarios (Section VI). II. G ENERAL MAXIMUM -E NTROPY FRAMEWORK 
+
+A. Problem Statement 
+
+Let (X , d ) be a Polish state space and P(X ) the set of Borel probability measures on X . At time step k, let π− 
+
+> k
+
+∈ P (X )
+
+be the prior (output of the prediction step) and π⋆k ∈ P (X ) adesired posterior encoding a tracking accuracy specification. In traditional Bayesian filtering, one measures data yk, derives a likelihood Lk(x) = p(yk|x) from a sensor model, and applies Bayes’ rule. Here we invert the workflow: the desired posterior is specified, and the likelihood is synthesized. No measurement data is involved; the likelihood is a design variable. A likelihood function Lk : X → R+ induces a posterior in Bayesian form: 
+
+π+ 
+
+> k
+
+(dx ) = Lk(x) π− 
+
+> k
+
+(dx )
+
+R Lk(ξ) π− 
+
+> k
+
+(dξ ) . (1) Given π− 
+
+> k
+
+and target π⋆k, the likelihood synthesis prob-lem finds a posterior close to π⋆k while injecting minimal information beyond the prior. For a discrepancy functional 
+
+D : P(X )×P (X ) → [0 , ∞], the maximum-entropy likelihood synthesis problem is: 
+
+min 
+
+> π≪π−
+> k
+
+DKL (π∥π− 
+
+> k
+
+) s.t. D(π, π ⋆k) ≤ εk. (2) The scalar εk > 0 is the accuracy budget. The constraint set Cεk = {π ∈ P(X ) : D(π, π ⋆k) ≤ εk} is convex for Wasserstein, MMD, and moment constraints (ensuring a unique solution by strict convexity of the KL objective), but not generally for f -divergences. 
+
+B. Likelihood Recovery 
+
+Proposition 1 (Likelihood from the optimal posterior) . Sup-pose πopt  
+
+> k
+
+solves (2) and πopt  
+
+> k
+
+≪ π− 
+
+> k
+
+. Then the likelihood function 
+
+Lopt  
+
+> k
+
+(x) ∝ dπ opt 
+
+> k
+
+dπ −
+
+> k
+
+(x) (3) 
+
+is the unique (up to positive scaling) nonnegative function such that the update in Bayesian form (1) with Lk = Lopt  
+
+> k
+
+yields 
+
+π+ 
+
+> k
+
+= πopt  
+
+> k
+
+.
+
+The proof follows directly from (1): setting π+ 
+
+> k
+
+= πopt  
+
+> k
+
+and rearranging gives Lk(x) ∝ (dπ opt  
+
+> k
+
+/dπ − 
+
+> k
+
+)( x).
+
+C. Particle Instantiation (Generic Discrepancy) 
+
+For computational implementation, we specialize to discrete distributions. In sequential Monte Carlo, prior particles prop-agate forward through dynamics, and measurement updates correspond to reweighting. Classically, weights are updated via Bayes’ rule with a given likelihood. Here, we solve the constrained optimization to synthesize the weights directly, then recover the implied likelihood. Represent the prior and desired posterior as weighted par-ticle sets: 
+
+π− 
+
+> k
+
+=
+
+> N
+
+X
+
+> i=1
+
+w− 
+
+> k,i
+
+δxk,i , π⋆k =
+
+> M
+
+X
+
+> j=1
+
+vk,j δzk,j , (4) where w− 
+
+> k
+
+∈ ∆N = {w ∈ RN 
+
+> +
+
+: P 
+
+> i
+
+wi = 1 } and vk ∈ ∆M .The particle-level synthesis problem is: 
+
+min  
+
+> wk∈∆N
+> N
+
+X
+
+> i=1
+
+wk,i log wk,i 
+
+w−
+
+> k,i
+
+s.t. DN (wk, v k) ≤ εk, (5) where DN is the discrete counterpart of D.The likelihood recovered on the particle support is: 
+
+L⋆k,i ∝ wopt 
+
+> k,i
+
+w−
+
+> k,i
+
+, i = 1 , . . . , N. (6) III. S PECIFIC ACCURACY METRICS 
+
+We now instantiate (2) with concrete choices for the dis-crepancy D. Different metrics induce different optimization structures; the choice depends on the operational meaning of accuracy in the application. 
+
+A. Wasserstein Distance 
+
+For p ≥ 1, the p-Wasserstein distance between μ, ν ∈ P (X )
+
+is: 
+
+Wp(μ, ν ) = 
+
+
+
+inf 
+
+> γ∈Π( μ,ν )
+
+Z
+
+d(x, y )p dγ (x, y )
+
+1/p 
+
+, (7) where Π( μ, ν ) is the set of couplings with marginals μ and ν.Setting D(π, π ⋆k) = Wp(π, π ⋆k) and passing to the particle representation, the coupling becomes a matrix Γk ∈ RN ×M
+
+> +
+
+and the problem is: 
+
+min  
+
+> wk,Γk
+> N
+
+X
+
+> i=1
+
+wk,i log wk,i 
+
+w−
+
+> k,i
+
+s.t. Γk1M = wk, Γ⊤ 
+
+> k
+
+1N = vk,
+
+⟨Ck, Γk⟩ ≤ εpk,wk ∈ ∆N , Γk ≥ 0,
+
+(8) where Ck,ij = d(xk,i , z k,j )p is the ground cost matrix. 
+
+Remark 2 (Structure) . Problem (8) is jointly convex in 
+
+(wk, Γk). The marginal constraints enforce that Γk transports mass from wk to vk; the first marginal Γk1M = wk links the transport plan to the posterior. The Wasserstein constraint 
+
+⟨Ck, Γk⟩ ≤ εpk bounds the transport cost, ensuring the poste-rior is geometrically close to the target. Sinkhorn solver.: The Sinkhorn algorithm [19], [20] approximates Wp via entropic regularization at O(N M ) per iteration. The overall problem (8) is solved via an outer bisec-tion loop on the Lagrange multiplier λk associated with the Wasserstein constraint. At each candidate λk, the inner prob-lem is an entropy-regularized transport computation solved by Sinkhorn iterations; the marginal constraint Γk1M = wk
+
+links the optimal transport plan to the posterior weights. Bisection terminates when |Wp(wk(λk), v k) − εk| falls below a prescribed tolerance, typically requiring O(log(1 /δ )) outer iterations for tolerance δ.Wasserstein distance measures the minimum cost of phys-ically transporting probability mass from the posterior to the target in state space. It is the natural accuracy metric when state-space displacement is the operationally relevant notion of error, for example in spatial localization or trajectory estimation. It remains well-defined even when the prior and target have non-overlapping supports, where density-ratio-based divergences become infinite. 
+
+B. Maximum Mean Discrepancy (MMD) 
+
+Let κ : X × X → R be a positive-definite kernel with RKHS Hκ. The MMD between μ and ν is MMD( μ, ν ) = 
+
+∥mμ − mν ∥Hκ , where mμ = R κ(·, x ) dμ (x) is the kernel mean embedding. For discrete distributions, the squared MMD expands to: 
+
+MMD 2(wk, v k) = w⊤ 
+
+> k
+
+Kxx wk − 2w⊤ 
+
+> k
+
+Kxz vk + v⊤ 
+
+> k
+
+Kzz vk, (9) where [Kxx ]ij = κ(xk,i , x k,j ), [Kxz ]ij = κ(xk,i , z k,j ), and 
+
+[Kzz ]ij = κ(zk,i , z k,j ).The synthesis problem becomes: 
+
+min  
+
+> wk∈∆N
+> N
+
+X
+
+> i=1
+
+wk,i log wk,i 
+
+w−
+
+> k,i
+
+s.t. w⊤ 
+
+> k
+
+Kxx wk − 2w⊤ 
+
+> k
+
+Kxz vk ≤ ε2 
+
+> k
+
+− v⊤ 
+
+> k
+
+Kzz vk.
+
+(10) The constraint is rewritten with the constant v⊤ 
+
+> k
+
+Kzz vk on the right-hand side. Since Kxx ⪰ 0, the constraint is convex, and (10) is a convex program with a unique solution. MMD compares distributions through their kernel mean embeddings, providing a smooth, differentiable discrepancy that avoids explicit transport plans. The performance depends on kernel choice: a Gaussian kernel with bandwidth σ is sensitive to differences at scale σ.
+
+C. f -Divergence Metrics 
+
+For a convex function f : R+ → R with f (1) = 0 , the 
+
+f -divergence of μ with respect to ν is: 
+
+Df (μ∥ν) = 
+
+Z
+
+f
+
+ dμ dν 
+
+
+
+dν. (11) Common instances include KL ( f (t) = t log t), reverse KL (f (t) = − log t), χ2 (f (t) = ( t − 1) 2), and Jensen-Shannon divergence. Using D(π, π ⋆k) = Df (π∥π⋆k) requires π ≪ π⋆k,i.e., the posterior must be absolutely continuous with respect to the target. For particle filters, this means prior and target must share support points. 
+
+Df (wk∥vk) = X
+
+> j
+
+vk,j f
+
+ wk,j 
+
+vk,j 
+
+
+
+, (12) where the sum runs over shared support points and wk,j is the posterior weight at the j-th shared location. If supports do not overlap, Df is typically infinite or undefined. In our particle implementation, the χ2-divergence constraint is evaluated by interpolating the target weights onto the prior support via kernel smoothing, so that every prior particle has a well-defined target weight; this introduces a small approximation but avoids the degenerate case. This makes f -divergences best suited for shared-support settings, such as hypothesis testing, where the density ratio has direct operational meaning as a likelihood ratio. 
+
+D. Moment and Feature Constraints 
+
+A lightweight choice is to constrain moments or features: 
+
+D(π, π ⋆k) := ∥Eπ [ϕ(x)] − Eπ⋆k [ϕ(x)] ∥, (13) for a feature map ϕ : X → Rd and norm ∥ · ∥ . Choosing 
+
+ϕ(x) = x constrains the mean; ϕ(x) = ( x, xx ⊤) constrains both mean and covariance; nonlinear ϕ constrains application-specific functionals. The discrete constraint is affine in wk inside the norm: 
+
+> N
+
+X
+
+> i=1
+
+wk,i ϕ(xk,i ) −
+
+> M
+
+X
+
+> j=1
+
+vk,j ϕ(zk,j ) ≤ εk. (14) For the Euclidean norm this is a second-order cone constraint; for ∥ · ∥ 1 or ∥ · ∥ ∞, it can be reformulated as linear inequalities via auxiliary variables. The resulting program is computation-ally efficient but does not guarantee full distributional fidelity: the maximum-entropy principle selects among all distributions satisfying the moment bounds, which may differ from the target in shape or tail behavior. 
+
+E. Hybrid Metrics 
+
+The framework supports multiple constraints simultane-ously: 
+
+min 
+
+> π≪π−
+> k
+
+DKL (π∥π− 
+
+> k
+
+) s.t. Dq (π, π ⋆k) ≤ εk,q , q = 1 , . . . , Q. 
+
+(15) Alternatively, discrepancies combine via D = P 
+
+> q
+
+αq Dq with a single budget εk.IV. S PECIAL SYMMETRIC CASE 
+
+When the desired posterior is a Dirac at the origin and the accuracy metric is a second-moment constraint Eπe [∥e∥2] ≤
+
+ε2 
+
+> k
+
+(with e = x − x⋆), the solution is an exponential tilt. 
+
+Proposition 2 (Exponential tilt) . Under the second-moment constraint, the solution to (2) is: 
+
+dπ opt 
+
+> e,k
+
+dπ −
+
+> e,k
+
+(e) = exp( −λk∥e∥2)
+
+Zk(λk) , (16) 
+
+where λk ≥ 0 is the Lagrange multiplier and Zk(λk) = R exp( −λk∥e∥2) dπ −
+
+> e,k
+
+.
+
+This is a standard result; the same structure appears in the robust filtering framework of Levy and Nikoukhah [13]. The proof follows from the KKT conditions of (2) with the quadratic constraint. For particles: 
+
+w+
+
+> k,i
+
+(λ) = w− 
+
+> k,i
+
+exp( −λ∥ek,i ∥2)
+
+PNℓ=1 w− 
+
+> k,ℓ
+
+exp( −λ∥ek,ℓ ∥2) . (17) The multiplier λk is found by scalar root-finding on g(λ) = P 
+
+> i
+
+w+
+
+> k,i
+
+(λ)∥ek,i ∥2 − ε2 
+
+> k
+
+= 0 . This costs O(IλN ) per update but produces a radially symmetric likelihood, which may not match asymmetric measurement geometries. When the prior is Gaussian, π− 
+
+> e,k
+
+= N (0 , P − 
+
+> k
+
+), the optimal posterior is 
+
+N (0 , (( P − 
+
+> k
+
+)−1 + 2 λkI)−1), recovering a Kalman-like update. V. L IKELIHOOD PARAMETERIZATION AND SENSOR 
+
+DESIGN 
+
+The maximum-entropy framework developed above synthe-sizes an ideal likelihood L⋆k from a performance specification. This section first describes how to distill the nonparametric likelihood into a parametric family, then shows how the param-eterized likelihood serves as the interface between estimation requirements and physical sensor design. 
+
+A. Parametric Distillation 
+
+Equation (6) provides nonparametric likelihood values on the particle support. When a compact or interpretable like-lihood is needed, distillation into a parametric family is appropriate. Two natural choices are Gaussian mixtures, 
+
+Lk(x; θk) = 
+
+> Mg
+
+X
+
+> m=1
+
+αk,m N (x; μk,m , Σk,m ), (18) and exponential families Lk(x; ηk) ∝ exp( η⊤ 
+
+> k
+
+ϕ(x)) , of which (16) is a special case. Parameters are fit via weighted least squares in log domain: 
+
+min 
+
+> θk
+> N
+
+X
+
+> i=1
+
+¯wk,i 
+
+ log L⋆k,i − log Lk(xk,i ; θk)2 , (19) where ¯wk,i = wopt  
+
+> k,i
+
+/ P 
+
+> ℓ
+
+wopt  
+
+> k,ℓ
+
+are the normalized optimal weights and θk collects all parameters of the chosen fam-ily (e.g., component means, covariances, and weights for a Gaussian mixture). Distillation is optional; the nonparametric likelihood (6) can be used directly for weight updates. Distil-lation is useful when the likelihood must be communicated to another estimator, stored compactly, evaluated off the particle support, or when physical interpretability of sensor parameters is desired. 
+
+B. Desired Posterior as a Performance Specification 
+
+The desired posterior π⋆k is a performance specification, not privileged information about the true state. Given prior particles {xk,i , w −
+
+> k,i
+
+}Ni=1 , let ˆxk be any available reference (the prior mean, an EKF estimate, or a fusion input). The simplest specification is π⋆k = δˆxk , under which the W2 constraint becomes: 
+
+W2(π+ 
+
+> k
+
+, δ ˆxk ) = 
+
+vuut NX
+
+> i=1
+
+w+ 
+
+> k,i
+
+∥xk,i − ˆxk∥2 ≤ εk, (20) a direct RMS error bound. More generally, π⋆k = N (ˆ xk, ¯Pk)
+
+specifies a covariance budget. No knowledge of the true state is needed. Other choices include a fusion input from a partner node (enforcing track agreement) or a reference filter output (for design-time distillation). The framework assumes that π⋆k
+
+is realizable, i.e., the constraint D(π, π ⋆k) ≤ εk is feasible for some π ≪ π− 
+
+> k
+
+. Systematic methods for constructing and validating π⋆k from operational requirements remain an open problem. 
+
+C. Two-Layer Architecture 
+
+The connection between accuracy-bounded estimation and sensor design is a two-layer decomposition. 
+
+a) Layer 1: Information design.: Solve (2) to obtain 
+
+πopt  
+
+> k
+
+and the target likelihood L⋆k,i = wopt  
+
+> k,i
+
+/w −
+
+> k,i
+
+. This layer determines what the sensor must achieve, expressed as a likelihood shape over state space. b) Layer 2: Sensor configuration.: Choose physical sen-sor parameters θk ∈ Θ (positions, bandwidths, beam patterns, etc.) so that the realizable likelihood Lk(x; θk) approximates 
+
+L⋆k. When Lk(· ; θk) = L⋆k(·) exactly, the accuracy constraint is met by construction. In practice, a realizability gap exists: 
+
+D(π+ 
+
+> k
+
+, π ⋆k) ≤ εk + ∆ k(θk), (21) where ∆k(θk) ≥ 0 depends on how well the sensor likelihood approximates the ideal one. Layer 2 minimizes this gap. 
+
+D. Sensor Design for Recursive State Estimation 
+
+The preceding subsections define the two layers abstractly. We now describe the concrete sensor parameterization, the fitting procedure, and how both layers integrate into a recursive predict-update-resample loop with optimal sensing. 
+
+a) Sensor likelihood model.: Suppose the sensor suite consists of R sensors, each producing a Gaussian kernel likelihood centered at its position sk,r ∈ X with bandwidth 
+
+hk,r . Range sensors, radar, sonar, and thermal imagers all produce approximately Gaussian likelihoods centered at the measurement source, so a mixture of such kernels is a natural multi-sensor family: 
+
+Lk(x; θk) = 
+
+> R
+
+X
+
+> r=1
+
+αk,r exp − ∥x − sk,r ∥2
+
+2h2
+
+> k,r
+
+!
+
+, (22) with sensor parameters θk = ( sk, αk, hk) comprising posi-tions sk = ( sk, 1, . . . , s k,R ), mixing weights αk ∈ ∆R, and per-component bandwidths hk ∈ RR
+
+> +
+
+.
+
+b) Scale-invariant fitting.: Since the likelihood is defined only up to a positive scaling (the normalizing constant in Bayes’ rule absorbs any multiplicative factor), the fitting ob-jective must be scale-invariant. Define the log-domain residual 
+
+ri(θk) = log L⋆k,i − log Lk(xk,i ; θk) and its weighted mean 
+
+¯c(θk) = P 
+
+> i
+
+¯wk,i ri(θk), which absorbs the unknown log-scale offset. The sensor design problem minimizes the scale-invariant fitting error: 
+
+min  
+
+> θk∈Θ
+> N
+
+X
+
+> i=1
+
+¯wk,i (ri(θk) − ¯c(θk)) 2 + J (θk, θ k−1), (23) which specializes the generic distillation objective (19) to the sensor mixture family (22), with the centered residual ri − ¯c
+
+replacing the raw log-difference to absorb the arbitrary nor-malization. The first term measures how well the parametric likelihood matches the shape of L⋆k and J encodes operational costs (sensor relocation, coverage overlap). The fitting weights 
+
+¯wk,i = wopt  
+
+> k,i
+
+/ P 
+
+> ℓ
+
+wopt  
+
+> k,ℓ
+
+concentrate the approximation effort where the optimal posterior places mass. The operational cost 
+
+J is application-specific (e.g., sensor relocation penalties, coverage costs); in the experiments below we set J = 0 to isolate the likelihood fitting quality. To handle the simplex constraint on αk and positivity of hk, we reparameterize via unconstrained variables: αk,r = eℓk,r / P 
+
+> r′
+
+eℓk,r ′ (soft-max) and hk,r = eηk,r (log-bandwidth), yielding an uncon-strained optimization over (sk, ℓk, ηk) ∈ R(d+2) R. Multi-start gradient-based optimization (L-BFGS-B) with initializations from quantile placement and Silverman bandwidth provides reliable convergence. Algorithm 1 summarizes the procedure. 
+
+Algorithm 1 Layer 2: Scale-Invariant Sensor Fitting 
+
+Require: Prior particles {xk,i , w −
+
+> k,i
+
+}Ni=1 , optimal weights 
+
+wopt  
+
+> k,i
+
+from Layer 1, number of sensors R, restarts T . 
+
+> 1:
+
+Ideal likelihood: L⋆k,i ← wopt  
+
+> k,i
+
+/w −
+
+> k,i
+
+. 
+
+> 2:
+
+Initialize s(0) at quantiles of (xk,i , ¯wk,i ); set h(0)  
+
+> r
+
+via Silverman’s rule; set ℓ(0) = 0. 
+
+> 3:
+
+for t = 1 , . . . , T do  
+
+> 4:
+
+If t > 1: perturb s(0) +ξs, η(0) +ξh with ξs ∼ N (0 , I ),
+
+ξh ∼ N (0 , 0.64 I) (the log-bandwidth variance 0.64 = 0.82 was chosen empirically to cover roughly a factor-of-two bandwidth variation per restart).  
+
+> 5:
+
+Solve (23) via L-BFGS-B → θ(t) 
+
+> k
+
+, J(t). 
+
+> 6:
+
+end for  
+
+> 7:
+
+Select θ⋆k ← arg min t J(t). 
+
+> 8:
+
+Realized update: w+ 
+
+> k,i
+
+∝ w− 
+
+> k,i
+
+Lk(xk,i ; θ⋆k). 
+
+> 9:
+
+return θ⋆k, {w+
+
+> k,i
+
+}, fitting error J⋆, realized distance. 
+
+Remark 3 (Dimension-independence of the perturbation vari-ance) . The log-bandwidth variance 0.64 is a per-component quantity: each scalar ηr is perturbed independently, so eηr +ξ
+
+with ξ ∼ N (0 , 0.64) spans roughly [hr /2, 2hr ] regardless of the state-space dimension d. With diagonal or isotropic band-widths, each coordinate of η receives the same perturbation, and the factor-of-two rationale applies entry by entry. What does change with d is the total parameter count, (d + 2) R
+
+for isotropic bandwidths or (2 d + 1) R for diagonal, which reduces the probability that a random restart lands near a good basin. The appropriate remedy is to increase the number of restarts T , not to inflate the per-component variance. 
+
+Since finite Gaussian mixtures are dense in the space of continuous likelihoods (in the supremum norm on compact sets), the realizability gap ∆k(θk) → 0 as the number of sensors R increases, provided their positions, weights, and bandwidths are freely optimizable. 
+
+c) Integration into recursive state estimation.: The sen-sor fitting procedure above determines the sensing architecture at a single time step. In recursive state estimation the procedure is embedded in the standard predict-update loop: at each step k, the dynamical model propagates particles forward to produce the prior {xk,i , w −
+
+> k,i
+
+}; Layer 1 solves the maximum-entropy problem to determine the ideal likelihood L⋆k,i ; and Layer 2 fits the sensor parameters θ⋆k to realize it. The realizable filter update is then: 
+
+w+ 
+
+> k,i
+
+∝ w− 
+
+> k,i
+
+Lk(xk,i ; θ⋆k). (24) An important practical distinction governs how the two-layer pipeline is deployed. In many platforms the sensor suite is fixed: the number, placement, and hardware characteristics of the sensors cannot be altered after installation. For such systems the framework operates as an offline design tool. The designer runs the two-layer pipeline over a representa-tive ensemble of predicted priors and accuracy specifications, collects the optimal configurations {θ⋆k}, and selects a single static configuration (e.g., the one minimizing the worst-case realizability gap) that best serves the anticipated operating envelope. Once installed, only the mixing weights αk and, if electronically adjustable, the measurement precision can be adapted online; the sensor positions sk are frozen. The framework realizes its full potential in dynamic sensing, where the location and precision of sensors can be reconfig-ured at each measurement interval. Surveillance networks with mobile nodes, reconfigurable antenna arrays, and autonomous sensor platforms with controllable fields of view are natural applications. In these settings, the fitted configuration θ⋆k
+
+specifies where to place sensors, what precision each requires, and how to weight their contributions for the current interval. As the state evolves, the optimal sensing architecture adapts: sensors reposition, bandwidths adjust, and mixing weights shift to track the changing likelihood shape dictated by the accuracy budget. The operational cost term J (θk, θ k−1) in (23) penalizes excessive reconfiguration, trading estimation accuracy against the physical cost of sensor repositioning. This inverse approach naturally handles multimodal priors, asymmetric likelihoods, and support mismatch, because the target likelihood L⋆k inherits the geometry of the particle cloud at each step. Algorithm 2 summarizes the complete per-step procedure. 
+
+Algorithm 2 Accuracy-Bounded Estimation with Sensor De-sign 
+
+Require: Prior particles {xk,i , w −
+
+> k,i
+
+}Ni=1 , desired posterior π⋆k,budget εk, sensor family Θ, previous positions sk−1. 
+
+> 1:
+
+Layer 1 (information design): Solve (5) → wopt  
+
+> k
+
+. 
+
+> 2:
+
+Target likelihood: L⋆k,i ← wopt  
+
+> k,i
+
+/w −
+
+> k,i
+
+. 
+
+> 3:
+
+Layer 2 (sensor design): Run Algorithm 1 → θ⋆k =(sk, αk, hk). 
+
+> 4:
+
+Realizable update: w+ 
+
+> k,i
+
+∝ w− 
+
+> k,i
+
+Lk(xk,i ; θ⋆k). 
+
+> 5:
+
+Diagnostics: Compute DKL (wopt  
+
+> k
+
+∥w− 
+
+> k
+
+) and ∆k =
+
+D(π+,real  
+
+> k
+
+, π ⋆k) − εk. 
+
+> 6:
+
+Resample if ESS( w+ 
+
+> k
+
+) < N thresh . 
+
+> 7:
+
+return {xk,i , w +
+
+> k,i
+
+}, sensor config θ⋆k, diagnostics 
+
+(DKL , ∆k).
+
+E. Design Diagnostics 
+
+Two quantities serve as design criteria at each step: 1) KL injection: DKL (wopt  
+
+> k
+
+∥w− 
+
+> k
+
+) measures the information cost of meeting the accuracy budget. A large value indicates that the budget εk is tight relative to the prior-target gap; the designer should either relax εk or improve the prior through better dynamics modeling. When the prior is already close to the target, the injection is small and the constraint may be inactive. 2) Realizability gap: ∆k = D(π+,real  
+
+> k
+
+, π ⋆k) − εk measures how well the physical sensor family approximates the ideal likelihood. If ∆k > 0, the sensor family is too restrictive: either add sensors (increase R), allow broader placement regions, or relax the budget. If ∆k ≤ 0,the accuracy specification is achievable with the current sensor suite. These two quantities separate the information-theoretic and physical failure modes: the budget may demand too much information (high KL), or the sensor family may lack the degrees of freedom to deliver it (positive ∆k). VI. N UMERICAL EXPERIMENTS 
+
+We compare four accuracy metrics, Wasserstein (W2), MMD, moment constraints, and χ2-divergence (an f -divergence), on two scenarios that span the range from straightforward to structurally challenging. Each metric is placed in the same framework: minimize DKL (π∥π− 
+
+> k
+
+) subject to the respective accuracy constraint, with tolerance parameters chosen so that each metric can visibly depart from the prior. We use N = 2000 prior particles and M = 500 target particles. 
+
+a) Scenario A: Gaussian to Gaussian.: The prior is 
+
+π− = N (−5, 9) and the target is π⋆ = N (0 , 0.25) . Fig. 1 shows the results. All four posteriors shift toward the target with similar shape, differing primarily in variance. Wasserstein and χ2-divergence yield the tightest posteriors at highest KL cost ( ≈ 2); moment constraints produce a broader posterior at lower KL ( 1.88 ); MMD retains the most spread, consistent with kernel smoothing. The synthesized likelihoods are nearly identical, indicating limited metric dependence for unimodal problems. 
+
+b) Scenario B: Multimodal to multimodal.: The prior is a three-component Gaussian mixture with weights 
+
+(0 .5, 0.3, 0.2) , means (0 , −4, 5) , and standard deviations 
+
+(0 .8, 0.6, 0.7) . The target is a two-component mixture with weights (0 .6, 0.4) , means (−1, 3) , and standard deviations 
+
+(0 .5, 0.6) . Mode locations do not coincide, forcing the metric to reconcile structurally unrelated mixtures. This scenario is motivated by IMM tracking [4], [22] and multi-hypothesis data association [4], [23], where multimodal densities arise from motion hypotheses or measurement ambiguity. Fig. 2 shows the results. Now the four metrics produce qualitatively different posteriors:  
+
+> •
+
+Wasserstein (W2 = 0 .50 , DKL = 0 .95 ) transports mass geometrically toward the target modes, achieving the best distributional accuracy but injecting the most information.  
+
+> •
+
+MMD (MMD = 0 .046 , DKL = 0 .39 ) smooths through the kernel and produces a broad posterior that roughly covers the target support without resolving its bimodal structure.  
+
+> •
+
+Moment constraints (|δμ | = 0 .30 , |δm 2| = 1 .0, DKL =0.14 ) match the target mean and second moment while barely departing from the prior, yielding the most con-servative update but the worst geometric fit.  
+
+> •
+
+χ2-divergence (χ2 = 0.50 , DKL = 0.48 ) penalizes pointwise density-ratio deviations, producing the tightest Fig. 1. Scenario A (Gaussian to Gaussian): four accuracy metrics applied to unimodal prior and target. Panels (a)–(d) show individual posteriors; panel (e) overlays all posteriors; panel (f) shows synthesized likelihoods. Metric choice has limited effect when both distributions are unimodal. 
+
+posterior variance ( 3.1, undershooting the target’s 4.3)with a shape distinct from all other metrics. The synthesized likelihoods (panel f) are strikingly different, confirming that in structurally challenging problems the choice of accuracy metric determines not just how much information is injected, but where that information concentrates. The accuracy thresholds for each metric ( εW , εMMD , εμ, εm2 , εχ2 )were chosen ad hoc for demonstration purposes. 
+
+c) Sensor realizability.: To demonstrate sensor realizabil-ity, we apply the full two-layer pipeline (Algorithms 2 and 1) to both scenarios using the Wasserstein metric W2 with budget 
+
+ε = 0 .5, sweeping the number of sensors from R = 1 to 
+
+16 ; the same procedure applies to any of the other accuracy metrics. Layer 1 produces ideal weights wopt and implied likelihood L⋆i = wopt  
+
+> i
+
+/w − 
+
+> i
+
+; Layer 2 fits the parametric sensor likelihood (22) via Algorithm 1 with T = 8 restarts. Fig. 3 shows results for the best R in each scenario. In Scenario A, the ideal likelihood has a single Gaussian-shaped peak; even R = 1 achieves near-zero fitting error and realized W2 = 0 .43 (below the ideal 0.50 ). The realized posterior is visually indistinguishable from the ideal. Adding sensors produces no further improvement. Scenario B is more demanding. The ideal likelihood is bimodal. A single sensor cannot capture this: fitting error 
+
+1.22 , W2 = 1 .64 . With R = 2 , fitting error drops to 0.03 
+
+and realized W2 = 0 .49 matches the ideal. For R ≥ 4 the fit saturates. These results confirm that realizability gap ∆k
+
+decreases with R and vanishes once the sensor family has sufficient degrees of freedom.           
+
+> Fig. 2. Scenario B (multimodal to multimodal): The four metrics produce qualitatively different posteriors and likelihoods. Wasserstein concentrates mass near target modes; moment constraints barely move the prior; MMD and χ2-divergence produce intermediate but distinct shapes.
+> Fig. 3. Sensor realizability. Top: prior (blue), target (red), ideal posterior (green), realized posterior (orange dashed). Bottom: ideal likelihood L⋆
+> (green) versus realized L(·;θ⋆)(orange dashed). Each column shows best R
+> for that scenario. Realized likelihood closely approximates L⋆, confirming the two-layer architecture translates budgets into achievable configurations.
+
+VII. D ISCUSSION AND EXTENSIONS 
+
+a) Online adaptation of εk.: The accuracy budget can be adapted online: tighten εk when the ESS is high and KL injection is small (the filter is operating conservatively), and relax it when the ESS drops sharply to prevent particle depletion. 
+
+b) Scalability.: The main computational bottleneck is the Wasserstein constraint evaluation via Sinkhorn, scaling as O(N M ) per iteration. For large particle counts, stabilized sparse scaling [24] or multiscale Sinkhorn methods [20] could reduce this cost. The MMD and moment-constraint alterna-tives offer better scaling when transport-level accuracy is not required. 
+
+c) Relationship to optimal transport.: The Sinkhorn solver used for constraint evaluation is differentiable [19], which opens a path toward end-to-end gradient-based sensor optimization through the transport layer. 
+
+d) Higher dimensions.: All experiments in this paper are one-dimensional. The framework itself is dimension-agnostic: the particle-level programs (5)–(8) operate on weighted point clouds in Rd without modification. However, practical chal-lenges grow with d: the particle count N needed for ade-quate coverage scales exponentially, the Sinkhorn cost matrix becomes O(N M d ) to fill, and the sensor likelihood (22) re-quires multivariate bandwidths (full or diagonal covariance per component) whose parameterization adds O(Rd 2) or O(Rd )
+
+variables. For moderate dimensions ( d ≤ 5), these costs remain manageable; for high-dimensional problems, projection-based or sliced-Wasserstein approximations may be necessary. VIII. C ONCLUSION 
+
+We have presented a maximum-entropy framework for synthesizing likelihoods in particle filtering when forward measurement models are unavailable. The formulation, KL minimization subject to distributional accuracy constraints, decouples accuracy specification from information injection. Instantiations for Wasserstein, MMD, f -divergences, moment constraints, and hybrid metrics (15) yield convex (or convex-relaxed) programs, with a closed-form exponential-tilt solution for the symmetric case. The desired posterior is a performance specification, not an oracle; in the simplest case, the budget is a direct RMS error bound. A two-layer sensor design architec-ture uses the synthesized likelihood as the interface between estimation requirements and physical sensor configuration. Ex-periments comparing Wasserstein, MMD, moment constraints, and χ2-divergence confirm reliable constraint enforcement and show that metric choice has limited impact for unimodal problems but produces qualitatively different posteriors and likelihoods when the prior and target are multimodal. A sen-sor realizability experiment demonstrates that the parametric likelihood family can closely approximate the ideal likelihood shape, with the realizability gap vanishing as the number of sensors increases. Future work includes sequential tracking validation over multiple time steps, formal approximation rates for the realiz-ability gap as a function of sensor count, comparison with clas-sical sensor design methods (D-optimal, Fisher information, mutual information), online budget adaptation, and scaling to higher dimensions. REFERENCES [1] E. T. Jaynes, “Information theory and statistical mechanics,” Physical Review , vol. 106, no. 4, pp. 620–630, 1957. [2] E. T. Jaynes, “Information theory and statistical mechanics. II,” Physical Review , vol. 108, no. 2, pp. 171–190, 1957. [3] I. Csisz´ ar, “ I-divergence geometry of probability distributions and min-imization problems,” The Annals of Probability , vol. 3, no. 1, pp. 146– 158, 1975. [4] Y. Bar-Shalom, X. R. Li, and T. Kirubarajan, Estimation with Applica-tions to Tracking and Navigation . New York: Wiley, 2001. [5] R. P. S. Mahler, Advances in Statistical Multisource-Multitarget Infor-mation Fusion . Norwood, MA: Artech House, 2014. [6] F. Gustafsson, “Particle filter theory and practice with positioning ap-plications,” IEEE Aerospace and Electronic Systems Magazine , vol. 25, no. 7, pp. 53–82, 2010. [7] M. Asch, M. Bocquet, and M. Nodet, Data Assimilation: Methods, Algorithms, and Applications . Philadelphia: SIAM, 2016. [8] Y. Gal and Z. Ghahramani, “Dropout as a Bayesian approximation: Representing model uncertainty in deep learning,” in Proc. 33rd Int. Conf. Machine Learning (ICML) , 2016, pp. 1050–1059. [9] R. K. Mehra, “On the identification of variances and adaptive Kalman filtering,” IEEE Trans. Autom. Control , vol. 15, no. 2, pp. 175–184, 1970. [10] R. K. Mehra, “Approaches to adaptive filtering,” IEEE Trans. Autom. Control , vol. 17, no. 5, pp. 693–698, 1972. [11] S. S¨ arkk¨ a and L. Svensson, Bayesian Filtering and Smoothing , 2nd ed. Cambridge: Cambridge University Press, 2023. [12] S. Shafieezadeh-Abadeh, D. Kuhn, and P. Mohajerin Esfahani, “Regular-ization via mass transportation,” J. Machine Learning Research , vol. 20, no. 103, pp. 1–68, 2019. [13] B. C. Levy and R. Nikoukhah, “Robust state space filtering under incremental model perturbations subject to a relative entropy tolerance,” 
+
+IEEE Trans. Autom. Control , vol. 58, no. 3, pp. 682–695, 2013. [14] S. Reich, “A nonparametric ensemble transform method for Bayesian inference,” SIAM J. Sci. Comput. , vol. 35, no. 4, pp. A2013–A2024, 2013. [15] S. Reich and C. Cotter, Probabilistic Forecasting and Bayesian Data Assimilation . Cambridge: Cambridge University Press, 2015. [16] A. Doucet, N. de Freitas, and N. Gordon, Eds., Sequential Monte Carlo Methods in Practice . New York: Springer, 2001. [17] N. Chopin and O. Papaspiliopoulos, An Introduction to Sequential Monte Carlo . New York: Springer, 2020. [18] J.-M. Marin, P. Pudlo, C. P. Robert, and R. J. Ryder, “Approximate Bayesian computational methods,” Statistics and Computing , vol. 22, no. 6, pp. 1167–1180, 2012. [19] M. Cuturi, “Sinkhorn distances: Lightspeed computation of optimal transport,” in Advances in Neural Information Processing Systems (NeurIPS) , vol. 26, 2013, pp. 2292–2300. [20] G. Peyr´ e and M. Cuturi, “Computational optimal transport,” Foundations and Trends in Machine Learning , vol. 11, no. 5–6, pp. 355–607, 2019. [21] M. J. Wainwright and M. I. Jordan, “Graphical models, exponential families, and variational inference,” Foundations and Trends in Machine Learning , vol. 1, no. 1–2, pp. 1–305, 2008. [22] H. A. P. Blom and Y. Bar-Shalom, “The interacting multiple model algorithm for systems with Markovian switching coefficients,” IEEE Trans. Autom. Control , vol. 33, no. 8, pp. 780–783, 1988. [23] T. E. Fortmann, Y. Bar-Shalom, and M. Scheffe, “Sonar tracking of multiple targets using joint probabilistic data association,” IEEE J. Oceanic Engineering , vol. 8, no. 3, pp. 173–184, 1983. [24] B. Schmitzer, “Stabilized sparse scaling algorithms for entropy reg-ularized transport problems,” SIAM J. Sci. Comput. , vol. 41, no. 3, pp. A1443–A1481, 2019.

@@ -1,0 +1,1420 @@
+Title: Recovering Physical Dynamics from Discrete Observations via Intrinsic Differential Consistency
+
+URL Source: https://arxiv.org/pdf/2605.08454v1
+
+Published Time: Tue, 12 May 2026 00:22:51 GMT
+
+Number of Pages: 35
+
+Markdown Content:
+# Recovering Physical Dynamics from Discrete Observations via Intrinsic Differential Consistency 
+
+Yuxiang Luo, Andrew Perrault 
+
+Department of Computer Science and Engineering The Ohio State University 
+
+{luo.929,perrault.17}@osu.edu 
+
+# Abstract 
+
+Recovering continuous-time dynamics from discrete observations is difficult be-cause local supervision (e.g., pointwise regression targets, derivative approxima-tions, or equation residuals) loses fidelity as the observation interval grows. We replace local supervision with a global structural constraint: any flow representing autonomous dynamics must satisfy the semi-group property under time transla-tion. We train a time-conditioned secant velocity field whose deviation from this property, which we call Symmetry Rupture, serves two purposes. As a training regularizer, it confines the hypothesis space to flows that compose consistently across temporal scales. As an inference oracle, it lets the solver select the largest step size that preserves internal consistency, replacing the local truncation error that conventional adaptive solvers depend on. On the diffusion-reaction benchmark under time-informed inference, our method reduces rollout RMSE by 87% while using 5x fewer function evaluations than a Neural ODE baseline. In the more demanding direct auto-regressive setting, where the model must predict distant future frames without intermediate temporal cues, our adaptive solver allocates compute based on local geometric complexity—maintaining the lowest rollout RMSE on two of three PDE benchmarks while baselines either diverge or require up to an order of magnitude more function evaluations to remain stable. 
+
+# 1 Introduction 
+
+Learning physical dynamics from data constitutes a cornerstone of scientific machine learning (SciML) (Chen et al., 2018; Raissi et al., 2019; Li et al., 2021; Helwig et al., 2023; Zhang et al., 2024; Trenta et al., 2026). While extensive efforts have been dedicated to optimizing network architectures and learning paradigms, a persistent challenge remains: bridging the representational gap between the continuous-time nature of physical dynamics and the real-world discrete-time observations. This gap manifests in the dichotomy between prevailing approaches. Discrete-time state regression schemes (Chen et al., 2023; Zhang et al., 2024; Khrabry et al., 2025; Ghanem et al., 2025) are bound by fixed time steps, resulting in temporal rigidity that fails to generalize across varying horizons. Conversely, Neural ODEs (Chen et al., 2018; Huang et al., 2020; Trenta et al., 2026) can learn dynamics that are numerically plausible but physically inconsistent, due to the absence of structural supervision between observations. Physics-Informed Neural Networks (PINNs) (Raissi et al., 2019) enforce physical compliance through explicit equation-based supervision, but require knowledge of the governing equations, which is often unavailable in practice. These paradigms are asymptotically equivalent as the sampling interval approaches zero ( ∆t → 0). However, with the sparse and noisy data typical of real-world settings, this theoretical equivalence breaks down. The shared limitation is a reliance on local constraints—discrete regression targets, derivative approximations, or point-wise equation residuals—whose effectiveness degrades as the observation interval grows. 
+
+> Preprint.
+> arXiv:2605.08454v1 [cs.LG] 8 May 2026
+
+Motivated by this observation, we propose to treat the dynamic evolution not as a sequence of discrete states, but as a continuous flow, and to learn models that recover such flows from discrete data. We formalize this by constructing a hypothesis space H of flows satisfying time-translation symmetry (TTS) on an expanded state-temporal manifold ( ψθ (st, ∆t) → st+∆ t−st 
+
+> ∆t
+
+) such that the learned dynamics are consistent across varying temporal scales. For implementation, we train a time-conditioned secant velocity field ( ψθ (st, ∆t)) with a triangle-consistency loss (Symmetry Rupture 
+
+R3) that is based on the temporal semi-group property of autonomous system (derived from TTS); and reuse the same loss as an adaptive step-size criterion at inference: 
+
+1. Learning Representational Consistency: We explicitly penalize SR during training to constrain the hypothesis space H to flows that satisfy strict semi-group property. This optimization forces the learned representations across different ∆t-strata to compose a TTS-compatible space—promoting that the learned dynamics remain consistent under sequential composition of flows across varying temporal scales. SR combined with the temporal expansion of the velocity field ψθ (st, ∆t) unfolds the geometric structure of the dynamics to a multi-scale bundle of flows to enable large-step Euler’s method for extrapolation while achieving faithful approximation of the true dynamics, hence results in superior efficiency and accuracy compared to baseline models. 
+
+2. Inference (Consistency-Aware Oracle): Existing adaptive solvers dictate step sizes based on 
+
+local truncation error —a metric that assumes the exactness of the governing differential equations and focusing on the extrinsic physical geometry. However, for neural surrogate dynamics, the primary failure mode often stems from representational collapse. By repurposing our SR as an intrinsic consistency-aware oracle, our solver explicitly monitors the network’s internal representational con-sistency. It dynamically searches for the largest admissible macroscopic step size that safely remains within the inconsistency-suppressed envelope (where the learned representation holds consistent be-tween step sizes). This enables highly efficient long-horizon rollouts while preserving the semi-group property, thereby mitigating the compounding errors characteristic of standard extrapolation. Our contributions are summarized as follows: 1. Consistency-Based Hypothesis Space: We propose grounding the learning of physical dynamics on a TTS-guided hypothesis space H, enabling the recovery of continuous dynamics from discrete data without explicit equation supervision. 2. Temporal Expansion for Unbiased Learning and Representational Consistency: We leverage a temporal expansion of the velocity field ψθ (st, ∆t) to eliminate the systematic bias in tangent velocity approximation and creating the representational capacity for building TTS condition into the model, thus mitigating the conflicting learning objectives between learning the true dynamics and learning a flat surrogate dynamics for extrapolation. 3. Unified Training and Inference Framework: We show that the same consistency metric serves dual roles: as a training regularization that promotes physically compatible flows, and as a consistency-based error measure for adaptive step-size scheduling during long-horizon inference. 4. Adaptive Consistency Solver: Using the model’s own consistency estimate as a local error indicator, we introduce an adaptive solver that dynamically adjusts integration step sizes, improving both accuracy and efficiency by allocating computation based on the local complexity of the learned dynamics. By constraining the hypothesis space to TTS-compatible flows, our method incurs a marginal O(1) 
+
+training overhead yet yields up to a significant reduction in long-horizon prediction error and decrease in function evaluations compared to existing continuous-time baselines. Ablation studies further isolate the contribution of each component—in particular, distinguishing our composition-consistency approach from naive multi-scale regularization. 
+
+# 2 Hypothesis Space H and Time-translation Symmetry 
+
+Our method conceives two core principles: 1. Construct a hypothesis space H that follows the continuous-time structure of physical dynamics 2. Leverage discrete observations D as ground truth to collapse this space towards the true dynamics. Let Φ∆t(s) be the evolution operator that maps the system state s to its future state after a time duration ∆t, i.e., Φ∆t(s) : M → M . We now define H as the set of all Φs supporting some natural 2physical dynamics on M. Following the principle of constructing a physics-compatible hypothesis space, the purpose of learning shifts from fitting discrete observations to identifying the best-fitting structure ( Φ⋆) within the hypothesis space H.
+
+Time-translation Symmetry describes the fundamental property of natural physical systems, that the laws of physics are invariant under shifts in time, leading to the conservation of energy in isolated systems (Noether & Tavel, 1918). Since Φt supports the temporal evolution of such autonomous systems, we discuss the group properties following Olver (1993) in Theorem B.1, which leads to the generalized time-translation symmetry condition (in short, Symmetry Condition) as Equation (1): 
+
+∀s ∈ M , t 1, t 2 ∈ R+, Φ(t1+t2)(s) − Φt2 (Φ t1 (s)) = 0 (1) where the semi-group property is explicitly enforced for all autonomous systems, and the inverse map condition is implicitly satisfied for conservative systems but relaxed for dissipative systems. We define the temporal-evolution-operator-based Symmetry Rupture RΦ 
+
+> k
+
+over the path-independence residual between the multi-step composed flow and the direct flow prediction: 
+
+RΦ 
+
+> k
+
+:= Φ ∆tk−1
+
+◦ · · · ◦ Φ ∆tk−1
+
+| {z }
+
+> Integral of Vector Field
+
+− Φ∆t
+
+|{z}  
+
+> Direct Flow Prediction
+
+(2) A Symmetry conditioned flow would yield closure of the loop as RΦ 
+
+> k
+
+≡ 0. Therefore, we constrain the hypothesis space H of our learned model ψθ by enforcing this temporal closure: 
+
+H = Φ | ∥R Φ 
+
+> k
+
+∥2 = 0 (3) where the exactness of this constraint is relaxed in practice to allow for optimization and generalization. This ensures that the learned discrete steps {Φ∆t(·)} generate a consistent one-parameter semi-group flow, rather than a disjoint collection of mappings. In practice, this objective is penalized over the training distribution. Consequently, we rely on the model’s empirical generalization to maintain consistency across the broader state-temporal manifold. We show in Section D that k = 3 is sufficient to enforce the Symmetry Condition. Therefore, we formulate the problem of learning continuous dynamics from discrete observations as minimizing Symmetry Rupture of the induced transport along closed temporal loops (particularly over triangular loops R3) to enforce the time-translation symmetry. 
+
+# 3 Temporal Expansion for Representational Consistency 
+
+We follow Equation (3) to shape the hypothesis space H, however, we show in Sections G.3 and G.4 that the representational inconsistency between discrete observations and continuous dynamics poses a significant challenge for learning a surrogate model vθ for tangent velocity field; and the conflicting learning objectives between accurate tangent velocity approximation for the true dynamics and flat surrogate dynamics for extrapolation further exacerbate this challenge. We resolve this by performing a temporal expansion of the velocity field ψθ (st, ∆t),
+
+ψθ (st, ∆t) := Φ∆t(st) − st
+
+∆t (4) where we exploit the ground truth secant velocity field ( v∆t) calculated from discrete observations to provide direct supervision for learning the continuous-time dynamic. With the temporal expan-sion, the model learns building blocks of the dynamics at multiple temporal scales, which reduces learning of true dynamics as a sub problem ( ∆t = 0 ) of learning a consistent cross-temporal-bundle representation, and thus mitigating the conflicting learning objectives and representational inconsis-tency (Section G.3). Such expansion leads to a reformulation of the Symmetry Rupture Rk over the velocity field and the temporal decompositions ( ∆t = Pk−1 
+
+> i=1
+
+∆ti): 
+
+Rk(st, ∆t) = 
+
+> k−1
+
+X
+
+> i=1
+
+∆ti
+
+∆t ψθ
+
+ sit, ∆ti
+
+ − ψθ (st, ∆t) (5) where sit = st + Pi−1 
+
+> j=1
+
+∆tj · ψθ (sjt , ∆tj ). Sections E.1 and G.5 show detail derivation. 3The training objective of the velocity field ψθ is defined in Equation (6) to match the secant velocity field ( ψθ (s, ∆t)) and to minimize the R3 over the randomly sampled decomposition ∆tis: 
+
+Jθ = E
+
+
+
+∥ψθ (st, ∆t) − v∆t∥22 + ∥R 3(st, ∆t)∥22
+
+
+
+(6) We further show in Section L.2 that our method achieves superior performance compared to methods that learn with spline-based tangent velocity supervision, providing evidence for our structured consistency enforcement as a more accurate and robust supervision signal than the biased tangent velocity from spline approximation. 
+
+Cascaded Normalization for Stable Training Now that the learning process involves processing of original state s and the velocity field ψθ (s, ∆t), we apply a unique cascaded normalization scheme to the velocity field that aligns state and velocity scaling via a pushforward transformation to stabilize the training and inference, which is detailed in Section F. Our ablation studies in Figure 4a show that this normalization scheme is critical for stabilizing the training and inference, therefore significantly improves the performance of the model. 
+
+# 4 Representational Consistency-Driven ODE Solver 
+
+One critical difference between equation-based numerical solvers and learning-based neural surrogates is that the latter is only trained on a finite distribution of time steps ∆t and thus may not maintain its structural integrity when extrapolating far beyond the training distribution. The Symmetry Condition (Equation (1)) constructs robust representational blocks within the temporal bounds of 
+
+[δmin , max ∆t∼D [∆ t]] . Within this temporal envelope, the representational inconsistency (Term I in Equation (30g)) is suppressed to create a well-structured region where the model can make large temporal leaps without violating the Symmetry Condition. Capitalizing on this insight, we repurpose the Symmetry Rupture Rk into a consistency-aware error measure for dynamic step-size scheduling during inference to explicitly monitors the internal integrity of the learned flow. By dynamically searching for the maximal step size ∆t that maintains the Symmetry Rupture below a defined tolerance ( Rk ≤ ϵ), the solver balances between inference efficiency via large macroscopic steps and remaining within the representationally consistent regime to mitigate error accumulation. We follow two principles for the design of the step control mechanism: 1. Minimum Step Size Constraint: The model cannot meaningfully resolve dynamics below the temporal resolution of its training data, denoted as δmin . The step control mechanism should not reduce the time step below δmin .2. Dynamic Relative Tolerance: A static tolerance is ill-suited for the generalization of neural operators. Instead, the error tolerance should adapt to the current operational scale of the solver to ensure meaningful error control across different scales of dynamics. A fundamental shift from spatial error control to temporal error control is proposed and leads to the step control mechanism (Equation (7)) that assumes a second-order error convergence ( p = 2 ) with respect to the step size: 
+
+τnew = max 
+
+
+
+δmin ,
+
+s
+
+δmin × tcurr 
+
+ˆR(st, t curr )
+
+
+
+(7) where ˆR(st, t curr ) is the normalized symmetry error (Section G.6) acting as a dimensionless measure of representational inconsistency. The novel step control principles and Algorithm 1 are shown in Section H. With the proposed learning objective and adaptive solver, we formally define the Consistent Vector Flow (CVF) model as our main method that adopts the Symmetry Condition as a training regularization and the Symmetry Rupture as a representational inconsistency measure for step-size control during inference. 
+
+# 5 Evaluations 
+
+For evaluations, we compare our proposed CVF model with previous state-of-the-art methods and on public datasets used in Takamoto et al. (2022). 4Datasets and Evaluation Settings The datasets used in the evaluations include: 2D diffusion reaction (DR), 2D Shallow Water (SW), and 2D incompressible Navier-Stokes equation in turbulence (CFD Turb.). We additionally include 2D wave equation (WE) that is strictly conservative in our ablation studies to evaluate the effect of semi-group and full-group constraints in dissipative and conservative systems. We present the tasks and datasets details in Section I. The evaluation metrics includes the root mean squared error of rollout ( Lτ ) predictions and the average number of function evaluations (NFE) during rollout predictions to measure the computational efficiency. Section K.2 provides the detailed definitions of these metrics. We include two different inference modes in evaluation of the baselines. Time-Informed Infer-ence (Section K.5) setting is widely used in literature; the other setting, Direct Auto-regressive Inference, requires the model to predict a distant future frame without intermediate temporal informa-tion ( Section K.6). 
+
+Baseline Models We consider below baseline models that implement various learning paradigms, with details discussion in Section J: 1. Local Derivative Matching: Forward Euler Matching (SM) (Liu & Yue, 2025); Spline-Smoothed Gradient Matching (TM) (Hou et al., 2025). 2. Trajectory Unrolling: Auto-regressive k-step Pushforward (PF-k) (Brandstetter et al., 2022). 3. Integration Matching: Adjoint-based Trajectory Matching (N-ODE) (Chen et al., 2018). 4. Generative Paradigm: Continuous-Time Flow Matching (CFM) (Lipman et al., 2023). 
+
+5.1 Time-Informed Setting Analysis   
+
+> (a) DR (b) SW (c) CFD Turb.
+
+Figure 1: Accuracy-Efficiency Trade-off on the Time-Informed Inference setting. The x-axis is the average NFE during rollout, and the y-axis is the rollout error Lτ . Detail matrices are in Table 6. 
+
+CVF: Accuracy & Efficiency , CVF achieves substantially superior long-term accuracy and efficiency compared to all baselines. Comparing to the CFM and TM baselines, CVF achieving an order of magnitude reduction in RMSE error ( Lτ of 0.009 vs 0.083 and 0.094 ) in the DR dataset (fig. 2a and table 6). The efficiency gain of CVF is also significant–the NFE of CVF is ≤ 3 across all datasets, which signals a rejection-free, single-step rollout behavior in this time-informed setting, while the NFE of CFM and TM are ≥ 20 across all datasets, indicating a heavy reliance on high-order solvers to mitigate their structural bias and numerical inconsistency. 
+
+Exploiting Training Priors: The SM and N-ODE models achieve the second lowest RMSE on the DR (SM vs CVF: 0.014 /0.009 ) and SW (N-ODE vs CVF: 0.008 /0.004 ) datasets, their success here is largely attributed to exploiting the training priors: SM model exploits the temporal grid of data sampling rate ( ∆t = ti+1 − ti) that perfectly aligns with its training prior, allowing it to perform naive one-step predictions with low error on the DR dataset; but for the SW dataset, SM’s Euler state-regression strategy is vulnerable to highly non-linear dynamics. N-ODE model exploits auto-regressive rollouts during training (RK4 with ∆t = 0 .1 × (tk+1 − tk)), which implicitly regularizes the model to be more robust to compounding errors during inference, thus achieving the second lowest RMSE on the SW dataset. But the trade-off between accuracy and efficiency is notable–the NFE of N-ODE increases from 15 .6 in DR to 20 .1 in SW, indicating a trend of increasing reliance on high-order solvers to mitigate the compounding errors in more complex dynamics. 55.2 Direct Auto-regressive Analysis 
+
+Figure 2 and table 7 illustrates the accuracy-efficiency trade-off under the Direct Auto-regressive Inference setting. Deprived of the dataset’s fine-grain temporal grid, models are forced to navigate   
+
+> (a) DR (b) SW (c) CFD Turb.
+
+Figure 2: Accuracy-Efficiency Trade-off on the Direct Auto-regressive Inference setting. the extended integration horizons ( ∆t = tk − t1) relying entirely on their own step-size scheduling capabilities. Under this highly demanding setting, CVF consistently maintains the best accuracy-efficiency trade-off by autonomously dividing the large time span, dynamically scaling its NFE based on the local geometric complexity of the manifold rather than prescribed time-step schedules, and tightly locking the rollouts within its physically accurate trajectory attractor. 
+
+False Confidence and Pathological Landscapes: N-ODE’s Failure Beyond SW. The performance of N-ODE is notably better than CVF on the SW dataset under the Direct Auto-regressive setting, yet this comes at an exorbitant computational cost: its NFE skyrockets from 20 .1 in the time-informed setting to 115 .9. This indicates a profound reliance on high-order solvers and the training prior to forcefully mitigate compounding errors during long-horizon extrapolation. Section K.7 provides a detailed analysis of this phenomenon. The robust superiority of CVF is fundamentally a two-fold success: 
+
+Learning Structurally Compatible Dynamics : Methods like CFM and TM often learn biased or incomplete representations of the underlying dynamics that deviate from the true physical phase space. Consequently, applying heavy, high-order solvers like dopri5 merely integrates these erroneous vector fields more precisely—resulting in systematically incorrect trajectory rollouts, as evidenced by their high RMSE regardless of high NFE (TM) and low NFE (CFM, benefiting from the Optimal Transport regularization). By contrast, CVF avoids this by promoting the base vector field to be geometrically consistent with valid physical flows before the solver even steps in. 
+
+Overcoming Learned Stiffness: N-ODE vs. CVF. CVF substantially mitigates the learned stiffness by explicitly embedding semi-group properties, executing massive macroscopic steps safely and preserving the true acceleration purpose of a neural surrogate. This strongly supports our core thesis: a sophisticated solver cannot rescue a structurally flawed flow. Without the rigorous semi-group property constraints naturally embedded in CVF, models construct confidently wrong phase spaces, whereas CVF exclusively restricts learning to the correct physical geometry, enabling both low NFE and state-of-the-art accuracy. 
+
+# 6 Ablation Study 
+
+We conduct ablation studies by varying the downsampling strategy ( k, Section 6.1), integral solver & normalization schema (Section 6.2), and dissipativity-semi-group interaction (Section 6.3) on the DR dataset. 
+
+6.1 Training Dynamics and Downsampling Strategies. Core Takeaway: Uniform downsampling is provably beneficial for the model to learn a consistent geometric prior. Furthermore, training with larger uniform intervals (e.g., k = −16 ) equips the model 6to confidently take larger macroscopic steps, effectively breaking the trade-off between computational cost (NFE) and error accumulation. We break down these dynamics into three key observations:  
+
+> (a) Time-Informed (b) Direct Auto-regressive
+
+Figure 3: Ablation Study on Uniform Downsampling ( k < 0 Sec-tion K.3) and Random ( k > 0, Section K.4) Downsampling during Training. 
+
+1. The Failure of Dynamic Down-sampling ( k > 0): 
+
+Across both evaluation settings, mod-els trained with naive random down-sampling exhibit severe overconfi-dence. They perform almost no step cuts (resulting in low NFE) yet suf-fer from significantly higher rollout errors compared to their uniformly downsampled counterparts. This starkly distinguishes our explicitly structured framework from simple multi-scale regularization techniques, which mistakenly assume that mere exposure to a diverse range of time steps is sufficient to learn temporal consistency. The observed performance degradation under random downsampling highlights a profound opti-mization pathology. Even though the step size ∆t is explicitly provided as a conditioning input to the network ψθ (st, ∆t), the highly stochastic nature of random intervals subjects the model to severely conflicting gradient signals. To navigate this chaotic loss landscape, the network resorts to a degenerate solution: it undergoes temporal feature collapse . Rather than establishing robust 
+
+representational consistency on the expanded temporal bundles, the model renders its output largely insensitive to the temporal scale. Therefore, it collapses the rich, ∆t-dependent trajectory bundle into a single, overly smooth, linearized vector field (i.e., forcing ψθ (st, ∆t) to be proportional to ∆t). Crucially, this temporal insensitivity perfectly explains the phenomenon of “overconfident extrap-olation" during inference. Because the predicted vector field behaves strictly linearly with respect to ∆t, the representation inconsistency (Term I, Section G) is artificially masked. As a result, the Symmetry Rupture estimator ( ˆR3) naturally evaluates to near zero, falsely suggesting to the solver that the learned representations are structurally consistent and the local geometry is flat. Deceived by this false indicator of representational integrity , the adaptive solver waives necessary step cuts and executes massive macro-steps. These steps become completely untethered from the true non-linear dynamics on the base manifold, ultimately compounding into increased rollout errors. 
+
+2. Constrained Rollout: The δmin Boundary: The time-informed setting reveals an intriguing contrasting behavior. When evaluated on this fine-grained temporal grid, models trained with larger 
+
+|k| behave more conservatively, resulting in a higher NFE without yielding a proportional drop in rollout error (compared to smaller |k| like k = −4). This plateau occurs because the time-informed step duration is already at δmin —the minimum fundamental resolution of the training data. The model cannot reduce its step size beyond this physical limit to further smooth out errors, demonstrating that macro-trained models attempting to reconcile with micro-scale observations will naturally exhaust their adjustment capacity against the data’s inherent noise floor. 
+
+3. Unconstrained Rollout with Macro-Stepping: The true advantage of uniform downsampling emerges in the direct auto-regressive setting. Here, a clear linear correlation exists: increasing the training downsampling factor |k| simultaneously reduces both NFE and rollout error. By training on a larger macro-scale (e.g., k = −16 ), the model successfully embeds the long-horizon trajectory into its latent space. Consequently, during inference, it confidently executes large temporal leaps, directly bypassing the compounding local truncation errors that plague smaller-step models, thus mitigating the error accumulation driven by a high number of auto-regressive iterations. This demonstrates that the model has effectively learned a consistent geometric prior that allows it to break the traditional trade-off between computational cost and error accumulation, if it is not constrained by the fundamental resolution of the data ( δmin ). 
+
+6.2 Solver Design and Normalization Scheme 
+
+Using a uniform downsampling factor of k = −2 during training and original step size for the direct auto-regressive setting for testing, we further ablate the solver design and normalization scheme in our 7(a) Normalization Ablation (b) Solver Ablation (c) Dissipative System (d) Conservative System 
+
+Figure 4: Accuracy-Efficiency Trade-off of Border Ablations under the Direct Auto-regressive Inference setting. framework. Figures 4a and 4b compare the normalization methods used in training, and the different solvers used in inference on the Diffusion-Reaction dataset. Our approach (Cascaded Normalization + GCS) beats other normalization schemes (Single and Separated normalization) and solvers (Dopri5, RK4, Euler’s) in terms of the prediction accuracy. As the cascaded normalization helps in stable learning and GCS helps in faithfully integrating the learned vector field, their contributions are complementary and both are necessary to achieve the best performance. 
+
+6.3 Dissipativity and Semi-Group Property 
+
+Figures 4c and 4d contrast the effects of enforcing full-group (Equation (10a)) versus semi-group properties (Equation (9a)) in dissipative and conservative systems, respectively. In the dissipa-tive system (Figure 4c), the unidirectional Rupture loss (semi-group Equation (9a)) significantly outperforms the bidirectional variant (full-group Equation (10a)). This confirms that enforcing time-reversibility on an intrinsically irreversible process is detrimental. In contrast, for the conservative system (Figure 4d), both settings yield comparable performance. We attribute this to the capacity of the unidirectional loss to implicitly capture the target’s time-reversal symmetry ( −Φ∆t). Conse-quently, while bidirectional consistency mirrors the Hamiltonian nature of conservative dynamics, the forward semi-group property remains practically sufficient. Above all, these findings highlight the necessity of physics-aware regularization. Imposing the correct temporal constraint is critical: bidirectional consistency acts as the preferred prior for conservative systems, yet a fatal over-constraint for dissipative ones. Our framework effectively exemplifies “inductive bias engineering"-embedding physical domain knowledge directly into the loss landscape—as a promising direction for enhancing model generalization beyond standard architecture or optimization design. 
+
+# 7 Conclusion 
+
+In this work, we present Consistent Vector Flow (CVF), a novel framework for learning consistent physical dynamics from discrete-time observations. The CVF framework utilizes TTS as a funda-mental inductive bias to learn consistent dynamics; cascaded normalization and a consistency-guided adaptive solver are further introduced to ensure stable training and improve inference accuracy and efficiency. Our work provides a new perspective on learning consistent dynamics from discrete observations and highlights the importance of correct inductive bias in learning physical systems. Based on the evaluations, we exemplify the critical role of learning structurally compatible dynamics and consistency-guided step-size control in achieving robust long-term predictions, which are often overlooked in existing frameworks. 
+
+Limitations and Future Work While our framework demonstrates significant improvements in learning consistent dynamics, there are several limitations that warrant further investigation. First, our current implementation focuses on autonomous systems, and extending the framework to handle systems with external forcing is an important direction for future work. Second, while our consistency-guided adaptive solver shows promising results in improving inference efficiency, revoking the reliance on absolute truncation error thresholds causes less inference consistency across time step scales than dopri5 solver. Finally, the TTS prior is not the only inductive bias that can be leveraged to learn consistent dynamics, and exploring other forms of inductive bias, such as symplectic structure or conservation laws, could be a promising direction for future research in learning physical systems. 88 Related Works 
+
+Learning Paradigms 
+
+1. Discrete-Time State Regression One common practice in neural surrogate modeling of physical systems learns discrete mapping from the current state to the future state or their residual (Hao et al., 2023; Li et al., 2023, 2020; Pfaff et al., 2021), assuming that the dynamics operates in a constant time step. Despite the two different learning objectives in the discrete-time mapping paradigm, they are essentially equivalent in that the discrete time step ∆t is assumed constant. 2. Neural ODEs Neural ordinary differential equation models learn the continuous transformation as a velocity field ordinary differential equations (ODEs) with neural surrogate models (Chen et al., 2018; Sanchez-Gonzalez et al., 2020). The inference process of neural ODEs only relies on external numerical solvers (Dormand, 2018), Chen et al. (2018); Kidger et al. (2020); Mei et al. (2024) address the challenges related to such training and inference process ; Norcliffe et al. (2020) application of high-order neural ODEs. 3. Generative Paradigm Recently, generative models (Lipman et al., 2023; Li et al., 2025; Wang et al., 2025; Souveton & Terrana, 2025) became the efficient alternative to learn continuous-time flows that follow the optimal transport between the current and future state distributions. Works (Zhang et al., 2026; Qiao et al., 2026) have proposed to learn the underlying geometric structure of the dynamics in generative tasks. Song et al. (2023) enforce self-consistency along a probability flow to facilitate single-step generation by mapping any point on the trajectory back to its origin, which is different from our approach that enforces semi-group consistency on the learned vector field to ensure the geometric compatibility of the learned dynamics. Our evaluation operator Φθ that is used in theoretical discussions adopts the same formation as these above paradigms, but our CVF moves beyond this paradigm with the TTS prior, temporal expansion and adaptive solver design. Xu et al. (2025); Matinkia & Ray (2024) also learns a semi-group enforcement from discrete observations in biological systems, with the core idea of multi-scale regularization, which coincidentally shares a similar formulation but is overall a subset of our approach. 
+
+Auxiliary Works Operator learning methods (Li et al., 2020; Lu et al., 2021; Li et al., 2021), encoding methods (Mukhopadhyay et al., 2025) and physics-informed neural networks (PINNs) (Raissi et al., 2019; Lau et al., 2024) are the orthogonal approaches to the above learning paradigms. 
+
+Numerical Solvers Models that implement fixed-step explicit methods like Euler’s method (Lipman et al., 2023; Mei et al., 2024) extrapolate linearly along the tangent space, inherently ignoring the manifold’s curvature and diverging rapidly in non-linear regions. Traditional adaptive solvers that follow Runge-Kutta methods (Dormand, 2018) rely on monitoring local truncation errors that assume a smooth and well-behaved manifold, which violates the neural surrogate modeling setting where the learned velocity field is dominated by the training data distribution and low-level noise as time step deviates from the training time step (Section H). 
+
+Post-Hoc Regularization of Lie Symmetries. Recent literature has increasingly focused on em-bedding continuous Lie group symmetries into neural surrogates for dynamic systems (e.g., (Liu et al., 2026; Ko et al., 2024)). A dominant paradigm within this thread treats symmetry discovery as a posterior regularization problem. These methods employ generic neural network estimators and attempt to force physical compliance by augmenting the training objective with complex algebraic penalties—such as the infinitesimal invariance condition (IIC) or computationally heavy “validity scores” derived from trajectory numerical errors. This stands in stark contrast to our approach. Rather than relying on heavy regularization to retroac-tively “recycle” valid Lie symmetry pieces from chaotic, unconstrained functional spaces, we directly construct a heavily constrained hypothesis space a priori . Because our approach embeds differential consistency and ground truth anchors naturally, it mitigates the computational bottlenecks often encountered in a posterior symmetry discovery, strongly promoting the preservation of the underlying semi-group geometry. 9References 
+
+Bensoussan, A. Ordinary differential equations. In Atherton, D. P. and Borne, P. (eds.), Concise En-cyclopedia of Modelling & Simulation , volume 5 of Advances in Systems Control and Information Engineering , pp. 319–322. Pergamon Press / Elsevier, 1992. doi: 10.1016/B978-0-08-036201-4. 50120-X. Brandstetter, J., Worrall, D. E., and Welling, M. Message passing neural PDE solvers. In The Tenth International Conference on Learning Representations, ICLR 2022, Virtual Event, April 25-29, 2022 . OpenReview.net, 2022. Chen, H., Wu, R., Grinspun, E., Zheng, C., and Chen, P. Y. Implicit neural spatial representations for time-dependent pdes. In Krause, A., Brunskill, E., Cho, K., Engelhardt, B., Sabato, S., and Scarlett, J. (eds.), International Conference on Machine Learning, ICML 2023, 23-29 July 2023, Honolulu, Hawaii, USA , volume 202 of Proceedings of Machine Learning Research , pp. 5162–5177. PMLR, 2023. Chen, T. Q., Rubanova, Y., Bettencourt, J., and Duvenaud, D. Neural ordinary differential equations. In Bengio, S., Wallach, H. M., Larochelle, H., Grauman, K., Cesa-Bianchi, N., and Garnett, R. (eds.), Advances in Neural Information Processing Systems 31: Annual Conference on Neural Information Processing Systems 2018, NeurIPS 2018, December 3-8, 2018, Montréal, Canada , pp. 6572–6583, 2018. deBoor, C. A Practical Guide to Splines . Applied Mathematical Sciences. Springer, 1978. ISBN 978-1-4612-6333-3. doi: 10.1007/978-1-4612-6333-3. Dormand, J. R. Numerical Methods for Differential Equations: A Computational Approach . CRC Press, 1 edition, May 2018. ISBN 978-1-351-07510-7. doi: 10.1201/9781351075107. Ghanem, P., Demirkaya, A., Imbiriba, T., Ramezani, A., Danziger, Z., and Erdogmus, D. Learning Physics Informed Neural Odes with Partial Measurements. In Walsh, T., Shah, J., and Kolter, Z. (eds.), AAAI-25, Sponsored by the Association for the Advancement of Artificial Intelligence, February 25 - March 4, 2025, Philadelphia, PA, USA , pp. 16799–16807. AAAI Press, 2025. doi: 10.1609/AAAI.V39I16.33846. Hairer, E., Wanner, G., and Lubich, C. Geometric Numerical Integration , volume 31 of Springer Series in Computational Mathematics . Springer-Verlag, Berlin/Heidelberg, 2006. ISBN 978-3-540-30663-4. doi: 10.1007/3-540-30666-8. Hall, C. A. and Meyer, W. Optimal error bounds for cubic spline interpolation. Journal of Approxi-mation Theory , 16(2):105–122, 1976. ISSN 0021-9045. doi: 10.1016/0021-9045(76)90040-X. Hao, Z., Wang, Z., Su, H., Ying, C., Dong, Y., Liu, S., Cheng, Z., Song, J., and Zhu, J. GNOT: A general neural operator transformer for operator learning. In Krause, A., Brunskill, E., Cho, K., Engelhardt, B., Sabato, S., and Scarlett, J. (eds.), International Conference on Machine Learning, ICML 2023, 23-29 July 2023, Honolulu, Hawaii, USA , Proceedings of Machine Learning Research, pp. 12556–12569. PMLR, 2023. Hastings, S. P. Differential equations and dynamical systems (lawrence perko). Siam Review , 34(1): 129–131, 1992. doi: 10.1137/1034019. Helwig, J., Zhang, X., Fu, C., Kurtin, J., Wojtowytsch, S., and Ji, S. Group equivariant fourier neural operators for partial differential equations. In Krause, A., Brunskill, E., Cho, K., Engelhardt, B., Sabato, S., and Scarlett, J. (eds.), International Conference on Machine Learning, ICML 2023, 23-29 July 2023, Honolulu, Hawaii, USA , Proceedings of Machine Learning Research, pp. 12907–12930. PMLR, 2023. Hou, X., Huang, X., and Perdikaris, P. CFO: Learning continuous-time PDE dynamics via flow-matched neural operators. CoRR , abs/2512.05297, 2025. doi: 10.48550/ARXIV.2512.05297. Huang, Z., Sun, Y., and Wang, W. Learning continuous system dynamics from irregularly-sampled partial observations. In Larochelle, H., Ranzato, M., Hadsell, R., Balcan, M.-F., and Lin, H.-T. (eds.), Advances in Neural Information Processing Systems 33: Annual Conference on Neural Information Processing Systems 2020, NeurIPS 2020, December 6-12, 2020, Virtual , 2020. 10 Khrabry, A., Startsev, E., Powis, A., and Kaganovich, I. Hierarchical-embedding autoencoder with a predictor (HEAP) as efficient architecture for learning long-term evolution of complex multi-scale physical systems. CoRR , abs/2505.18857, 2025. doi: 10.48550/ARXIV.2505.18857. Kidger, P., Morrill, J., Foster, J., and Lyons, T. J. Neural controlled differential equations for irregular time series. In Larochelle, H., Ranzato, M., Hadsell, R., Balcan, M.-F., and Lin, H.-T. (eds.), 
+
+Advances in Neural Information Processing Systems 33: Annual Conference on Neural Information Processing Systems 2020, NeurIPS 2020, December 6-12, 2020, Virtual , 2020. Ko, G., Kim, H., and Lee, J. Learning infinitesimal generators of continuous symmetries from data. In Globersons, A., Mackey, L., Belgrave, D., Fan, A., Paquet, U., Tomczak, J. M., and Zhang, C. (eds.), Advances in Neural Information Processing Systems 38: Annual Conference on Neural Information Processing Systems 2024, NeurIPS 2024, Vancouver, BC, Canada, December 10 - 15, 2024 , 2024. Lau, G. K. R., Hemachandra, A., Ng, S.-K., and Low, B. K. H. PINNACLE: PINN adaptive ColLocation and experimental points selection. In The Twelfth International Conference on Learning Representations, ICLR 2024, Vienna, Austria, May 7-11, 2024 . OpenReview.net, 2024. Li, Z., Kovachki, N. B., Azizzadenesheli, K., Liu, B., Bhattacharya, K., Stuart, A. M., and Anand-kumar, A. Neural operator: Graph kernel network for partial differential equations. CoRR ,abs/2003.03485, 2020. Li, Z., Kovachki, N. B., Azizzadenesheli, K., Liu, B., Bhattacharya, K., Stuart, A. M., and Anandku-mar, A. Fourier neural operator for parametric partial differential equations. In 9th International Conference on Learning Representations, ICLR 2021, Virtual Event, Austria, May 3-7, 2021 .OpenReview.net, 2021. Li, Z., Zhou, A. Y., and Farimani, A. B. Generative latent neural PDE solver using flow matching. 
+
+CoRR , abs/2503.22600, 2025. doi: 10.48550/ARXIV.2503.22600. Li, Z.-Y., Kovachki, N. B., Choy, C., Li, B., Kossaifi, J., Otta, S., Nabian, M. A., Stadler, M., Hundt, C., Azizzadenesheli, K., and Anandkumar, A. Geometry-Informed Neural Operator for Large-Scale 3D PDEs, September 2023. Lipman, Y., Chen, R. T. Q., Ben-Hamu, H., Nickel, M., and Le, M. Flow Matching for Generative Modeling. In The Eleventh International Conference on Learning Representations, ICLR 2023, Kigali, Rwanda, May 1-5, 2023 . OpenReview.net, 2023. Liu, S., Sinha, S., and Krishnan, V. LieDynNet: Learning Lie Symmetries from Spatiotemporal Data, 2026. Liu, W. and Yue, X. Learning to integrate diffusion odes by averaging the derivatives. CoRR ,abs/2505.14502, 2025. doi: 10.48550/ARXIV.2505.14502. Lu, L., Jin, P., Pang, G., Zhang, Z., and Karniadakis, G. E. Learning nonlinear operators via DeepONet based on the universal approximation theorem of operators. Nature Machine Intelligence , 3(3): 218–229, March 2021. ISSN 2522-5839. doi: 10.1038/s42256-021-00302-5. Matinkia, M. and Ray, N. Learning diffeomorphism for image registration with time-continuous networks using semigroup regularization. CoRR , abs/2405.18684, 2024. doi: 10.48550/ARXIV. 2405.18684. Mei, W., Zheng, D., and Li, S. ControlSynth Neural Odes: Modeling Dynamical Systems with Guaranteed Convergence. In Globersons, A., Mackey, L., Belgrave, D., Fan, A., Paquet, U., Tomczak, J. M., and Zhang, C. (eds.), Advances in Neural Information Processing Systems 38: Annual Conference on Neural Information Processing Systems 2024, NeurIPS 2024, Vancouver, BC, Canada, December 10 - 15, 2024 , 2024. Mortensen, R. E. Infinite-dimensional dynamical systems in mechanics and physics (roger temam). 
+
+Siam Review , 33(1):156–158, 1991. doi: 10.1137/1033041. Mukhopadhyay, P., McCabe, M., Ohana, R., and Cranmer, M. Controllable Patching for Compute-Adaptive Surrogate Modeling of Partial Differential Equations, 2025. 11 Noether, E. and Tavel, M. A. Invariant Variation Problems. Transport Theory and Statistical Physics ,1(3):186–207, 1918. ISSN 0041-1450, 1532-2424. doi: 10.1080/00411457108231446. Norcliffe, A., Bodnar, C., Day, B., Simidjievski, N., and Lió, P. On second order behaviour in augmented neural odes. In Larochelle, H., Ranzato, M., Hadsell, R., Balcan, M.-F., and Lin, H.-T. (eds.), Advances in Neural Information Processing Systems 33: Annual Conference on Neural Information Processing Systems 2020, NeurIPS 2020, December 6-12, 2020, Virtual , 2020. Olver, P. J. Applications of Lie Groups to Differential Equations , volume 107 of Graduate Texts in Mathematics . Springer New York, New York, NY, 1993. ISBN 978-0-387-95000-6 978-1-4612-4350-2. doi: 10.1007/978-1-4612-4350-2. Pfaff, T., Fortunato, M., Sanchez-Gonzalez, A., and Battaglia, P. W. Learning mesh-based simulation with graph networks. In 9th International Conference on Learning Representations, ICLR 2021, Virtual Event, Austria, May 3-7, 2021 . OpenReview.net, 2021. Qiao, W., Zuo, W., and Li, H. Lie flow: Video dynamic fields modeling and predicting with lie algebra as geometric physics principle. CoRR , abs/2602.21645, 2026. doi: 10.48550/ARXIV.2602.21645. Raissi, M., Perdikaris, P., and Karniadakis, G. E. Physics-informed neural networks: A deep learning framework for solving forward and inverse problems involving nonlinear partial differential equations. Journal of Computational Physics , February 2019. doi: 10.1016/J.JCP.2018.10.045. Sanchez-Gonzalez, A., Godwin, J., Pfaff, T., Ying, R., Leskovec, J., and Battaglia, P. W. Learning to simulate complex physics with graph networks. In Proceedings of the 37th International Conference on Machine Learning, ICML 2020, 13-18 July 2020, Virtual Event , Proceedings of Machine Learning Research, pp. 8459–8468. PMLR, 2020. Song, Y., Dhariwal, P., Chen, M., and Sutskever, I. Consistency models. In Krause, A., Brunskill, E., Cho, K., Engelhardt, B., Sabato, S., and Scarlett, J. (eds.), International Conference on Machine Learning, ICML 2023, 23-29 July 2023, Honolulu, Hawaii, USA , Proceedings of Machine Learning Research, pp. 32211–32252. PMLR, 2023. Souveton, V. and Terrana, S. Hamiltonian normalizing flows as kinetic PDE solvers: Application to the 1D vlasov-poisson equations. In Coelho, C., Zimmering, B., Costa, M. F. P., Ferrás, L. L., and Niggemann, O. (eds.), Proceedings of the 2nd ECAI Workshop on "Machine Learning Meets Differential Equations: From Theory to Applications", 26 October 2025, Bologna, Italy ,Proceedings of Machine Learning Research, pp. 133–146. PMLR, 2025. Takamoto, M., Praditia, T., Leiteritz, R., MacKinlay, D., Alesiani, F., Pflüger, D., and Niepert, M. PDEBench: An extensive benchmark for scientific machine learning. In Koyejo, S., Mohamed, S., Agarwal, A., Belgrave, D., Cho, K., and Oh, A. (eds.), Advances in Neural Information Processing Systems 35: Annual Conference on Neural Information Processing Systems 2022, NeurIPS 2022, New Orleans, LA, USA, November 28 - December 9, 2022 , 2022. Trenta, A., Cossu, A., and Bacciu, D. Learning and transferring physical models through derivatives. 2026, 2026. Wang, H., Pan, J., Wu, H., Zhang, F., and Wu, T. FourierFlow: Frequency-aware flow matching for generative turbulence modeling. CoRR , abs/2506.00862, 2025. doi: 10.48550/ARXIV.2506.00862. Xu, B., Ho, Z. E., and Huang, Y. Time-series modeling with neural flow maps. bioRxiv : the preprint server for biology , 2025. Zhang, X., Helwig, J., Lin, Y., Xie, Y., Fu, C., Wojtowytsch, S., and Ji, S. SineNet: Learning temporal dynamics in time-dependent partial differential equations. In The Twelfth International Conference on Learning Representations, ICLR 2024, Vienna, Austria, May 7-11, 2024 . OpenReview.net, 2024. Zhang, Z., Li, D., Reid, I. D., and Hartley, R. I. GeoWorld: Geometric world models. CoRR ,abs/2602.23058, 2026. doi: 10.48550/ARXIV.2602.23058. 12 A Notations and Preliminaries 
+
+A.1 Flow, Trajectory, and Manifold 
+
+Let Ts(t) be the temporal trajectory of the system state s over time in an unknown system M, i.e., 
+
+Ts(t) : R → M where M can also be viewed as the manifold of all possible system states and their trajectories. The goal is to recover the TTS compatible dynamics T ⋆ = {T ⋆s (t) | s ∈ M} from a set of discrete observations ˜s ∈ D sampled from these trajectories at discrete time points. Let Φ⋆
+
+support the true T ⋆, the learning objective is then to identify the optimal Φ⋆ within the space H.
+
+Φ⋆ = arg min  
+
+> Φ∈H
+
+Es∼D [L(Φ , s )] 
+
+M The manifold of all possible system states and their trajectories 
+
+Φ The arbitrary evolution operator used in theoretic analysis 
+
+Ts(t) The temporal trajectory of the system state s over time 
+
+T ⋆ The true TTS compatible dynamics, i.e., the set of all trajectories T ⋆s (t) for s ∈ M 
+
+Φ⋆ The true flow map that supports the true TTS compatible dynamics T ⋆
+
+H The hypothesis space of candidate flow maps 
+
+D The dataset of discrete observations sampled from the trajectories in T ⋆
+
+L(Φ , s ) The measure of the discrepancy between the flow map Φ and the true trajectory at state sψθ The learned flow map parameterized by neural network parameters θ
+
+RΦ 
+
+> k
+
+The Φ-based Symmetry Rupture used in theoretic analysis 
+
+Rk The Symmetry Rupture estimator used for training model 
+
+ˆRk The normalized Symmetry error used for step control during inference 
+
+θ The parameters of the learned flow map ψθ
+
+Jθ The training objective for learning the flow map ψθ
+
+δmin The minimum fundamental resolution of the training data 
+
+∆t The time step used for training and inference NFE Number of Function Evaluations during inference, a measure of computational cost TTS Time-Translation Symmetry SR Symmetry Rupture SM Baseline model trained to learn the secant velocity field TM Baseline model trained to learn the tangential velocity field N-ODE Baseline model trained with the Neural ODE paradigm CFM Baseline model trained with the Continuous Flow Matching paradigm CVF Our proposed Consistent Vector Flow framework Table 1: Summary of Notations and Abbreviations 
+
+# B Time-Translation Symmetry and Group Structure 
+
+Time-translation symmetry (TTS) is a fundamental property of many physical systems, reflecting the invariance of the system’s behavior under shifts in time. In the context of learning dynamics from discrete observations, TTS implies that the evolution of the system can be described by a flow that is consistent as time progresses, regardless of the specific time points at which observations are made. Note that TTS is a significantly weaker constraint than the PDE-based regularization used in PINNs, as it does not require explicit knowledge of the underlying equations governing the dynamics, but rather requires only that the physical system follows a consistent rule of temporal evolution regardless of when the observations are made. Mathematically, this manifests as a time-independent ordinary differential equation (ODE) as ds dt =
+
+v(s), where the rate of change is governed by a time-invariant velocity field v(s).
+
+Theorem B.1 (Group Property of Temporal Evolution) .
+
+∀s ∈ M , t 1, t 2 ∈ R∗,
+
+Φt2 (Φ t1 (s)) = Φ (t1+t2)(s)(Φ t)−1 = Φ −t
+
+1. Path Independence : The composition of flows satisfies the semi-group property, i.e., the flow over a combined time duration is equivalent to the sequential application of flows over individual durations. 2. Inverse Map : The inverse of Φt is given by flowing backward in time. 
+
+13 C Flows and Diffeomorphisms 
+
+According to the Picard-Lindelöf Theorem (Bensoussan, 1992; Hastings, 1992), if the vector field 
+
+f (t, s ) is continuously differentiable ( C1) on an open set D ⊂ R × Rn, then for any (t0, s 0) ∈ D,there exists a unique solution s(t).
+
+Proposition C.1 (Flow as a Diffeomorphism) . Let Φt 
+
+> ∆t
+
+: s(t) 7 → s(t + ∆ t) be the flow generated by the ODE ds dt = f (s, dt ). For any finite time interval where solutions are defined, the map Φ∆t is a diffeomorphism (a smooth bijection with a smooth inverse). The inverse map is simply given by flowing backwards along the time-reversed vector field: (Φ ∆t)−1 = Φ −∆t.Proof. See Bensoussan (1992), Chapter 2, Section 2. The smooth dependence on initial conditions implies differentiability of Φ, and uniqueness implies bijection. 
+
+Relation to Divergence (Liouville’s Formula). The geometric properties of the flow are governed by the divergence of the field ∇ · f :
+
+ddt Vol (Ω t) = 
+
+Z
+
+> Ωt
+
+(∇ · f ) dV (8) This allows us to categorize physical systems into two classes relevant to our modeling assumptions: • Conservative Systems (Groups): When ∇ · f = 0 (e.g., Hamiltonian dynamics), the phase volume is preserved. The flow Ψ∆t forms a one-parameter group of diffeomorphisms 
+
+defined for all ∆t ∈ R. The map is strictly reversible, aligning perfectly with the group structure. • Dissipative Systems (Semi-groups): When ∇ · f < 0 (e.g., Diffusion Reaction), phase volume contracts exponentially. Mathematically, the flow forms a semi-group (t ≥ 0)and is not globally a diffeomorphism as t → ∞ due to information loss (merging into attractors) (Mortensen, 1991). As we approach the ideal map of the true underlying dynamics Φ∆t with our learned flow ψθ , the Lie group structure of diffeomorphisms in the conservative case and the semi-group structure in the dissipative case are both naturally embedded in the learning process, and the proposed Symmetry Rupture serves as a general consistency constraint that promotes the preservation of these geometric properties in the learned dynamics, which is critical for achieving accurate long-term predictions and stable rollouts. 
+
+C.1 Learning Homomorphisms of Flows for Both Conservative and Dissipative Systems 
+
+While the conservative systems and dissipative systems differ in their global geometric properties, the Symmetry Rupture Rk is compatible with both classes of systems. For conservative systems, the group property enforces that −Φt = Φ −t, therefore Rk naturally forms a closed loop that measures the Symmetry Rupture. For dissipative systems, the semi-group property enforces that 
+
+Φt1+t2 = Φ t1 ◦ Φt2 for t1, t 2 ≥ 0, Rk measures the semi-group inconsistency, which is the only meaningful temporal constraint for dissipative systems. Therefore, the proposed Symmetry Rupture is a general consistency measurement that can be applied to both conservative and dissipative system, and does not require any modification to accommodate the differences in their geometric properties. 
+
+Rk(s) =  ◦ki=1 Φ∆ti
+
+ (s0) − ΦT (s0) 2 (9a) where s0 = s, si = Φ ∆ti (si−1).
+
+C.2 Learning Diffeomorphisms for Conservative Systems with Bidirectional Consistency 
+
+However, we explicitly define the bidirectional Rupture loss Rbi k for conservative systems to further enforce the reverse-time consistency, which is a necessary condition for learning consistent dynamics in conservative systems but not in dissipative systems. Together, the semi-group-based forward, and the full-group-based bidirectional constraints ( Rk and Rbi k ) form a comprehensive consistency measurement that can effectively regularize the learning of dynamics in both classes of systems. 
+
+Rbi  
+
+> k
+
+(s) = 
+
+
+
+◦ k
+
+> 2
+> i=1
+
+Φ∆ti
+
+
+
+(s0) −
+
+
+
+◦ k
+
+> 2
+> i=0
+
+Φ−∆tk−i
+
+
+
+(sk) 2
+
+(10a) 14 D Reduction: Sufficiency of the Basic Triangle ( k = 3 )
+
+A key insight from geometric integration theory is that any such k-polygon error can be decomposed into a sum of local triangle errors via triangulation (Hairer et al., 2006). Thus, by strictly enforcing the vanishing of the local 2-step error (Symmetry Condition, k = 3 ), we implicitly bound the global error Rk for any k > 3.Directly optimizing Equation (2) is computationally intractable due to the infinite sum. However, we propose that explicitly enforcing consistency on the smallest non-trivial loop ( k = 3 ) is sufficient to bound the error for any k.
+
+Proposition D.1 (Triangle Sufficiency via Composition) . If the flow map Φ satisfies the Symmetry Condition (i.e., vanishing rupture for k = 3 ) for all t1, t 2:
+
+Φt2 ◦ Φt1 = Φ t1+t2 (11) 
+
+then the flow satisfies the global path independence condition for any finite k ≥ 3.Proof. We proceed by induction on k, the number of discrete steps. 
+
+Base Case ( k = 3 ): The condition is given by hypothesis: Φ∆t2 (Φ ∆t1 (s)) = Φ ∆t1+∆ t2 (s).
+
+Inductive Step: Assume consistency holds for any sequence of k steps. Consider a sequence of k + 1 
+
+steps with total time Tk+1 = Pk+1  
+
+> i=1
+
+∆ti. The composition is: 
+
+Sk+1 = Φ ∆tk+1 ◦ (Φ ∆tk ◦ · · · ◦ Φ∆t1 ) (12) 
+
+= Φ ∆tk+1 ◦
+
+
+
+ΦPki=1 ∆ti
+
+
+
+(by Inductive Hypothesis) (13) Now, let Tk = Pki=1 ∆ti. We are left with the composition of two terms: Φ∆tk+1 ◦ ΦTk . Applying the triangle Symmetry Condition (Base Case) to these two terms: 
+
+Φ∆tk+1 ◦ ΦTk = Φ Tk +∆ tk+1 = Φ Tk+1 (14) Thus, consistency for k = 3 implies consistency for all k ∈ N.
+
+Geometric Interpretation (Triangulation). This algebraic proof corresponds to the geometric intuition of Polygon Triangulation . Any closed loop formed by k time steps (a k-gon) can be decomposed into k − 2 triangles. If the curvature vanishes on every fundamental triangle, Stokes’ theorem (in the discrete sense) implies that the total curvature over the entire polygon surface must also vanish. Therefore, constraining the model with the basic k = 3 loss is structurally sufficient to enforce the global group property required for the k → ∞ geodesic limit. 
+
+D.1 Unified Bidirectional Isomorphism 
+
+Standard approaches to promoting reversibility in dynamic learning typically rely on dual-model frameworks (e.g., CycleGANs using separate forward/backward generators) or architecturally con-strained invertible flows. The former doubles the parameter space and risks learning disjoint dynamics, while the latter sacrifices expressivity. In contrast, we leverage the Lie group structure Equation (10a) of the temporal flow to unify the forward and backward dynamics within a single model ψθ .
+
+Isomorphic Consistency at k=3 This unification is most potent when applied to the simplest non-trivial topological loop: the triangle ( k = 3 ). By exploiting the group inverse property Φ−t = Φ −1 
+
+> t
+
+,we can structurally fold the loop closure constraint into a single forward pass. Let the three edges of the temporal triangle be Φ∆t (hypotenuse), Φ∆t1 (partial forward), and Φ−∆t2 (partial backward, where ∆t1 + ∆ t2 = ∆ t). The closure condition implies that the state reached by evolving ∆t1
+
+forward from st must be identical to the state reached by evolving ∆t2 backward from st+∆ t. We operate this by constructing a composite query batch (S, T ) that simultaneously samples the forward, backward, and hypotenuse bundles: 
+
+S = [ st, s t, s t+∆ t], T = [∆ t1, −∆t2, ∆t] (15) 15 By feeding this batch into ψθ , the model is forced to explicitly learn the inverse map logic: 
+
+∆t1
+
+∆t ψθ (st, ∆t1) ≈ ψθ (st, ∆t) − ∆t2
+
+∆t ψθ (st+∆ t, −∆t2) (16) Crucially, this design does not merely “accelerate" training. It enforces that the learned operator is a true element of the one-parameter semi-group flow, possessing a valid inverse. While this bidirectional folding reduces the computational complexity of the consistency check from O(k) to 
+
+O(⌈k/ 2⌉) for general polygons, it achieves a singular computational closure at k = 3 . In this special case, the entire topological constraint is resolved in O(1) (parallel) steps without any recursive rollout. 
+
+# E Unified Tangent-Secant Velocity Fields 
+
+The training objective (Equation (17)) of the Consistent Vector Flow (CVF) is to capture the secant velocity field ( ψθ (s, ∆t)) and the Symmetry Rupture ( Rk) in a unified framework: 
+
+Jθ = E
+
+
+
+∥ψθ (st, ∆t) − v∆t∥22 + ∥rψ θ (st, rdt ) + r′ψθ (st+r∆t, r ′∆t) − ψθ (st, ∆t)∥22
+
+
+
+(17) where v∆t is the time-difference secant velocity calculated from discrete-time observations, and r
+
+and r′ are two random scalars satisfying r + r′ = 1 , r ∼ U [0 , 1] .
+
+E.1 Symmetry Rupture in Velocity Field 
+
+Learning of tangent and secant velocity fields can find solid ground on the observed data points (knots of the spline interpolation), however, the velocity field in between the observed data points remains unobserved and unconstrained. One straightforward solution is to sample from the spline trajectory for both tangent and secant velocity supervision, however, it would introduce a strong bias towards the spline-approximated velocity field instead of the true underlying physical dynamics. The Symmetry Rupture Rk is used in this paper to support the unobserved region of the flow. Following Equation (2), it is easy to find the correspondence in velocity fields: 
+
+∀[st1 ,s t2 , s t3 ] ⊂ τ ∧ t1 ≤ t2 ≤ t3,st3 = st1 + ( st2 − st1 ) + ( st3 − st2 )
+
+st3 − st1 = ( st2 − st1 ) + ( st3 − st2 )
+
+st3 − st1
+
+t3 − t1
+
+= t2 − t1
+
+t3 − t1
+
+st2 − st1
+
+t2 − t1
+
++ t3 − t2
+
+t3 − t1
+
+st3 − st2
+
+t3 − t2
+
+st3 − st1
+
+∆t = ∆t1
+
+∆tst2 − st1
+
+t2 − t1
+
++ ∆t2
+
+∆tst3 − st2
+
+t3 − t2
+
+ψθ (st, ∆t) = ∆t1
+
+∆t ψθ (st, ∆t1) + ∆t2
+
+∆t ψθ (st+r∆t, ∆t2)
+
+(18) where τ is the unknown trajectory of the physical system. The Symmetry Rupture Rk in velocity field is then defined as the mean squared error between the two sides of Equation (18): 
+
+∥rψ θ (st, r ∆t) + r′ψθ (st+r∆t, r ′∆t) − ψθ (st, ∆t)∥22 (19) 
+
+E.2 United Velocity Field as Path Integration 
+
+Ideally, we seek a learned model ψθ that satisfies path independence for any arbitrary discretizations 
+
+k → ∞ . Taking the limit as max(∆ ti) → 0, the composition of discrete steps converges to the integral of the vector field (the geodesic flow), while the direct term remains the neural operator prediction. The condition for a consistent physical model is: 
+
+lim  
+
+> k→∞
+
+Rk(s; ∆ t) = 1∆t
+
+Z ∆t
+
+> 0
+
+vθ (st) dt 
+
+| {z }
+
+> Geodesic Integral
+
+− ψθ (st, ∆t)
+
+| {z }
+
+> Direct Jump
+
+≡ 0 (20) Satisfying Equation (20) implies that the learned operator ψθ is the exact exponential map of the learned vector field vθ .16 F Tangent-Bundle Consistent Normalization 
+
+Standard normalization schemes treat state variables s and velocity variables v as independent statistical distributions, applying separate channel-wise scaling (e.g., s → N (¯ s), v → N (¯ v)). However, from a differential geometric perspective, this independence assumption violates the intrinsic structure of the Tangent Bundle T M. Velocity v is not a free vector but lives in the tangent space anchored at s. A coordinate transformation on the manifold (normalization of s) induces a precise Pushforward transformation on the tangent vectors. Ignoring this coupling forces the neural network to implicitly learn the scaling ratios between independent normalization statistics, creating a “conditioning barrier" that hinders convergence. To resolve this, we propose Cascaded Normalization , a scheme designed to preserve the differential consistency between the base manifold and its tangent space during data pre-processing. 
+
+Preserving the Pushforward Map Let Φ : M → ˜M be the normalization diffeomorphism acting on the state space, defined as ˜s = Φ( s) = (s−μs) 
+
+> σs
+
+. By the chain rule, the induced transformation on the velocity v = dtds must be the pushforward dΦ:
+
+d˜sdt = dΦ · ds dt = 1
+
+σs
+
+v. (21) Standard independent normalization scales v by 1 
+
+> σv
+
+, which creates a dimensional mismatch if σv̸ = σs.Our Cascaded Normalization respects this geometric linkage by first applying the pushforward scaling ( 1 
+
+> σs
+
+) and then applying a secondary affine standardization for numerical stability: 
+
+˜s = s − μs
+
+σs
+
+˜v = 
+
+> vσs
+
+− μv
+
+σv
+
+, ˜v∆t =
+
+ s(t+∆ t)−s(t)
+
+> σs∆t
+
+
+
+− μv
+
+σv
+
+(22) Here, μv ,σv are the statistics of the pre-scaled velocity vσs . Crucially, this scheme ensures that the neural velocity field ψθ operates in a dimensionless latent space consistent with the state dynamics. The reconstruction strictly follows the inverse map: 
+
+ˆst+∆ t = st + ∆ t · σs · [σv ψθ (˜ s, ∆t) + μv ]
+
+| {z }
+
+> Inverse Pushforward (dΦ) −1
+
+. (23) 
+
+Analysis of Gradient Consistency The advantage of this scheme becomes evident when analyzing the derivative limit. Consider the independent normalization baseline where ˜s = (s−μs) 
+
+> σs
+
+and 
+
+˜v = v−μ′
+
+> v
+> σ′
+> v
+
+. The numerical derivative of the normalized state yields: 
+
+lim 
+
+> ∆t→0
+
+˜s(t + ∆ t) − ˜s(t)∆t = vσs
+
+. (24) However, the network is trained to output ˜v = vσ′
+
+> v
+
+. This forces the network ψθ to effectively learn a linear gain factor k = σs
+
+> σ′
+> v
+
+to reconcile the physical derivative with the target label. In contrast, our Cascaded Normalization ensures that the target v is structurally aligned with dtds up to the affine shift μv ,σv , decoupling the physical scaling σs from the numerical conditioning. Figure 4a empirically validates that this geometry-aware normalization stabilizes the velocity field distribution, preventing the “vanishing gradient" effect caused by mismatched scale factors in stiff dynamic systems. 
+
+# G From Semi-Group Property to Symmetry Rupture 
+
+Let R⋆k represent both the evolution-operator-based Symmetry Rupture RΦ 
+
+> k
+
+and the Symmetry Rupture in the velocity field Rk. In this section, we discuss the geometric interpretation of the Symmetry Rupture ( R⋆k) based on the semi-group property and the necessary and sufficient conditions for a non-vanishing Symmetry Rupture ( R⋆k > 0). 17 We proceed by first defining the notions of the semi-group property and curvature in the context of dynamic system and then demonstrating that trajectory curvature is only a necessary, but not sufficient, condition for a non-vanishing Symmetry Rupture. By showing the insufficiency of trajectory curvature for a non-zero R⋆k, we further establish the true necessary and sufficient condition for a non-vanishing Symmetry Rupture, which is the violation of the representational consistency of the learned flow across different time bundles. Finally, we incorporate an expanded manifold-temporal space E = M × R+ to show that R⋆k is calculated across various time bundles. The curvature detected in E is the inconsistency of the representation across these different time bundles, and the vanishing of R⋆k implies the flatness of the learned flow in E, which is a stronger condition than the flatness of the trajectory in M.
+
+G.1 Definitions: Semi-Group Property and Curvature on the Trajectory Manifold 
+
+Consider a discrete decomposition of a time horizon ∆t into a sequence of k intervals {∆ti}ki=1 such that P ∆ti = ∆ t. The two forms of Symmetry Rupture are shown below: 
+
+RΦ 
+
+> k
+
+(st; ∆ t) :=  ◦ki=1 Φ∆ti
+
+ (st) − Φ∆t(st)lim  
+
+> k→∞
+
+Rk := 1∆t
+
+Z ∆t
+
+> 0
+
+vθ (·)dt − ψ(st, ∆t) (25) where ◦ denotes operator composition. 
+
+Definition G.1 (Temporal Semi-Group Property) . The semi-group property of the flow requires that sequential composition of temporal transitions must be equivalent to the direct transition of equal duration. (i.e., Φt1 ◦ Φt2̸ = Φ t1+t2 )The semi-group property is translated into a vanishing condition of the Symmetry Rupture R⋆k.
+
+Corollary G.2 (Symmetry Rupture measures Curvature) . The evolution-operator-based Symmetry Rupture RΦ 
+
+> k
+
+(s; ∆ t) serves as a discrete measure of the geodesic curvature induced by the learned dynamics. Proof. We show that RΦ 
+
+> k
+
+(st; ∆ t) is equivalent to the covariant derivative of the flow map along the triangle loop, which is a direct measure of curvature. Consider the triangle formed by three time steps r∆t, (1 − r)∆ t, ∆t where r ∈ (0 , 1) . RΦ 
+
+> k
+
+(st; ∆ t)
+
+around this triangle is: 
+
+RΦ 
+
+> k
+
+(st; ∆ t) = Φ (1 −r)∆ t(Φ r∆t(st)) − Φ∆t(st) (26a) 
+
+= st + r∆tv (st) + (1 − r)∆ tv (st + r∆tv (st)) − (st + ∆ tv (st)) (26b) We can expand the velocity field in a Taylor series: 
+
+v(st + r∆tv (st)) = v(st) + r∆t∇sv(st)v(st) + O(∆ t2) (26c) Substituting back into the Symmetry Rupture expression: 
+
+RΦ 
+
+> k
+
+(st; r∆t, (1 − r)∆ t) ≈ r(1 − r)∆ t2∇sv(st)v(st) + O(∆ t3) (26d) The term ∇sv(st)v(st) is precisely the covariant derivative of the velocity field along the flow, which is a direct measure of the curvature over the local trajectory segment. Extending this argument to ∆t > 0:
+
+RΦ 
+
+> k
+
+(st; ∆ t) = X
+
+> poly
+
+RΦ 
+
+> k
+
+(poly ) (26e) where poly are the non-overlapping polygon loops that compose the outer k-polygon, and RΦ 
+
+> k
+
+poly k is the Symmetry Rupture around each polygon loop. Because each polygon loop can be further decom-posed into triangle loops, we can express the Symmetry Rupture over Riemann integral ( Rk(st; ∆ t))as a sum of triangle Symmetry Ruptures: 
+
+RΦ 
+
+> k
+
+(st; ∆ t) = X
+
+> ∆∈T riangulation (polygon )
+
+RΦ 
+
+> k
+
+(∆) (26f) 18 where ∆ are the triangle loops that compose the polygon loops. Let C∆ denote the covariant derivative term for each triangle loop: C∆ = ∇sv(st)v(st) (26g) 
+
+RΦ 
+
+> k
+
+(∆) ≈ r∆(1 − r∆)∆ t2C∆ (26h) 
+
+RΦ 
+
+> k
+
+(st; ∆ t) ≈ X
+
+> ∆
+
+r∆(1 − r∆)∆ t2C∆ (26i) where r∆ is the ratio of the triangle loop’s time steps to the total time step ∆t. This shows that the Symmetry Rupture measures the accumulated inconsistency effects of the curvature of the flow on the manifold over ∆t from the initial state st. And minimizing it corresponds to flattening the manifold to achieve path independence. 
+
+Remark G.3 (Connection to Curvature) . In the language of differential geometry, a non-vanishing Symmetry Rupture around a closed loop implies the existence of a non-zero Curvature in the connection associated with the time-evolution bundle. Specifically, the failure of the commutative diagram can be interpreted as a “curvature" that prevents the discrete steps from forming a flat, consistent coordinate system on the manifold. 
+
+G.2 Curvature Flux by Stokes’ Theorem 
+
+By Stokes’ theorem, such Symmetry Rupture can be expressed as the flux of curvature through the area enclosed by the loop, where we denote the unknown curvature flux as C∆. When k = 3 , r = 0 .5,we have Rup (s, {∆ti}) as R3(st):
+
+RΦ3 (st) ≈ 14 ∆t2C∆ (27) This derivation is analogous to the Ambrose-Singer Theorem in differential geometry, which states that the holonomy around a closed loop is directly related to the curvature of the connection. The curvature flux C∆, following the same principle, quantifies the distortion of the flow induced by the curvature of the state manifold over a macroscopic time step ∆t.
+
+G.3 Infeasible Learning of Tangent Velocity with Symmetry Rupture 
+
+Replacing the true velocity v with a tangent velocity surrogate vθ gives the learning objective for training: 
+
+J Φ 
+
+> θ
+
+= E
+
+
+
+∥ st+1 − st
+
+∆t −vθ (st)∥22+∥R Φ3 (st, ∆t)∥22
+
+
+
+= E
+
+
+
+∥ st+1 − st
+
+∆t −vθ (st)∥22+ ∆t4
+
+16 ∥∇ svθ (st)vθ (st)∥22
+
+
+
+(28) However, there are a three critical caveats to this formulation. 
+
+First , the spatial derivative of learned tangent velocity ∇svθ (st) and velocity field vθ are the intrinsic properties of the learned flow that are subjective to the underlying true manifold. Given the fact that we hope to learn a flow that is consistent with the true manifold, learning to match the observed data and minimizing the Symmetry Rupture are two incompatible objectives that cannot be optimized simultaneously. 
+
+Second , the estimation of ∇svθ (st) (captured by RΦ3 ) and vθ (represented by st+1 −st 
+
+> ∆t
+
+) are not accurate due to the fundamental mismatch between the discrete-time observations and the continuous-time tangent velocity field learning setting, which imports systematic bias into the estimation both terms in J Φ 
+
+> θ
+
+and make it unreliable as a training signal. 
+
+Third , the Symmetry Rupture ˆRΦ3 can never be reduced to zero for a curved manifold, which means that the learning process will be trapped in a dilemma of either learning a flow that is consistent with the observed data but has non-zero Symmetry Rupture, or learning a flow that has zero Symmetry Rupture but is inconsistent with the observed data. The former case could diverge the learning process when the Symmetry Rupture becomes the dominant term in the learning process, while the latter case is a trivial solution that does not learn anything about the true dynamics. 19 G.4 Learning Secant Velocity With Symmetry Rupture 
+
+Our method effectively bypasses these issues by directly learning secant velocity field ψθ (s, ∆t):
+
+Jθ = E
+
+
+
+∥ st+1 − st
+
+∆t , ψ θ (st, ∆t)∥2 + ∥R 3(st, ∆t)∥22
+
+
+
+= E
+
+
+
+· · · + ∥rψ θ (st, r ∆t) + (1 − r)ψθ
+
+
+
+st + r∆tψ θ (st, r ∆t), (1 − r)∆ t
+
+
+
+− ψθ (st, ∆t)∥22
+
+
+
+(29) Our method resolves the problems in Section G.3 by expanding the original manifold space M to include a temporal dimension E = M × R +, where the secant velocity field ψθ (st, ∆t) is directly learned as a function of both state and time step, and the Symmetry Rupture ˆR3(st, ∆t) is calculated across different time bundles to measure the representational consistency of the learned flow across these bundles. By learning the secant velocity field ψθ (st, ∆t), we align the learning objective with the discrete-time observations, eliminating the systematic bias in estimating the velocity field. Expanding to E contains the learning of true dynamics as a special case when ∆t = 0 , while also allowing the model to build TTS across different time bundles, which is a stronger condition than the flatness of the trajectory in 
+
+M and can be optimized without conflicting with the data-fitting objective. We furtherly show in Section G.5 that the expanded space E brings in representation learning semantics to the learned flow, which transforms the learning of a consistent flow into the learning of a consistent representation across different time bundles, where the curvature detected in E is the inconsistency of representation across these bundles, and the vanishing of ˆR3 implies the flatness of the learned flow in E, which is a stronger and learnable condition than the flatness of the trajectory in 
+
+M.
+
+G.5 Decoupling representation inconsistency and Spatial Curvature via Taylor Expansion 
+
+Recall the formulation of the Symmetry Rupture over velocity field Rk for a two-step partition parameterized by r ∈ (0 , 1) :
+
+Rk(st, ∆t) = rψ θ (st, r ∆t) + (1 − r)ψθ
+
+
+
+st + r∆tψ θ (st, r ∆t), (1 − r)∆ t
+
+
+
+− ψθ (st, ∆t) (30a) The nested state transition in the second term obfuscates the analysis. To isolate the effects, we perform a first-order Taylor expansion on the intermediate state transition with respect to the spatial variable s. Let the spatial displacement be δs = r∆tψ θ (st, r ∆t). Expanding the vector field around the anchor state st yields: 
+
+ψθ
+
+
+
+st + δs, (1 − r)∆ t
+
+
+
+= ψθ
+
+ st, (1 − r)∆ t + ∇sψθ
+
+
+
+st, (1 − r)∆ t
+
+
+
+δs + O(∥δs ∥2) (30b) where ∇sψθ denotes the Jacobian matrix of the velocity field with respect to the state space. Substi-tuting δs explicitly into the expansion gives: 
+
+ψθ
+
+
+
+st + r∆tψ θ (st, r ∆t), (1 − r)∆ t
+
+
+
+(30c) 
+
+= ψθ
+
+
+
+st, (1 − r)∆ t
+
+
+
++ r∆t∇sψθ
+
+
+
+st, (1 − r)∆ t
+
+
+
+ψθ (st, r ∆t) + O(∆ t2) (30d) 20 By plugging Eq. 30d back into the original formulation in Eq. 30a, we can elegantly regroup the Symmetry Rupture into two distinct geometric components: 
+
+Rk(st, ∆t) = 
+
+h
+
+rψ θ (st, r ∆t) + (1 − r)ψθ
+
+
+
+st, (1 − r)∆ t
+
+
+
+− ψθ (st, ∆t)
+
+i| {z } 
+
+> Term I: Temporal Representation Mismatch in E
+
+(30e) 
+
++
+
+h
+
+r(1 − r)∆ t∇sψθ
+
+
+
+st, (1 − r)∆ t
+
+
+
+ψθ (st, r ∆t)
+
+i| {z }
+
+> Term II: Intrinsic Convective Curvature of the Learned Flow
+
+(30f) 
+
++ O(∆ t2) (30g) This decomposed form provides a profound algebraic verification of our theoretical claims. Term I 
+
+strictly measures the representation inconsistency within the augmented space E—it evaluates the linearity of the learned representations across different time bundles at the exact same spatial location 
+
+s. Conversely, Term II takes the form of a directional derivative ( ∇sψ · ψ), quantifying the inherent physical curvature of the trajectory on the base manifold M.Crucially, Term II does not merely passively measure the extrinsic physical curvature of the base manifold, but explicitly quantifies the nonlinearity of the learned vector field itself. By minimizing it, our framework actively shapes the learned flow towards spatial linearity, enabling massive straight macro-steps over complex geometries. This analysis also clarifies the practical implications of the Symmetry Rupture for training and solver control. The presence of spatial curvature on true dynamics κ does not necessarily lead to a non-vanishing Symmetry Rupture Rk > 0 if the learned temporal representations are consistent (Term I is zero) and linear upon ∆t. Conversely, even in the absence of spatial curvature κ = 0 , a non-zero Term I (badly learned representation) can cause a significant Symmetry Rupture, leading to solver instability and poor generalization to larger time steps. Furthermore, this analysis establishes the theoretical basis for distinguishing our framework from naive multi-time-step consistency regularization. While classical regularization merely penalizes the spatial non-linearity of the learned flow (attempting to suppress Term II), our approach directly confronts and eliminates the underlying representational inconsistencies across distinct time bundles (Term I). By achieving true compositional consistency, the model demonstrates strong robustness against macroscopic time steps even when the extrinsic geometry is highly non-linear. 
+
+G.6 Inference with Normalized Symmetry Error 
+
+We look for a normalized magnitude of the inconsistency flux C∆ compared to the evalutation operator Φ∆t itself for the purpose of stable training and solver control. We can define the normalized inconsistency as: 
+
+ˆCpoly = ∥∆t2Cpoly (st, ∆t)∥∥∆tv (st)∥ (31) The intuition here is to represent the non-linearity of the learned flow relative to the proportional distance mismatch of the loop, where 0 means the flow is perfectly linear such that a linear step of 
+
+∆t can lead to the same state as the complex Riemann integral of the velocity field along the loop. This gives us a dimensionless measure of learned linearity that can be compared across different time scales and velocity magnitudes. 
+
+Definition G.4 (Normalized Rupture Error) . We define the Normalized Rupture Error (NRE) ˆR
+
+as Equation (32): 
+
+ˆR(st, ∆t) = ∥R k(st, ∆t)∥2
+
+∥ψθ (st, ∆t)∥2 + η (32) where ψθ (st, ∆t) represents the macroscopic transport. η is a small constant to prevent division by zero and ensure numerical stability. Empirical observations suggest that k = 3 suffices to capture the dominant curvature effects in the temporal manifold, and that ˆC3 serves as a reliable proxy for the normalized curvature flux across different trajectory lengths. 21 Tangent Velocity Setting. Following this tangent velocity setting, presence of curvature κ in the underlying true manifold is a sufficient and necessary condition for a non-vanishing Symmetry Rupture ˆRΦ3 (st, ∆t) > 0. Omitting the direction of flow and the constant factor, we can rewrite the normalized Symmetry Rupture (NRE, Equation (32)) as: 
+
+ˆRΦ3 (st, ∆t) = ∥RΦ3 ∥2
+
+∥∆tv θ (st)∥2
+
+= ˆ C3 = ∆ t ∥C3(st, ∆t)∥2
+
+∥vθ (st)∥2
+
+= ∆ tκ θ ∥vθ (st)∥2 (33) where κθ ≈ ∥C3∥2 
+
+> ∥vθ∥22
+
+is the spatial curvature of the flow. A straightforward explanation of this relation is that the faster you go on a straight line for the longer time on a manifold with higher curvature, the more inconsistency you will get between the your end point and the point you would have reached if you had taken the Riemann integral of the velocity field along the curve (a.k.a. the geodesic). However, as we discussed in Section G.4, the curvature κ and the velocity field vθ are the intrinsic properties of the learned flow that are not optimizable in inference. The only way for the solver to reduce the ˆRΦ3 is to reduce the time step ∆t which cannot be reduced below the temporal resolution of the training data δmin ; or search for a trivial linear region of the trajectory where κθ (∆ t) = 0 .Consequently, the NRE in the tangent velocity setting is no more than a flat trajectory detector that aims to find the locally linear segments of the trajectory (i.e., κθ (∆ t) = 0 ), which might not be satisfiable for a curved manifold and can lead to severe step size reduction and solver instability. 
+
+Secant Velocity Setting. The NRE in the secant velocity setting ( ˆR3) is a more complex measure that captures both the temporal representational consistency and the spatial curvature of the learned flow across different time bundles. Because the curvature of interest is not on the basic manifold (∆t = 0 ) that must follow the true dynamics, ˆR3 is now a measure of the representational consistency and the spatial curvature of the learned flow across different time bundles. The intuition here is that the ˆR3-based step control mechanism looks for a time step ∆t within which the learned flow is consistent across different time bundles and has low curvature. The search for both representational consistency and low curvature is a stronger and more approachable condition than the flatness of the trajectory in M required by ˆRΦ3 , thus allowing the solver to take larger steps without being trapped in the trivial linear regions of the trajectory. In implementation of the step control mechanism, we set r = 0 .5 to maximize the area of the triangle loop and thus the sensitivity to curvature, which gives us the following formulation for ˆR3:
+
+ˆR3(st, ∆t) = ∥R3∥2
+
+∥ψθ (st, ∆t)∥2
+
+(34) 
+
+G.7 Geodesic Alignment: Manifold OT vs. Euclidean Interpolation 
+
+A critical theoretical distinction in our framework lies in the geometric nature of the learned trajec-tories. While the numerical integration of the vector field corresponds to a Riemann integral in the temporal domain, the spatial path traced by this integral determines the physical validity of the model. We distinguish between two modes of trajectory collapse: 
+
+1. The Trap of Euclidean Optimal Transport (Trivial Collapse). Standard Flow Matching objectives (Lipman et al., 2023) often regress towards Euclidean Optimal Transport (OT) in the observation space to minimize transport cost. In this regime, the learned flow tends to approximate linear interpolation: 
+
+ψt(x0) ≈ (1 − t)x0 + tx 1 (35) While this solution is a “geodesic" in the flat ambient Euclidean space, it often constitutes a physical violation for non-linear systems (e.g., fluid parcels passing through boundaries or pendulums shorten-ing their arms). We term this the “trivial collapse,” where the model minimizes loss by ignoring the underlying physical manifold structure. 
+
+2. Manifold Transport (CVF Solution). In contrast, CVF enforces Symmetry Condition ( Φt2 ◦Φt1 =Φt1+t2 ) on the operator level. This constraint acts as a path-shortening force, but crucially, it operates within the learned representation. Instead of forcing linearity in the observation space, CVF rectifies 22 the latent manifold such that the dynamics become geodesics (straight lines) in the latent coordinates 
+
+z, while decoding to non-linear physical curves in x:
+
+x(t) = Dθ (z0 + vθ (z0) · t) (36) Here, the integral R vθ dt corresponds to a linear displacement in latent space (a latent geodesic). This represents manifold-consistent integration . The model avoids the trivial Euclidean collapse because the encoder/decoder capacity allows the “straight" latent path to map to a physically valid, curved trajectory in observation space. Therefore, the Symmetry Condition does not merely smooth the trajectory; it ensures that the discrete Riemann steps of the solver accumulate along the intrinsic geodesic of the physical manifold, rather than taking physically invalid shortcuts through the ambient Euclidean space. 
+
+# H Time Step Control Mechanism 
+
+Standard time step control mechanisms in ODE solvers as Equation (37) are derived from the principle of maintaining a constant error tolerance. Let tcurr be the current time step, and tnew be the new time step after cutting. The new time step is calculated based on the current error estimate and the desired tolerance level: 
+
+tnew = tcurr ·
+
+ tol ErrorEstimate 
+
+ 1
+
+> p
+
+(37) which is incompatible with neural surrogate models in two aspects: • Step Cut: Traditional solvers rely on embedded methods to estimate the local truncation error that assumes a monotonically decreasing error with smaller step sizes, which may not hold for neural models due to approximation errors, training data distribution, etc. • Absolute Tolerance: The error tolerance in traditional solvers is often set as an absolute value, which may not be meaningful for neural models where the scale of errors can vary significantly across different regions of the state space. We follow two principles for the design of the step control mechanism to address these challenges: • Minimum Step Size Constraint: The model cannot meaningfully resolve dynamics below the temporal resolution of its training data, denoted as δmin . The step control mechanism should not reduce the time step below δmin .• Dynamic Relative Tolerance: A static tolerance is ill-suited for the generalization of neural operators. Instead, the error tolerance should adapt to the current operational scale of the solver and ensure meaningful error control across different scales of dynamics. A fundamental shift from spatial error control to temporal error control is proposed and leads to the following step control mechanism following Equation (33): First, we follow the standard step control mechanism to define the step size cut based on the current error estimate ˆR3(s, ∆t) and a predefined tolerance level tol: 
+
+tnew = tcurr ·
+
+ tol 
+
+ˆR3(st, ∆t)
+
+ 1
+
+> p
+
+(38a) where p is the order of the solver (e.g., p = 2 for our method since the error is dominated by the second-order term). To embed the scale-awareness and the δmin constraint into the solver, we propose a Dynamic Tolerance mechanism. We define the target tolerance to be inversely proportional to the current step size: tol := δmin 
+
+tcurr 
+
+(38b) The physical intuition behind this dynamic tolerance is twofold: when the solver attempts a large time step ( tcurr ≫ δmin ), the tolerance strictly tightens to prevent significant departure from the 23 underlying manifold. Conversely, as the step size approaches the data resolution limit ( tcurr → δmin ), the tolerance gracefully relaxes towards 1.0, accommodating the inherent noise floor of the neural operator where sub-grid predictions lose fidelity. The step size cut is then updated as: 
+
+tnew = tcurr ·
+
+ δmin 
+
+ˆR3(st, ∆t) × tcurr 
+
+ 1
+
+> p
+
+(38c) Replacing p with 2:
+
+tnew =
+
+s
+
+δmin × tcurr 
+
+ˆR3(st, ∆t) (38d) 
+
+Theorem H.1 (Termination of the GCS Search Loop) . Given a macroscopic transport flow ψθ (st, ∆t)
+
+that is locally consistent (i.e., the symmetry rupture error lim ∆t→0 ∥R k(st, ∆t)∥2 = 0 ) and a strictly positive minimum step size δmin > 0, the step-size search loop in the Greedy Consistency Solver (Algorithm 1) is guaranteed to terminate in a finite number of iterations. Proof. Let τk be the proposed step size at the k-th iteration of the REPEAT-UNTIL loop in Algorithm 1, with the initial proposed step size τ0 = ∆ t. According to the step control mechanism (Eq. 7), the updated step size is given by: 
+
+τk+1 =
+
+s
+
+δmin · τk
+
+L(τk) (39a) where L(τk) = ˆR(s, τ k) is the Normalized Rupture Error (NRE). The loop’s termination condition is τk+1 ≥ τk.We prove the finite termination by contradiction. Assume that the loop never terminates. This implies that for all iterations k ≥ 0, the termination condition is not met, meaning: 
+
+τk+1 < τ k (39b) Consequently, the sequence {τk}∞ 
+
+> k=0
+
+is strictly monotonically decreasing. Since the step size represents time and is bounded below by zero ( τk > 0), the sequence must converge to a non-negative limit: 
+
+lim  
+
+> k→∞
+
+τk = 0 (39c) (Note: If it were to converge to a constant c > 0, it would require L(c) = δmin  
+
+> c
+
+, at which point 
+
+τk+1 = τk, triggering termination). Now we analyze the algebraic equivalent of the termination condition τk+1 ≥ τk. By squaring both sides and rearranging the terms, the loop terminates if and only if: 
+
+L(τk) ≤ δmin 
+
+τk
+
+(39d) Let us take the limit of both sides of Eq. 39d as the step size diminishes ( τk → 0): 
+
+Right Hand Side (RHS): Since the minimum resolution δmin > 0 is a fixed positive constant, we have: 
+
+lim  
+
+> τk→0
+
+δmin 
+
+τk
+
+= + ∞ (39e) 
+
+Left Hand Side (LHS): By Definition G.4, the NRE is calculated as L(τk) = ∥R k (s,τ k )∥2   
+
+> ∥ψθ(s,τ k)∥2+η
+
+. Due to the local consistency of the learned vector flow, the symmetry rupture vanishes as the step size approaches zero, i.e., lim τk →0 ∥R k(s, τ k)∥2 = 0 . This doesn’t necessarily conflicts with the claims regarding the Minimum Step Size Constraint , as the convergence of the Symmetry Rupture to zero is given by the smoothness of neural networks as τk → 0, which is a smaller scale than δmin , and thus does not violate the constraint that the solver should not reduce the time step below δmin .24 Since η > 0 is a strictly positive constant introduced for numerical stability, the NRE converges to zero: 
+
+lim   
+
+> τk→0
+
+L(τk) = 0
+
+∥ψθ (st, 0) ∥2 + η = 0 (39f) As τk → 0, the LHS of the inequality approaches 0, while the RHS approaches +∞. Therefore, there must exist a finite integer K such that for the step size τK , the inequality L(τK ) ≤ δmin  
+
+> τK
+
+holds strictly true. This indicates that at the K-th iteration, τK+1 ≥ τK is satisfied, and the loop terminates. This directly contradicts our initial assumption that the loop never terminates. Empirically, the GCS algorithm has consistently converged within < 10 iterations across all evaluated PDE benchmarks without encountering infinite loops. Following the step control mechanism, we implement the Greedy Consistency Solver (GCS) as described in Algorithm 1. The solver iteratively evaluates the NRE at the proposed step size and updates the step size according to the control mechanism until it finds a suitable step size that satisfies the termination condition. 
+
+Algorithm 1 Greedy Consistency Solver (GCS) 
+
+Input: Current states X , Step size ∆t, Min step size δmin 
+
+Output: Velocity vfull , Step size ∆t′ 
+
+> 1:
+
+∆t′ ← ∆t 
+
+> 2:
+
+repeat  
+
+> 3:
+
+{vfull , L} ← ˜R(X , ∆t′) 
+
+> 4:
+
+∆t = ∆ t′ 
+
+> 5:
+
+∆t′ ←
+
+q δmin ×∆t′ 
+
+> L
+> 6:
+
+until ∆t′ ≥ ∆t or ∆t′ < δ min  
+
+> 7:
+
+Return {vfull , ∆t}
+
+In the actual implementation, we apply a batch version of the GCS to evaluate the NRE across multiple states in parallel, and we keep the step size for each state independent to allow for adaptive step sizes across different regions of the state space. A mask-based pruning strategy is applied to efficiently select the states that require step size reduction, thus avoiding redundant evaluations of the NRE for states that already satisfy the termination condition. The pruning strategy detects the step size to run in each inference, and only evaluates those step sizes that are above the minimum step size δmin and below the current step size ∆t.25 I PDEBench Datasets 
+
+Dataset Size Time Steps Channels Dimensions Step Intervals (s) Shallow Water 1000 100 1 128 ×128 0.01 Diffusion Reaction 1000 100 1 128 ×128 0.05 CFD 1000 21 4 512 ×512 0.05 Wave Equation 1000 100 2 128 ×128 0.01 Table 2: Summary of the PDEBench datasets used in our experiments. 
+
+I.1 Training and Validation Split 
+
+For the training and validation of our models, we utilize the PDEBench datasets with a split of 900 samples for training and 100 samples for validation for each PDE type. The test set consists of 100 unique trajectories that are not included in the training or validation sets, ensuring a fair evaluation of the model’s generalization capabilities. 
+
+I.2 Diffusion Reaction and CFD Turbulence 
+
+We use the PDE dataset from existing work for most of the training and validation. The diffusion reaction and CFD turbulence dataset are directly taken from Takamoto et al. (2022), where we explicitly verified the correctness of the dataset and made sure that they do contain distinct trajectories. 
+
+I.3 Shallow Water 
+
+The Shallow Water dataset consists of numerical solutions to the two-dimensional shallow water equations that is included in the PDEBench suite (Takamoto et al., 2022). However, we found that the original dataset (MD5:75d838c47aa410694bdc912ea7f22282) contains a significant amount of duplication and redundancy that only 81 unique trajectories are present in the original 1000 samples. To address this issue, we re-generated the dataset using the same source code but a wider range of initial condition generation process as described in Takamoto et al. (2022). We verified that the re-generated dataset contains 1000 unique trajectories, and we used this re-generated dataset for all our experiments. 
+
+I.4 Wave Equation 
+
+This dataset consists of numerical solutions to the two-dimensional wave equation, representing a conservative physical system (e.g., surface gravity waves or a vibrating membrane). 
+
+1. Governing Equation The evolution of the scalar field u(x, t ) is governed by the linear second-order partial differential equation (PDE): 
+
+∂2u∂t 2 = c2∇2u = c2
+
+ ∂2u∂x 2 + ∂2u∂y 2
+
+
+
+(40) where u represents the displacement, t is time, and c denotes the constant propagation speed of the wave. 
+
+2. Numerical Discretization The simulator employs a finite difference method (FDM) with an explicit time-stepping scheme. 
+
+Spatial Operator The Laplacian ∇2u is approximated using a five-point stencil with periodic boundary conditions: 
+
+∇2u ≈ ui+1 ,j + ui−1,j + ui,j +1 + ui,j −1 − 4ui,j 
+
+∆x2 (41) where ∆x = ∆ y is the spatial resolution. 26 Temporal Integration The state is advanced using a second-order central difference scheme: 
+
+un+1  
+
+> i,j
+
+= 2 uni,j − un−1 
+
+> i,j
+
++ ( c∆t)2∇2uni,j (42) To ensure numerical stability and prevent divergence, the parameters satisfy the CFL (Courant-Friedrichs-Lewy) condition for 2D systems: 
+
+C = c∆t
+
+∆x < 1
+
+√2 ≈ 0.707 (43) 
+
+3. Initial Conditions and Data Format 
+
+• Initialization: The system is initialized with 1 ∼ 3 randomly placed Gaussian wave packets to simulate “droplets" hitting a surface: 
+
+u(x, y, 0) = 
+
+> N
+
+X
+
+> k=1
+
+exp 
+
+
+
+− (x − cx,k )2 + ( y − cy,k )2
+
+2σ2
+
+> k
+
+
+
+(44) The initial velocity field is assumed to be zero ( ∂u ∂t |t=0 = 0 ). • Output Features: Each sample is a 4D tensor of shape (T, H, W, 2) .
+
+– Channel 0: Displacement field u.
+
+– Channel 1: Velocity field v, approximated via central difference vn = un+1 −un−1 
+
+> 2∆ t
+
+.
+
+# J Implementation Details of Baseline Models 
+
+Paradigm Objective Encoding Solver Reference N-ODE † ∥ R ψθ dt, ∆s∥22 Atten dopri5 Chen et al. (2018) CFM † ∥ψθ (s), ∆s∥22 Atten dopri5 Lipman et al. (2023) TM † ∥ψθ , v t∥22 Atten dopri5 Hou et al. (2025) SM ‡ ∥ψθ , v ∆t∥22 Atten Euler Liu & Yue (2025) PF-k‡ ∥ψθ (st), s t+1 ,··· ,t +k∥22 Atten Euler Brandstetter et al. (2022) CVF ∥ψθ (st, ∆t) − ∆s 
+
+> ∆t
+
+∥22 + ∥R 3∥22 Atten Algorithm 1 Table 3: Comparison of Neural ODE algorithms ( †), Time skipping ( ‡) and CVF (ours) on the Diffusion-Reaction and CFD datasets. Table 4: Baseline implementation details and hyperparameter for the FDBench investigation.                                                              
+
+> Method Backbone Config ( L/H/D )Solver Path / Spline Batch Size Epochs Learning Rate CFM SiT 8 / 8 / 512 dopri5 Linear 256 160 1E−4
+> SM SiT 8 / 8 / 512 Euler Linear 256 160 1E−4
+> N-ODE SiTVc 8 / 8 / 512 dopri5 –256 160 1E−4
+> TM SiT 8 / 8 / 512 dopri5 Cubic Spline 256 160 1E−4
+> CVF SiT 8 / 8 / 512 GCS Secant 256 160 1E−4
+> PF-kPF 8 / 8 / 512 ––256 160 1E−4
+
+For baseline comparisons in Section 5.1, we perform temporal even downsampling by a factor of 2 (m = 2 ) for training, but evaluate without downsampling to test the models’ capability of recovering unobserved dynamics. Training is conducted in an open-loop setting where the temporal horizon for both input and output sequences is set to 1 frame. During evaluation, all models perform one-step predictions auto-regressively. For evaluations that involve dopri5 solver, the absolute tolerance is set to 1E − 4 and the relative tolerance is set to 1E − 3.For the training of N-ODE, we use RK4 with a fixed step size of 0.1 during training, and dopri5 with the aforementioned tolerances during evaluation. The learning rate is set to 1E − 4 for all models, and the training is conducted for 160 epochs with a batch size of 256. The learning rate schedule consists of a linear warmup for the first 5% of the epochs, followed by a linear decay for the next 75%, and then a constant learning rate for the final 20% of the epochs at 10% of the initial learning rate. 27 J.1 Computational Efficiency Comparison 
+
+To compare the training cost of different models, we report the samples per second (SPs) for each model that is trained specifically for monitoring the training efficiency. Contrasting to the training and evaluation setting that are discussed in other part of this paper, we profile the computation efficiency using a different setting. For a fair comparison, all models are trained with the same batch size of 128 on the same NVIDIA A100 GPU. The dataset used for this comparison is the Diffusion-Reaction dataset with a spatial resolution of 64 × 64 and 2 channels (displacement and velocity). The SPS metric provides a direct measure of how many samples each model can process per second during training, which is a critical factor in evaluating the scalability and practicality of the models for large-scale applications. The computation efficiency testing environment is set up with 4 AMD EPYC 7H12 cores with the total memory of 20 GB, and NVIDIA A100 GPU with 40 GB memory. • CFM: 3619.84 SPs • SM: 3604.48 SPs • N-ODE: 344.32 SPs • TM: 3127.04 SPs • CVF: 1141.76 SPs • PF-k: 3339.52 SPs 
+
+# K Training and Inference Settings 
+
+K.1 Training Settings 
+
+All models are trained using the AdamW optimizer with a learning rate of 1E − 4. For data normalization, we apply a decaying EMA normalization strategy, where the mean and variance are computed across the entire training set and updated with a decay factor of 0.999 during training. The models are trained with 4 distinct random seeds to ensure the robustness of the results, and the mean and standard deviation of the evaluation metrics are reported across these runs. These seeds are kept consistent across all models to ensure a fair comparison. 
+
+K.2 Evaluation Metrics 
+
+The evaluation metrics discussed in detail include step residual root mean square error (step RMSE, 
+
+Lt+1 ), rollout residual RMSE ( Lτ ), average number of function evaluations per time step (NFE), and cost per RMSE drop (CPED). Table 5: Summary of Evaluation Metrics 
+
+Symbol Name Equation 
+
+Lt+1 Step Residual RMSE 
+
+r
+
+> 1
+> N
+
+PNi=1 s(i) 
+
+> t+1
+
+− ˆs(i)
+
+> t+1
+> 22
+
+Lτ Rollout Residual RMSE 
+
+q 1
+
+> τ
+
+Pτk=1 L2
+
+> t+k
+
+NFE Average Number of Function Evaluations 1
+
+> T
+
+PTt=1 Neval (t)
+
+CPED Cost per RMSE Drop NFE model /NFE base 
+
+> Lbase −L model
+
+It is crucial to note that NFE is not a fixed hyperparameter, but rather an emergent property of the combined model and solver design. Therefore, the NFE reported in Figure 1 is an average over the entire rollout horizon, reflecting the model’s practical ability to autonomously balance accuracy and efficiency. By contrast, the NFE of state-regression methods (e.g., SM, PF-k) is statically fixed to 1,which fails to reflect any adaptive allocation of computational resources based on underlying dynamic complexity. 28 Calculating the Rupture error intrinsically requires 3 NFEs per step (one macro-step and two micro-steps). The fact that CVF’s recorded NFE exactly equals 3 indicates that the model successfully maintains integration consistency on its first attempt, cleanly circumventing the need to subdivide the step size. Furthermore, when the proposed time step ∆t is less than or equal to the minimum allowable time step ( δmin ), the GCS algorithm directly executes the macro-step without running temporal subdivision, resulting in an NFE < 3.Finally, the Cost per RMSE Drop (CPED) compares the ratio of NFE required by a model to reduce a unit of RMSE relative to a baseline. Because baseline models typically exhibit both high RMSE and high NFE, CPED effectively quantifies a model’s efficiency in translating computational overhead into tangible accuracy gains, using the baseline’s NFE as the standardized unit of computational cost. 
+
+K.3 Even Downsampling 
+
+The even downsampling is to remove intermediate frames in the original dataset to create a sparser temporal resolution. Let τ = [ t0, t 1, . . . , t N ] be the time points in the original dataset. The down-sampled dataset is then given by τk = [ τ0, τ k, τ 2k, . . . , τ M k ] for a given factor k and M k ≤ N . This creates a new dataset with a temporal resolution that is k times coarser than the original, allowing us to evaluate the learned manifold under the unobserved temporal regime. In this paper, we always test on the original temporal resolution (i.e., τ ) to evaluate the model’s ability to generalize to finer time scales, while training on the downsampled dataset τk to simulate the sparse observation scenario. 
+
+K.4 Dynamic Downsampling 
+
+The dynamic downsampling is created by sampling the 1 
+
+> k
+
+time points from the original dataset with a uniform random distribution, which creates a non-uniform temporal resolution. This setting is designed to evaluate the model’s ability to handle irregularly spaced time points, which is common in real-world scenarios where data collection may be inconsistent or event-driven. Even in simulated environments, as the source of data turns from simple scripted data generation to more complex high-fidelity simulators that adopt adaptive time-stepping, the resulting dataset may naturally exhibit non-uniform temporal resolution. By training on this dynamically downsampled dataset, we can assess the robustness of the learned manifold and the solver’s ability to adapt to varying time intervals during inference. 
+
+K.5 Time-informed Auto-regressive Inference 
+
+The standard rollout evaluation protocol run long-term simulation by recursively feeding the model’s own predictions back as input for the next time step, where the proposed time step is fixed to the original dataset’s time step (e.g., ∆t = ti+1 − ti). Therefore we call this protocol “Time-informed Auto-regressive Inference" as the model is informed of the fine-grained temporal grid during inference, which is consistent with the original dataset’s temporal resolution. This protocol is designed to evaluate the model’s performance in a setting that closely matches the original data distribution, where the model is expected to make predictions at the same time intervals as it was trained on. This method provides rollout predictions that match the original temporal resolution such that the quantitative evaluation of the model’s performance is straightforward and consistent with the original dataset. However, this method does not allow the model to leverage its adaptive step control mechanism, which is a key feature of our approach. We follow this standard protocol for benchmarking against state-regression baselines (e.g., SM, PF-k), and we report the results in Table 6. 
+
+K.6 Direct Auto-regressive Inference 
+
+The direct auto-regressive inference protocol provides the model with the total rollout horizon between the initial state and a intermediate state ( ∆t = tk −t0). This protocol challenges the model to leverage its learned manifold structure and adaptive step control mechanism to make accurate predictions over a longer time horizon without being informed of the intermediate time steps. The model must effectively navigate the latent manifold and adjust its step size dynamically to maintain accuracy over 29 Dataset Metric N-ODE † CFM † TM † SM ‡ PF-k‡ CVF DR 
+
+Lt+1 7E-4 ±8E-5 .002 ±2E-5 .001 ±7E-5 3E-4 ±1E-5 .007 ±3E-4 2E-4 ±5E-5 
+
+Lτ .070 ±.003 .083 ±.002 .094 ±.002 .014 ±.004 .159 ±.008 .009 ±.007 
+
+NFE 15.6 ±3.1 20.9 ±.229 21.5 ±5.0 1.0 ±.000 1.0 ±.000 3.0 ±.000 
+
+CPED 30.0 85.3 Base - - 1.6 
+
+SW 
+
+Lt+1 4E-4 ±2E-5 .008 ±3E-4 .010 ±6E-6 .001 ±6E-5 .012 ±2E-4 4E-4 ±5E-6 
+
+Lτ .008 ±6E-4 .133 ±.003 .545 ±.005 .032 ±.003 .374 ±.152 .004 ±4E-4 
+
+NFE 20.1 ±.000 24.5 ±1.1 19.8 ±.287 1.0 ±.000 1.0 ±.000 3.0 ±.000 
+
+CPED 1.9 3.0 Base - - .280 
+
+CFD 
+
+Lt+1 .328 ±.004 .316 ±.009 .303 ±.002 .251 ±.001 .324 ±.003 .326 ±1E-3 
+
+Lτ .535 ±.012 .574 ±.021 .787 ±.012 .361 ±.003 .581 ±.024 .339 ±.035 
+
+NFE 14.0 ±.000 42.1 ±1.6 59.9 ±2.1 1.0 ±.000 1.0 ±.000 2.2 ±.039 
+
+CPED .929 3.3 Base - - .081 
+
+Table 6: Benchmarking on the Diffusion-Reaction, Shallow Water and CFD Turb. datasets in time-informed settings. the extended rollout. This protocol is designed to evaluate the model’s ability to generalize to longer time horizons and to test the effectiveness of the learned manifold and the step control mechanism in guiding the solver through complex dynamics. We call this protocol “Direct Auto-regressive Inference" because the model is asked to directly predict the state at a future time point without being informed of the intermediate time steps, whose evaluation data is shown in Table 7. Dataset Metric N-ODE † CFM † TM † CVF DR 
+
+Lt+1 7E-4 ±8E-5 .002 ±2E-5 .001 ±7E-5 2E-4 ±5E-5 
+
+Lτ .070 ±.003 .073 ±8E-5 .094 ±.002 .016 ±.005 
+
+NFE 31.9 ±35.9 53.0 ±19.9 202.6 ±132.5 70.8 ±7.5 CPED 6.5 12.7 Base 4.5 
+
+SW 
+
+Lt+1 4E-4 ±2E-5 .008 ±3E-4 .010 ±6E-6 4E-4 ±5E-6 
+
+Lτ .008 ±5E-4 .178 ±.005 .545 ±.005 .095 ±.012 NFE 115.9 ±1.5 26.0 ±.000 97.0 ±5.0 51.2 ±3.7 CPED 2.2 .730 Base 1.2 CFD 
+
+Lt+1 .328 ±.004 .316 ±.009 .303 ±.002 .326 ±1E-3 
+
+Lτ .535 ±.012 .655 ±.004 .787 ±.011 .314 ±.022 
+
+NFE 14.0 ±.000 50.0 ±.000 459.2 ±22.5 22.9 ±.749 CPED .121 .821 Base .105 
+
+Table 7: Benchmarking on the Diffusion-Reaction, Shallow Water and CFD Turb. datasets in direct auto-regressive settings. In the turbulent CFD regime, CVF exhibits a unique self-correcting behavior where the rollout RMSE ( Lτ ) remains lower than the single-step error ( Lt + 1 ). This suggests a unique self-correcting behavior of CVF, where it captures the underlying physical manifold of the global flow, and thus corrects its trajectory over time, while baselines may achieve lower single-step error by overfitting to local noise but rapidly drift away from the true dynamics during long-horizon rollouts. This phenomenon highlights the importance of evaluating models not only on single-step accuracy but also on their ability to maintain physical consistency and stability over long-term predictions, especially in complex, turbulent regimes where local noise can be misleading. 
+
+K.7 N-ODE vs. CVF: Discussion on the Performance Discrepancy in SW Dataset 
+
+Further investigation into N-ODE’s performance across the two settings reveals a critical insight into the nature of its learned dynamics. While its accrued RMSE remains comparable between the settings ( 0.008 vs. 0.008 ), the required NFE explodes. We posit that N-ODE is deeply reliant on the microscopic auto-regressive prior injected during training (via the fixed-step RK4 solver). When deprived of this uniform grid during direct auto-regressive inference, N-ODE exhibits a pathological sensitivity to high-frequency stiffness and compounding errors. To compensate and artificially restore its train-time auto-regressive behavior, the adaptive solver is forced to aggressively truncate step sizes, operating in a brute-force micro-stepping regime. Consequently, N-ODE asymptotically purchases 30 its macroscopic accuracy at the cost of severe computational overhead, highlighting the failure of unconstrained models to act as efficient, geometry-preserving surrogates. The performance of N-ODE on the SW dataset proves a critical baseline capability: when N-ODE inadvertently learns a vector field that permits the restoration of the true dynamics, the adaptive dopri5 
+
+solver is fully capable of achieving high precision by brute-forcing massive computational resources (NFE ≈ 116 ). However, this makes N-ODE’s failure on the DR and CFD datasets profoundly revealing. On these datasets, N-ODE exhibits a paradoxical “false confidence”: despite failing to recover the true dynamics (producing drastically higher Lτ errors), it chooses a computationally cheaper path, with its NFE dropping significantly to 31 .9 and 14 .0, respectively. It neither achieves high accuracy nor attempts to consume the resources required to do so. This phenomenon exposes the fatal flaw of unconstrained continuous models. The adaptive solver determines its step size based on local truncation errors. Its reluctance to increase NFE in DR and CFD implies that the local errors are strictly within the rigorous 10 −3 tolerance. We suspect that N-ODE provides the solver with a geometric landscape that is fundamentally misaligned macroscopically, yet smoothly deceptive locally. The dopri5 solver confidently executes large, efficient steps along this deceptive path, yet remains fundamentally powerless to salvage the trajectory because the underlying vector field itself is systematically pointing in the wrong direction. Synthesizing the empirical results across both testing paradigms exposes a crucial limitation in existing frameworks: a sophisticated numerical solver cannot rescue a fundamentally biased vector field, nor can a rigid solver navigate complex dynamics without external temporal meta-information. 
+
+# L Ablation Details 
+
+L.1 Downsampling Rate Time-Informed Setting In the Time-Informed setting, the model is trained with a fixed time step k
+
+that is uniformly applied across the training data. Uniform Downsampling :k < 0, g (x) = −0.000822 ∗ x2 + 0 .000558 ∗ x1 + 1 .06 e − 02 (45) 
+
+Direct Auto-regressive Setting In the Direct Auto-regressive setting, the model is trained with a random time step k that is sampled from a uniform distribution for each training instance. Random Downsampling :k > 0, f (x) = e0.015229 ∗log (x)2+−0.285431 ∗log (x)1+−3.506706 
+
+Uniform Downsampling :k < 0, g (x) = e0.118474 ∗log (x)2+−0.635297 ∗log (x)1+−4.129588 (46) The evaluation results (Figure 3b) and the trends show a co-reduction in both the NFE and the RMSE as the downsampling rate increases, which indicates that the model learns a more accurate manifold with a wider range of time steps, thus leading to better generalization performance in the unobserved temporal regime. However, a marginal reduction in RMSE is observed as the downsampling rate increases– as the downsampling rate ( ∥k∥) increases exponentially, reduction in RMSE is not significant after a certain point; that is, the performance gain from learning with a wider range of time steps is marginal after a certain point. While our benchmarking trains the model with a fixed downsampling rate of k = −2 (i.e., training on every other frame), the ablation results suggest that training with a wider range of time steps (e.g., 
+
+k = −4 or k = −16 ) can further improve the model’s generalization performance in the unobserved temporal regime, albeit with diminishing returns in terms of RMSE reduction. 
+
+L.2 Tangent Supervision Spline Approximation of Tangent Velocity By training the model to match spline tangent velocity, an error bound between the learned and the true tangent velocity L = ∥vt − ψθ (s, 0) ∥∞ can be established based on the approximation error of the spline interpolation. According to Hall & Meyer (1976); deBoor (1978), the error bound of first-order derivative from k-order spline interpolation is given as: 
+
+∥vt − vs∥∞ ≤ ϵ∥s(k+1) ∥∞∆tk (47) 31 where ϵ is a constant depending on the spline basis functions, s(k+1) is the fourth-order derivative of the true trajectory, and ∆t is the maximum time step between consecutive observations. Therefore, the expected error of learned tangent velocity L can be bounded as: 
+
+E [L] ≤ ∥ vt − vs∥∞ + E [∥vs − ψθ (s, 0) ∥∞]
+
+≤ ϵ∥s(k+1) ∥∞∆tk + E [RM SE (vs, ψ θ (s, 0))] (48) which is contrasting to learning a pure neural ODE without tangent velocity supervision, where no such error bound can be established due to the infinite possible tangent velocity fields that are consistent with the discrete-time observations. Figure 5 evaluates the effect of tangent supervision in the Time-Informed and Direct Auto-regressive settings. Hou et al. (2025) proposed learning first-order quintic Hermite derivative to ensure smooth-ness of acceleration field on the knots such that the learned velocity field aligns better with the true underlying physical dynamics. Therefore, the model is tested with combining the cubic spline-based tangent supervision, quintic Hermite derivative supervision, and without tangent supervision. 
+
+Jtangent = E
+
+
+
+∥ψθ (st, 0) − vt∥22 + ∥ψθ (st, ∆t) − v∆t∥22 + ∥R 3(st, ∆t)∥22
+
+
+
+(49) The results in both settings show consistent trends that no tangent supervision gains the best  
+
+> (a) Time-Informed (b) Direct Auto-regressive
+
+Figure 5: Ablation Study on the Effect of Spline-Based Tangent Supervision. performance, and the cubic spline-based tangent supervision performs worse than the quintic Hermite derivative supervision. This reflects the biased nature of spline and Hermite supervision, which may not align perfectly with the semi-group or Lie group structure of the underlying physical dynamics, thus leading to worse generalization performance than learning from raw velocity data. However, the performance difference between the quintic Hermite derivative supervision and no tangent supervision is not significant, which showcases again the importance of correct inductive bias in learning physical dynamics - learning with velocity smoothness bias (cubic spline) is worse than learning with acceleration smoothness bias (quintic Hermite), and learning with no bias is better than learning with the wrong bias. The benefits of tangent supervision might be more significant in avoiding plateauing in the early stage of training or failing into plain solutions as linear interpolation, which is not reflected in the final performance after convergence. Therefore, it is treated as an optional technique that can be applied when the training process is unstable or prone to linear interpolation degradation, and it can be safely removed when the training process is smooth and converges well. 
+
+# M Inference Details 
+
+M.1 Visual Analysis of Failure Modes 
+
+Figures 6 and 7 visualize the examples of final frame prediction and the corresponding spatial error distribution (pixel-wise mean absolute error) from the two datasets, respectively. The qualitative comparison reveals distinct failure modes in the baseline methods that our CVF framework effectively overcomes. 32 (a) Prediction 
+
+> (b) Mean Absolute Error
+
+Figure 6: Example Final Frame of Rollout Predictions on the DR Dataset. 
+
+Visualizing Error Dynamics: The “Blur" vs. The “Noise" The error heatmaps (Figure 7b) reveal distinct failure modes across different methodologies, offering a qualitative explanation for the quantitative gap in Table 7. 
+
+1. The “Temporal Smearing" of Flow Matching: As observed in the Shallow Water error maps (Figure 7b, column 1), Flow Matching (CFM) exhibits a characteristic ring-like error pattern . While CFM captures the global topology, it suffers from severe spectral bias, effectively acting as a low-pass filter. Physically, this manifests as “temporal smearing": instead of resolving the sharp shock front at 
+
+t + 1 , the model predicts a diffused average of the wave’s propagation path. This suggests that without the explicit tangent anchor, the continuous probability flow takes a “shortcut" through the manifold curvature, underestimating the stiffness of the wavefront and resulting in a blurred, low-amplitude prediction that fails to conserve energy (amplitude decay). 
+
+> (a) Prediction
+> (b) Mean Absolute Error
+
+Figure 7: Example Final Frame of Rollout Predictions on the SW Dataset. 33 2. The Unbounded Divergence of Unconstrained Extrapolation (PF-k): In stark contrast, the Latent Extrapolation baseline (PF-k) demonstrates the diverging consequences of removing the bidirectional topological constraint. As seen in the Figure 7b column PF-k, the error pattern transforms from structural mismatch into unstructured high-frequency noise, which manifests as rapid collapsing of the wave structure just after half of the inference duration (Figure 8a). This confirms that purely extrapolating the latent vector field is an unstable process; strictly dissipative or dispersive errors accumulate exponentially ( ϵt+k ∝ eλk ϵ0). The rapid disintegration of the PF-k predictions validates that our Symmetry Condition is not merely an auxiliary loss, but a necessary condition to bound the accumulation of error on the latent manifold. 
+
+3. The Precision of CVF: CVF (Figure 7b, column 5) uniquely avoids both extremes. The error map is uniformly low (deep blue), with no visible ring artifacts (implying correct phase velocity) and no noise accumulation (implying topological stability). By anchoring the local derivative (Tangent) while enforcing macroscopic reversibility (Secant), CVF successfully resolves the sharp wavefront of the shallow water system without the diffusive blurring of CFM or the chaotic divergence of PF-k. 
+
+> (a) PF-k0.0, 0.2, 0.4, 0.6, 0.8s
+> (b) Flow Matching 0.0, 0.2, 0.4, 0.6, 0.8s
+
+Figure 8: The Rollout Predictions of PF-k and CFM on the SW Dataset, showing significant amplitude decay and wave distortion over time. 34 Figure 9: Comparison of Example Rollout Trajectory of the Benchmarking Methods on the SW Dataset on 2D U-MAP Visualization, showing significant deviation from the true trajectory. 35

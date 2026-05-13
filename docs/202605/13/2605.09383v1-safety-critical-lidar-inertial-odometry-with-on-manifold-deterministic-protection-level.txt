@@ -1,0 +1,1890 @@
+Title: Safety-Critical LiDAR-Inertial Odometry with On-Manifold Deterministic Protection Level
+
+URL Source: https://arxiv.org/pdf/2605.09383v1
+
+Published Time: Tue, 12 May 2026 01:48:09 GMT
+
+Number of Pages: 16
+
+Markdown Content:
+# Safety-critical LiDAR-inertial odometry with on-manifold deterministic protection level 
+
+Yueqi Zhu, Yan Pan, Chufan Rui, Jiasheng Luo, Shihua Li and Bo Zhou 
+
+Abstract 
+
+In safety-critical scenarios, the protection level of the autonomous navigation system is crucial for enabling mobile robots to perform safe tasks. However, existing studies on probabilistic navigation systems for robots usually perform offline accuracy evaluations using limited datasets and assume that the results can be applied to unknown real-world environments. As a result, current autonomous mobile robots often lack protection levels for online safety assessment. To fill this gap, we propose a safety-critical LiDAR-inertial odometry (LIO) that provides deterministic protection levels based on on-manifold deterministic state estimation. By adopting the unknown but bounded assumption, we derive a neat closed-form relationship between point cloud noise and the uncertainty of the estimation from the iterated closest point algorithm. Using this relationship, we design an on-manifold ellipsoidal set-membership filter and implement it within the LIO system. Leveraging the properties of the set-membership filter, our system offers the feasible sets of the estimated locations as the deterministic protection levels, serving as safety references for the robots’ downstream autonomous operations. The experimental results show that our system can provide effective deterministic online safety references for diverse robots in various environments. 
+
+Keywords 
+
+Safety-critical localization, LiDAR-inertial odometry, deterministic state estimation, robot safety 
+
+1 Introduction 
+
+Although a variety of mobile robots have been widely deployed to perform various tasks, ensuring the safety of robots, individuals, environments, and interactive objects in challenging environments remains an open problem. In safety-critical scenarios (Annaswamy et al., 2024), the navigation system plays a crucial role in guaranteeing the safe operation of autonomous mobile robots. Although safety is a decisive factor in the application of autonomous mobile robots, implementing the online safety and reliability assessment of the navigation system is an overlooked challenge. In the field of the global navigation satellite system (GNSS), the protection level (PL) (Zhu et al., 2018) is leveraged as a key metric to quantify the online uncertainty of the navigation system, characterizing the reliability of the locations and providing a safety assessment for downstream autonomous behaviors. However, for widely used navigation systems for mobile robots (Xu et al., 2022; Shan et al., 2021), most of the research focused on improving the accuracy of localization and mapping, while studies on the uncertainty and the protection level are commonly overlooked. Probabilistic state estimation is a commonly used method for enabling autonomous navigation of mobile robots. The navigation system based on Bayesian filters (Xu et al., 2022; Wu et al., 2024) simultaneously estimates the means and covariances of the system state. The covariances thereby can measure the safety and reliability of the navigation system and act as the protection levels. However, the estimated protection levels are usually rather small and cannot accurately represent the error between the localization result and the ground-truth location. This limitation primarily arises because the noise distributions of the measurements from the sensors are usually complex and unknown, and probabilistic methods usually assume them to be zero-mean Gaussian distributions with extremely small covariances. The accuracy of this method in modeling noise is crude, which in turn leads to low accuracy in the resulting safety assessment. Optimization-based navigation systems (Campos et al., 2021; Shan et al., 2021) take the optimal result as an estimation and generally do not account for the uncertainty and reliability of the estimated locations. During the design phase of the optimization-based navigation systems, offline performance evaluation for accuracy is commonly conducted using datasets with reliable ground truth, whereas online performance evaluation under various real-world environments without ground truth is rarely considered. Nevertheless, although various datasets for challenging scenarios were proposed (Zhao et al., 2024; Li et al., 2024), the number and complexity of the scenarios in these datasets can never cover all the situations encountered in the real world. As a result, offline accuracy evaluation results based on datasets cannot truly reflect the performance of navigation systems under all actual working         
+
+> School of Automation, Southeast University and Key Laboratory of Measurement and Control of CSE, Ministry of Education, Nanjing, China
+> Corresponding author:
+> Bo Zhou, School of Automation, Southeast University and Key Laboratory of Measurement and Control of CSE, Ministry of Education, Nanjing, China Email: zhoubo@seu.edu.cn
+> arXiv:2605.09383v1 [cs.RO] 10 May 2026 2
+
+conditions. This offline absolute trust may pose potential safety hazards. Unlike probabilistic state estimation, deterministic state estimation (Calafiore, 2005; Rohou and Jaulin, 2023) is a more robust type, which can estimate the online bounded uncertainty of the system state without involving probability. The set-membership filter (SMF) (Wang et al., 2022; Yang et al., 2023) is a typical deterministic state estimation tool. It only requires that the noise satisfy the unknown but bounded (UBB) assumption, which can simply and accurately describe complex sensor noises that are difficult to calibrate. Moreover, a set-membership filter estimates the feasible set of the system state and directly provides the uncertainty and reliability of the estimated state. However, due to the practical complexity of the set arithmetic and the theoretical complexity of robot systems on high-dimensional manifolds, very few studies have extended the set-membership filter to the high-dimensional robot autonomous navigation system using 3D LiDAR and 6-DOF inertial measurement unit (IMU). To overcome the aforementioned robot safety issue, we propose to use the feasible set from the set-membership filter as the deterministic protection level. Compared with the protection level based on the unbounded Gaussian distribution, the deterministic protection level characterizes the uncertainties of the localization results in bounded spaces. To break through the theoretical limitations of the deterministic state estimation in safety-critical scenarios and explore its application potential, in this paper, we present a LiDAR-inertial odometry (LIO) based on a meticulously designed on-manifold ellipsoidal set-membership filter. By designing an on-manifold set-membership filter, our system can provide protection levels in the form of ellipsoidal sets and offer more accurate online safety assessments. Our main contributions are summarized as follows: 1. As a theoretical attempt to apply deterministic state estimation to the autonomous navigation system of mobile robots, a novel pipeline paradigm is designed for LiDAR-inertial odometry composed of the uncertainty resolving and the on-manifold set-membership filter. 2. A distinctive and neat closed-form expression for describing the online reliability of the SE(3) point-to-plane iterated closest point (ICP) results is derived based on the UBB assumption, Lie groups, and Lie algebras. 3. A novel on-manifold ellipsoidal set-membership filter is designed to fuse the observations from the IMU with the ICP results. The final output of this filter is the ellipsoidal set where the system state lies. The resultant ellipsoidal sets can serve as effective and online deterministic protection levels. 4. Experiments conducted with multiple mobile robot platforms demonstrate that the estimated protection level from our system outperforms the state-of-the-art (SOTA) methods in terms of accuracy and effectiveness. In our experiments, the cover rate of the protection levels estimated by our system to the ground truth reached 100%. Our code is publicly available *.
+
+2 Related works 
+
+2.1 State estimation for robotics 
+
+As the classic route, the probabilistic state estimation (Barfoot, 2017) has been widely applied to robots (Xu et al., 2022; Campos et al., 2021). Unlike probabilistic state estimation, deterministic state estimation is another promising approach. As the pivotal method of deterministic state estimation, the set-membership filter (Qin et al., 2024; Zhu et al., 2024) uses bounded sets to describe the uncertainties within the systems. In terms of the selection of sets, the ellipsoidal set (Schweppe, 1968; Durieu et al., 2001) is a widely used choice. To improve the performance of ellipsoidal SMF, Wang et al. (2022) proposed an optimal ellipsoidal SMF with less conservatism by assuming that the inverse of the observation model exists. Wang et al. (2023) increased the degrees of freedom in the SMF, enabling the filter to better adapt to the dynamic changes of the system. This method not only improved the estimation accuracy but also reduced the computational load. Although there are numerous theoretical studies related to the SMF, the corresponding works focused on real-world applications are relatively rare. Zhu et al. (2023) applied the ellipsoidal SMF to the two-dimensional mobile robot localization based on ultrasonic sensors. Zhou et al. (2025) proposed a method for applying the ellipsoidal SMF to three-dimensional ultra-wideband localization. Moreover, although SMFs have unique characteristics in the field of state estimation and possess high potential application value, very few studies have applied SMFs to state estimation problems based on manifolds (Xu et al., 2022). To enable the SMF to demonstrate its advantages in on-manifold state estimation, in this paper, we design an on-manifold SMF and combine it with the uncertainty modeling in the LIO system, presenting a feasible SMF-based LIO. 
+
+2.2 Uncertainty analysis for LiDAR-based localization 
+
+The safety threats of the localization system are usually caused by the uncertainties within the system. Therefore, uncertainty analysis (Rodr´ ıguez-Ar´ evalo et al., 2018) is of vital importance in constructing a safety-critical localization system. Censi (2007) systematically analyzed the error sources of the ICP algorithm. Based on the implicit function theorem, he provided a covariance estimation for the ICP algorithm results. However, this method is only applicable to the two-dimensional ICP algorithm. Prakhya et al. (2015) extended this method to the three-dimensional ICP problem and provided a more intuitive closed-form solution. However, this result is derived based on Euler angles and is not applicable to modern state estimation systems constructed based on SE(3). Furthermore, the aforementioned methods pay less attention to modeling the point cloud noise, which consequently leads to lower accuracy of the covariance estimations. Based on the characteristics of LiDAR, Yuan et al. (2021) constructed an on-manifold probabilistic noise model for measured points, which has become a widely used modeling 
+
+> ∗[Online]. Available: https://github.com/Zhu-YQ/LIO-SMF.git.
+
+Safety-critical LiDAR-inertial odometry 3
+
+method for point cloud noise (Liu et al., 2024; Dong et al., 2025). Furthermore, Yuan et al. (2022) explicitly presented a relationship between point uncertainty and the uncertainty of the estimated plane for ICP, thereby presenting the uncertainty of the map. Huang et al. (2024) achieved a more accurate description of the probabilistic point noise model by additionally considering the incident angle and the surface roughness. Furthermore, they also proposed an incremental method for maintaining map uncertainty, which significantly improved the efficiency of updating map uncertainty. Hu et al. (2024) presented an optimization-based LiDAR localization system with uncertainty estimation. By combining factor graphs and the Laplace approximation (Gomez-Ojeda et al., 2019), this method can provide considerable online reliability assessment. 
+
+3 Preliminary for ellipsoidal set 
+
+Since the ellipsoidal sets are chosen to describe the UBB noises and uncertainties, there are numerous ellipsoidal set operations in our system. In this section, we list the necessary and mature operations of ellipsoidal sets in order to introduce our system in the following sections better. 
+
+3.1 Definition 
+
+An n-dimensional ellipsoidal set is defined as follows: 
+
+E (a, P) = 
+
+n
+
+x | (x − a)T P−1 (x − a) ⩽ 1, x ∈ Rno
+
+(1) where the vector a ∈ Rn is called the center, and the positive-definite matrix P ∈ Rn×n is called the shape matrix. 
+
+3.2 Linear map and translation 
+
+Linear map and translation are the basic operations of vectors and ellipsoidal sets. If the original n-dimensional vector satisfies x ∈ E (a, P), the transformed vector satisfies: 
+
+Ax + b ∈ E 
+
+
+
+Aa + b, APA T
+
+(2) where A ∈ Rm×n, b ∈ Rm.
+
+3.3 Minkowski sum 
+
+Considering multiple vectors within different ellipsoidal sets xi ∈ E (ai, Pi), i = 1 , 2, ..., n , if the sum of all xi is required, the result is within the following Minkowski sum (Wang et al., 2022): 
+
+> n
+
+X
+
+> i=1
+
+xi ∈
+
+> n
+
+M
+
+> i=1
+
+E (ai, Pi) (3) where ⊕ is the Minkowski sum operator. However, the resul-tant Minkowski sum will not necessarily be an ellipsoidal set. For the consistency of the subsequent operations using ellipsoidal sets, the out-bounding ellipsoidal set must be maintained: 
+
+E (a, P) ⊇
+
+> n
+
+M
+
+> i=1
+
+E (ai, Pi) (4) whose parameters are a = Pni=1 ai, P = Pni=1 β−1 
+
+> i
+
+Pi
+
+(Durieu et al., 2001), where βi > 0 and Pni=1 βi = 1 .Moreover, due to the flexibility of βi, the out-bounding ellipsoidal set is not unique. To limit the conservatism of the set, the minimum trace criterion (Wang et al., 2022) is frequently used to obtain a unique set, whose closed-form solution is βi = ptr ( Pi)/Pnj=1 
+
+ptr ( Pj ) (Durieu et al., 2001). Denote the corresponding optimal ellipsoidal set as 
+
+E (a∗, P∗). For clarity, in this paper, the operator ⊕E is used to represent the operation of obtaining the optimal out-bounding ellipsoidal set of the Minkowski sum, that is 
+
+E (a∗, P∗) = 
+
+> n
+
+M 
+
+> i=1
+> E
+
+E (ai, Pi) (5) 
+
+3.4 Intersection 
+
+Intersection is a momentous operation for set-membership filters. For two ellipsoidal sets E (a1, P1) and E (a2, P2)
+
+with the same dimension, their intersection is usually not retained as an ellipsoidal set. With the same handling in the Minkowski sum operation, the out-bounding ellipsoidal set (Wang et al., 2022) is required: 
+
+E (a, P) ⊇ (E (a1, P1) ∩ E (a2, P2)) (6) 
+
+a = Pλ
+
+ (1 − λ) P−11 a1 + λP−12 a2
+
+ , 0 < λ < 1 (7) 
+
+P = (1 − ν) Pλ (8) where 
+
+P−1 
+
+> λ
+
+= (1 − λ) P−11 + λP−12 (9) 
+
+ν = (1 − λ) aT1 P−11 a1 + λaT2 P−12 a2 − aTP−1 
+
+> λ
+
+a (10) Additionally, the minimum trace criterion is also used to obtain a unique set, whose solution can be acquired using the linear search methods (Nocedal and Wright, 2018). Similarly, to enhance the clarity, in this paper, the operator 
+
+∩E is used to represent the operation of obtaining the optimal out-bounding ellipsoidal set with minimum trace of the intersection, that is 
+
+E (a∗, P∗) = E (a1, P1) ∩E E (a2, P2) (11) 
+
+3.5 Conversion from box to ellipsoidal set 
+
+Box (Merlinge, 2024) is composed of multiple intervals, and this representation for UBB vectors is more intuitive and suitable to be used as an auxiliary set for performing ellipsoidal set operations. An n-dimensional box is defined as follows: 
+
+B = [ b1] × [b2] × · · · × [bn] (12) 
+
+[bi] = {x | inf ([ bi]) ⩽ x ⩽ sup ([ bi]) , x ∈ R} (13) where i = 1 , 2, ..., n , × is the Cartesian product operator, 
+
+[bi] is an interval (Ehambram et al., 2022). Considering an n-dimensional ellipsoidal set E (a, P), the relationship between it and its inscribed box Bin is 
+
+Bin = bin 1
+
+ × bin 2
+
+ × · · · × bin 
+
+> n
+
+ (14) 
+
+a = a1 · · · an
+
+T , P = diag  nr 21 , · · · , nr 2
+
+> n
+
+ (15) where 
+
+ai = 0 .5  inf   bin 
+
+> i
+
+ + sup   bin 
+
+> i
+
+ , r i = sup   bin 
+
+> i
+
+ − ai
+
+(16) 4Deskewing  Local Map 
+
+> On-Manifold Set-Membership Filter Inputs
+
+IMU 
+
+LiDAR  Uncertainty Resolving 
+
+Pose With 
+
+Protection Level 
+
+Prediction  Update 
+
+> Minkowski Sum
+> Intersection
+> Outputs
+> Point Cloud Registration With Uncertainty Resolving
+
+Point-to-Plane 
+
+ICP  
+
+> Figure 1. Overview of the proposed safety-critical LiDAR-inertial odometry with deterministic protection level. An uncertainty resolving method is designed to calculate the ellipsoidal set-membership uncertainty of the estimated pose from ICP. An on-manifold set-membership filter is designed to fuse the measurements from IMU and the pose estimated from ICP. Finally, the outputs are the estimated pose with the deterministic protection level and the point cloud map.
+
+4 System overview 
+
+The pipeline of our system is shown in Figure 1. The point cloud from LiDAR after deskewing is leveraged to estimate the pose via the point-to-plane ICP algorithm with the scan-to-map strategy. Then the UBB uncertainty of the estimated pose is calculated by the uncertainty resolving method we propose (see Section 5). Consequently, the on-manifold set-membership filter (see Section 6) fuses the IMU measurements with UBB noises and the estimated pose with UBB uncertainty from ICP for more robust and accurate localization. The outputs of our system are the estimated pose with the deterministic protection level and the point cloud map. Finally, with the transformation given by the estimated pose, the LiDAR point cloud is updated to the local map. The significant novelties of our system are as follows. 1. Deterministic LIO pipeline: To fully leverage the theoretical advantages of deterministic UBB noise, we propose a complete, feasible, and efficient deterministic LIO pipeline in this paper. Unlike the existing technical routes, our system does not involve any Gaussian assumptions. Instead, it takes the deterministic bound as the pivot and constructs a bound-aware state estimation system. Our main objective is to use hard bounds that 100% encompass the ground truth to characterize the system safety, rather than probabilistic bounds that cover the ground truth with certain probabilities. 2. Uncertainty-aware on-manifold ICP : For LiDAR-based localization systems, the point-plane ICP on SE(3) is indispensable. However, due to the uniqueness and complexity of the optimization problem, the reliability of the ICP results is usually difficult to assess online. Unlike previous reliability analyses of ICP based on probability and Euler angles, we propose to use the UBB assumption and combine Lie groups and Lie algebras to derive a neater, more accurate, and more practical online ICP uncertainty resolving. 3. On-manifold set-membership filter : Although the set-membership filter has unparalleled advantages in terms of safety, due to the complexity of set arithmetic (see Section 3), it is less flexible than the Kalman filter, resulting in most of the research on it remaining at the level of low-dimensional Euclidean systems. To fully leverage the advantages of the set-membership filter, we propose an on-manifold set-membership filter for the robot state on a more complex manifold. This effort expands the theoretical boundaries of the set-membership filter and demonstrates its application potential in complex on-manifold systems. 
+
+5 Point cloud registration with UBB uncertainty resolving 
+
+5.1 Point model with UBB noise 
+
+In this section, we assume that the collected point cloud is deskewed using the IMU measurements (Shan et al., 2021). Denote the reference frame of the IMU as {I}, and the reference frame of the LiDAR as {L}. The relationship between the measured point from the laser and the ground-truth point can be formulated as 
+
+> L
+
+pi = L ˜pi + Lδpi (17) where Lpi ∈ R3 is the ground-truth point, L ˜pi ∈ R3 is the measured point, and Lδpi ∈ R3 is the unknown noise. Since 
+
+> L
+
+δpi is unknown, it is commonly modeled as a random variable following a zero-mean Gaussian distribution. However, the Gaussian distribution is unbounded, whereas the noise captured by real-world sensors is bounded. This suggests that Gaussian distributions are inevitably an approximation for modeling noise. In addition, the noise characteristics of the point vary at different ranges. To accurately characterize the noise of a point using the Gaussian distribution, it is necessary to obtain different covariances corresponding to different ranges. However, it is intractable and impractical to accurately calibrate the dynamic covariance of the noise at different ranges due to the complexity of the hardware and environment. Existing methods (Xu et al., 2022; Wu et al., 2024) usually set the covariance of the noise to a small empirical value. Thus, the accuracy of existing methods for modeling noise based on Gaussian distributions is limited. Safety-critical LiDAR-inertial odometry 5Unknown GT Point  
+
+> Measured Point
+> Bounded Set of GT Point
+> Figure 2. An illustration of the point model with UBB noise. The unknown ground-truth point is encompassed by a bounded ellipsoidal set whose center is the measured point. Unknown Bearing Noise
+
+Direction of Laser 
+
+> Unknown GT Range Measured Range
+
+Tangent Space at 
+
+> Measured Point
+
+(a) 
+
+(b)  
+
+> Figure 3. An illustration of the point model with UBB noises. (a) Range measurement with UBB noise. The unknown ground-truth range is restricted within a bounded set. (b) Bearing measurement with UBB noise. The length of the unknown bearing noise is less than the upper bound.
+
+To overcome this drawback, as shown in Figure 2, we utilize the UBB assumption and the ellipsoidal set to model the noise. Originally, based on the theory in Yuan et al. (2021), the measurement of a laser is composed of a range and a bearing: 
+
+di = ˜di + n(d) 
+
+> i
+
+, ϕi = ˜ϕi ⊞S2 n(ϕ) 
+
+> i
+
+(18) where di ∈ R and ϕi ∈ S2 are the ground-truth range and bearing, ˜di ∈ R and ˜ϕi ∈ S2 are the measured range and bearing, n(d) 
+
+> i
+
+∈ R and n(ϕ) 
+
+> i
+
+∈ R2 are the UBB noises, and 
+
+⊞S2 indicates the operation of adding a perturbation. As depicted in Figure 3, in our system, n(d) 
+
+> i
+
+and n(ϕ) 
+
+> i
+
+are assumed to be UBB, that is n(d) 
+
+> i
+
+∈ [−br , b r ] and ∥n(ϕ) 
+
+> i
+
+∥ ⩽
+
+bϕ. The value of n(d) 
+
+> i
+
+indicates the difference between the measured range and the ground-truth range, and the length of n(ϕ) 
+
+> i
+
+indicates the angle between the measured bearing and the ground-truth bearing. Unlike the noise modeling methods with Gaussian distributions, when using the UBB assumption for noise modeling, there is no need to provide the covariance. Instead, only the upper bounds of the range error and the bearing error need to be provided, which is a more relaxed and simpler assumption. Consequently, according to the rule of out-bounding ellipsoidal set (see Section 3.5), the augmented noise is restricted in the following set: 
+
+h
+
+n(d) 
+
+> i
+
+n(ϕ)
+
+> i
+> T
+
+iT
+
+∈ E  0, diag  3b2 
+
+> r
+
+, 3b2
+
+> ϕ
+
+, 3b2
+
+> ϕ
+
+ 
+
+= E  0,P Pp
+
+> i
+
+ (19) By composing the range component and the bearing component, based on the method in Yuan et al. (2021), (17) can be reformulated to 
+
+> L
+
+pi = diϕi = ˜di ˜ϕi
+
+|{z}  
+
+> L˜pi
+
++
+
+h ˜ϕi − ˜di ˜ϕ∧ 
+
+> i
+
+N
+
+ ˜ϕi
+
+i "
+
+n(d)
+
+> i
+
+n(ϕ)
+
+> i
+
+#| {z }
+
+> Lδpi
+
+(20) where (·)∧ denotes the skew-symmetric operator, N( ˜ϕi) ∈
+
+R3×2 is the orthonormal basis of the tangent plane at ˜ϕi, which can be obtained through the Gram-Schmidt orthogonalization procedure. Denote that Ai =[ ˜ ϕi − ˜di ˜ϕ∧ 
+
+> i
+
+N( ˜ϕi)] , then the noise can by given by the rule of linear map (see Section 3.2): 
+
+> L
+
+δpi ∈ E  0, AiP Pp 
+
+> i
+
+AT
+
+> i
+
+ (21) Finally, the overall point model written in terms of {I} can be formulated as  
+
+> I
+
+pi − I ˜pi = I δpi ∈ E (0, ILR(AiP Pp 
+
+> i
+
+AT 
+
+> i
+
+)ILRT)= E(0, I Pp 
+
+> i
+
+) (22) where ILR ∈ SO(3) and ILt ∈ R3 are the calibrated extrinsic parameters. Due to the maturity of the calibration of the extrinsic parameters, the accuracy impact brought by them on the system is very small such that can be ignored. For the simplicity of our derivation, the uncertainties of the extrinsic parameters are ignored. 
+
+5.2 Closed-form uncertainty resolving on SE(3) 
+
+Denote the world frame of the odometry as {W }. An ideal point-to-plane ICP problem is given by 
+
+min  
+
+> WIT
+> n
+
+X
+
+> i=1
+
+uT
+
+> i
+
+WI TI pi − qi
+
+ 2
+
+(23) where WI T ∈ SE (3) is the decision variable, I pi is the ground-truth LiDAR point, ui indicates the normal vector of the corresponding plane from the map, and qi indicates a point on the plane. This ICP problem can be solved using the Gauss-Newton or Levenberg–Marquardt method iteratively and incrementally. When the algorithm converges for the final solution, the last increment is given by solving the following optimization problem: 
+
+∆ξ∗ = 0 = arg min 
+
+> ∆ξ
+> n
+
+X
+
+> i=1
+
+uT 
+
+> i WI
+
+˜T∗Exp (∆ ξ) I pi − uT 
+
+> i
+
+qi
+
+> 2
+
+(24) where Exp( ·) = exp(( ·)∧) , ∆ξ∗ ∈ se (3) is the calculated increment in this iteration, and WI ˜T∗ ∈ SE(3) is the 6
+
+optimal solution from the last iteration using the measured LiDAR points. Denote the objective function in (24) as J  ∆ξ, I p1: n
+
+ = Pni=1 Ji
+
+ ∆ξ, I pi
+
+. According to the implicit function theorem (Censi, 2007), there is an implicit map, which is denoted as f , from the LiDAR points to the increment: 
+
+∆ξ = f  I p1: n
+
+
+
+= f  I ˜p1: n
+
+ +
+
+> n
+
+X
+
+> i=1
+
+∂f  I ˜p1: n
+
+
+
+∂I pi
+
+ I pi −I ˜pi
+
+ +
+
+> n
+
+X
+
+> i=1
+
+rnl 
+
+(25) where 
+
+∆ξ∗ = f  I ˜p1: n
+
+ (26) 
+
+∂f  I ˜p1: n
+
+
+
+∂I pi
+
+= − ∂2J  ∆ξ∗,I ˜p1: n
+
+
+
+∂∆ξ2
+
+!−1
+
+∂2J  ∆ξ∗,I ˜p1: n
+
+
+
+∂I pi∂∆ξ
+
+(27) and rnl is the UBB higher-order term. This relationship is overarching for deriving the uncertainty in the estimated pose, as it describes the connection between the LiDAR points and the increment of pose. Since each component of the objective function is only related to one LiDAR point, the Hessian matrix of the objective function with respect to the increment of the pose can be decomposed into the following summation form: 
+
+∂2J  ∆ξ, I p1: n
+
+
+
+∂∆ξ2 =
+
+> n
+
+X
+
+> i=1
+
+∂2Ji
+
+ ∆ξ, I pi
+
+
+
+∂∆ξ2 (28) Denote that εi = uT 
+
+> i WI
+
+˜T∗Exp (∆ ξ) I pi − uT 
+
+> i
+
+qi, then based on the chain rule and the Jacobian matrix of SE(3) ,the gradient of the objective function with respect to the increment is be given by 
+
+∂J i
+
+ ∆ξ, I pi
+
+
+
+∂∆ξ =
+
+ ∂ε i
+
+∂∆ξ
+
+T ∂J i
+
+ ∆ξ, I pi
+
+
+
+∂ε i
+
+= 2 B, −BI pi∧T 
+
+uT 
+
+> iWI
+
+˜T∗Exp (∆ ξ) I pi − uT 
+
+> i
+
+qi
+
+
+
+(29) where B = uT 
+
+> i WI
+
+˜R∗, WI ˜R∗ ∈ SO (3) is the rotation part of  
+
+> WI
+
+˜T∗. Then the Hessian matrix is 
+
+∂2Ji
+
+ ∆ξ, I pi
+
+
+
+∂2∆ξ = 2 B, −BI pi∧T B, −BI pi∧ (30) To further calculate ∂2J  ∆ξ, I p1: n
+
+/∂ I pi∂∆ξ, it is essential to reformulated (29) to 
+
+∂J i
+
+ ∆ξ, I pi
+
+
+
+∂∆ξ = 2 JT1 , JT2
+
+T (31) 
+
+
+
+J1 =BTBExp (∆ ϕ) I pi + BTuT
+
+> i
+
+ WI ˜t∗ + ∆ t − qi
+
+
+
+J2 =I pi∧BTBExp (∆ ϕ) I pi
+
+−  BTuT
+
+> i
+
+ WI ˜t∗ + ∆ t − qi
+
+ ∧I pi
+
+(32) 
+
+∆t = WI R∗ ∞X
+
+> j=0
+
+1(j + 1)! 
+
+ ∆ϕ∧j ∆ρ (33) 
+
+Figure 4. The relationship between the estimated on-manifold pose and its corresponding ellipsoidal set-membership uncertainty in the tangent space. 
+
+where WI ˜t∗ ∈ R3 is the translation part of WI ˜T∗, ∆ξ =[∆ ρT ∆ϕT]T, ∆ρ ∈ R3 and ∆ϕ ∈ so (3) . Consequently, it yields 
+
+∂2Ji
+
+ ∆ξ, I pi
+
+
+
+∂I pi∂∆ξ = 2 
+
+h ∂J1 
+
+> ∂Ipi
+> T
+
+, ∂J2 
+
+> ∂Ipi
+> T
+
+iT
+
+(34) 
+
+
+
+∂J1
+
+∂I pi
+
+=BTBExp (∆ ϕ)
+
+∂J2
+
+∂I pi
+
+=I pi
+
+> ∧
+
+BTBExp (∆ ϕ) −  BTBExp (∆ ϕ) I pi
+
+∧
+
+−  BTuT
+
+> i
+
+ WI ˜t∗ + ∆ t − qi
+
+ ∧
+
+(35) Let I pi = I ˜pi and ∆ξ = ∆ ξ∗ = 0, then by combing (27), (28), (30), (34) and (35), the final Jacobian matrix of the implicit function with respect to the LiDAR point is given by 
+
+∂f  I ˜p1: n
+
+
+
+∂I pi
+
+= −
+
+> n
+
+X
+
+> i=1
+
+[B, −BI ˜p∧ 
+
+> i
+
+]T[B, −BI ˜p∧ 
+
+> i
+
+]
+
+!−1
+
+×
+
+ BTB 
+
+> I
+
+pi∧BTB −  BTBI pi
+
+∧ −  BTuT
+
+> i
+
+ WI ˜t∗ − qi
+
+ ∧
+
+
+
+(36) Based on (25) and the closed-form Jacobian matrix above, the ellipsoidal set that contains the last increment can be given via the Minkowski sum operation (see Section 3.3): 
+
+∆ξ =∆ ξ − ∆ξ∗ ∈ E 
+
+
+
+0, ˜Qξ 
+
+=
+
+> n
+
+M 
+
+> i=1
+> E
+
+E 0, ∂f  I ˜p1: n
+
+
+
+∂I piI Pi 
+
+> p
+
+∂f  I ˜p1: n
+
+
+
+∂I pi
+
+> T
+
+!! 
+
+⊕E
+
+> n
+
+M 
+
+> i=1
+> E
+
+E  0, Pnl !
+
+(37) where E  0, Pnl  is the compensation parameter for rnl .Eventually, the estimated pose from the point-to-plane ICP algorithm with ellipsoidal set-membership uncertainty is given by  
+
+> WI
+
+˜T = WI ˜T∗Exp (∆ ξ) , ∆ξ ∈ E 
+
+
+
+0, ˜Qξ 
+
+(38) The illustration of the relationship between the estimated pose and its uncertainty is shown in Figure 4. Safety-critical LiDAR-inertial odometry 7
+
+6 On-manifold set-membership filter for sensor fusion 
+
+6.1 System state 
+
+The system state to be estimated at time k in our system is 
+
+xk = tT 
+
+> k
+
+, vT 
+
+> k
+
+, RT
+
+> k
+
+T ∈ M , M = R6 × SO (3) (39) where tk ∈ R3 is the translation, vk ∈ R3 is the velocity, and Rk ∈ SO(3) is the rotation matrix. The system state is the description of {I} relative to {W }. For simplicity, the reference frame of the state will be omitted in this section. To implement an on-manifold set-membership filter, it is essential to separate the nominal state and the error state. In our system, the nominal state is defined as 
+
+ˆxk =
+
+hˆtT 
+
+> k
+
+, ˆvT 
+
+> k
+
+, ˆRT
+
+> k
+
+iT
+
+(40) and the error state is defined as 
+
+δˆxk = xk ⊟M ˆxk =
+
+h
+
+δˆtT 
+
+> k
+
+, δ ˆvT 
+
+> k
+
+, δ ˆθT
+
+> k
+
+iT
+
+(41) where ⊟M is the encapsulated minus operator (Xu et al., 2022) for M, δˆtk ∈ R3, δˆvk ∈ R3, and δˆθk ∈ so (3) . The error state in our system is assumed to be UBB and be within separated ellipsoidal sets: 
+
+δˆtk ∈ E 
+
+
+
+0, ˆPt
+
+> k
+
+
+
+, δ ˆvk ∈ E 
+
+
+
+0, ˆPv
+
+> k
+
+
+
+, δ ˆθk ∈ E 
+
+
+
+0, ˆPθk
+
+
+
+(42) where E(0, ˆPt
+
+> k
+
+) is considered as the protection level of translation, and E(0, ˆPθk) is considered as the protection level of rotation. 
+
+6.2 Prediction 
+
+Based on the kinematic model (Xu et al., 2022) of the system state, the motion model of the nominal state (40) is 
+
+ˇtk+1 = ˆ tk + ˆ vk∆t + 12
+
+ ˆRk(˜ ak − ba)
+
+
+
+∆t2 + 12 g∆t2
+
+ˇvk+1 = ˆ vk + ˆRk(˜ ak − ba)∆ t + g∆t
+
+ˇRk+1 = ˆRkExp (( ˜ ωk − bg)∆ t)
+
+(43) where ∆t is the sampling interval, ˜ak and ˜ωk are the IMU measurements, ba and bg are the IMU biases (obtained using the IMU measurements during the static initialization before moving), g is the gravity. In the prediction step, the nominal state is predicted via (43) without considering any noise. According to the definition of the error state (41), its motion model is 
+
+δˇtk+1 =δˆtk + δˆvk∆tδˇvk+1 =δˆvk − ˆRk(˜ ak − ba)∧δˆθk∆t − ˆRkδba∆t − ηv,k 
+
+δˇθk =Exp ( −( ˜ ωk − bg)∆ t) δˆθk − δbg∆t − ηθ,k 
+
+(44) where δba and δbg are the error of the calibrated IMU biases, and ηv,k and ηθ,k are the noises. In our system, the errors of biases and noises are assumed to be UBB and within ellipsoidal sets: 
+
+δba ∈ E  0, Pba  , δ bg ∈ E  0, Pbg  (45) 
+
+ηv,k ∈ E  0, ∆t2Na
+
+> k
+
+ , ηθ,k ∈ E  0, ∆t2Ng
+
+> k
+
+ (46) 
+
+Na 
+
+> k
+
+= diag  3b2
+
+> a
+
+, 3b2
+
+> a
+
+, 3b2
+
+> a
+
+ , Ng 
+
+> k
+
+= diag  3b2 
+
+> g
+
+, 3b2 
+
+> g
+
+, 3b2
+
+> g
+
+
+
+(47) In the prediction stage, based on the motion model, the ellipsoidal sets that contain the predicted error state can be calculated as follows: 
+
+δˇtk+1 ∈ E  0, ˇPt
+
+> k+1
+
+ = E
+
+
+
+0, ˆPt
+
+> k
+
+
+
+⊕E E
+
+
+
+0, ∆t2 ˆPv
+
+> k
+
+
+
+(48) 
+
+δˇvk+1 ∈ E  0, ˇPv
+
+> k+1
+
+ = E
+
+
+
+0, ˆPv
+
+> k
+
+
+
+⊕E E
+
+
+
+0, Ck ˆPθkCT
+
+> k
+
+
+
+⊕E E  0, DkPba DT
+
+> k
+
+ ⊕E E  0, ∆t2Na
+
+> k
+
+
+
+(49) 
+
+δˇθk+1 ∈ E  0, ˇPθk+1 
+
+ =E
+
+
+
+0, Ek ˆPθkET
+
+> k
+
+
+
+⊕E E  0, ∆t2Pbg 
+
+⊕E E  0, ∆t2Ng
+
+> k
+
+
+
+(50) where Ck = − ˆRk(˜ ak − ba)∧∆t, Dk = − ˆRk∆t, and 
+
+Ek = Exp ( −( ˜ ωk − bg)∆ t).
+
+6.3 Update 
+
+In the update stage, the estimated pose from ICP with UBB uncertainty is considered as the observation for the filter. Denote the estimated pose from ICP at time k + 1 as ˜T∗
+
+> k+1
+
+,and denote the shape matrix of its uncertainty as ˜Qξk+1 , then the estimated translation with uncertainties can be given by using the linear map of ellipsoidal sets: 
+
+˜tk+1 ∈ E 
+
+˜t∗
+
+> k+1
+
+, ˜Qt
+
+> k+1
+
+
+
+(51) 
+
+˜Qt 
+
+> k+1
+
+= Ft ˜Qξk+1 FtT, Ft = I3×3, O3×3
+
+ (52) where ˜t∗ 
+
+> k+1
+
+is the translation part of ˜T∗
+
+> k+1
+
+. Grounded in the relationship between the observed translation and the predicted nominal translation, the observed error translation is 
+
+δ˜tk+1 ∈ E 
+
+˜t∗ 
+
+> k+1
+
+− ˇtk+1 , ˜Qt
+
+> k+1
+
+
+
+(53) Since the predicted ellipsoidal set (48) and the observed ellipsoidal set (53) both contain the unknown ground-truth translation, their intersection (see Section 3.4) is a tighter set that also contains the ground-truth translation, which is the outcome of fusing the IMU measurements and the LiDAR measurements. Hence, the predicted error translation state can be updated as follows: 
+
+δˆtk+1 ∈ E  0, ˇPt
+
+> k+1
+
+ ∩E E
+
+˜t∗ 
+
+> k+1
+
+− ˇtk+1 , ˜Qt
+
+> k+1
+
+
+
+= E
+
+
+
+δˆt+
+
+> k+1
+
+, ˆPt
+
+> k+1
+
+ (54) In terms of the velocity, by leveraging Euler’s method, the connection between the observed translation and the observed velocity is given as ˜tk+1 − ˜tk = ˜ vk+1 ∆t.Consequently, the observed velocity satisfies 
+
+˜vk+1 ∆t ∈ E (˜ t∗
+
+> k+1
+
+, ˜Qt
+
+> k+1
+
+) ⊕E E(−˜t∗
+
+> k
+
+, ˜Qt
+
+> k
+
+)= E(∆˜ tk+1 , ˜Q∆t 
+
+> k+1
+
+) (55) 
+
+˜vk+1 ∈ E 
+
+ 1∆t ∆˜ tk+1 , 1∆t2 ˜Q∆t 
+
+> k+1
+
+
+
+(56) 8
+
+And the ellipsoidal set that contains the observed error velocity is 
+
+δ˜vk+1 ∈ E 
+
+ 1∆t ∆˜ tk+1 − ˇvk+1 , 1∆t2 ˜Q∆t 
+
+> k+1
+
+
+
+(57) Thus, the predicted error velocity state can be updated as follows: 
+
+δˆvk+1 ∈ E (0, ˇPv
+
+> k+1
+
+) ∩E E( 1∆t ∆˜ tk+1 − ˇvk+1 , 1∆t2 ˜Q∆t 
+
+> k+1
+
+)= E
+
+
+
+δˆv+
+
+> k+1
+
+, ˆPv
+
+> k+1
+
+
+
+(58) Similarly, the observed rotation matrix with uncertainty can be given by 
+
+˜Rk+1 = ˜R∗
+
+> k+1
+
+Exp ( δθk+1 ) , δ θk+1 ∈ E 
+
+
+
+0, ˜Qr
+
+> k+1
+
+
+
+(59) 
+
+˜Qr 
+
+> k+1
+
+= Fr ˜Qξk+1 FrT , Fr = O3×3, I3×3
+
+ (60) where ˜R∗ 
+
+> k+1
+
+is the rotation part of ˜T∗
+
+> k+1
+
+. The connection between the predicted nominal rotation state and the observed rotation is given as 
+
+˜R∗
+
+> k+1
+
+Exp ( δθk+1 ) = ˇRk+1 Exp 
+
+
+
+δ˜θk+1 
+
+
+
+(61) 
+
+δ˜θk+1 ≈ Log 
+
+ ˇRT 
+
+> k+1
+
+˜R∗
+
+> k+1
+
+
+
++ J −1δθk+1 
+
+∈ E 
+
+
+
+Log 
+
+ ˇRT 
+
+> k+1
+
+˜R∗
+
+> k+1
+
+
+
+, J −1 ˜Qr
+
+> k+1
+
+J −T (62) where Log( ·) = (log ( ·)) ∨, (·)∨ is the inverse of the skew-symmetric operator, and J is the right Jacobian (Barfoot, 2017) of Log( ˇRT 
+
+> k+1
+
+˜R∗
+
+> k+1
+
+). Subsequently, the predicted error rotation state can be updated as follows: 
+
+δˆθk+1 ∈ E 
+
+
+
+δ ˆθ+
+
+> k+1
+
+, ˆPθk+1 
+
+
+
+= E  0, ˇPθk+1 
+
+
+
+∩E E
+
+
+
+Log 
+
+ ˇRT 
+
+> k+1
+
+˜R∗
+
+> k+1
+
+
+
+, J −1 ˜Qr
+
+> k+1
+
+J −T
+
+(63) Once the error state is updated, the nominal state can be updated via the error state. It yields 
+
+ˆtk+1 = ˇ tk+1 + δˆt+
+
+> k+1
+
+ˆvk+1 = ˇ vk+1 + δˆv+
+
+> k+1
+
+ˆRk+1 = ˇRk+1 Exp 
+
+
+
+δˆθ+
+
+> k+1
+
+ (64) Eventually, the centers of ellipsoidal sets of the error state are reset to zero. In practice, if the increment of the last iteration is significantly greater than the threshold, the ICP result is considered unreliable, and this update process will be ignored, and no map update will be carried out. 
+
+6.4 Map uncertainty propagation 
+
+In our system, we regard the global map as the union of multiple local maps. In the aforementioned discussion about ICP uncertainty, we believe that the local map is reliable. However, the global map is generated from noisy historical states and also has its own uncertainty, and this uncertainty will affect the uncertainty of the odometry results. Trajectory Pose with Protection Level 
+
+(a) 
+
+(b) 
+
+> Trajectory Pose with Protection Level
+
+Figure 5. Estimated locations and protection levels from our system. Unlike other methods that only provide estimated locations, our system can provide deterministic protection levels. (a) gate 02 in M2DGR . (b) sbs 03 in NTU VIRAL .
+
+When the robot moves a certain distance away from the origin of the current local map, a new local map will be created. We use the ellipsoidal sets of the last error state within the local map to describe the uncertainty of the current local map. For the m-th local map, its uncertainty is denoted using Et,loc  
+
+> m
+
+, Ev,loc  
+
+> m
+
+and Eθ, loc  
+
+> m
+
+. Based on the uncertainty propagation mechanism of ellipsoidal sets, the system uncertainty with respect to the global map is given as 
+
+δˆtglob  
+
+> k+1
+
+∈ E 
+
+
+
+0, ˆPt,glob 
+
+> k+1
+
+
+
+= E
+
+
+
+0, ˆPt
+
+> k+1
+
+
+
+⊕E
+
+> M
+
+M 
+
+> m=1
+> E
+
+Et,loc 
+
+> m
+
+δˆvglob  
+
+> k+1
+
+∈ E 
+
+
+
+0, ˆPv,glob 
+
+> k+1
+
+
+
+= E
+
+
+
+0, ˆPv
+
+> k+1
+
+
+
+⊕E
+
+> M
+
+M 
+
+> m=1
+> E
+
+Ev,loc 
+
+> m
+
+δˆθglob  
+
+> k+1
+
+∈ E 
+
+
+
+0, ˆPθ, glob 
+
+> k+1
+
+
+
+= E
+
+
+
+0, ˆPθk+1 
+
+
+
+⊕E
+
+> M
+
+M 
+
+> m=1
+> E
+
+Eθ, loc 
+
+> m
+
+(65) where M is the total number of local maps. 
+
+7 Experiments 
+
+7.1 Implementation 
+
+In general, our system is implemented using C++ and the robot operating system (ROS). The ikd-Tree (Xu et al., 2022) is selected as the specific implementation of the map. To limit the computation burden of our system, the input point clouds are downsampled with the strategy given in Xu et al. (2022), and the maximum number of iterations for ICP is limited to 30. Furthermore, in order to fully leverage the performance advantages of the multi-core computing system, we employed the Intel thread building blocks (TBB) for parallel computing. Safety-critical LiDAR-inertial odometry 9Ours      
+
+> PALoc
+> Est. Protection Level
+> Est. Trajectory
+> Ground Truth
+> (a) gate 01 Ours
+> PALoc
+> Est. Protection Level
+> Est. Trajectory
+> Ground Truth (b) hall 01 Ours
+> PALoc
+> Est. Protection Level
+> Est. Trajectory
+> Ground Truth (c) room 01
+
+Figure 6. Estimated protection levels and trajectories from our system and PALoc ( σ2 = 0 .001 ), and the ground truth using different sequences in M2DGR . The protection levels estimated by PALoc cannot cover the ground truth inevitably, therefore, cannot effectively reflect the effectiveness of the navigation system. However, the protection levels obtained by our system can more effectively cover the ground truth. 
+
+7.2 Experimental setup 
+
+In our experiments, Bayesian filter-based FAST-LIO2 (Xu et al., 2022), LIO-EKF (Wu et al., 2024), and optimization-based LIO-SAM (Shan et al., 2021), PALoc (Hu et al., 2024) are deployed as the SOTA probabilistic methods to be compared with. Contributed to the filter-based mechanism, FAST-LIO2 and LIO-EKF can provide covariance estimations. By using the Laplace approximation, PALoc can also provide explicit covariance estimations. In the experiments, we used the 99.73% confidence intervals based on the three-sigma rule as the protection levels for FAST-LIO2, LIO-EKF, and PALoc. 
+
+7.3 Datasets results 
+
+To verify the cross-platform performance of our system, different types of robots were chosen to conduct various experiments. We conducted thorough tests on our system using the following datasets that are of reliable ground truth obtained by 3D laser trackers or real-time kinematic GNSS: 1. M2DGR (Yin et al., 2022): The M2DGR dataset was recorded with a wheeled mobile robot. In this dataset, Velodyne VLP-32C was deployed to capture 3D point clouds, and Handsfree A9 was used as the IMU. 2. NTU VIRAL (Nguyen et al., 2022): NTU VIRAL is a dataset recorded with an autonomous aerial vehicle. Ouster OS1-16 Gen11 and VectorNav VN100 were utilized as the sensors. It is noteworthy that in order to verify the effectiveness of our deterministic protection level, it is essential to conduct experiments using datasets and ground truth. In fact, our protection level can describe the reliability of the localization system in environments without ground truth. The visualized pose estimations and protection levels using different robots are shown in Figure 5. Unlike other methods, in addition to providing the predicted trajectories, our system also offers deterministic protection levels, thereby enabling the online assessment of the safety and reliability of the localization system. Furthermore, it indicates that our system can construct detailed point cloud maps, which can serve for other downstream tasks such as motion planning. To objectively assess the effectiveness of our system, the absolute trajectory error (ATE) is selected as the metric for evaluating the accuracy of localization. It is worth noting that the ellipsoidal sets estimated by our system are the feasible sets of the system state, and all values in one set are considered to be of equal status (Ehambram et al., 2022). Therefore, our system provides no optimal estimation result. However, to evaluate the accuracy of our system, the centers of the ellipsoidal sets were selected as the estimated values used for calculating ATE results in our experiments. The ATE results on the M2DGR dataset are shown in Table 1, and the results on the NTU VIRAL dataset are shown in Table 2. The results show that although our system was not constructed based on the optimal state estimation method, the estimated centers of the ellipsoidal sets by our system only have centimeter-level differences compared to the results estimated by the SOTA methods. Additionally, to objectively assess the estimated protection levels, the cover rate (CR) (Zhou et al., 2025) was chosen as the metric for evaluating the accuracy of the translational protection level, that is 
+
+CR = 1
+
+K
+
+> K
+
+X
+
+> k=0
+
+ϕ
+
+ tk − ˆtk
+
+T ˆP−1
+
+> k
+
+ tk − ˆtk
+
+
+
+(66) 
+
+ϕ (x) = 
+
+(
+
+1, if x ≤ 10, otherwise (67) 10  
+
+> Table 1. ATE [m] (
+
+↓) on the M2DGR dataset. FAST-LIO2 LIO-SAM LIO-EKF PALoc Ours gate 01 0.172 0.148 0.564 0.177 0.140                                               
+
+> gate 02 0.331 0.345 0.346 0.357 0.321
+> gate 03 0.213 0.111 0.227 0.210 0.105
+> hall 01 0.291 0.243 0.326 0.303 0.247 hall 02 0.530 0.538 0.547 0.524 0.267
+> hall 03 0.547 0.658 0.631 0.550 0.370
+> room 01 0.400 0.171 0.467 0.397 0.153
+> room 02 0.315 0.125 0.476 0.316 0.124
+> room 03 0.427 0.161 0.491 0.429 0.164 Average 0.358 0.278 0.453 0.363 0.210 Table 2. ATE [m] (
+
+↓) on the NTU VIRAL dataset. FAST-LIO2 LIO-SAM LIO-EKF PALoc Ours eee 01 0.069 0.075 0.245 0.097 0.120 eee 02 0.069 0.069 0.114 0.183 0.117 eee 03 0.111 0.101 0.142 0.112 0.173 nya 01 0.053 0.076 0.150 0.117 0.118 nya 02 0.090 0.089 0.133 0.191 0.146 nya 03 0.109 0.143 0.129 0.251 0.153 sbs 01 0.086 0.088 0.107 0.096 0.128 sbs 02 0.075 0.084 0.150 0.103 0.120 sbs 03 0.076 0.084 0.755 0.097 0.123 Average 0.082 0.090 0.214 0.139 0.133 
+
+where tk is the ground-truth location, ˆtk is the estimated location, and ˆPk is the scaled covariance (using three-sigma rule) or the global shape matrix. In our experiments, different covariances of point noise ( σ2) were tuned for probabilistic methods to verify the performance of their protection levels. The CR results on the M2DGR dataset are shown in Table 3, and the results on the NTU VIRAL dataset are shown in Table 4. The CR results of the protection levels estimated by our method outperform PALoc, which is the SOTA method with uncertainty estimation, by 40.62% on the M2DGR dataset, and by 110.94% on the NTU VIRAL dataset. These results indicate that, in terms of estimating protection levels and providing online safety assessment, our deterministic method based on the set-membership filter has a significant advantage over the traditional probabilistic methods. It shows that the low performance of the protection levels obtained by the probabilistic methods is not related to the noise parameters but is caused by the inherent characteristics of the Gaussian distribution. To further demonstrate the superiority of the protection levels obtained by our system, we decompose the estimated protection levels along three axes, and the results are depicted in Figure 6. It turns out that the protection levels obtained by PALoc cannot effectively cover the ground truth trajectories, thus making it impossible to conduct an effective online assessment of the safety and reliability of the localization system. The results also show that the protection levels estimated by our system can effectively encompass the localization errors. It indicates that when the ground truth is unknown in real-world applications, our deterministic protection level can be used as an upper bound of the RoboSense Helios32 LiDAR    
+
+> YIS130 IMU
+> Figure 7. Our quadruped robot platform. The RoboSense Helios32 LiDAR and the YIS130 IMU were used as the sensors. The quadruped robot was remotely controlled and walked along multiple different trajectories in the campus environment.
+> Figure 8. Estimated protection levels and mapping result of the
+> building sequence. Our system not only provides location estimations and deterministic protection levels, but also yields fine-grained maps.
+
+unknown ground-truth location, thereby providing a safety reference for downstream tasks. 
+
+7.4 Real-world results 
+
+In addition to the public datasets, to verify the effectiveness of the protection levels estimated by our system, experiments using a quadruped robot equipped with the RoboSense Helios32 LiDAR and the YIS130 IMU were conducted. The robot platform is shown in Figure 7. The estimated protection levels and the mapping result of the building sequence are shown in Figure 8. In the real-world experiments using the quadruped robot, we use the end-to-end error to evaluate the accuracy of the localization systems. To fairly verify the end-to-end accuracy of the LIO methods, all loop closure modules were turned off. The end-to-end errors are shown in Table 5. The abilities to cover the ending errors are shown in Table 6 and Figure 9. The results show that even without optimal estimation results, the accuracy of our system is still improved compared with some SOTA LIOs. More importantly, when the robot moved for a long time and returned to the origin, the protection level obtained by our system can effectively express the Safety-critical LiDAR-inertial odometry 11 
+
+Table 3. CR [%] ( ↑) on the M2DGR dataset. FAST-LIO2 FAST-LIO2 FAST-LIO2 LIO-EKF LIO-EKF LIO-EKF LIO-SAM PALoc PALoc PALoc Ours (σ2 = 0 .001 ) ( σ2 = 0 .1) (σ2 = 1 ) (σ2 = 0 .001 ) ( σ2 = 0 .1) ( σ2 = 1 ) (σ2 = 0 .001 ) ( σ2 = 0 .1) ( σ2 = 1 )gate 01 0.000 0.000 0.000 0.000 0.000 0.756 × 10.192 80.664 98.019 100 
+
+gate 02 0.000 0.000 0.000 0.000 0.000 0.367 × 38.799 92.157 97.580 100 
+
+gate 03 0.035 0.035 0.035 0.000 0.106 0.600 × 63.190 95.477 99.081 100 
+
+hall 01 0.000 0.000 0.000 0.000 1.053 4.211 × 0.000 53.684 80.000 100 
+
+hall 02 0.000 0.000 0.000 0.000 0.000 0.000 × 0.000 16.667 54.167 100 
+
+hall 03 0.000 0.000 0.000 0.000 0.000 0.000 × 0.000 12.245 8.163 100 
+
+room 01 0.150 0.150 0.151 0.000 1.349 15.940 × 0.000 19.127 71.795 100 
+
+room 02 0.152 0.152 0.152 0.000 2.266 34.894 × 1.368 41.578 89.210 100 
+
+room 03 0.080 0.080 0.080 0.000 0.000 11.358 × 0.000 7.962 41.992 100 
+
+Average 0.046 0.046 0.046 0.000 0.530 7.570 × 12.617 46.618 71.112 100 Table 4. CR [%] ( ↑) on the NTU VIRAL dataset. FAST-LIO2 FAST-LIO2 FAST-LIO2 LIO-EKF LIO-EKF LIO-EKF LIO-SAM PALoc PALoc PALoc Ours (σ2 = 0 .001 ) ( σ2 = 0 .1) (σ2 = 1 ) (σ2 = 0 .001 ) ( σ2 = 0 .1) ( σ2 = 1 ) (σ2 = 0 .001 ) ( σ2 = 0 .1) ( σ2 = 1 )eee 01 0.000 0.000 0.000 0.000 3.607 24.136 × 68.930 44.441 84.105 100 
+
+eee 02 0.000 0.000 0.000 0.036 4.608 33.801 × 47.084 8.675 43.629 100 
+
+eee 03 0.000 0.000 0.000 0.000 1.132 14.048 × 38.774 30.646 89.540 100 
+
+nya 01 0.000 0.000 0.000 0.000 2.004 40.827 × 27.123 20.638 34.894 100 
+
+nya 02 0.000 0.000 0.000 0.000 3.137 0.130 × 6.743 66.209 69.579 100 
+
+nya 03 0.000 0.000 0.000 0.000 3.180 24.224 × 1.319 24.722 16.266 100 
+
+sbs 01 0.000 0.000 0.000 0.000 2.776 32.811 × 71.632 29.826 88.020 100 
+
+sbs 02 0.000 0.000 0.000 0.000 2.162 8.549 × 60.995 0.000 0.000 100 
+
+sbs 03 0.000 0.000 0.000 0.000 3.241 33.724 × 60.956 0.000 0.619 100 
+
+Average 0.000 0.000 0.000 0.004 2.872 23.583 × 42.617 25.017 47.406 100 
+
+uncertainty of the final localization result. This indicates that our deterministic protection level can effectively be utilized to ensure the safety of the autonomous operation of robots. 
+
+Table 5. End-to-end error [m] ( ↓) in different sequences with quadruped robot. Methods lawn building sidewalk 
+
+FAST-LIO2 ( σ2 = 0 .001 ) 1.004 2.177 0.893 FAST-LIO2 ( σ2 = 0 .1) 0.714 × 2.339 FAST-LIO2 ( σ2 = 1 ) × × ×
+
+LIO-EKF 1.840 3.730 2.168 LIO-SAM 0.989 3.601 ×
+
+PALoc ( σ2 = 0 .001 ) 2.270 1.177 0.929 PALoc ( σ2 = 0 .1) × × 0.708 
+
+PALoc ( σ2 = 1 ) × × ×
+
+Ours 0.953 1.496 0.710 
+
+To verify the cross-platform capability of our system, as shown in Figure 10, we also conducted experiments using a wheeled mobile robot equipped with Velodyne VLP-16 LiDAR and CH110 IMU. The real-time kinematic GNSS was used to provide ground truth for the robot. The ATE results and the CR results are shown in Table 7 and Table 8. The decomposed protection levels are shown in Figure 11. The results show that, even though the platforms are different, our system still performs exceptionally well. In the experiments conducted on the wheeled mobile robot 
+
+Table 6. Ending coverage in different sequences with quadruped robot. Methods lawn building sidewalk 
+
+FAST-LIO2 ( σ2 = 0 .001 ) × × ×
+
+FAST-LIO2 ( σ2 = 0 .1) × × ×
+
+FAST-LIO2 ( σ2 = 1 ) × × ×
+
+LIO-EKF × × ×
+
+LIO-SAM × × ×
+
+PALoc ( σ2 = 0 .001 ) × ✓ ×
+
+PALoc ( σ2 = 0 .1) × × ✓
+
+PALoc ( σ2 = 1 ) × × ×
+
+Ours ✓ ✓ ✓
+
+platform, the localization accuracy our system achieved was close to the SOTA probabilistic methods. More importantly, the deterministic protection levels provided by our system can accurately cover the ground truth. Finally, to verify the adaptability of our system to different types of LiDARs and environments, we conducted indoor experiments using the solid-state Livox Mid-360 and its build-in IMU. The optical motion capture system was used to provide the ground truth. The ATE results are shown in Table 9. The results show that in the indoor environment, the localization accuracy results of various methods are comparable. The CR results are listed in Table 10. Since both PALoc and our system can achieve 100% CR, we use 12 (a) 
+
+(b)  Successful Coverage 
+
+> Failed Coverage
+
+Figure 9. Ending protection levels of the lawn sequence from different methods. The results show that when the robot returned to the origin, the protection level obtained by our system can effectively cover the errors, while the one obtained by PALoc cannot. (a) PALoc ( σ2 = 0 .001 ). (b) Ours. Velodyne VLP-16 LiDAR 
+
+CH110 IMU 
+
+GNSS Receiver 
+
+Figure 10. Our wheeled mobile robot platform. The Velodyne VLP-16 LiDAR and CH110 IMU were used as the sensors. The real-time kinematic GNSS was equipped to provide ground truth. 
+
+Table 7. ATE [m] ( ↓) in different sequences with wheeled mobile robot. Methods yard garden fountain 
+
+FAST-LIO2 ( σ2 = 0 .001 ) 0.344 0.658 0.828 FAST-LIO2 ( σ2 = 0 .1) × 0.731 ×
+
+FAST-LIO2 ( σ2 = 1 ) × × ×
+
+LIO-EKF 0.311 0.660 0.841 LIO-SAM 0.215 0.567 0.773 
+
+PALoc ( σ2 = 0 .001 ) 0.325 0.665 0.908 PALoc ( σ2 = 0 .1) × × ×
+
+PALoc ( σ2 = 1 ) × × ×
+
+Ours 0.173 0.635 0.828 
+
+Table 8. CR [%] ( ↑) in different sequences with wheeled mobile robot. Methods yard garden fountain 
+
+FAST-LIO2 ( σ2 = 0 .001 ) 0.000 0.000 0.000 FAST-LIO2 ( σ2 = 0 .1) × 0.000 ×
+
+FAST-LIO2 ( σ2 = 1 ) × × ×
+
+LIO-EKF 0.000 0.000 0.000 LIO-SAM × × ×
+
+PALoc ( σ2 = 0 .001 ) 0.824 0.000 0.000 PALoc ( σ2 = 0 .1) × × ×
+
+PALoc ( σ2 = 1 ) × × ×
+
+Ours 100 100 100 Table 9. ATE [m] ( ↓) in different sequences with Livox Mid-360. Methods seq. 1 seq. 2 seq. 3 
+
+FAST-LIO2 ( σ2 = 0 .001 ) 0.336 0.255 0.223 FAST-LIO2 ( σ2 = 0 .1) 0.333 0.253 0.222 FAST-LIO2 ( σ2 = 1 ) 0.331 0.251 0.220 
+
+LIO-EKF × × ×
+
+LIO-SAM ×1 ×1 ×1
+
+PALoc ( σ2 = 0 .001 ) 0.336 0.255 0.223 PALoc ( σ2 = 0 .1) 0.332 0.255 0.223 PALoc ( σ2 = 1 ) 0.255 0.251 0.220 
+
+Ours 0.351 0.273 0.230  
+
+> 1Not suitable for the solid-state Livox Mid-360.
+
+the average interval length (AIL) (Stutts et al., 2023) to measure the conservatism of the protection levels. For our deterministic protection levels, the average interval length is defined as: 
+
+AIL = 1
+
+K
+
+> K
+
+X
+
+> k=1
+
+13
+
+> 3
+
+X
+
+> i=1
+
+2
+
+q
+
+ˆPt,glob  
+
+> k
+
+(i, i ) (68) where ˆPt,glob  
+
+> k
+
+is the shape matrix and 
+
+q ˆPt,glob  
+
+> k
+
+(i, i ) is the radius of the interval (Scholte and Campbell, 2003). For other probabilistic protection levels, the average interval length is defined based on the three-sigma rule: 
+
+AIL = 1
+
+K
+
+> K
+
+X
+
+> k=1
+
+13
+
+> 3
+
+X
+
+> i=1
+
+2 × 3
+
+q
+
+ˆPt 
+
+> k
+
+(i, i ) (69) where ˆPt 
+
+> k
+
+is the estimated covariance of the translation part and 
+
+q ˆPt
+
+> k
+
+(i, i ) is the standard deviation. In practical applications, the conservatism of the protection level plays a decisive role in the performance of the autonomous navigation system. The protection levels should correctly cover localization errors with a small degree of conservatism. Table 10 indicates that although both PALoc and our system achieved 100% CR, the protection level obtained by our system is less conservatism. Compared with PALoc, our system reduced the conservatism by 47.38%. In practical applications, this small but precise protection level can provide better safety references for mobile robots. Safety-critical LiDAR-inertial odometry 13 Ours 
+
+> PALoc Est. Protection Level
+> Est. Trajectory
+> Ground Truth
+
+(a) yard Ours  
+
+> PALoc Est. Protection Level
+> Est. Trajectory
+> Ground Truth
+
+(b) garden Ours  
+
+> PALoc Est. Protection Level
+> Est. Trajectory
+> Ground Truth
+
+(c) fountain 
+
+Figure 11. Estimated protection levels and trajectories from our system and PALoc ( σ2 = 0 .001 ), and the ground truth using different sequences with our wheeled mobile robot. The protection levels obtained by our system can more effectively cover the ground truth. 
+
+Table 10. CR [%] ( ↑) / AIL [m] ( ↓) in different sequences with Livox Mid-360. Methods seq. 1 seq. 2 seq. 3 Cover GT Avg. AIL FAST-LIO2 ( σ2 = 0 .001 ) 0.000 / ×1 0.000 / ×1 0.000 / ×1 × ×1
+
+FAST-LIO2 ( σ2 = 0 .1) 0.000 / ×1 2.435 / ×1 0.997 / ×1 × ×1
+
+FAST-LIO2 ( σ2 = 1 ) 5.910 / ×1 17.217 / ×1 14.286 / ×1 × ×1
+
+LIO-EKF × / × × / × × / × × ×
+
+LIO-SAM ×2 / ×2 ×2 / ×2 ×2 / ×2 ×2 ×2
+
+PALoc ( σ2 = 0 .001 ) 74.468 / ×1 82.609 / ×1 72.425 / ×1 × ×1
+
+PALoc ( σ2 = 0 .1) 100 / 3.537 100 / 3.909 100 / 2.729 ✓ 3.392 PALoc ( σ2 = 1 ) 100 / 7.954 100 / 8.650 100 / 6.425 ✓ 7.676 Ours 100 / 1.797 100 / 1.788 100 / 1.770 ✓ 1.785  
+
+> 1
+
+If the ground truth cannot be 100% covered, AIL has no meaning.  
+
+> 2
+
+Not suitable for the solid-state Livox Mid-360. 
+
+7.5 Real-time analysis 
+
+As the cornerstone of the autonomous navigation system, the LIO system must ensure real-time performance in order to provide information for downstream tasks. In this section, we focus on the real-time analysis of our system. In our implementation, the golden section method was employed to solve the optimization problems related to the operations for ellipsoidal sets. Our real-time analysis was conducted with an Intel i5-14600K CPU. As shown in Table 11, although our system is complicated, it can still operate efficiently at frequencies lower than 10Hz. For a common LiDAR that operates at 10Hz, our system is capable of running in real time. The detailed time cost for each step during the update stage is shown in Figure 12. The results show that the step that takes the most time in the update stage is ICP, while the uncertainty resolving and the on-manifold set-membership filter we propose are of smaller computational load. 
+
+Table 11. Average time cost for online running with valid numbers of points. LiDAR Avg. Points Prediction Update [ms] [ms] Velodyne VLP-32C 1 1416 2.25 ×10 −2 83.60 Ouster OS1-16 Gen11 1 1358 2.09 ×10 −2 74.57 RoboSense Helios32 1 1242 2.02 ×10 −2 96.89 Livox Mid-360 2 2380 1.75 ×10 −2 91.61  
+
+> 1
+
+Spinning LiDAR.  
+
+> 2
+
+Solid-state LiDAR. 
+
+Figure 12. Time cost of different steps in the update stage. The uncertainty resolving method we proposed has a relatively small computational load. 14 
+
+7.6 Parameter sensitivity analysis 
+
+Since our system is constructed based on the UBB assumption, the selection of noise parameters has a high degree of flexibility. Next, we show the influence of sensor noise parameters on the conservatism of the estimated protection level. We fixed the noise parameters of the IMU and only changed the noise parameters of the LiDAR to observe the changes in the AIL results. The AIL results are listed in the Table 12. The results show that although the noise parameter selection of our system has considerable flexibility, the LiDAR noise parameters have a significant impact on the conservatism of the deterministic protection level. Overall, the noise parameters of LiDAR are positively correlated with the results of AIL. This indicates that although different LiDAR noise parameters can enable the system to operate normally, users should appropriately select the LiDAR noise parameters based on the characteristics of the chosen sensor and the degree of strictness of the safety assessment they expect. If the robot is expected to operate under stricter safety standards, then one can appropriately increase the values of the LiDAR noise parameters.                            
+
+> Table 12. AIL [m] ( ↓) using different LiDAR noise parameters.
+> bϕ[deg] br[m] 0.04 0.08 0.12 0.20 0.05 1.035 1.174 1.313 1.587 0.10 1.044 1.181 1.319 1.579 0.30 1.097 1.225 1.354 1.618 0.70 1.225 1.334 1.450 1.702 1.20 1.388 1.482 1.592 1.821
+
+Similarly, we fixed the noise parameters of the LiDAR and only changed the noise parameters of the IMU to observe the changes in the AIL results. The AIL results are listed in the Table 13. The results show that the IMU noise parameters have almost no impact on the conservatism of the protection level. This is because, compared with the dead reckoning based on IMU, the pose estimation mechanism based on LiDAR and ICP usually has higher accuracy and reliability. In the updated stage we designed, we calculate the intersections of the sets calculated based on IMU and the sets calculated based on ICP, and use the intersections as the final estimated sets. Since the results of ICP are more reliable, during the intersection process, the results of ICP play a dominant role. This results in the noise parameters of the IMU having a relatively insignificant impact on the system. Overall, our deterministic protection levels are moderately conservative and highly flexible. This characteristic enables our system to be applied to different types of safety-critical tasks in various scenarios. 
+
+8 Discussion 
+
+8.1 Trade-off within the deterministic state estimation 
+
+As an attempt to apply the deterministic state estimation to the navigation system of autonomous mobile robots, in this paper, we have implemented a LiDAR-inertial                            
+
+> Table 13. AIL [m] ( ↓) using different IMU noise parameters.
+> bg[rad / s] ba[m / s 2]0.2 0.4 0.6 0.8 0.07 1.099 1.098 1.099 1.101 0.10 1.100 1.101 1.101 1.101 0.14 1.101 1.101 1.103 1.102 0.21 1.101 1.103 1.101 1.101 0.28 1.103 1.105 1.103 1.103
+
+odometry based on the on-manifold set-membership filter. As an entirely different approach from probabilistic state estimation, the focus of deterministic state estimation lies in estimating a possible set rather than a probability distribution. This characteristic leads to the fact that the deterministic state estimation cannot yield optimal estimations. In our application, this characteristic is manifested in the fact that our LIO does not have optimal localization results. In our implementation, we used the centers of the ellipsoidal sets as the approximate optimal results. This approximation, to some extent, leads to the situation where, under the current accuracy assessment system, the accuracy of our system does not have an absolute advantage. As an exchange, the LIO implemented using the deterministic state estimation can directly provide the reliability of localization in the form of a set. However, the feasible sets of the dynamic systems are commonly irregular, and the set-membership filters use rule sets to cover the irregular feasible sets. This, to some extent, leads to the fact that the estimated sets are of a certain degree of conservatism, meaning that they are usually larger. 
+
+8.2 Application 
+
+Since there is no back-end optimization in our system, the localization performance of our LIO is limited in large-scale scenarios. However, as a general LIO method, our system can be integrated with place recognition and loop closure modules (Cui and Chen, 2023; Ma et al., 2024) to form a complete simultaneous localization and mapping (SLAM) system. As part of the navigation system, the safety-critical LIO we proposed can provide both localization results and safety references for many downstream tasks. Our LIO can be deployed for various motion planning modules (Zhou et al., 2021; Li et al., 2025) with its estimated locations and constructed maps. More importantly, our LIO can provide safety references for motion planning modules, making the planned trajectories aware of the reliability of current locations and the safety of the robots. Furthermore, our LIO can also be combined with the model predictive control and the control barrier function (Jin et al., 2023; Jian et al., 2023) to achieve safety-critical robot motion control. 
+
+9 Conclusion 
+
+In this paper, we present a safety-critical LiDAR-inertial odometry with on-manifold deterministic protection levels. To measure the uncertainty of the estimated pose from Safety-critical LiDAR-inertial odometry 15 
+
+the point-to-plane ICP algorithm, we derive a closed-form expression between the noise of the point cloud and the uncertainty of the pose estimation via the implicit function theorem and the UBB assumption. Besides, an on-manifold set-membership filter is designed to fuse the IMU measurements and the ICP results for more accurate localization with more robust protection levels. Eventually, the experimental results demonstrate that the protection levels estimated by our system can effectively express the errors between estimated locations and unknown ground truth in safety-critical scenarios, and can provide safety references for downstream autonomous tasks. 
+
+Declaration of conflicting interests 
+
+The authors declared no potential conflicts of interest with respect to the research, authorship, and/or publication of this article. 
+
+Funding 
+
+The authors disclosed receipt of the following financial support for the research, authorship, and/or publication of this article: This work was supported by the National Natural Science Foundation (NNSF) of China under Grant 62573124. 
+
+References 
+
+Annaswamy AM, Johansson KH and Pappas G (2024) Control for societal-scale challenges: Road map 2030. IEEE Control Systems Magazine 44(3): 30–32. DOI:10.1109/MCS.2024. 3382376. Barfoot TD (2017) State Estimation for Robotics . 1st edition. Cambridge, U.K.: Cambridge University Press. Calafiore G (2005) Reliable localization using set-valued nonlinear filters. IEEE Transactions on Systems, Man, and Cybernetics - Part A: Systems and Humans 35(2): 189–197. DOI:10.1109/ TSMCA.2005.843383. Campos C, Elvira R, Rodr´ ıguez JJG, Montiel JMM and Tard´ os JD (2021) Orb-slam3: An accurate open-source library for visual, visual–inertial, and multimap slam. IEEE Transactions on Robotics 37(6): 1874–1890. DOI:10.1109/TRO.2021. 3075644. Censi A (2007) An accurate closed-form estimate of icp’s covariance. In: 2007 IEEE International Conference on Robotics and Automation (ICRA) . ISBN 1050-4729, pp. 3167– 3172. DOI:10.1109/ROBOT.2007.363961. Cui J and Chen X (2023) Ccl: Continual contrastive learning for lidar place recognition. IEEE Robotics and Automation Letters 
+
+8(8): 4433–4440. DOI:10.1109/LRA.2023.3284359. Dong Y, Xu E, Qiu S, Li W, Liu Y and Han B (2025) Vibration-aware lidar-inertial odometry based on point-wise post-undistortion uncertainty. IEEE Robotics and Automation Letters 10(9): 8706–8713. DOI:10.1109/LRA.2025.3588393. Durieu C, Walter ´E and Polyak B (2001) Multi-input multi-output ellipsoidal state bounding. Journal of Optimization Theory and Applications 111(2): 273–303. DOI:10.1023/A: 1011978200643. Ehambram A, Jaulin L and Wagner B (2022) Hybrid interval-probabilistic localization in building maps. IEEE Robotics and Automation Letters 7(3): 7059–7066. DOI:10.1109/LRA.2022. 3181371. Gomez-Ojeda R, Moreno FA, Zu˜ niga-No¨ el D, Scaramuzza D and Gonzalez-Jimenez J (2019) Pl-slam: A stereo slam system through the combination of points and line segments. IEEE Transactions on Robotics 35(3): 734–746. DOI:10.1109/TRO. 2019.2899783. Hu X, Zheng L, Wu J, Geng R, Yu Y, Wei H, Tang X, Wang L, Jiao J and Liu M (2024) Paloc: Advancing slam benchmarking with prior-assisted 6-dof trajectory generation and uncertainty estimation. IEEE/ASME Transactions on Mechatronics : 1– 12DOI:10.1109/TMECH.2024.3362902. Huang K, Zhao J, Lin J, Zhu Z, Song S, Ye C and Feng T (2024) Log-lio2: A lidar-inertial odometry with efficient uncertainty analysis. IEEE Robotics and Automation Letters 9(10): 8226– 8233. DOI:10.1109/LRA.2024.3440850. Jian Z, Yan Z, Lei X, Lu Z, Lan B, Wang X and Liang B (2023) Dynamic control barrier function-based model predictive control to safety-critical obstacle-avoidance of mobile robot. In: 2023 IEEE International Conference on Robotics and Automation (ICRA) . pp. 3679–3685. DOI:10. 1109/ICRA48891.2023.10160857. Jin T, Di J, Wang X and Ji H (2023) Safety barrier certificates for path integral control: Safety-critical control of quadrotors. 
+
+IEEE Robotics and Automation Letters 8(9): 6006–6012. DOI: 10.1109/LRA.2023.3301297. Li G, Han R, Wang S, Gao F, Eldar YC and Xu C (2025) Edge accelerated robot navigation with collaborative motion planning. IEEE/ASME Transactions on Mechatronics 30(2): 1166–1178. DOI:10.1109/TMECH.2024.3419436. Li H, Zou Y, Chen N, Lin J, Liu X, Xu W, Zheng C, Li R, He D, Kong F, Cai Y, Liu Z, Zhou S, Xue K and Zhang F (2024) Mars-lvig dataset: A multi-sensor aerial robots slam dataset for lidar-visual-inertial-gnss fusion. The International Journal of Robotics Research 43(8): 1114–1127. DOI:10.1177/ 02783649241227968. Liu H, Pan S, Wu P, Yu K, Gao W and Yu B (2024) Uncertainty-aware uwb/lidar/ins tightly coupled fusion pose estimation via filtering approach. IEEE Sensors Journal 24(7): 11113–11126. DOI:10.1109/JSEN.2024.3362741. Ma J, Xiong G, Xu J and Chen X (2024) Cvtnet: A cross-view transformer network for lidar-based place recognition in autonomous driving environments. IEEE Transactions on Industrial Informatics 20(3): 4039–4048. DOI:10.1109/TII. 2023.3313635. Merlinge N (2024) Set inversion and box contraction on lie groups using interval analysis. Automatica 165: 111688. DOI:10. 1016/j.automatica.2024.111688. Nguyen TM, Yuan S, Cao M, Lyu Y, Nguyen TH and Xie L (2022) Ntu viral: A visual-inertial-ranging-lidar dataset, from an aerial vehicle viewpoint. The International Journal of Robotics Research 41(3): 270–280. Nocedal J and Wright SJ (2018) Numerical Optimization . New York, NY, USA: Springer. Prakhya SM, Bingbing L, Rui Y and Lin W (2015) A closed-form estimate of 3d icp covariance. In: 2015 14th IAPR International Conference on Machine Vision Applications (MVA) . pp. 526– 529. DOI:10.1109/MVA.2015.7153246. Qin X, Cong Y, Lai J, Yang J and Wang X (2024) Single-beacon localization for mobile robot: A set membership filtering approach. IEEE Robotics and Automation Letters 9(11): 9899– 9906. DOI:10.1109/LRA.2024.3406190. 16 
+
+Rodr´ ıguez-Ar´ evalo ML, Neira J and Castellanos JA (2018) On the importance of uncertainty representation in active slam. IEEE Transactions on Robotics 34(3): 829–834. DOI:10.1109/TRO. 2018.2808902. Rohou S and Jaulin L (2023) Brunovsky decomposition for dynamic interval localization. IEEE Transactions on Automatic Control 68(11): 6937–6943. DOI:10.1109/TAC. 2023.3246943. Scholte E and Campbell ME (2003) A nonlinear set-membership filter for on-line applications. International Journal of Robust and Nonlinear Control 13(15): 1337–1358. Citation Key: Scholte2003ANS. Schweppe F (1968) Recursive state estimation: Unknown but bounded errors and system inputs. IEEE Transactions on Automatic Control 13(1): 22–28. DOI:10.1109/TAC.1968. 1098790. Shan T, Englot B, Meyers D, Wang W, Ratti C and Rus D (2021) Lio-sam: Tightly-coupled lidar inertial odometry via smoothing and mapping. In: 2020 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . ISBN 2153-0866, pp. 5135–5142. DOI:10.1109/IROS45743.2020. 9341176. Stutts AC, Erricolo D, Tulabandhula T and Trivedi AR (2023) Lightweight, uncertainty-aware conformalized visual odometry. In: 2023 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . ISBN 2153-0866, pp. 7742–7749. DOI:10.1109/IROS55552.2023.10341924. Wang Z, Shen X, Liu H, Meng F and Zhu Y (2022) Dual set membership filter with minimizing nonlinear transformation of ellipsoid. IEEE Transactions on Automatic Control 67(5): 2405–2418. DOI:10.1109/TAC.2021.3081078. Wang Z, Zhang Y, Shen M and Shen Y (2023) Ellipsoidal set-membership filtering for discrete-time linear time-varying systems. IEEE Transactions on Automatic Control 68(9): 5767–5774. DOI:10.1109/TAC.2022.3228205. Wu Y, Guadagnino T, Wiesmann L, Klingbeil L, Stachniss C and Kuhlmann H (2024) Lio-ekf: High frequency lidar-inertial odometry using extended kalman filters. In: 2024 IEEE International Conference on Robotics and Automation (ICRA) .pp. 13741–13747. DOI:10.1109/ICRA57147.2024.10610667. Xu W, Cai Y, He D, Lin J and Zhang F (2022) Fast-lio2: Fast direct lidar-inertial odometry. IEEE Transactions on Robotics 38(4): 2053–2073. DOI:10.1109/TRO.2022.3141876. Yang H, Zhang Y, Gu W, Yan H and Yang F (2023) A novel global set-membership filtering approach for localization of automatic guided vehicles. IEEE Transactions on Industrial Informatics 
+
+19(3): 3219–3228. DOI:10.1109/TII.2022.3179409. Yin J, Li A, Li T, Yu W and Zou D (2022) M2dgr: A multi-sensor and multi-scenario slam dataset for ground robots. IEEE Robotics and Automation Letters 7(2): 2266–2273. DOI: 10.1109/LRA.2021.3138527. Yuan C, Liu X, Hong X and Zhang F (2021) Pixel-level extrinsic self calibration of high resolution lidar and camera in targetless environments. IEEE Robotics and Automation Letters 6(4): 7517–7524. DOI:10.1109/LRA.2021.3098923. Yuan C, Xu W, Liu X, Hong X and Zhang F (2022) Efficient and probabilistic adaptive voxel mapping for accurate online lidar odometry. IEEE Robotics and Automation Letters 7(3): 8518– 8525. DOI:10.1109/LRA.2022.3187250. Zhao S, Gao Y, Wu T, Singh D, Jiang R, Sun H, Sarawata M, Qiu Y, Whittaker W, Higgins I, Du Y, Su S, Xu C, Keller J, Karhade J, Nogueira L, Saha S, Zhang J, Wang W, Wang C and Scherer S (2024) Subt-mrs dataset: Pushing slam towards all-weather environments. In: 2024 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) . pp. 22647–22657. DOI:10.1109/CVPR52733.2024.02137. JournalAbbreviation: 2024 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR). Zhou B, Zhu Y, Rui C, Luo J and Pan Y (2025) Safety-critical ultra-wideband 3d localization with set-membership uncertainty representation. IEEE Robotics and Automation Letters 10(9): 8826–8833. DOI:10.1109/LRA.2025.3589806. Zhou X, Wang Z, Ye H, Xu C and Gao F (2021) Ego-planner: An esdf-free gradient-based local planner for quadrotors. IEEE Robotics and Automation Letters 6(2): 478–485. DOI:10.1109/ LRA.2020.3047728. Zhu H, Luo J, Luo M and Minane J (2023) A recursive robust set-membership estimator for wsn-assisted moving targets tracking with ubb anchor location uncertainty. IEEE Transactions on Vehicular Technology 72(5): 6547–6557. DOI:10.1109/TVT. 2022.3231598. Zhu N, Marais J, B´ etaille D and Berbineau M (2018) Gnss position integrity in urban environments: A review of literature. IEEE Transactions on Intelligent Transportation Systems 19(9): 2762–2778. DOI:10.1109/TITS.2017.2766768. Zhu X, Li Y, Yin G and Patton RJ (2024) Interval observer-based fault detection and isolation for quadrotor uav with cable-suspended load. IEEE Transactions on Systems, Man, and Cybernetics: Systems 54(10): 5876–5888. DOI:10.1109/ TSMC.2024.3411315.
