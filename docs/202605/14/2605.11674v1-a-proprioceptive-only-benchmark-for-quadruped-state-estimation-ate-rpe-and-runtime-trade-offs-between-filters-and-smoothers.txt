@@ -1,0 +1,660 @@
+Title: A Proprioceptive-Only Benchmark for Quadruped State Estimation: ATE, RPE, and Runtime Trade-offs Between Filters and Smoothers
+
+URL Source: https://arxiv.org/pdf/2605.11674v1
+
+Published Time: Wed, 13 May 2026 00:49:48 GMT
+
+Number of Pages: 6
+
+Markdown Content:
+# A Proprioceptive-Only Benchmark for Quadruped State Estimation: ATE, RPE, and Runtime Trade-offs Between Filters and Smoothers 
+
+Ylenia Nistic` o1, Jo˜ ao Carlos Virgolino Soares 1, Joan Sol` a2, and Claudio Semini 1
+
+Abstract — We compare three state-of-the-art proprioceptive state estimators for quadruped robots: MUSE [1], the Invari-ant Extended Kalman Filter (IEKF) [2], and the Invariant Smoother (IS) [3], on the CYN-1 sequence of the GrandTour Dataset [4]. Our goal is to give practitioners clear guidance on accuracy and computation time: we report long-term ac-curacy (Absolute Trajectory Error, ATE), short-term accuracy (translational and rotational Relative Pose Error, RPE), and per-update computation time on a fixed hardware/software stack. On this dataset, RPEs are broadly similar across meth-ods, while IEKF and IS achieve a lower ATE than MUSE. Runtime results highlight the accuracy-latency trade-offs across the three approaches. In the discussion, we outline the evalu-ation choices used to ensure a fair comparison and analyze factors that influence short-horizon metrics. Overall, this study provides a concise snapshot of accuracy and cost, helping read-ers choose an estimator that fits their application constraints, with all evaluation code and documentation released open-source at https://github.com/iit-DLSLab/state_ estimation_benchmark for full reproducibility. 
+
+I. INTRODUCTION Reliable proprioceptive state estimation is essential for agile quadruped locomotion. When exteroceptive sensing is unreliable or unavailable (e.g., due to dust/fog, long featureless corridors, or GPS outages), robots must rely on IMU, joint encoders, and contact information to estimate body motion. The challenge is twofold: ( i) maintain long-term consistency under drift and modeling errors, and ( ii )preserve short-horizon fidelity that directly affects feedback control and foothold planning, while meeting tight latency and compute budgets on embedded platforms. Early work, such as [5], established that IMU and leg kine-matics can yield reliable odometry when fused consistently. The Two-State Implicit Filter (TSIF) [6] further simplified the estimator structure to improve robustness and real-time performance. Modern modular stacks combine propriocep-tion with exteroception when available or operate purely proprioceptively in perception-degraded settings. MUSE [1], building on [7], exemplifies this trend: a multi-sensor, real-time stack that can run proprioceptively when needed. Among factor-graph approaches, Agrawal et al. [8] for-mulated proprioceptive state estimation using contact and kinematic factors, exploiting temporal consistency while maintaining real-time performance. In parallel, the Invariant Extended Kalman Filter (IEKF) [2] leverages Lie group            
+
+> 1Dynamic Legged Systems (DLS) Lab, Istituto Italiano di Tecnologia, 16163 Genova, Italy
+
+ylenia.nistico@iit.it, joao.virgolino@iit.it, claudio.semini@iit.it  
+
+> 2Institut de Rob` otica i Inform` atica Industrial - CSIC, 08028 Barcelona, Spain
+
+jsola@iri.upc.edu 
+
+structure so that the linearized error dynamics are state-independent, improving convergence and consistency under contact events; recent variants incorporate robust measure-ment costs and slip awareness [9]. Smoothing methods extend this idea by optimizing over short windows with structure-aware residuals: the Invariant Smoother [3] adapts IEKF group-affine residuals to fixed-lag optimization, yield-ing state-independent Jacobians and improved tolerance to dynamic contacts (e.g., slips), at higher computational cost. 
+
+a) Contributions : In our study, we present, in aproprioceptive setting, an apples-to-apples comparison of three representative state-of-the-art estimators for quadruped robots: MUSE [1] (proprioceptive mode), the IEKF [2], and the Invariant Smoother (IS) [3], on a common real-world dataset [4]. These methods were selected because they represent recent and high-performing approaches in proprio-ceptive state estimation, are publicly available through open-source implementations enabling reproducible evaluation, and cover complementary estimation paradigms, namely fil-tering, smoothing, and invariant-error estimation. This allows us to provide a fair and informative comparison of the trade-offs between accuracy, latency, and computational cost in deployable quadruped systems. Following common trajectory evaluation practice [10], we report: (i) long-term accuracy via Absolute Trajectory Error (ATE), (ii) short-term accuracy via translational and rota-tional Relative Pose Error (RPE), and (iii) computation time per update, highlighting latency differences between filtering and smoothing. We also include a concise discussion of com-monly adopted metrics, clarifying what each captures and when it is most informative for control and deployment. Ad-ditionally, we briefly discuss the convergence behavior of the three estimators under poor initialization of the orientation. 
+
+b) Outline : Section II briefly reviews the three method-ologies (modeling assumptions, measurement cues). Sec-tion III presents results on a shared dataset with ATE/RPE and runtime, followed by a discussion of findings and metric interpretation. Section IV summarizes takeaways for estimator selection and outlines limitations and future work. Finally, Section V describes the supplementary material. II. M ETHODS 
+
+We compare (i) MUSE [1] in proprioceptive mode, (ii) the IEKF [2], and the fixed-lag IS [3]. All estimate floating-base pose (R, p) ∈ SO (3) × R3, and body velocity v ∈ R3, from IMU, leg kinematics, and contact states of quadruped robots. 
+
+> arXiv:2605.11674v1 [cs.RO] 12 May 2026
+
+A. MUSE (proprioceptive-only) 
+
+MUSE is a modular, real-time fusion stack. In this paper we disable exteroceptive blocks and use only IMU, joint en-coders, and contact/force sensing [1]. The main components of MUSE comprise an Attitude Observer, a Leg Odometry module, and a Sensor Fusion algorithm that outputs the robot’s pose and twist. 
+
+1) Attitude Observer : To estimate the robot’s orientation, MUSE employs a cascaded Nonlinear Observer (NLO), and an eXogeneous Kalman Filter (XKF) from [11], [12]. The XKF linearizes about the NLO’s globally stable estimate, yielding global stability with near-optimal Kalman filter’s performance. The observer state is xt = [ q⊤ 
+
+> t
+
+bω 
+
+> t⊤
+
+]⊤ ∈ R7
+
+with quaternion qt ∈ R4 and gyroscope bias bω 
+
+> t
+
+∈ R3.Measurements are z = [ fb
+
+> t
+> ⊤
+
+mb
+
+> t
+> ⊤
+
+]⊤ ∈ R6, where fb 
+
+> t
+
+is the accelerometer specific force, and mb 
+
+> t
+
+, is the magnetometer reading when available. If the magnetometer is unavailable or unreliable, mb 
+
+> t
+
+is obtained by rotating a fixed reference vector (constant in the navigation frame) into the body frame using the previous attitude estimate. Full NLO/XKF equations are given in [7]. 
+
+2) Leg Odometry : Leg odometry measures the linear velocity of the floating base from the forward kinematics of legs in stable contact. The measured base velocity is 
+
+vb 
+
+> t
+
+= 1
+
+ns ∑
+
+> ℓ∈L
+
+vb 
+
+> tℓ
+
+, vb 
+
+> tℓ
+
+= −αℓ
+
+
+
+Jℓ(qℓ) ˙qℓωb × db
+
+> ℓ
+
+
+
+(1) where L is the set of legs, αℓ ∈ { 0, 1} indicates contact state, and ns = ∑ℓ∈L αℓ is the number of stance legs. The contribution of leg ℓ is vb 
+
+> tℓ
+
+, with Jℓ(qℓ) the leg Jacobian, qℓ
+
+joint position, ˙ qℓ joint velocity, ωb base angular velocity, db
+
+> ℓ
+
+foot position in the base frame, and vb 
+
+> ℓ
+
+the foot velocity in the base frame. 
+
+3) Sensor Fusion : The IMU and leg odometry measure-ments are fused in a Kalman Filter, with dynamics as in [7]. The state xt = [ pt⊤vt⊤]⊤ ∈ R6 is the position and velocity of the base, the input ut = ( Rtfb 
+
+> t
+
+− g) ∈ R3 is the base accel-eration, and the measurement is the leg odometry velocity 
+
+zt = [ Rtvb 
+
+> t
+
+]⊤ ∈ R3. The filter uses K ∈ R6×3 (Kalman gain), 
+
+P ∈ R6×6 (covariance matrix), Q ∈ R6×6 (process noise), and 
+
+R ∈ R3×3 (measurement noise covariance matrix). 
+
+B. IEKF 
+
+The theory in this section follows [2]. The IEKF is posed on a group-affine system, so the right-invariant error is state-independent. Propagation integrates IMU data; the update assumes stable contact (zero foot velocity). The continuous-time dynamics with noise and bias are: ddt Rt = Rt( ˜ωt − bω 
+
+> t
+
+− wω 
+
+> t
+
+)∧, ddt pt = vt (2) ddt vt = Rt(˜at − ba 
+
+> t
+
+− wa 
+
+> t
+
+) + g, ddt dt = Rtwd 
+
+> t
+
+(3) ddt bω 
+
+> t
+
+= wbω 
+
+> t
+
+, ddt ba 
+
+> t
+
+= wba 
+
+> t
+
+(4) Here g is gravity and all w(·) are zero-mean Gaussian. The discrete, noise-corrupted log-linear propagation is 
+
+ξ rt+1
+
+ζ rt+1
+
+
+
+= ( I18 + At∆t)
+
+ξ rt
+
+ζ rt
+
+
+
++ Bt ¯wt, Bt = ∆t
+
+Ad ¯Xt 012 ,6
+
+06,12 I6
+
+
+
+(5) 
+
+At =
+
+
+
+0 03,3 03,3 03,3 −Rt 03,3
+
+(g)∧ 03,3 03,3 03,3 − (vt)∧ Rt −Rt
+
+03,3 I3 03,3 03,3 − (pt)∧ Rt 03,3
+
+03,3 03,3 03,3 03,3 −  dt
+
+∧ Rt 03,3
+
+06,3 06,3 06,3 06,3 06,3 06,3
+
+ , (6) with time-step ∆t, and noise vector ¯wt =[( wω 
+
+> t
+
+)⊤,(wa 
+
+> t
+
+)⊤,(wa 
+
+> t
+
+∆t)⊤,(wd 
+
+> t
+
+)⊤,(wbω 
+
+> t
+
+)⊤,(wba 
+
+> t
+
+)⊤]⊤.For the observation, the contact measurement is written in right-invariant, group-affine form yt = X−1t s + wobs t , with forward kinematics fk ( ˜qt) = R⊤ 
+
+> t
+
+(dt − pt) + Jp( ˜qt)wq 
+
+> t
+
+. As in [2], the right-invariant measurement is 
+
+Ykin t = X−1t bkin t + Vkin t , (7) where Ykin t = [ fk ( ˜qt) 0 1 − 1]⊤ is the vector of kinematic observation, X−1t is the inverse of the state matrix Xt,
+
+bkin t = [ 03,1 0 1 − 1]⊤ is a constant vector, while Vkin t =[Jp( ˜qt)wqt 0 0 0 ]⊤ is the Gaussian noise vector of the observation model. Given (7), the IEKF update is ¯X+ 
+
+> t
+
+= Exp (KtΠ ¯X− 
+
+> t
+
+Ykin t ) ¯X−
+
+> t
+
+P+ 
+
+> t
+
+= ( I − KtHt)Pt(I − KtHt)⊤ + Kt ¯NtK⊤
+
+> t
+
+with Π ≜ I 03,3
+
+, Kt is the Kalman gain matrix com-puted as Kt = PtH⊤ 
+
+> t
+
+(HtPtH⊤ 
+
+> t
+
++ ¯Nt)−1. The matrices Ht
+
+and ¯Nt are given by Ht = 03,3 03,3 − I I and ¯Nt =
+
+R− 
+
+> t
+
+Jp( ˜qt)Cov (wq 
+
+> t
+
+)Jp⊤( ˜qt)( R− 
+
+> t
+
+)⊤.
+
+C. Invariant Smoother 
+
+Unlike the IEKF, which updates only the most recent states, the IS in [3] seeks a Maximum A Posteriori (MAP) estimate over a fixed window of size n using states X0:n 
+
+and measurements Z0:n . MAP is formulated as a nonlinear least-squares problem: 
+
+e*0:n = argmin 
+
+> e0:n
+
+(∥rpri − Jpri e0:n ∥2
+
+> Σpri
+
++
+
+> n−1
+
+# ∑
+
+> t=0
+
+∥rtpro − Jtpro e0: n∥2 
+
+> Σpro
+
++
+
+> n
+
+# ∑
+
+> t=0
+
+∥rto − Jtoe0: n∥2 
+
+> Σo
+
+),
+
+(8) where n is the window size (WS), r· are the residuals, 
+
+Σ· the covariances, and J· the Jacobians at the operating points ¯ Xt and ¯ xt for the prior , propagation , and observation 
+
+distributions, respectively. The prior anchors the window; marginalization keeps its size fixed [3]. 
+
+a) Propagation Cost : From the log-linear property we get the residual [3]: 
+
+rtpro =
+
+Log ( f d 
+
+> M
+
+( ¯Xt) ¯X−1
+
+> t+1
+
+)
+
+f d 
+
+> v
+
+(¯xt) − ¯xt+1
+
+
+
+, Σpro = BtCov ( ¯wt)B⊤ 
+
+> t
+
+, (9) with Jacobians Jt+1pro = I18 + At∆t and Jtpro = I18 . The discrete dynamics are obtained by discretizing (2)-(4): 
+
+f d 
+
+> M
+
+(Xt) = 
+
+ Rdt vdt pdt ddt
+
+03,3 I3
+
+
+
+, f d 
+
+> v
+
+(xt) = 
+
+bω
+
+> t
+
+ba
+
+> t
+
+
+
+,
+
+(10) where Rdt = RtExp (( ¯ωt − bω 
+
+> t
+
+)∆t), vdt = vt + Rt(¯at − ba 
+
+> t
+
+)∆t +
+
+g∆t, and pdt = pt + vt∆t + 12 Rt(¯at − ba 
+
+> t
+
+)( ∆t)2 + 12 g(∆t)2.
+
+b) Observation Cost : Using the right-invariant kine-matics observation of (7) as in [3]: 
+
+rto = XtYkin t − bkin t (11) 
+
+Jot = [( bkin t )⊙ 06,6], Σt 
+
+> o
+
+= ¯XtΣkin (wq)t ¯X⊤ 
+
+> t
+
+, (12) where the ⊙ operator is defined in [3]. Finally, solving (8) (e.g., Gauss-Newton) yields increments that update the oper-ating points each iteration: X∗ 
+
+> t
+
+← Exp (ξ r∗ 
+
+> t
+
+) ¯Xt, x∗ 
+
+> t
+
+← ¯xi + ζ r∗ 
+
+> i
+
+.III. R ESULTS AND DISCUSSION 
+
+A. Evaluation Metrics 
+
+We evaluate performance using two standard Root Mean Square Error (RMSE)-based metrics. The Absolute Trajec-tory Error (ATE) measures global pose accuracy by aligning the estimated trajectory to the ground-truth and computing the RMSE over the full path (captures accumulated drift). The Relative Pose Error (RPE) measures short-horizon accu-racy by computing windowed, or frame-to-frame motion dif-ferences and taking their RMSE (captures local consistency). Both metrics are computed with the evo Python pack-age [13]. We also report velocity RMSE, by comparing the estimated and GT trajectories at each timestamp. This metric captures the accuracy of the estimated velocity profiles, which is important for control and planning applications. Here, we report IS results using a WS of 3, which balances accuracy and runtime. We analyze the effect of window size on accuracy and runtime in Section III-B. 
+
+1) Absolute Trajectory Error (ATE) : Each estimated trajectory is aligned to the ground truth with SE(3) Umeyama [13], and the RMSE is computed using evo for interpola-tion (linear in position, SLERP in orientation). Results are reported in Table I. All three pipelines achieve relatively similar ATE values. The difference between the best (IS) and worst (MUSE) result is approximately 0.91 m, which corresponds to about 0 .3% of the total 300 m trajectory length. Because SE(3) alignment removes constant pose bias, the residual ATE mainly reflects accumulated drift and modeling errors. IEKF and IS achieve lower ATE values than MUSE, which is consistent with their group-affine modeling and, in the case of IS, the additional smoothing regularization. 3D overlays (Fig. 1a) and per-axis (x-y-z) plots (Figs. 1b and 1c) show trajectories that remain broadly aligned over the full sequence, although MUSE exhibits a larger end-point de-viation. This interpretation is further supported by the trajec-tory error norm in Fig. 2c, which remains bounded over time and indicates moderate differences among the estimators. 
+
+2) Relative Pose Error (RPE) : We report translational and rotational RPEs in Table I using evo under two windowing schemes: (i) a spatial window with ∆ = 1 m, evaluating motion over segments of approximately one meter of reference path length (probing meter-scale drift); and (ii) a temporal window with ∆ = 1 frame, corresponding to one sample in the synchronized logs (probing frame-to-frame consistency). At ∆ = 1 m, IEKF and IS achieve lower translational RPE than MUSE (approximately 40% reduction). At ∆ = 1frame, IEKF and MUSE exhibit lower RPE than IS (approx-imately 72% and 66% reduction). The stronger separation under the meter-based window suggests that small systematic errors (e.g., micro-slips, encoder biases, or residual IMU-kinematics coupling) accumulate over the multiple updates required to traverse one meter. Differences in filtering and contact handling likely contribute at this scale. In contrast, the frame-based metric is more sensitive to measurement jit-ter and estimator bandwidth; here, filters’ higher-rate fusion appears to better suppress high-frequency noise. Similar con-sideration applies to Rotational RPE, which is comparable across methods, with minor differences possibly linked to attitude-estimation stability properties. 
+
+3) Linear Velocity : The RMSE of the velocity estimates, reported in Table I and visualized in Figs. 2a–2c, shows that the differences are small, and all three methods provide accurate velocity profiles that closely match the ground truth. 
+
+B. Runtime and Computational Load 
+
+To assess real-time suitability, we measured per-iteration runtime for each estimator (current implementations), sum-marized in Fig. 3. MUSE is the fastest ( ≈0.012 ms), followed by IEKF ( ≈0.02 ms). In contrast, IS exposes an explicit accuracy–latency trade-off via its window size (WS): from 
+
+≈0.110 ms at WS = 1 up to ≈0.583 ms at WS = 5. A practical implication is that fixed-lag smoothing intro-duces algorithmic latency proportional to the lag: estimates may be delayed depending on whether the pipeline outputs the lagged state or a real-time approximation. This delay is negligible for small WS but becomes significant as WS increases. 
+
+C. Convergence with large initial conditions 
+
+We also tested the convergence behavior of the three estimators when initialized with large orientation errors. We introduced a significant initial misalignment (180 degrees in roll) and observed how quickly each estimator converged to the correct orientation. The results, shown in Fig. 4, indicate that all three estimators converge to the correct orientation, but MUSE converges faster than IEKF and IS (WS:3). The reason for this is likely due to the design of MUSE’s attitude TABLE I: Grand Tour Dataset : ATE, ATE vel , and RPE (∼ 296 m trajectory) errors. The best result per row is highlighted in bold , the second-best in underline.                               
+
+> RMSE MUSE IEKF IS ATE [m] 2.269461 1.405668 1.363114
+> ATE vel [m/s] 0.876147 0.869383 0.869481 RPE ( ∆=1 meter) [m] 0.072223 0.043187 0.042526
+> RPE ( ∆=1 frame) [m] 0.000670 0.000544 0.001965 RPE ( ∆=1 meter) [ ◦]0.578469 0.568987 0.565644
+> RPE ( ∆=1 frame) [ ◦]0.002605 0.002611 0.002614 GT MUSE IEKF IS
+
+(a) GT vs. estimated trajectories. 0        
+
+> 100
+> px [m]
+> Position
+> GT MUSE IEKF IS
+> 0
+> 100
+> py [m]
+> 100 200 300 400 500
+> Time [s]
+> 0
+> 100
+> pz [m]
+
+(b) GT vs. estimated positions. 25         
+
+> 0
+> 25
+> roll  [°]  Orientation (roll, pitch, yaw)
+> GT MUSE IEKF IS
+> 25
+> 0
+> 25
+> pitch  [°]
+> 100 200 300 400 500
+> Time [s]
+> 250
+> 0
+> 250
+> yaw  [°]
+
+(c) GT vs. estimated orientations. 
+
+Fig. 1: Comparison of the ground truth (GT) trajectory, position and orientation vs. the estimates obtained with MUSE, IEKF, and IS, on the CYN-1 (Grindelwald Canyon) sequence of the Grand Tour Dataset [4]. 1       
+
+> 0
+> 1
+> vx [m/s]  Linear Velocity
+> 1
+> 0
+> 1
+> vy [m/s]
+> 100 200 300 400 500
+> Time [s]
+> 1
+> 0
+> 1
+> vz [m/s]  GT MUSE IEKF IS
+
+(a) GT vs. estimated velocities. 1         
+
+> 0
+> 1
+> vx [m/s]  Linear Velocity (zoomed: 50.0 60.0 s)
+> 1
+> 0
+> 1
+> vy [m/s]
+> 50 52 54 56 58 60
+> Time [s]
+> 1
+> 0
+> 1
+> vz [m/s]  GT MUSE IEKF IS
+
+(b) GT vs. estimated velocities (zoomed). 100 200 300 400 500         
+
+> Time [s]
+> 0
+> 2
+> || ep|| [m]
+> Trajectory Error Norm
+> MUSE IEKF IS 100 200 300 400 500
+> Time [s]
+> 0.0
+> 0.5
+> 1.0
+> || ev|| [m/s]  Linear Velocity Error Norm
+> MUSE IEKF IS
+
+(c) Trajectory and velocity errors over time. 
+
+Fig. 2: (a) Comparison of ground-truth (GT) and estimated velocities from MUSE, IEKF, and IS. (b) Zoomed-in view of the highlighted interval. (c) Error metrics over time, with trajectory error norm (top) and velocity error norm (bottom). .MUSE IEKF IS   
+
+> (WS:1)
+> IS
+> (WS:2)
+> IS
+> (WS:3)
+> IS
+> (WS:4)
+> IS
+> (WS:5)
+> 10 2
+> 10 1
+> Runtime
+> per step
+> (Avg) [ms]  Runtime Comparison
+
+Fig. 3: Computation time per iteration for MUSE, IEKF, and IS with different window sizes (WS). A log scale is used for the y-axis for a clearer visualization. 0    
+
+> 100
+> roll  [°]
+> Roll and Pitch (large initial condition)
+> GT
+> MUSE
+> IEKF
+> IS
+> MUSE convergence
+> IEKF/IS convergence
+> 20 40 60 80 100
+> Time [s]
+> 0
+> 25
+> pitch  [°]
+
+Fig. 4: Convergence behavior with large initial orientation errors for MUSE, IEKF, and IS (WS:3). The plot shows the orientation error (in degrees) over time, starting from a large initial misalignment. observer, which is globally stable and can handle large initial errors without diverging. In contrast, IEKF and IS rely on local linearization and filtering assumptions that can be violated when the initial error is large, leading to slower convergence in some cases. These results indicate that all three estimators remain robust under large initialization errors, with MUSE exhibit-ing faster convergence than IEKF and IS. This property is particularly relevant for real-world deployments, where the initial state may be uncertain or perturbed. In Fig. 4 we reported only roll and pitch angles, as the yaw angle is not observable from the IMU and kinematics measurements alone, and its convergence behavior in this scenario is not representative of the estimators’ performance. IV. C ONCLUSIONS 
+
+This work compares three state-of-the-art proprioceptive estimators (MUSE, IEKF, and IS) on a common dataset. ATE and rotational RPE are similar across methods, with IS achieving the best results, while translational RPE shows that at ∆ = 1 m, IEKF achieves lower error, whereas at ∆ =
+
+1 frame the gap with MUSE narrows. MUSE and IEKF run at ≈0.012–0.020 ms/iteration, while IS exposes an accuracy– latency trade-off via its window size. These results highlight the trade-off between local consistency, global accuracy, and latency: filters favor high-rate control, while IS with larger windows improves trajectory accuracy at the cost of latency, with small windows providing a compromise. We hope this preliminary comparison can help practition-ers select an estimator matched to their accuracy-latency envelope and motivate broader, standardized benchmarks for quadruped proprioceptive state estimation. Future work includes evaluation across robots, terrains, and dynamic conditions, as well as closed-loop experiments assessing control performance (e.g., tracking and disturbance rejection) and real-time deployment on embedded hardware to measure latency, load, and power. V. SUPPLEMENTARY MATERIAL The complete benchmarking pipeline used to produce all results in this paper is available at https://github. com/iit-DLSLab/state_estimation_benchmark . The repository provides a self-contained, offline pipeline for quadruped state estimation benchmarking. All three estimators, MUSE, IEKF, and IS, are implemented as standalone C++ executables reading from a shared CSV dataset. Evaluation metrics (ATE, RPE, velocity RMSE) are computed with the evo 
+
+package [13] after converting outputs to TUM format [10]. A compact pipeline overview is shown in Fig. 5, and the full reproducibility details are listed in Table II. 
+
+Input Data (from the Dataset) 
+
+sensor data.csv groundtruth.csv 
+
+Precompute Kinematics 
+
+Estimators MUSE | IEKF | IS 
+
+Evaluation TUM + evo 
+
+ATE/RPE/Vel RMSE 
+
+Fig. 5: Compact supplementary workflow: dataset processing, estimator execution, and metric evaluation. TABLE II: Description of Supplementary Material 
+
+Component Description 
+
+Repository structure 
+
+common/ Shared data types and CSV I/O utilities (timestamps, IMU, joint states, contacts, ground truth). 
+
+data process/ Build-and-run tools for dataset inspection and offline precomputation of foot kinematics (positions, Jacobians, velocities) using Pinocchio; Python scripts for plotting, TUM conversion, metric computation, and optional GNSS georeferencing to UTM. 
+
+muse/ C++ implementation of the MUSE proprioceptive pipeline [1] (adapted from https://github.com/ iit-DLSLab/muse ), runnable as a single executable (main muse ) or as three separate modules (main attitude estimation , main leg odometry , main sensor fusion ). 
+
+iekf/ C++ implementation of the Invariant EKF [2], wrapping the InEKF library (https://github.com/ RossHartley/invariant-ekf ) with a quadruped-specific measurement interface, run via main iekf .
+
+invariant smoother/ C++ implementation of the fixed-lag Invariant Smoother [3] (adapted from https:// github.com/DrcdKAIST/invariant_smoother ), with configurable window size, run via 
+
+main invariant smoother .
+
+data/ Dataset root: the ANYmal-D CYN-1 sequence from the GrandTour dataset [4] (sensor data.csv ,
+
+groundtruth.csv ), generated from the publicly available rosbags. 1
+
+models/ ANYmal-D URDF model used by Pinocchio for forward kinematics. 1
+
+Benchmarking pipeline (each step builds independently with CMake) S1 – Inspect dataset Verify CSV parsing, timestamps, and sample counts ( inspect dataset ). S2 – Precompute kinematics Run Pinocchio offline to compute per-foot positions, Jacobians, and velocities for all leg-based estimators (precompute feet kinematics ); output: feet kinematics.csv .S3 – Run estimators Execute main muse , main iekf , and main invariant smoother (window size configurable); each writes 
+
+fused state.csv to its own subfolder under data/ .S4 – Plot trajectories Compare GT vs. estimated position, orientation, and velocity traces with data process/scripts/plots.py .S5 – Convert to TUM Run convert to tum.py to produce TUM-format trajectory files; the script also prints ready-to-run evo 
+
+commands for ATE and RPE evaluation. S6 – Georeference (opt.) Align estimated trajectories to UTM coordinates using GNSS anchor points via georef from gnss.py .
+
+Dependencies and reproducibility 
+
+environment.yml conda-forge environment file to install all C++ and Python dependencies consistently: conda env create -f environment.yml && conda activate state est bench . Key dependencies: CMake ≥ 3.22, Ninja, Eigen, Pinocchio, fmt , yaml-cpp (C++); NumPy, Pandas, Matplotlib, SciPy, pyproj /PROJ, 
+
+contextily , evo (Python). 
+
+> 1
+
+The dataset and model entries are not fixed requirements of the pipeline. They may be replaced by any dataset, model, or sequence that provides the equivalent information needed for estimation and evaluation. REFERENCES [1] Y. Nistic` o, J. C. V. Soares, L. Amatucci, G. Fink, and C. Sem-ini, “MUSE: A real-time multi-sensor state estimator for quadruped robots,” IEEE Robotics and Automation Letters , vol. 10, no. 5, pp. 4620–4627, 2025, DOI: 10.1109/LRA.2025.3553047. [2] R. Hartley, M. Ghaffari, R. M. Eustice, and J. W. Grizzle, “Contact-aided invariant extended kalman filtering for robot state estimation,” 
+
+The International Journal of Robotics Research , vol. 39, no. 4, pp. 402–430, 2020, DOI: 10.1177/0278364919894385. [3] Z. Yoon, J.-H. Kim, and H.-W. Park, “Invariant smoother for legged robot state estimation with dynamic contact event information,” IEEE Transactions on Robotics , vol. 40, pp. 193–212, 2024, DOI: 10.1109/ TRO.2023.3328202. [4] J. Frey, T. Tuna, F. Fu, K. Patterson, T. Xu, M. Fallon, C. Ca-dena, and M. Hutter, “Grandtour: A legged robotics dataset in the wild for multi-modal perception and state estimation,” arXiv preprint arXiv:2602.18164 , 2026. [5] M. Bloesch, M. Hutter, M. A. Hoepflinger, S. Leutenegger, C. Gehring, C. D. Remy, and R. Siegwart, “State estimation for legged robots: consistent fusion of leg kinematics and IMU,” Robotics , vol. 17, pp. 17–24, 2013, DOI: 10.15607/RSS.2012.VIII.003. [6] M. Bloesch, M. Burri, H. Sommer, R. Siegwart, and M. Hutter, “The two-state implicit filter recursive estimation for mobile robots,” IEEE Robot. Autom. Lett. , vol. 3, no. 1, pp. 573–580, 2018, DOI: 10.1109/ LRA.2017.2776340. [7] G. Fink and C. Semini, “Proprioceptive sensor fusion for quadruped robot state estimation,” in 2020 IEEE/RSJ Int. Conf. Intell. Robots Syst. (IROS) , 2020, pp. 10 914–10 920, DOI: 10.1109/IROS45743. 2020.9341521. [8] V. Agrawal, S. Bertrand, R. Griffin, and F. Dellaert, “Proprioceptive state estimation of legged robots with kinematic chain modeling,” in 
+
+2022 IEEE-RAS 21st International Conference on Humanoid Robots (Humanoids) , 2022, pp. 178–185, DOI: 10.1109/Humanoids53995. 2022.10000099. [9] H. M. S. Santana, J. C. V. Soares, Y. Nistic` o, M. A. Meggiolaro, and C. Semini, “Proprioceptive state estimation for quadruped robots using invariant Kalman filtering and scale-variant robust cost functions,” in 
+
+2024 IEEE-RAS Int. Conf. Humanoid Robots , 2024, pp. 213–220, DOI: 10.1109/Humanoids58906.2024.10769911. [10] J. Sturm, N. Engelhard, F. Endres, W. Burgard, and D. Cremers, “A benchmark for the evaluation of RGB-D SLAM systems,” in 2012 IEEE/RSJ International Conference on Intelligent Robots and Systems ,2012, pp. 573–580, DOI: 10.1109/IROS.2012.6385773. [11] H. F. Grip, T. I. Fossen, T. A. Johansen, and A. Saberi, “Globally exponentially stable attitude and gyro bias estimation with application to GNSS/INS integration,” Automatica , vol. 51, pp. 158–166, 2015, DOI: 10.1016/j.automatica.2014.10.076. [12] T. A. Johansen and T. I. Fossen, “The eXogenous Kalman filter (XKF),” International Journal of Control , vol. 90, no. 2, pp. 161–167, 2017, DOI: 10.1080/00207179.2016.1172390. [13] M. Grupp, “evo: Python package for the evaluation of odometry and slam.” https://github.com/MichaelGrupp/evo, 2017.
