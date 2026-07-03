@@ -1,0 +1,1012 @@
+Title: Learning to Distributedly Estimate under Partially Known Dynamics: A Covariance-Agnostic Neural Kalman Consensus Filter
+
+URL Source: https://arxiv.org/pdf/2606.28441v1
+
+Published Time: Tue, 30 Jun 2026 00:05:01 GMT
+
+Number of Pages: 13
+
+Markdown Content:
+> 1
+
+# Learning to Distributedly Estimate under Partially Known Dynamics: A Covariance-Agnostic Neural Kalman Consensus Filter 
+
+George Stamatelis, Student Member, IEEE , Kyriakos Stylianopoulos, Student Member, IEEE ,and George C. Alexandropoulos, Senior Member, IEEE 
+
+Abstract —Online latent state estimation constitutes a funda-mental challenge within the artificial intelligence field, serving as a foundational tool for diverse applications, including sequential decision making, anomaly and change-point detection. In this paper, a novel online distributed sensing framework, where agents collaborate and exchange information to perform latent state estimation, is presented. The proposed estimator combines available partial domain knowledge with the representation capabilities of deep neural networks. In particular, the designed sensing framework incorporates prior estimates, optimized con-sensus weights, and Kalman-like recursive updates to perform decentralized inference, without relying on knowledge of noise statistics. Extensive experiments on linear, chaotic (Lorenz), and practical wireless tracking environments reveal that the proposed Covariance-Agnostic Neural Kalman Consensus Filter (CA-NKCF) outperforms traditional distributed Kalman and particle filters as well as purely model-free deep neural networks, exhibiting robustness even when the underlying motion and observation models are misspecified. It is also demonstrated that CA-NKCF’s performance advantage remains stable across varying noise levels, random communication topologies, latent state dimensions, and observation clutter densities induced by scattering objects in wireless systems. 
+
+Index Terms —Distributed estimation, tracking, Kalman filter, consensus, model-based deep learning. 
+
+I. I NTRODUCTION 
+
+Decentralized decision making under uncertainty is a cor-nerstone of Multi-Agent (MA) Artificial Intelligence (AI) [1], [2]. A key prerequisite for efficient decentralized decisions is accurate online estimation (a.k.a. filtering ) of latent state representations. One possible application is in robotics, where a group of robots explore their surrounding space, process observations using different sensors, and exchange messages in order to track moving targets; the latent state could be the position or velocity of targets [3]–[5]. Another possible appli-cation is in large-scale sensor networks tasked with monitoring a physical phenomenon, e.g., spreading fire or a gas leak [6], [7]. Due to bandwidth limitations, sending all sensing data to a central node, access point, or Base Station (BS) may be infeasible or too time consuming for safety applications. Alternatively, each sensor may exchange local readings with nearby peers to track the underlying system state.                  
+
+> The authors are with the Department of Informatics and Telecom-munications, National and Kapodistrian University of Athens, Panepis-timiopolis Ilissia, 16122 Athens, Greece. (e-mails: {georgestamat, kstylianop alexandg }@di.uoa.gr). This work has been supported by the SNS JU project 6G-DISAC under the European Union’s Horizon Europe research and innovation programme under Grant Agreement No 101139130. G. Stamatelis was supported by the Hellenic Foundation for Research and Innovation (HFRI) under the 5th Call for HFRI PhD Fellowships (Fellowship Number: 21080).
+
+In the centralized, single-sensor domain, the most estab-lished estimator is the Kalman Filter (KF) [8] and its ex-tensions, such as the Extended (EKF) [3] and Unscented (UKF) KF [9]. This filter is the optimal estimator for linear systems with zero-mean Gaussian noise. In fact, despite being developed over 50 years ago, it finds numerous engineering applications as well as emerging AI applications [10], [11]. However, for realistic nonlinear systems, KF extensions are suboptimal. Furthermore, one key limitation of such Model-Based (MB) approaches is that they require precise spec-ification of the underlying system dynamics. This feature actually renders them unsuitable in systems where the state and observation generating functions are approximations of the true dynamics. Additionally, in some high-dimensional systems, the noise can be complicated, nonstationary and, hence, it is infeasible to accurately model it [12]. On the other hand, purely Model-Free (MF) approaches, such as end-to-end Recurrent Neural Networks (RNNs) [13], [14], do not utilize any domain knowledge, usually sacrificing performance. To that end, KFs aided by artificial Neural Networks (NNs) [12] have emerged as a powerful synergy, combining the representational power of deep NNs with the available domain knowledge provided either by application experts or by offline estimation methods (e.g., [15], [16]). Besides potential for improved performance, these hybrid schemes offer improved interpretability over purely MF es-timation mechanisms; a feature that is beneficial for safety critical monitoring applications. Additionally, NN-aided KFs with exact noise knowledge are discussed for example in references [17]–[19]. For instance, the work in [17] utilizes a two-step approach, where a conventional estimation algorithm is first applied, and then NNs perform error correction. A re-cent group of works focuses on the more generally applicable case of partial domain knowledge , designing estimation filters without covariance information [20]–[22]. In these works, a prior of the state is computed according to the KF, and then, specific features are extracted and used by RNNs to estimate the Kalman Gain (KG) without the availability of the noise covariance matrices. Then, that NN-based KG is used in the posterior filtering operation. In this paper, we focus on MA estimation systems and extend the aforedescribed NN-based, covariance-agnostic idea to distributed filtering. This distributed latent state estimation goal is actually more challenging due to the lack of global information and the induced communication costs. In partic-ular, the agents/nodes performing estimation need to reach consensus (i.e., similar estimates) and not just minimize their local errors; to this end, consensus algorithms constitute an 
+
+> arXiv:2606.28441v1 [cs.LG] 26 Jun 2026 2
+
+entire research sub-field with many intricacies [23], [24]. In fact, even for linear distributed systems, optimal filters do not exist or are computationally prohibitive, forcing a reliance on heuristic consensus-based Kalman updates [25]. Additionally, in the MA Reinforcement Learning (MARL) community, it is well known that MA optimization is more challenging due to the inherent nonstationarity of the learning process [26], [27]. More specifically, as one agent updates its estimator model, it alters the distribution of the transmitted messages to neighboring nodes. Consequently, the environment dynamics of all other agents change, and previously learned behaviors must constantly adapt. In the following, we summarize the contributions of this paper:  
+
+> •
+
+A novel distributed estimator, termed as Covariance-Agnostic Neural Kalman Consensus Filter (CA-NKCF), is presented, which fuses principles from MARL with model-informed NN-based filtering and a novel consen-sus mechanism. A primary advantage of CA-NKCF is its lightweight communication structure, since, unlike ad-vanced information-weighted filters [28], [29] that require exchanging full covariance or information matrices, the proposed approach requires only the exchange of state priors, substantially reducing the inter-agent/-node com-munication bandwidth. In addition, to overcome the in-herent nonstationarity of MA optimization, the proposed NN filtering modules and consensus weights are jointly optimized offline using a central dataset. Inspired by the Centralized Learning, Decentralized Execution (CLDE) paradigm [26], [27], the considered training allows the framework to discover effective collaborative behaviors, and promotes extreme scalability by sharing copies of identical optimized NNs across nodes.  
+
+> •
+
+We provide strong mathematical intuition regarding the stability of the proposed NN-based consensus mecha-nism. It is shown that, for each estimation node, the posterior estimate is a convex combination of their local prior and the priors of their neighboring nodes. This feature indicates that each local posterior is trapped inside the multi-dimensional convex hull of all priors, a fact that prevents catastrophic erroneous updates.  
+
+> •
+
+We present extensive numerical experiments that show-case the superiority of the proposed CA-NKCF approach over a wide range of distributed estimators, including both MB and purely data-driven approaches, in both linear and nonlinear systems. Furthermore, a rigorous ab-lation study is used to demonstrate the critical importance of a unified loss function, a central training procedure, and the joint optimization of both the NN parameters and the consensus weights. The remainder of this paper is organized as follows. Aliterature review of MB and distributed filtering schemes is provided in Section II, whereas the mathematical background of KFs and related algorithms is included in Section III, along with the data-driven problem formulation under investigation. Our novel CA-NKCF approach is presented in Section IV, and test performance is experimentally assessed in Section V. Finally, Section VI includes the paper’s concluding remarks. 
+
+Notation: Lower-case bold letters refer to vectors (e.g., x), upper-case bold letters to matrices (e.g., X), and calligraphic letters indicate sets (e.g., X ). N (μ, σ ) represents a Gaussian distribution with parameters mean μ and variance σ, whereas 
+
+E[·] denotes expectation. The notation Id stands for the d × d
+
+(d ≥ 2) identity matrix, and |·| denotes the cardinality operator. II. R ELATED WORK 
+
+A. Conventional Distributed Filtering 
+
+Decentralized implementations of the celebrated KF algo-rithms have been studied by the control community for over two decades, initially for ideal fully-connected networks [30]. The foundations for scalable decentralized KF with consen-sus algorithms for systems with sparse and possibly time-varying topologies have been set by Olfati-Saber in his sem-inal Kalman Consensus Filter (KCF) in [25]. This algorithm combines local KF-like updates with a consensus imposed on the weighted sensor disagreement. Although this filter has not been proven to be optimal, due to the heuristic variance-dependent choice of the consensus weights, it remains very popular up to date due to its satisfactory performance, sim-plicity, and numerical stability. Improvements that either run multiple consensus steps on the information vectors [29] or compute the optimal value of consensus weights [31], [32] have been proposed, at the expense, however, of much higher computational costs, practicality limitations, and stability risks. Computing optimal values as proposed in [31], [32] requires maintaining and per-forming consensus on covariance matrices, and then perform-ing multiple matrix inversions on massive block matrices for observation correlations, hindering numerical stability. All in all, even though these papers produce beautiful mathematical optimality results, Saber’s KCF remains very popular due to its easy implementation and stability. Additionally, progress has been made in combining distributed filters with practical engineering challenges, e.g., non-Gaussian observations [33], limited sensor range [34], communication costs [35], [36], as well as privacy risks [37]. It is noted that, while KF-based approaches are the most widely utilized estimators, an alternative family of methods known as Particle Filters (PFs) can be used in nonlinear systems instead. These filters constitute non-parametric se-quential Monte Carlo estimators that have been used for single-agent [38]–[40] as well as distributed, MA [41] systems. However, these approaches carry much greater overhead and are highly sensitive to the number of particles simulated. 
+
+B. Model-Based Neural Filtering 
+
+There are two main approaches for online hidden state estimation in discrete-time Dynamical Systems (DSs) using MB NNs: i) external architectures; and ii ) NNs embedded in the KF logic. Prior works on i), either utilize NNs to extract features from high-dimensional observations, which are then combined with known state updates [19], or utilize RNNs to perform error correction on traditional filters [17]. Exact specification of the state evolution’s mean and covariance is required. Most works on ii ) are based on the KalmanNet 3
+
+framework [20]. This work first proposed utilizing supervised Gated Recurrent Units (GRUs) [14] to estimate the KG without the need for covariance matrix knowledge. The proposed hybrid model was shown to outperform both MB KFs and PFs as well as fully MF RNNs. Since then, various extensions of the original KalmanNet framework for different types of DSs have been proposed. For instance, [21] combines the KalmanNet framework with deep convolutional feature extrac-tors for tracking problems profiting from visual observations from cameras. Very recently, an extension of the KalmanNet with an additional GRU, termed as MJFNet [22], was designed to filter trajectories with switching behavior. One alternative framework in this line of research is the fully unsupervised Data-Driven Nonlinear State Estimation (DANSE) model [18], which does not require any specification of the latent state evolution model. However, it is limited to linear observations with fully known Gaussian noise. MB deep learning techniques for latent space estimation combine domain knowledge of traditional algorithms with the expressiveness and generalization capabilities of modern NNs to improve performance. MB deep learning has been also proposed for other tasks like smoothing, i.e., offline/noncausal state estimation [17], [42], [43]. Besides discriminative learn-ing problems, NNs can also be used to estimate the under-lying dynamics of high-dimensional nonlinear DSs, which is a form of generative learning [15], [16], [44], [45]. Note that discriminative and generative approaches can be used in parallel, i.e., by first learning the dynamics offline with a generative algorithm and then training a discriminative NN-based KF. In that case, the learned dynamics constitute the state and observation generating recursions utilized by the filter. It is, however, highlighted that all aforementioned works are limited to centralized single-node systems , where a single processing center infers hidden state information using all available observations. It is finally noted for completeness that, apart from esti-mation of time-varying processes, MB deep learning [46] has numerous interesting applications, e.g., medical imaging [47], near-field localization [48], as well as dimensionality reduc-tion [49]. An important subcategory of MB deep learning is physics-informed NNs, where physical laws are directly integrated into the NN operation, e.g., [50]–[53]. III. P RELIMINARIES 
+
+A. Centralized Filters 
+
+In the centralized setting (single node/sensor/agent), discrete-time DSs (indexed by time t) are described as follows: 
+
+xt+1 = f (xt) + wt ∈ Rs, (1a) 
+
+zt = h(xt) + vt ∈ Ro. (1b) where f (·) and h(·) are termed as the transition and ob-servation functions, respectively, whereas wt and vt are noise vectors. MB estimators typically assume that wt ∼N (0 , Q), vt ∼ N (0 , R), where Q ∈ Rs×s, R ∈ Ro×o.A simple yet fundamental category of DSs is the linear DS, where the functions f (·) and h(·) are respectively the matrices 
+
+F and H, yielding the state-space equations: 
+
+xt+1 = Fx t + wt ∈ Rs, (2a) 
+
+zt = Hx t + vt ∈ Ro. (2b) We are concerned with filtering, i.e., estimating the current latent variable xt, leveraging the past and present observations 
+
+z1: t ≜ [z1, z2, . . . , zt]. The prior and posterior estimates at the time instance t are respectively denoted as follows: 
+
+ˆxt|t−1 ≜ E[xt|z1: t−1], ˆxt|t ≜ E[xt|z1: t]. (3) Consequently, the prior and posterior errors are denoted as 
+
+ηt|t−1 and ηt|t, and the respective error covariance matrices are defined as Pt ≜ E[ηt|t−1ηTt|t−1] and Mt ≜ E[ηt|tηTt|t].The KF for linear DSs is given by the following recursion: 
+
+Kt = PtHT (R + HP tHT )−1, (4a) 
+
+ˆxt|t = ˆ xt|t−1 + Kt(zt − Hˆxt|t−1), (4b) 
+
+Mt = Pt − PtHT (R + HP tHT )−1HP t, (4c) 
+
+Pt+1 = FM tFT + Q, (4d) 
+
+ˆxt+1 |t = Fˆxt|t. (4e) The variable Kt in expression (4a) is known as the KG. The KalmanNet framework [20]–[22] performs the same a priori estimate for ˆxt|t−1 as the KF, but utilizes a GRU θ in order to estimate Kt. The approximate KG Kt,θ is then plugged into the expression (4b). It is noted for completeness that the EKF is a popular yet suboptimal approach for filtering nonlinear DSs, where the state updates become as follows: 
+
+ˆxt|t = ˆ xt|t−1 + Kt(zt − h(ˆ xt|t−1)) , ˆxt+1 |t = f (ˆ xt|t). (5) For the covariance updates and the KG computation, matri-ces F and H are replaced by the following Jacobians which are evaluated on the state estimates: 
+
+˜Ft = Jf (ˆ xt−1|t−1), ˜Ht = Jh(ˆ xt|t−1). (6) It needs to be noted that the KalmanNet algorithm [20] supports the use of EKF-like state predictions. 
+
+B. The Kalman Consensus Filter (KCF) 
+
+Consider an environment with N sensors (indexed with 
+
+i = 1 , 2, . . . , N ) which collect distinct, possibly overlapping, measurements according to the following model: 
+
+zi,t = Hixt + vi,t ∈ Roi , (7) where the covariance matrix of each i-th observation noise is represented as Ri ∈ Roi×oi . It is assumed that each sensor node i can exchange messages with a set of neighbors Ni,t ;furthermore, we write Ji,t ≜ Ni,t ∪ { i}. The nodes are essentially located in a graph, where edges indicate sensor communication (i.e., message exchange). We assume that the graph topology can evolve with time, and is not controlled by the nodes. Algorithms that combine state estimation models with intelligent topology design are a very interesting potential research direction, outside the scope of this work. 4
+
+The seminal work in [25] proposed KCF according to which, each sensor node i broadcasts its local prior state estimate, and the Kalman posterior update is combined with a consensus update rule based on the prior estimates. The update recursion of KCF is defined as follows: 
+
+Ki,t = Pi,t HTi (Ri + HiPiHTi )−1, (8a) 
+
+ˆxi,t |t = ˆ xi,t |t−1 + Ki,t (zi,t − Hi ˆxi,t |t−1)+ Ci,t 
+
+X
+
+> j∈N i
+
+(ˆ xj,t |t−1 − ˆxi,t |t−1), (8b) 
+
+Ai,t = I − Ki,t Hi, (8c) 
+
+Mi,t = Ai,t Pi,t ATi,t + Ki,t RiKi,t , (8d) 
+
+Pi,t +1 = FM i,t FT + Q, (8e) 
+
+ˆxi,t +1 |t = Fˆxi,t |t, (8f) where a typical heuristic choice for the consensus weight is: 
+
+Ci,t ≜ ϵ Pi,t 
+
+1 + || Pi,t || F
+
+∈ Rs×s (9) with ϵ being an appropriately chosen hyperparameter. It is noted that, while the baseline recursion in (8) relies on a heuristic consensus matrix and the exchange of only prior state estimates, a rigorously derived variant in [28, Algorithm 3] offers improved performance. This advanced implementation employs an information-weighted formulation where nodes broadcast their local information vector ( ui,t ) and information matrix ( Ui,t ) alongside their state predictions. By aggregating this data from the neighborhood Ji,t , the distributed update successfully minimizes estimate disagreement across the MA network and bypasses the traditional KG matrix calculation. The complete recursion for this formulation is defined as: 
+
+uj,t = HTj R−1 
+
+> j
+
+zj,t ∀j ∈ J i,t , (10a) 
+
+Uj,t = HTj R−1 
+
+> j
+
+Hj ∀j ∈ J i,t , (10b) 
+
+yi,t = X
+
+> j∈J i,t
+
+uj,t , (10c) 
+
+Si,t = X
+
+> j∈J i,t
+
+Uj,t , (10d) 
+
+Mi,t =
+
+
+
+P−1 
+
+> i,t |t−1
+
++ Si,t 
+
+−1
+
+, (10e) 
+
+ˆxi,t |t = ˆ xi,t |t−1 + Mi,t 
+
+ yi,t − Si,t ˆxi,t |t−1
+
+ ,
+
++ ϵMi,t 
+
+X
+
+> j∈N i
+
+ ˆxj,t |t−1 − ˆxi,t |t−1
+
+ , (10f) 
+
+Pi,t +1 |t = FM i,t FT + Q, (10g) 
+
+ˆxi,t +1 |t = Fˆxi,t |t. (10h) 
+
+C. Estimation Problem Formulation 
+
+In this work, we wish to design a data-driven distributed filtering algorithm, such that each sensor node i can reliably estimate the true state xt, based on past observations and received messages. Formally, node i employs an NN θi in order to estimate the latent state vector as: 
+
+ˆxi,t |t = E[xt|zi, 1: t; θi]. (11) In particular, the core objective is to minimize the average Mean Squared Error (MSE) loss; in mathematical terms: 
+
+min 
+
+> θ1,θ 2,...,θ N
+
+1
+
+N
+
+> N
+
+X
+
+> i=1
+
+E
+
+h
+
+ˆxi,t |t − xt
+
+> 2
+
+i
+
+. (12) Following the reasoning of established works [20], [42], we proceed adopting the following realistic assumptions:  
+
+> •
+
+The noise distribution is unknown. In practical systems, noise distributions are often complex and nonstationary, and thus hard to estimate, necessitating filters that do not rely on the exact specification of noise statistics.  
+
+> •
+
+Approximations of the transition function f (·) in (1a) and the observation functions hi(·) ∀i in the general version of (7): zi,t = hi(xt) + vi,t are available, either estimated offline or provided by an application expert. However, in the results section, we will investigate the effectiveness of our scheme when these approximations are incorrect. Furthermore, in order to train our NN models, we will assume the availability of a large labeled dataset with hidden states and sensor-wise observations, defining the following set: 
+
+D ≜ {x(d)1: t , z(d)1,1: t, z(d)2,1: t, . . . , z(d)
+
+> N, 1: t
+
+}Dd=1 . (13) Finally, the design of our distributed estimator, described in the sequel, is influenced by two critical practical requirements: R1 Strict Real-Time Causality: In highly dynamic systems, the state transitions from xt to xt+1 vary rapidly. To pre-vent predictions from becoming obsolete, the estimator’s forward inference time needs to be very quick. This hard latency constraint precludes the use of computationally heavy architectures (e.g., massive transformers [54] or graph NNs [52]), high-capacity PFs [41], or iterative multi-step consensus protocols. R2 Massive Scalability: The designed framework needs to be readily deployable in large-scale Internet of Things (IoT) applications comprising a vast number of sensor nodes. This necessitates an architecture that inherently minimizes memory footprint and training complexity, a requirement that directly motivates the Parameter Sharing (PS) strategy introduced in the sequel. 
+
+Remark 1 (Topology Agnosticism and Overfitting) . A critical challenge in data-driven distributed estimation is the risk of the machine learning model overfitting to a specific, favorable message-exchange graph. To this end, in this paper, we deliber-ately do not assume any fixed topology structure. The proposed framework is required to be inherently topology-agnostic, en-suring that the nodes learn generalized collaborative filtering behaviors rather than indirectly inferring and exploiting static connection patterns. To rigorously validate this requirements, the ensuing numerical experiments in Section V utilize random graphs drawn from a maximum entropy distribution (i.e., uniform connection probabilities at each time instance t). 
+
+IV. P ROPOSED DISTRIBUTED ESTIMATION METHOD 
+
+Having established the necessary mathematical background and presented the hybrid machine learning setup, we will now present our proposed CA-NKCF. We have adopted a PS 5
+
+Algorithm 1 Proposed CA-NKCF at each i-th Node 
+
+Input : Observation zi,t , shared parameters θ and γ, neigh-bors Ni,t , and previous GRU hidden state hi,t −1.
+
+Output : Posterior ˆxi,t |t and new hidden state hi,t .
+
+Local Prediction:  
+
+> 1:
+
+Compute the local prior ˆxi,t |t−1 = f (ˆ xi,t −1|t−1). 
+
+> 2:
+
+Broadcast ˆxi,t |t−1 to neighbors j ∈ N i,t .
+
+Neural KG Estimation:  
+
+> 3:
+
+Compute the RNN features as in expression (14).  
+
+> 4:
+
+Set Ki,t ;θ , hi,t = FP θ (ϕi,t ; hi,t −1).
+
+Consensus-Based Update:  
+
+> 5:
+
+Collect all prior estimates ˆxj,t |t−1 ∀j ∈ N i,t . 
+
+> 6:
+
+Compute the consensus term: 
+
+ucons  
+
+> i,t
+
+= 1
+
+> |N i,t |
+
+P
+
+> j∈N i,t
+
+ ˆxj,t |t−1 − ˆxi,t |t−1
+
+. 
+
+> 7:
+
+Perform the update: 
+
+ˆxi,t |t = ˆ xi,t |t−1 + Ki,t ;θ ∆ˆ zi,t + σ(γ)ucons  
+
+> i,t
+
+. 
+
+> 8:
+
+return ˆxi,t |t and hi,t .method where all N sensor nodes are equipped with the same NN parameters θ (i.e., θi = θ ∀i); this choice was actually made for scalability purposes. In modern sensor network applications, the number of sensors can be very large, implying that initializing and optimizing N separate RNNs carries prohibitive computational and memory costs. By adopting PS in our multi-node setup, only one RNN needs to be trained, which is very cost efficient and memory friendly. Notably, PS is often used for large-scale MARL [55]–[57] for the same reason. Furthermore, in distributed estimation, in addition to total error minimization, the nodes must reach similar state estimates. Since the NN parameters are shared, unless the local inputs differ significantly, we expect the disagreement to be minimal. In the next section, we will demonstrate that CA-NKCF achieves better consensus than MB baselines. To remain consistent with prior works, we model θ as GRU, but other models, such as Long Short Term Memory (LSTM) models [13] or transformers [54], can be used instead. At each time instance t and for each sensor node i, the NN parametrized by θ is provided with KF-specific input features 
+
+ϕi,t , and then combines them with its most recent internal hidden state hi,t −1 to estimate the local KG Ki,t ;θ .
+
+A. Covariance-Agnostic Neural Kalman Consensus Filtering 
+
+At each time instance t, each sensor node i performs the following steps, collectively presented in Algorithm 1 and visualized in Fig. 1. First, the prior state estimate ˆxi,t |t−1 =
+
+f (ˆ xi,t −1|t−1) is computed and transmitted to its neighboring nodes. Then, the RNN input features are computed as follows: 
+
+ϕi,t ≜ [∆ˆ zi,t , ∆¯ zi,t , ∆ˆ xi,t ] ∈ R2oi+s×1, (14) including the following vectors: 
+
+∆ˆ zi,t ≜ zi,t − hi(ˆ xi,t |t−1) ∈ Roi×1, (15a) 
+
+∆¯ zi,t ≜ zi,t − zi,t −1 ∈ Roi×1, (15b) 
+
+∆ˆ xi,t ≜ ˆxi,t −1|t−1 − ˆxi,t −1|t−2 ∈ Rs×1. (15c) This feature combination is selected due to its demonstrated effectiveness in prior single-sensor works [20], [22]. The KG is estimated using the GRU as Ki,t ;θ = FP θ (ϕi,t ; hi,t −1), where 
+
+hi,t −1 is the previous hidden state of the GRU and FP v (·; h)
+
+denotes the forward-pass operation of an RNN with parameters 
+
+v and hidden state h. For each node i, a separate hidden state 
+
+hi,t is maintained and updated over time. Using a consensus weight γξ for each ξ-th possible state (with ξ ∈ { 1, 2, · · · , s })included in the consensus vector γ, the posterior estimate is: 
+
+ˆxi,t |t =ˆ xi,t |t−1 + Ki,t ;θ (zi,t − hi(ˆ xi,t |t−1)) + σ(γ)
+
+|N i|
+
+X
+
+> j∈N i
+
+(ˆ xj,t |t−1 − ˆxi,t |t−1), (16) where σ(·) is an element-wise sigmoid function having the role of forcing the consensus weight inside (0 , 1) to prevent numer-ical issues. Note that, in this expression, instead of utilizing a large consensus matrix Ci,t ∈ Rs×s as in [25], we employ the single learnable consensus weight γξ for each ξ-th state, which models each node’s trust on its own information versus the information provided by the peers regarding that specific state component. We argue that the complexity of handling non-linearities, correlations, and elaborate dynamics is sufficiently managed by the proposed neural KG estimation and, hence, decoupled dimension-wise consensus is entirely sufficient; this will become evident in the numerical investigations presented later on in Section V. Consequently, the optimization process only needs to learn the general informative value and reliability of the shared peer estimates for each individual state variable. 
+
+Remark 2 (State-of-the-art vs. Proposed Consensus Scheme) .
+
+Arguably, optimizing a full s×s consensus matrix as presented in [25] drastically expands the parameter search space, a fact that introduces a significant risk of learning spurious cross-dimensional couplings. Consider, for example, a 2-Dimensional (2D) vehicle tracking application where the state vector comprises Cartesian positions ( x, y ) alongside their respective velocities ( vx, v y ). From a physics standpoint, a velocity on one axis does not affect the position of another axis, and the model should not impose such correlations. Because a fully populated matrix lacks inherent kinematic constraints, off-diagonal elements can easily learn to cross-contaminate orthogonal axes. For instance, a sudden lateral position displacement reported by a neighbor could be erro-neously mapped into a longitudinal acceleration correction for the local sensor node. Since these cross-terms violate the true decoupled equations of motion, they frequently lead to instability and filter divergence. By restricting the consensus interactions to a decoupled learnable vector γ within the pro-posed CA-NKCF framework (see (16) ), we enforce dimension-wise independence and eliminate this physically inconsistent cross-contamination risk. 
+
+Remark 3 (Computational and Communication Efficiency) .
+
+The proposed filtering approach improves the numerical sta-bility and communication costs of the conventional KCF [25]. First, traditional KG computation requires matrix inversion, which carries cubic cost and is associated with increased risks of numerical instability. This issue is exacerbated when Jacobian-based matrices are used for nonlinear systems, and additional stability mechanisms need to be employed further 6Estimate KG  
+
+> using RNN
+> Estimate local Kalman-like term as:
+> Update prior as:
+> Compute disagreement term as:
+> Local
+> observation
+> Estimate posterior as:
+
+...  
+
+> ...
+> Neighboring nodes
+
+...  
+
+> Node ...
+> ...
+> ...
+
+Fig. 1: Visualization of the proposed CA-NKCF framework for distributed estimation with N sensor nodes. 
+
+increasing the cost. In contrast, in the proposed CA-NKCF framework, each sensor node i only performs a prior estimate using f (·) (or F in the linear case) and a forward pass of a moderate-sized GRU. Besides that, in its more advanced form, the KCF requires exchange of two s-dimensional vectors and an s × s matrix, whereas our algorithm only requires messaging an s-dimensional prior. Thereby, it allows for im-plementation with substantially lower bandwidth consumption. B. Mathematical Intuition Regarding Stability 
+
+Providing a rigorous stability proof for a distributed recur-rent estimator is a difficult task that falls beyond the scope of this paper. However, we herein provide strong mathematical intuition as to why we expect the consensus mechanism within the proposed CA-NKCF framework to be stable in practice. Focusing on the proposed update rule in (16) for a single dimension ξ, the following is deduced: 
+
+ˆxi,t |t[ξ] = ˆ xi,t |t−1[ξ] + σ(γξ )
+
+|N i|
+
+X
+
+> j∈N i
+
+ ˆxj,t |t−1[ξ] − ˆxi,t |t−1[ξ]
+
+= (1 − σ(γξ )) 
+
+| {z }
+
+> self-weight
+
+ˆxi,t |t−1[ξ] + X
+
+> j∈N i
+
+σ(γξ )
+
+|N i|
+
+| {z } 
+
+> neighbor-weight
+
+ˆxj,t |t−1[ξ].
+
+(17) This decomposition implies the following significant proper-ties of the proposed latent state estimation recursion: 1) Non-negativity: The sigmoid activation in (17) guar-antees that σ(γξ ) ∈ (0 , 1) , hence, the local self-weight and the individual neighbor weights incorporated into the update rule are strictly positive. Strict positivity is a well-established requirement for the stability of dynamic consensus systems [58]. 2) Convexity: It can be easily concluded that the latter weights sum to unity, implying that the posterior esti-mate is a convex combination of the local priors. Con-sequently, the state estimates are perpetually bounded within the multi-dimensional convex hull of the net-work’s current “beliefs” [59], precluding compounding over-corrections and catastrophic divergence often ob-served in unconstrained end-to-end MA models. It is finally noted that, beyond the proposed consensus step, we expect the local Kalman-like tracking to remain stable, as recurrent KG estimation using GRUs has been thoroughly studied and validated in the single-agent domain. Hence, while we cannot rigorously prove global stability and convergence for MA systems, due to the inherent complexity of GRUs, the synthesis of bounded consensus and reliable local filtering provides strong theoretical foundation for it. This intuition is further corroborated by the numerical experiments provided later on in the respective section. 
+
+C. Training Optimization 
+
+The loss function over the dataset D in (13) corresponding to each i-th sensor node was chosen as follows: 
+
+Li ≜
+
+> D
+
+X
+
+> d=1
+> T
+
+X
+
+> t=1
+
+ˆx(d) 
+
+> t|t−1
+
+− x(d)
+
+> t
+> 2
+
+, (18) and the total, centralized loss function was set as the average of the local estimation errors. In this paper, we treat the learnable weights of NN θ and the consensus weights γ as a unified learnable parameter set, formulating the following 7
+
+Algorithm 2 CA-NKCF Optimization on a Single Trajectory 
+
+Input : Trajectory data x1: T , z1,1: T , z2,1: t, . . . , zN, 1: T and neighbors {N i,t }.
+
+Parameter : Shared parameters θ and γ.
+
+Output : Optimized θ and γ.
+
+Initialization  
+
+> 1:
+
+Initialize GRU hidden states as hi, 0 = 0 ∀i. 
+
+> 2:
+
+Initialize state estimates ˆxi, 0|0. 
+
+> 3:
+
+Set Ltraj = 0 . 
+
+> 4:
+
+for t = 1 to T do Distributed Filtering Step  
+
+> 5:
+
+for i = 1 to N do  
+
+> 6:
+
+Call CA-NKCF (Algorithm 1): 
+
+ˆxi,t |t, hi,t ← CA-NKCF (zi,t , θ, γ, Ni,t , hi,t −1). 
+
+> 7:
+
+end for Loss Accumulation  
+
+> 8:
+
+Compute the instantaneous loss: 
+
+Lt = 1
+
+> N
+
+PNi=1 ∥ˆxi,t |t − xt∥2. 
+
+> 9:
+
+Perform the update Ltraj = Ltraj + Lt. 
+
+> 10:
+
+end for Parameter Optimization  
+
+> 11:
+
+Compute ∇θ, γ Ltraj using BPTT.  
+
+> 12:
+
+Update θ and γ using Adam [60].  
+
+> 13:
+
+return θ, γ0 10 20 30 40 50 
+
+> Horizon T
+> 3
+> 2
+> 1
+> 0
+> 1
+> 2
+> 3
+> 4
+> Meters
+> osc. 1 position
+> osc.4 position
+> osc. 1 velocity
+> osc. 4 velocity
+
+Fig. 2: Sampled oscillator states for N = 4 sensors. optimization objective for the considered NN-based distributed estimation framework: 
+
+min  
+
+> θ, γ
+
+L ≜ 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+Li. (19) The proposed model was trained on the mini-batch version of L. For each trajectory in the batch, the neural filtering operation from t = 0 up to t = T was conducted sequentially, and the local losses at each time instance t were added to compute the final loss result. For moderate trajectories (e.g., up to T = 100 ), the hidden state vectors h1,t , h2,t , . . . , hN,t were initialized at the beginning, and the gradients were computed using Back Propagation Through Time (BPTT). For longer horizons, the trajectories can be split into shorter segments of length Ttrunc to apply truncated BPTT. To handle datasets with trajectories of different lengths, max-padding can be used. The considered training process on a single trajectory is summarized in Algorithm 2. V. N UMERICAL RESULTS AND DISCUSSION 
+
+In this section, diverse numerical investigations are pre-sented to validate the effectiveness of the proposed CA-NKCF framework, by comparing it with traditional MB filters and MF NNs. We have simulated three scenarios: a linear example with harmonic oscillators, a nonlinear experiment inspired by chaos theory including a Lorenz attractor, and a practical wireless tracking application. For all simulations, the node/sensor/agent graph was chosen at random and time-varying, with the goal to verify that our model does not overfit to specific favorable topologies. For each time instance t, the existence of a communication link between nodes i and j was determined by an independent Bernoulli trial with probability 
+
+pc (thus, determining 1 the sets of neighboring nodes Ni,t ∀i). All reported results in the sequel were obtained through averaging across 10 random seeds; each instance was trained on 5 × 10 4 trajectories and tested on other 10 4 ones. Training consisted of 100 epochs performed with a learning rate of 
+
+5 × 10 −4. For the linear example, the CA-NKCF was realized with a GRU with 2 hidden layers of 64 units. For the nonlinear experiment, the hidden size was increased to 256 , and an additional pre-processing feed-forward module with hidden dimension of 128 and a ReLU activation was used before the GRU. The output of the GRU was transformed to the appropriate KG dimensions with an additional linear layer. For MF benchmark, GRUs with similar structure trained on the same dataset were considered. Since they did not have access to domain knowledge, the hidden sizes, and the number of hidden layers were doubled. For MB benchmarks, the KCF given by (10) was utilized for linear systems, and the Extended KCF (EKCF), Unscented KCF (UKCF) and Distributed PF (DPF) with 200 particles were examined for nonlinear systems. 
+
+A. Linear Scenario 
+
+An environment with N decoupled one-dimensional har-monic oscillators (same as the number of nodes) has been simulated. In particular, the state xt ∈ R2N was a vector stacking the position and velocity of all oscillators. Each node 
+
+i observed only one oscillator, meaning that estimation of the entire state xt ∈ R2N relied on successful consensus, and not just on developing powerful local KG estimators. The state evolution was actually dictated by the block-diagonal matrix 
+
+F ≜ diag (F1, F2, . . . , FN ), where each sub-block monitored a rotation with a distinct frequency, i.e., ∀i:
+
+Fi =
+
+cos( ωi∆t) − sin( ωi∆t)sin( ωi∆t) cos( ωi∆t)
+
+
+
+. (20) We have examined systems with N = 4 k, k ∈ N oscillators, setting ∆t = 0 .1 sec. The first quarter of the oscillators had the frequency 0.5 rad/sec, the second quarter 1 rad/sec, the third 1.5 rad/sec, and the final 2 rad/sec. The process noise in (1) was chosen as zero-mean Gaussian with Q = 0 .05 I2N .Each measurement matrix Hi ∈ R2×2N extracted only the i-th component of the complete state and all observation noise matrices were set as Ri = 0 .1I2. Finally, he horizon was fixed to T = 50 . Examples of state evolution for the first and last oscillator for N = 4 are depicted in Fig. 2.        
+
+> 1As emphasized in Remark 1, this dynamic, random topology generation is considered to showcase that the performance gains of the proposed CA-NKCF framework stem entirely from its robust consensus mechanism, precluding the GRU from profiting itself by memorizing static communication patterns that may not be present in real-world deployments. 80.10 0.15 0.20 0.25 0.30 0.35 0.40
+> Graph Connection Probability pc
+> 1.25
+> 1.50
+> 1.75
+> 2.00
+> 2.25
+> 2.50
+> 2.75
+> 3.00
+> 3.25
+> Average MSE
+> KCF
+> CA-NKCF
+> MF-GRU
+> local KalmanNet
+> local KalmanNet PS
+
+(a) Average Sensor MSE 0.10 0.15 0.20 0.25 0.30 0.35 0.40   
+
+> Graph Connection Probability pc
+> 1.50
+> 1.75
+> 2.00
+> 2.25
+> 2.50
+> 2.75
+> 3.00
+> 3.25
+> Average Worst MSE
+> KCF
+> CA-NCKF
+> MF-GRU
+> local KalmanNet
+> local KalmanNet PS
+
+(b) Worst Sensor MSE 0.10 0.15 0.20 0.25 0.30 0.35 0.40   
+
+> Graph Connection Probability pc
+> 1.00
+> 1.25
+> 1.50
+> 1.75
+> 2.00
+> 2.25
+> 2.50
+> 2.75
+> Average Sensor Disagreement
+> KCF
+> CA-NKCF
+> MF-GRU
+> local KalmanNet
+> local KalmanNet PS
+
+(c) Consensus Disagreement 
+
+Fig. 3: MSE performance versus the node connection probability for the linear scenario. 
+
+Method pc = 0 .1 pc = 0 .2 pc = 0 .3 pc = 0 .4
+
+CA-NKCF 1.81 1.52 1.44 1.32 
+
+Ablation 1 2.01 1.67 1.57 1.56 Ablation 2 2.27 1.99 1.54 1.49 Ablation 3 2.11 1.88 1.71 1.62 
+
+TABLE I: Ablation analysis for the proposed CA-NKCF in the linear scenario. First, we considered a small system with N = 4 nodes, varying pc from 0.1 to 0.4. As is evident from Fig. 3a, the pro-posed method significantly outperforms all benchmarks. For further intuition, we have trained local KalmanNets for each node, both with shared (i.e., PS) and individual parameters. It is shown that these methods perform worse than the linear KCF, validating the paramount importance of consensus for this partially observable task. Interestingly, it is showcased that utilizing powerful NNs to perform KG estimation is not enough for distributed systems, indicating that the nodes must also perform intelligent consensus. We also tracked the worst case MSE (out of all nodes) for each episode as well as the average disagreement in Figs. 3b and 3c respectively, which collectively verify that our approach can successfully optimize these robustness metrics without being directly trained to do so. Finally, in Fig. 4, we fixed pc = 0 .4 and varied N up to 32 
+
+nodes. As is apparent from the presented results, the proposed CA-NKCF scales well with N consistently outperforming the baselines. Besides superior performance, our filter also achieves very good robustness to initialization conditions as inferred by examining the shaded region. In contrast, the shaded region of the GRU in Fig. 4 is significantly larger. 
+
+Ablation Analysis 
+
+We have verified the importance of each component of the prososed CA-NKCF by examining the following three ablation benchmarks: 1) To examine whether the KG computation is a necessary step, we have trained a GRU that processes the most recent observation, the prior ˆxi,t |t−1, and the average prior of all peers in the set Ni,t , with the goal to directly map them to ˆxi,t |t.5 10 15 20 25 30 
+
+Number of Nodes N
+
+2
+
+4
+
+6
+
+8
+
+10 
+
+12 
+
+> Average MSE
+
+KCF 
+
+CA-NKCF 
+
+MF-GRU 
+
+Fig. 4: Average MSE versus the number of nodes N for the linear scenario. 2) One important feature of our method is the joint opti-mization of γ. To investigate whether joint optimization hinders stability, we have trained the same models, but with a fixed γ, whose value was determined by an element-wise grid search on [0 , 1] . The training process was repeated for each considered value of γ.
+
+3) For the final ablation test, we have investigated the importance of end-to-end training with the consensus loop present during training, and the centralized loss function. To this end, we have trained N independent local KalmanNets (one for each node), and then during testing alone, we added the consensus term in the recursion. Again, the value of the weight was determined by grid search on [0 , 1] .For fairness, all latter 3 GRUs were designed to have similar structure to the GRU of CA-NKCF. As depicted in Table I, all 3 components are necessary. The Kalman-like recursion is superior to just processing priors, optimizing γ along with θ
+
+improves training, and the network must learn to cooperate during training by incorporating the consensus step in the training code; consensus on deployment alone is not sufficient. 910  
+
+> 5
+> 0
+> 5
+> 10 15
+> 10
+> 5
+> 0
+> 5
+> 10
+> 15
+> 0
+> 5
+> 10
+> 15
+> 20
+> 25
+> 30
+
+Start 
+
+End 
+
+Fig. 5: The considered state trajectory for the Lorenz attractor scenario. 30 25 20 15 10 5 0  
+
+> Observation Noise Level Lor in dB
+> 0.5
+> 1.0
+> 1.5
+> 2.0
+> 2.5
+> 3.0
+> 3.5
+> Average MSE
+> EKCF
+> UKCF
+> CA-NKCF
+> CA-NKCF Incor. J
+> MF-GRU
+
+Fig. 6: Average MSE versus the observation noise level for the Lorenz attractor scenario. 
+
+B. Lorenz Attractor 
+
+Next, we performed experiments with a polynomial 3-dimensional DS inspired by the Lorenz attractor. Such DSs are often utilized to test the effectiveness of sequential estimators due to their inherent complexity. The latent state of the Lorenz attractor evolves according to the following expression: 
+
+xt+1 = F(xt)xt + wt ∈ R3, (21a) 
+
+F(xt) ≜ exp 
+
+
+
+−10 10 028 −1 xt−1
+
+0 xt − 83
+
+ ∆t
+
+ ∈ R3×3. (21b) We have generated trajectories using the 5-th order ( J = 5 )Taylor series expansion of F(xt) for ∆t = 0.02 , setting the state process noise in (1) to Q = 0 .1I3. An example simulated trajectory is provided in Fig. 5. To investigate our filter’s ability to generalize to incorrect model knowledge, we trained two variants: one assuming J = 5 (correct dynamics) and one assuming J = 2 (incorrect dynamics). A system with N = 3 sensor nodes was considered, with the graph connection probability set to pc = 0 .4. The first node received a noisy estimate of the first two state coordinates, the second observed the last two, and the third node receives an estimate of the first and third state coordinates after they have been converted to polar coordinates. The observation noise was additive zero-mean Gaussian with covariance Ri = σLor I2
+
+for each i-th node. To ensure the neural filter generalizes across different temporal lengths rather than overfitting to a fixed sequence, the horizon T for each trajectory was selected uniformly at random from the set 2 {1250 , 1500 , 1750 , 2000 }.Figure 6 depicts the average MSE performance with the observation noise strength σLor ranging from −30 dB to 
+
+0 dB. The DPF benchmark displayed poor performance with very large errors, and has been omitted from the plot to maintain presentation quality. As shown in the figure, CA-NKCF achieves a significant performance gain, yielding up to 
+
+50% error reduction relative to the MF GRU benchmark, even when the former assumes incorrect system dynamics. 
+
+Sensitivity Study 
+
+Training machine learning models on sequential data with a nonstationary structure can be an unstable process, highly affected by hyperparameter choices [61]. Having established the effectiveness of the proposed CA-NKCF framework in the Lorenz attractor scenario, we have also used those chaotic trajectories to verify its stability to moderate hyperparameter changes. More specifically, we have tested the following:  
+
+> •
+
+Learning rate: The training and testing procedures were repeated for learning rates ranging from 5×10 −5 to 10 −3. 
+
+> •
+
+Gradient clipping: The clip threshold was modified from 
+
+0.5 to 2.5. 
+
+> •
+
+Truncation length ( Ttrunc ): It was varied from 15 to 50 .The Coefficients of Variation (CoVar) on the test set, consid-ering observation noise of σLor = 0 dB, are depicted in Fig. 7. As is evident, the proposed algorithm is robust to moderate hy-perparameter changes as the CoVars are substantially smaller than 1; this implies that the variance of the test set score is much smaller than the average. The learning rate causes some fluctuation in the final result, particularly for large values, whereas the other two parameters have negligible effect. 
+
+C. Wireless Tracking Application 
+
+To demonstrate the applicability of the proposed estimator in real-world tasks, we have designed a practical wireless application inspired by the current 5th Generation (5G) New Radio (NR) telecommunications standard [62]. A wireless User Equipment (UE) tracking system [63] was considered, where the UE can move along two axes with a fixed accel-eration (αx, α y ). The UE state is the 4-dimensional vector 
+
+xt = [ px,t , p y,t , v x,t , v y,t ], whose entries are dictated by: 
+
+px,t +1 = px,t + vx,t ∆t + 12 αx∆2 
+
+> t
+
++ wpx,t , (22a)   
+
+> 2During training, trajectories were split to shorter segments of length
+> Ttrunc = 20 to apply truncated BPTT. 10 learning rate
+> clip threshold
+> Ttrunc
+> 0.00
+> 0.05
+> 0.10
+> 0.15
+> 0.20
+> 0.25
+> CoVar
+
+Parameter Values 
+
+Fig. 7: Sensitivity study results for the Lorenz attractor sce-nario considering observation noise of 0 dB. 
+
+vx,t +1 = vx,t + αx∆t + wvx,t , (22b) 
+
+py,t +1 = py,t + vy,t ∆t + 12 αy ∆2 
+
+> t
+
++ wpy ,t , (22c) 
+
+vy,t +1 = vy,t + αy ∆t + wvy ,t . (22d) All state noise variables (the rightmost w terms) were assumed zero-mean Gaussian with variance of 0.1, the time interval was set to ∆t = 0 .05 sec, and the acceleration duplet was set to (0 .5, 0.5) m/sec 2. The single-antenna UE was assumed to transmit a beacon signal at every time instance. Each sensor node corresponded to a BS equipped with NA = 8 antenna el-ements, which was tasked to estimate the channel coefficients, i.e., the transfer function of the signal propagation system between itself and the UE. For each i-th BS, this channel coefficient is represented by gi,t (pt), where pt ≜ [px,t , p y,t ]⊤
+
+is the current UE 2D coordinate vector, which can be esti-mated 3 using existing channel estimation methods [64]. In our simulations, we have assumed the presence of noise during the channel estimation process, with a Signal-to-Noise Ratio (SNR) of 20 dB, leading to erroneous observation of gi,t (pt)
+
+denoted by ˆgi,t (pt). Besides the UE and the BSs, static objects known as scatterers were considered present in the scene. Those are, in general, passive environmental features (e.g., buildings, bridges, trees) that reflect the signal, creating multi-path conditions that adversely affect the estimation of the UE state. Note that, to ensure resolvability of the UE position from the considered multi-BS system, the total number of reception antennas must exceed the number of scatterers and, additionally, those antennas need to be spatially distributed, motivating the adoption of KCF-based techniques. Details of the channel model simulated are provided in the Appendix. In Fig. 8, we have fixed T = 50 , pc = 0 .4, and varied the number of scatterers from K = 20 to 50 to evaluate the performance of the proposed CA-NKCF in rich scatter-ing conditions. It is evident that the proposed UE position        
+
+> 3Notice that the channel measurements are only determined by the current UE position vector. To this end, the filter needs to incorporate past measure-ments through its GRU memory to estimate the velocity. 20 25 30 35 40 45 50
+> Number of Scatterers K
+> 2
+> 3
+> 4
+> 5
+> 6
+> Average MSE
+> EKCF
+> UKCF
+> DPF
+> CA-NKCF
+> MF-GRU
+
+Fig. 8: Average MSE versus the number of scatterers for the wireless UE tracking scenario. learning rate 
+
+> clip threshold
+> Ttrunc
+> 0.00
+> 0.05
+> 0.10
+> 0.15
+> 0.20
+> 0.25
+> 0.30
+> 0.35
+> CoVar
+
+Parameter Values 
+
+Fig. 9: Sensitivity study results for the wireless UE tracking scenario considering 40 scatterers. estimator outperforms all baselines by a pronounced margin. In addition, consistent with previous observations, the DPF benchmark exhibits particularly weak performance. While the UKCF serves as the most competitive baseline, CA-NKCF consistently surpasses it. Notably, even though our model’s performance exhibits slight variance depending on the random initialization seed, its worst-case execution strictly outper-forms the UKCF across all evaluated scattering densities. This experiment verifies that our consensus-based distributed estimation framework can achieve good performance in real-world systems. Finally, after repeating the sensitivity study of Fig. 7 for this wireless tracking application, we verified the stability of the our MA algorithm in practical applications; the results for K = 40 scatterers are depicted in Fig. 9. 
+
+D. Forward Inference Time Comparison 
+
+While the preceding evaluations demonstrate the superior estimation capabilities of our hybrid scheme, that combines Kalman-like priors with data-driven NNs, compared to tra-ditional latent state estimation algorithms, it is crucial to verify that the integration of GRUs in CA-NKCF does not incur additional latency. Table II details the forward inference 11                             
+
+> Task KCF EKCF UCKF PF CA-NKCF
+> Linear N= 4 0.0002 ---0.0001 Linear N= 32 0.0057 --0.0021 Lorenz -0.0002 0.0008 0.0102 0.0001 Wireless -0.0017 0.0003 0.0024 0.0004
+
+TABLE II: Comparison of forward inference time in seconds between the proposed CA-NKCF and conventional filters. times of all simulated estimation methods, confirming that our approach avoids computational bottlenecks. All evaluations were conducted on a 64 -bit Linux workstation. The system is equipped with an 11 th Generation Intel Core i 7 − 11700 KF processor ( 8 cores, 16 threads) operating at a base frequency of 3.60 GHz, alongside an NVIDIA GeForce RTX 3080 GPU and 32 GB of system memory. As shown from this table, the proposed CA-NKCF achieves faster execution times than standard MB estimators; this is primarily attributed to the fact that it bypasses the need for costly matrix inversions. Crucially, this efficiency ensures CA-NKCF satisfies the strict real-time causality constraint required for online tracking, as its inference time remains significantly smaller than the system’s sampling period. In contrast, scaling particle-based baselines pushes their execution time beyond the physical state update interval, rendering their predictions obsolete. VI. C ONCLUSION AND FUTURE WORK 
+
+In this paper, we presented CA-NKCF, a powerful domain-informed deep learning algorithm for online latent state es-timation in decentralized systems. The proposed estimation framework combines the representational power of NNs, the temporal modeling abilities of GRUs, and the elegant mathe-matical structure of KFs with an optimized novel lightweight consensus mechanism. Strong mathematical intuition demon-strating that the learned consensus updates promote sta-ble estimation was provided. Crucially, the proposed frame-work improves upon the communication costs of traditional information-based filters by requiring only the exchange of state priors, while completely bypassing the need for com-putationally expensive matrix inversions. Detailed numerical investigations on physics-inspired trajectories and on a realistic wireless system under extreme scattering conditions show-cased the superiority of our approach over both traditional MB and MF recurrent estimators. It was also demonstrated that the proposed hybrid architecture, hybrid combining Kalman-like priors with data-driven NNs, remains remarkably robust to reasonable hyperparameter changes. For future work, we plan on extending CA-NKCF to track-ing the state of more complicated latent processes, e.g., high-order autoregressive models and switching Markov models. Furthermore, we intend to develop distributed filters robust to Byzantine attacks and freeloaders. Mechanisms that adaptively optimize the agent network topology to improve distributed inference, leveraging bandit algorithms or reinforcement learn-ing, constitute another interesting research direction. APPENDIX 
+
+We have considered a wireless system operating at the carrier frequency f0 = 28 GHz, comprising a single-antenna UE broadcasting a beacon signal (i.e., fixed and known) at every time instance t, which is received by a set of N BSs playing the role of distributed sensor nodes. Each BS was assumed equipped with a Uniform Linear Array (ULA) of 
+
+NA = 8 antenna elements. The ULAs of all BSs were aligned with the y axis of the coordinate plane, with each BS’s adjacent antenna elements spaced at distances of λ/ 2, where 
+
+λ = c/f 0 represents the wavelength and c = 3 × 10 8 m/sec is the speed of light. Since, at every time-slot, only a single transmission took place, we assumed the UE to remain quasi-static, therefore Doppler effects were ignored. The wireless environment additionally contained K scattering objects that partially absorbed and reflected the impinging signals; the positions and properties of all scatterers remained fixed within each UE trajectory. As a result, the channel in the far field between the UE and each i-th BS ( i = 1 , 2, . . . , N ) can be expressed, similar to [65], as follows: 
+
+gi,t (pt) ≜ gD 
+
+> i,t
+
++
+
+> K
+
+X
+
+> k=1
+
+gi,k,t ∈ CNA×1, (23) where gD 
+
+> i,t
+
+is the direct link from the UE to the i-th BS and 
+
+gi,k,t is the link corresponding to the path reflected by the 
+
+k-th scatterer (modeled as a point). The gD 
+
+> i,t
+
+is defined as: 
+
+gD 
+
+> i,t
+
+≜ L(pt, pBS  
+
+> i
+
+) exp 
+
+
+
+−ȷ 2πλ ∥pt − pBS  
+
+> i
+
+∥2
+
+
+
+a(θD
+
+> i,t
+
+), (24) where pBS  
+
+> i
+
+is the position of the i-th BS (corresponding to its left-most ULA antenna element), L(pt, pBS  
+
+> i
+
+) represents signal attenuation due to pathloss: 
+
+L  pt, pBS 
+
+> i
+
+ = λ
+
+4π pt − pBS  
+
+> i2
+
+!2
+
+, (25) the exponential factor models the distance-dependent phase shift, and a(θD
+
+> i,t
+
+) is the ULA steering vector which depends on the angle θD 
+
+> i,t
+
+between the UE antenna and the first antenna element of the i-th BS. This vector models incremental phase shifts incurred by the antenna spacing, as follows: 
+
+a(θD
+
+> i,t
+
+) ≜
+
+h
+
+1, e −jπ sin( θD
+
+> i,t )
+
+, . . . , e −jπ (NA−1) sin( θD
+
+> i,t )
+
+iT
+
+. (26) Moreover, each vector gi,k,t in (23) can be expressed as: 
+
+gi,k,t = Γ kL(pt, pSC  
+
+> k
+
+)L(pSC  
+
+> k
+
+, pBS  
+
+> i
+
+) (27) 
+
+× exp 
+
+
+
+−ȷ 2πλ pt − pSC   
+
+> k2
+
++ pSC  
+
+> k
+
+− pBS  
+
+> i2
+
+
+
+a(θSC  
+
+> i,k
+
+),
+
+where Γk is the k-th scatterer reflection coefficient modeled as a complex random value with uniform amplitude and phase, 
+
+pSC  
+
+> k
+
+is its position, and θSC  
+
+> i,k
+
+denotes the angle between the 
+
+k-th scatterer and the i-th BS. To emulate the channel estimation process at the fixed SNR level of 20 dB, we have inserted additive white Gaussian noise to the actual channel vector as follows: 
+
+ˆgi,t (pt) = gi,t (pt) + vi,t , (28) where vi,t was sampled from the complex normal distribu-tion CN (0NA , σ 2CE INA ) with σCE = ∥gi,t (pt)∥F/(10 √NA).12 
+
+Therefore, following (23), the observation vector at each i-th BS sensor can be expressed as follows: 
+
+zi,t = [ Re (ˆ gi,t (pt)) , Im (ˆ gi,t (pt))] T ∈ R2NA×1, (29) where Re (·) and Im (·) represent the real and imaginary components of the channel estimation vector ˆgi,t (pt) which were appended together to form zi,t . For our simulations, we have used N = 3 BSs whose positions pBS  
+
+> i
+
+’s remained in the fixed positions (10 , 10) m, (90 , 10) m, (50 , 95) macross all UE trajectories. At the beginning of every trajectory, 
+
+pSC  
+
+> k
+
+’s were re-sampled uniformly within the bounded 2D box indicated by the coordinates of the N BSs. REFERENCES [1] R. Solomon et al. , “LumiMAS: A comprehensive framework for real-time monitoring and enhanced observability in multi-agent systems,” in 
+
+Proc. AAMAS , (Paphos, Cyprus), 2026. [2] C. Shi et al. , “IMAS2: Joint agent selection and information-theoretic coordinated perception in Dec-POMDPs,” in Proc. AAMAS , (Paphos, Cyprus), 2026. [3] M. Gruber, “An approach to target tracking,” technical report, MIT Lincoln Laboratory, Lexington, MA, 1967. [4] R. E. Larson et al. , “Application of the extended Kalman filter to ballistic trajectory estimation,” Stanford Research Institute, Tech. Rep. , 1967. [5] F. Auger et al. , “Industrial applications of the Kalman filter: A review,” 
+
+IEEE Trans. Ind. Electron , vol. 60, no. 12, pp. 5458–5471, 2013. [6] H. X. Pham and Lothers, “A distributed control framework for a team of unmanned aerial vehicles for dynamic wildfire tracking,” in Proc. IEEE/RSJ IROS , (Vancouver, Canada), 2017. [7] V. P. Anand et al. , “Simultaneous distributed acoustic and temperature sensing for robust leakage detection in gas pipelines,” J. Lightwave Techn. , vol. 44, no. 7, pp. 2849–2857, 2026. [8] R. E. Kalman, “A new approach to linear filtering and prediction problems,” J. Basic Engineering , vol. 82, pp. 35–45, 03 1960. [9] E. Wan and R. Van Der Merwe, “The unscented Kalman filter for nonlinear estimation,” in Proc. IEEE AS-SPCC , (Alberta, Canada), 2000. [10] D. Valencia et al. , “CTD4 – a deep continuous distributional actor-critic agent with a Kalman fusion of multiple critics,” in Proc. AAAI ,(Philadelphia, Pennsylvania, USA), 2025. [11] V. Vahidpour et al. , “Partial diffusion Kalman filtering for distributed state estimation in multiagent networks,” IEEE Trans. Neural Netw. Learn. Syst. , vol. 30, no. 12, pp. 3839–3846, 2019. [12] N. Shlezinger et al. , “Artificial intelligence-aided Kalman filters: AI-augmented designs for Kalman-type algorithms,” IEEE Signal Process. Mag. , pp. 2–26, 2025. [13] S. Hochreiter and J. Schmidhuber, “Long short-term memory,” Neural Computation , vol. 9, no. 8, pp. 1735–1780, 1997. [14] J. Chung et al. , “Empirical evaluation of gated recurrent neural networks on sequence modeling,” arXiv preprint: 1412.3555 , 2014. [15] A. A. Gorji and M. B. Menhaj, “Identification of nonlinear state space models using an MLP network trained by the EM algorithm,” in Proc. IEEE IJCNN , (Hong Kong, China), 2008. [16] M. Fraccaro et al. , “Sequential neural models with stochastic layers,” in 
+
+Proc. NeurIPS , (Barcelona, Spain), 2016. [17] V. G. Satorras et al. , “Combining generative and discriminative models for hybrid inference,” in Proc. NeurIPS , (Vancouver Canada), 2019. [18] A. Ghosh et al. , “DANSE: Data-driven non-linear state estimation of model-free process in unsupervised learning setup,” IEEE Trans. Signal Process. , vol. 72, pp. 1824–1838, 2024. [19] H. Coskun et al. , “Long short-term memory Kalman filters: Recurrent neural estimators for pose regularization,” in Proc. IEEE ICCV , (Venice, Italy), 2017. [20] G. Revach et al. , “KalmanNet: Neural network aided Kalman filtering for partially known dynamics,” IEEE Trans. Signal Proces. , vol. 70, pp. 1532–1547, 2022. [21] I. Buchnik et al. , “Latent-KalmanNet: Learned Kalman filtering for tracking from high-dimensional signals,” IEEE Trans. Signal Process. ,vol. 72, pp. 352–367, 2024. [22] G. Stamatelis and G. C. Alexandropoulos, “Filtering Markov jump systems with partially known dynamics: A model-based deep learning approach,” IEEE Trans. Signal Proces. (Early Acess) , 2026. [23] T. Cui et al. , “Distributed weighted average consensus fusion based on admm under measurement uncertainty,” Signal Process. , vol. 241, p. 110380, 2026. [24] A. Amirkhani and A. H. Barshooi, “Consensus in multi-agent systems: a review,” Artif. Intell. Rev. , vol. 55, p. 3897–3935, June 2022. [25] R. Olfati-Saber, “Kalman-consensus filter : Optimality, stability, and performance,” in Proc. IEEE CDC , (Shanghai, China), 2009. [26] L. Kraemer and B. Banerjee, “Multi-agent reinforcement learning as a rehearsal for decentralized planning,” Neurocomputing , vol. 190, pp. 82– 94, 2016. [27] R. Lowe et al. , “Multi-agent actor-critic for mixed cooperative-competitive environments,” in Proc. NeurIPS , (Long Beach, California, USA), 2017. [28] R. Olfati-Saber, “Distributed kalman filtering for sensor networks,” in 
+
+Proc. IEEE CDC , (New Orleans, Louisiana, USA), 2007. [29] A. T. Kamal et al. , “Information weighted consensus,” in Proc. IEEE CDC , (Maui, Hawaii, USA), 2012. [30] B. Rao et al. , “A fully decentralized multi-sensor system for tracking and surveillance,” Intern. J. Robotics Research , vol. 12, no. 1, pp. 20–44, 1993. [31] R. Deshmukh et al. , “Optimal discrete-time kalman consensus filter,” in 
+
+Proc. ACC , (Seattle, Washington, USA), 2017. [32] S. Khan et al. , “Optimal Kalman filter with information-weighted consensus,” IEEE Trans. Autom. Control , vol. 68, no. 9, pp. 5624–5629, 2023. [33] C. Hu and B. Chen, “An efficient distributed Kalman filter over sensor networks with maximum correntropy criterion,” IEEE Trans. Signal Inf. Process. Networks , vol. 8, pp. 433–444, 2022. [34] B. Lian et al. , “Distributed Kalman consensus filter for estimation with moving targets,” IEEE Trans. Cybern. , vol. 52, no. 6, pp. 5242–5254, 2022. [35] Q. Liu et al. , “Distributed Kalman filtering under two-bitrate peri-odic coding strategies,” IEEE Trans. Autom. Control , vol. 69, no. 12, pp. 8633–8646, 2024. [36] D. Ghion and M. Zorzi, “Distributed Kalman filtering with event-triggered communication: a robust approach,” in Proc. Medit. Conf. Control Autom. , (Athens, Greece), 2022. [37] A. Moradi et al. , “Privacy-preserving distributed Kalman filtering,” IEEE Trans. Signal Process. , vol. 70, pp. 3074–3089, 2022. [38] C. M. Carvalho et al. , “Particle learning and smoothing,” Statistical Science , vol. 25, no. 1, pp. 88–106, 2010. [39] I. Urtcaga et al. , “Sequential monte carlo methods under model uncer-tainty,” in Proc. IEEE SSP , (Palma de Mallorca, Spain), 2016. [40] P. Doshi and P. J. Gmytrasiewicz, “A particle filtering based approach to approximating interactive POMDPs,” in Proc. AAAI , (Pittsburgh, Pennsylvania, USA), 2005. [41] M. Coates, “Distributed particle filters for sensor networks,” in Proc. ACM IPSN , (Berkeley, California, USA), 2004. [42] G. Revach et al. , “RTSNet: Learning to smooth in partially known state-space models,” IEEE Trans. Signal Process. , vol. 71, pp. 4441–4456, 2023. [43] R. G. Krishnan et al. , “Structured inference networks for nonlinear state space models,” in Proc. AAAI , (San Francisco, California, USA), 2017. [44] R. G. Krishnan et al. , “Deep Kalman filters,” arXiv preprint: 1511.05121 , 2015. [45] M. Fraccaro et al. , “A disentangled recognition and nonlinear dynamics model for unsupervised learning,” in Proc. NeurIPS , (Long Beach, California, USA), 2017. [46] N. Shlezinger et al. , “Model-based deep learning,” Proc. IEEE , vol. 111, no. 5, pp. 465–499, 2023. [47] H. K. Aggarwal et al. , “MoDL: Model-based deep learning architecture for inverse problems,” IEEE Trans. Medical Imag. , vol. 38, no. 2, pp. 394–405, 2019. [48] A. Gast et al. , “DCD-MUSIC: Deep-learning-aided cascaded differen-tiable MUSIC algorithm for near-field localization of multiple sources,” in Proc. IEEE ICASSP , (Hyderabad, India), 2025. [49] H. Cai et al. , “Learned robust PCA: a scalable deep unfolding approach for high-dimensional outlier detection,” in Proc. NeurIPS , (Virtual), 2021. [50] M. Raissi et al. , “Physics-informed neural networks: A deep learning framework for solving forward and inverse problems involving nonlinear partial differential equations,” J. Comput. Physics , vol. 378, pp. 686–707, 2019. [51] C. Zhou et al. , “Dual-balancing for physics-informed neural networks,” in Proc. IJCAI , (Montreal Canada), 2025. 13 
+
+[52] K. Stylianopoulos et al. , “Graph-CNNs for RF imaging: Learning the electric field integral equations,” in Proc. EUSIPCO , (Palermo, Italy), 2025. [53] R. Zhu et al. , “U-PINet: Physics-informed hierarchical learning for radar cross section prediction via 3D electromagnetic scattering reconstruc-tion,” arXiv preprint: 2508.03774 , 2025. [54] A. Vaswani et al. , “Attention is all you need,” arXiv preprint arXiv:1706.03762 , 2017. [55] OpenAI, “Dota 2 with large scale deep reinforcement learning,” arXiv preprint: 1912.06680 , 2019. [56] W. Kim and Y. Sung, “Parameter sharing with network pruning for scalable multi-agent deep reinforcement learning,” in Proc. AAMAS ,(London, United Kingdom), 2023. [57] M. Kaushik et al. , “Parameter sharing reinforcement learning archi-tecture for multi agent driving,” in Proc. AIR, ACM International Conference Proceedings Series , (Chennai, India), 2019. [58] W. Ren and R. Beard, “Consensus seeking in multiagent systems under dynamically changing interaction topologies,” IEEE Trans. Autom. Control , vol. 50, no. 5, pp. 655–661, 2005. [59] R. Olfati-Saber et al. , “Consensus and cooperation in networked multi-agent systems,” Proc. IEEE , vol. 95, no. 1, pp. 215–233, 2007. [60] D. P. Kingma and J. Ba, “Adam: A method for stochastic optimization,” 
+
+arXiv preprint: 1412.6980 , 2017. [61] K. Greff et al. , “Lstm: A search space odyssey,” IEEE Trans Neural Netw. Learn. Syst. , vol. 28, no. 10, pp. 2222–2232, 2017. [62] 3GPP, “NR; Physical channels and modulation,” Technical Specification TS 38.211, 3rd Generation Partnership Project (3GPP), 2020. [63] H. Wymeersch and G. Seco-Granados, “Radio localization and sens-ing—Part i: Fundamentals,” IEEE Commun. Lett. , vol. 26, no. 12, pp. 2816–2820, 2022. [64] L. Italiano et al. , “A tutorial on 5G positioning,” IEEE Commun. Surveys & Tuts. , vol. 27, no. 3, pp. 1488–1535, 2025. [65] A. M. Sayeed, “Deconstructing multiantenna fading channels,” IEEE Trans. Signal Process. , vol. 50, no. 10, pp. 2563–2579, 2002.
