@@ -1,0 +1,959 @@
+Title: Iterated Invariant EKF for 3D Landmark-Aided Inertial Navigation
+
+URL Source: https://arxiv.org/pdf/2607.00145v1
+
+Published Time: Thu, 02 Jul 2026 00:12:29 GMT
+
+Number of Pages: 20
+
+Markdown Content:
+# Iterated Invariant EKF for 3D Landmark-Aided Inertial Navigation ⋆
+
+Hilton Marques Souza Santana 1[0000 −0002 −2840 −2904] , Jo˜ ao Carlos Virgolino Soares 2[0000 −0002 −6278 −378 X], and Marco Antonio Meggiolaro 1[0000 −0002 −6240 −8189]  
+
+> 1
+
+Pontifical Catholic University of Rio de Janeiro, Rio de Janeiro, Brazil 
+
+hiltonmarques@gmail.com  
+
+> 2
+
+Dynamic Legged Systems Lab, Istituto Italiano di Tecnologia, Genova, Italy 
+
+Abstract. Inertial navigation systems aided by three-dimensional land-mark measurements constitute a fundamental problem in robotic percep-tion and state estimation. Classical SO(3)-based Extended Kalman Filter (SO(3)-EKF) approaches provide practical solutions, but suffer from the false observability problem, in which the filter becomes overconfident in unobservable directions, leading to degraded estimation performance. The Invariant EKF (IEKF) addresses this limitation by reformulating the system dynamics as a group-affine system on a Lie group, although its measurement update does not fully satisfy certain state compatibil-ity properties. More recently, the Iterated Invariant EKF (IterIEKF) was proposed to further improve the IEKF by ensuring, in the low-noise regime, that the estimated state remains on the observed state manifold while the uncertainty is confined to its tangent space. In this work, we formulate and apply the IterIEKF to landmark-based inertial 3D local-ization for the first time. Through numerical simulations, we show that the proposed approach outperforms the classical SO(3)-EKF, the Iter-ated SO(3)-EKF, and the IEKF in terms of both estimation accuracy and consistency. 
+
+Keywords: Kalman Filter · Localization · Sensor Fusion. 
+
+## 1 Introduction 
+
+The necessity of estimating the state of a mobile system, including its position, orientation, and velocity, has been a fundamental challenge throughout the his-tory of navigation. The use of celestial landmarks for localization spans several millennia. In particular, mariners in the Northern Hemisphere estimated their latitude by measuring the elevation of the North Star (Polaris) above the hori-zon [1, pg. 2]. These early navigation techniques relied on identifiable, static fea-tures in the environment, giving rise to the modern notion of landmarks as fixed  
+
+> ⋆
+
+This study was financed in part by the Coordena¸ c˜ ao de Aperfei¸ coamento de Pessoal de N´ ıvel Superior – Brasil (CAPES) – Finance Code 001 and the Funda¸ c˜ ao de Amparo ` a Pesquisa do Estado do Rio de Janeiro (FAPERJ).  
+
+> arXiv:2607.00145v1 [cs.RO] 30 Jun 2026 2H. Santana et al.
+
+reference points that can be repeatedly observed to infer an agent’s state. Dur-ing the mid-twentieth century, the success of the Apollo missions demonstrated that robust navigation required not only observations of external landmarks, such as stars, but also accurate inertial measurements from accelerometers and gyroscopes. The fusion of inertial and exteroceptive sensing established many of the principles that underpin modern state estimation. Since the early 2000s, the emergence of Micro Aerial Vehicles (MAVs), together with the widespread availability of sophisticated sensing technologies, including RGB-D cameras, Li-DARs, and high-performance embedded computing platforms, has enabled real-time state estimation and map reconstruction in increasingly complex environ-ments [11]. These technological advances have made it practical to address the Simultaneous Localization and Mapping problem [9]. The classical algorithmic foundation for landmark-based localization for au-tonomous mobile robots was established in [14]. This framework relies on two key stages: landmark detection within the scene, followed by data association (or matching), which evaluates whether an observed feature has been previ-ously cataloged or represents a new landmark. In this work, we consider a 3D MAV navigating with inertial sensors through an environment where a prior map has already been constructed and features are uniquely identifiable, mean-ing the underlying data association problem is assumed to be solved. Then, we combine exteroceptive updates (measurements of known landmarks) and pro-prioceptive inputs (inertial measurements), also called Visual-Inertial Odometry (VIO), through a unified probabilistic framework in order to obtain a real-time state estimate of the robot. Probabilistic filtering methods, particularly those based on the Extended Kalman Filter (EKF), have played a central role in landmark-aided inertial navi-gation over the past decades. One of its earliest applications to inertial navigation with a vehicle equipped with an Inertial Measurement Unit (IMU) and capable of autonomously measuring its relative position with respect to a pre-built three-dimensional map was presented in [21]. That work formulated an SO(3)-EKF (also known as Multiplicative-EKF or Quaternion-EKF [16]) for the precision landing of a spacecraft using observations of known planetary landmarks. Sub-sequently, Li and Mourikis [15] showed that this standard formulation suffers from the so-called false observability problem, motivating the development of constrained filters. Later, a seminal study by Barrau and Bonnabel [2] demon-strated that false observability fundamentally arises from the choice of error-state parameterization and can be mitigated by exploiting the symmetry of the underlying system through the Invariant Extended Kalman Filter (IEKF). The IEKF was later applied to indoor MAV navigation in [6], where it demonstrated superior estimation performance compared to conventional EKF formulations. Nevertheless, the classical IEKF still relies on a first-order linearization of the measurement model about the predicted state, which may degrade estimation accuracy in highly nonlinear scenarios. To overcome this limitation, Goffin et al. [12] proposed the Iterated IEKF (IterIEKF), which performs a sequence of local optimization steps to estimate the mode of the posterior distribution while Iterated Invariant EKF for 3D Landmark-Aided Inertial Navigation 3
+
+reducing the impact of first-order approximation errors. The IterIEKF has re-cently demonstrated improved convergence properties for state estimation of a quadrupedal robot in [17]. In this work, we apply the IterIEKF framework for the first time to a MAV equipped with an IMU capable of measuring its relative position to known envi-ronmental landmarks. Through extensive Monte Carlo simulations evaluated on one of the EuRoC MAV datasets [7], we demonstrate that the IterIEKF outper-forms the standard SO(3)-EKF, its iterated variant (IterSO(3)-EKF), and the standard IEKF in terms of state estimation accuracy and statistical consistency. More specifically, the primary contributions of this paper are summarized as follows: 
+
+– We derive complete mathematical formulations of both invariant and multi-plicative iterated filters tailored for landmark-aided MAV state estimation. To the best of our knowledge, the complete algorithmic derivation of the IterIEKF in this specific framework is presented here for the first time. 
+
+– We provide a systematic comparative study analyzing the direct impact of iterative invariant updates on both the trajectory accuracy and the statis-tical consistency of the estimated states. Through controlled Monte Carlo trials, we demonstrate that the IterIEKF yields substantial improvements in consistency metrics, resulting in an error reduction of approximately 80% in the estimated position and linear velocity vectors. 
+
+– We present an in-depth analysis of online IMU bias estimation dynamics, demonstrating that while the accelerometer bias remains difficult to fully observe across all evaluated filters, the IterIEKF consistently achieves the most accurate profile overall. The work will be structured as follows. In Section 2, we provide a com-prehensive review of the relevant literature, highlighting the key contributions and limitations of existing approaches. Section 3 introduces the mathematical background necessary for understanding the described filters. Section 4 details a simple example that highlights the geometrical aspect behind IterIEKF. From Sections 5 to 8 we describe all filter derivations, including the SO(3)-EKF, IterSO(3)-EKF, IEKF, and IterIEKF. In Section 9 we present the results of our Monte Carlo experiments, comparing the performance of the different filters in terms of accuracy and consistency. Finally, we conclude with a discussion of our findings and potential directions for future research in Section 10. 
+
+## 2 Related Work 
+
+The landscape of visual-inertial state estimation has evolved significantly, shift-ing from traditional local coordinate representations to geometrically principled invariant frameworks and high-fidelity iterative updates. 
+
+2.1 Multiplicative and Invariant Visual-Inertial Estimators 
+
+Early frameworks for landmark-aided localization primarily focused on absolute positioning and landing applications. For instance, Trawny et al. [21] developed a 4 H. Santana et al. 
+
+vision-aided inertial navigation system specifically optimized for pin-point land-ing, relying on observations of pre-mapped landmarks. While highly effective for localized target tracking, classical SO(3)-EKF frameworks are fundamentally hindered by consistency issues. This limitation was thoroughly dissected by Li and Mourikis [15], who demonstrated that conventional VIO formulations suffer from false observability, where the filter erroneously gains information along un-observable directions, such as yaw and global position, leading to overoptimistic covariance estimates and degraded accuracy. To resolve these consistency mismatches, Barrau and Bonnabel introduced the IEKF framework [2]. Later, Brossard et al. [6] applied it directly to visual-inertial SLAM. By parameterizing the state error using Lie group actions, the IEKF guarantees that the error kinematics remain independent of the robot’s ab-solute trajectory. This mathematical property inherently eliminates the false ob-servability problem without requiring artificial modifications like First-Estimates Jacobians. Our work builds directly upon this invariant paradigm, extending it from a single-step propagation-update loop to an optimization-driven iterative routine tailored for MAV setups. 
+
+2.2 Iterated and Manifold-Based Filtering 
+
+Parallel to the development of invariant filtering, iterated Kalman filters emerged as an effective approach to reduce the linearization errors introduced by highly nonlinear measurement models. In the context of visual-inertial odometry, Bloesch et al. [4] proposed an iterated EKF that combines direct photometric feed-back with manifold-based state representations for rotations and landmark bear-ing vectors, improving robustness through iterative measurement refinement. Later, He et al. [13] generalized this methodology into a canonical framework for Kalman filtering on differentiable manifolds, enabling generic iterated error-state filters on arbitrary product manifolds. However, neither approach explicitly addresses the consistency issues arising from the incorrect linearization of un-observable directions, and therefore, they do not resolve the false-observability problem. Bridging the gap between geometric tracking and invariant filtering, Goffin et al. [12] introduced the Iterated IEKF. By fusing Lie group invariance with manifold-aware Gauss-Newton iterations, the IterIEKF solves the maximum a posteriori (MAP) estimation problem while confining uncertainty in the tangent space of the observed submanifold. While their initial framework demonstrated remarkable performance on legged quadrupedal platforms [17], its application to unconstrained, high-velocity 3D aerial robotics has yet to be fully explored. In contrast to the aforementioned literature, this paper presents the first explicit application and evaluation of the IterIEKF for a 3D MAV executing navigation loops via relative position observations to mapped landmarks. Un-like traditional VIO methods [21, 15] that suffer from false observability, and conventional iterated manifold filters [4, 13] that lack invariant error dynam-ics, our formulation combines the statistical consistency of invariant mechanics with the high-accuracy tracking of iterated update steps. We provide a rigorous, Iterated Invariant EKF for 3D Landmark-Aided Inertial Navigation 5
+
+simulation-backed verification of this approach under extensive Monte Carlo tri-als, explicitly detailing the filter’s superiority in state accuracy, consistency, and online IMU bias estimation. 
+
+## 3 Mathematical Background 
+
+We define the robot true state at instant ti as being the orientation ( Ri ∈ SO(3)), base velocity ( vi ∈ R3), position ( pi ∈ R3), all relative to the world frame, and IMU gyroscope and accelerometer bias ( bg , ba ∈ R3). In this work, the robot state is embedded into two distinct matrix Lie groups, SE 2(3) × R6 [6] and SO(3) × R12 [21]: 
+
+Xi := 
+
+
+
+Ri vi pi
+
+01,3 1 0
+
+01,3 0 1
+
+ 05,7
+
+07,5
+
+ I6
+
+bg,i 
+
+ba,i 
+
+
+
+01,6 1
+
+
+
+∈ SE 2(3) × R6,
+
+xi := {Ri, vi, pi, bg,i , ba,i } ∈ SO(3) × R12 .
+
+(1) Every matrix Lie group G has an associated Lie algebra g of the same dimension 
+
+n. We define the isomorphisms between g and Rn as: Hat : Rn → g, v 7 → v∧ =
+
+> n
+
+X
+
+> i=1
+
+viEi, (2) Vee : g → Rn, v∧ 7 → (v∧)∨ = v =
+
+> n
+
+X
+
+> i=1
+
+viei, (3) where {Ei} and {ei} are bases for g and Rn. In this work, we use the Rn represen-tation of g. Both spaces are related by the local homeomorphism exp G : g → G,where v∧ 7 → exp G(v∧) = P∞  
+
+> i=0 v∧i
+> i!
+
+, and its inverse log G : G → g. We define Exp G(v) := exp G(v∧) and Log G(X ) := log G(X )∨ for v ∈ Rn, X ∈ G. Following [20], we overload the left- and right-⊕ operations, left-⊕ : G × Rn → G, X ⊕ u = X Exp( u),
+
+right-⊕ : Rn × G → G, u ⊕ X = Exp( u)X , (4) and approximate the exponential map for ∥u∥ ≈ 0 using the right-Jacobian 
+
+Jr,G (·): Exp G(a + u) ≈ Exp G(a) ⊕ J r,G (a)u. (5) The Lie algebra is important because it accommodates the error-state vectors of the respective filters [3]. In this work, we adopt a right-invariant error parame-terization, defining the error-states as zero-mean Gaussian random variables as follows: ξi := Log SE 2(3) ×R6 (Xi ¯X −1 
+
+> i
+
+), ξi ∼ N (015 ,1, Pi),δxi := Log SO(3) ×R12 (xi ¯x−1 
+
+> i
+
+), δxi ∼ N (015 ,1, Σi). (6) 6 H. Santana et al. 
+
+The exponential, logarithmic, and right-Jacobians for the isolated Lie groups SE 2(3) and SO(3) are detailed in [17, Appendix I]. Their algebraic extension to the Cartesian product with Rk vector spaces is straightforwardly obtained by forming block-diagonal matrices composed of the original group operators and identity matrices of matching dimensions. 
+
+## 4 Motivating Example 
+
+We start by motivating the proposed formulation, IterIEKF, with a simple exam-ple containing three landmarks and almost noise-free measurements (see Fig. 1). This example can be considered the extended 3D version of the motivating ex-ample presented in [17, Section IV]. Let X be the current true state of the MAV; we assume at this moment that the robot can measure, with almost noise-free conditions, its relative position to three landmarks, b1, b2, and b3. Each mea-surement defines a submanifold where the robot could have been located when obtaining that measurement. We denote this submanifold as the observed set 
+
+SX −1dk=yk [17, Definition 1]. The three submanifolds originated by the three measurements are shown in Fig. 1a. At this moment, our noisy nominal state ¯X ,with covariance P, is far from the true state and receives all three measurements. We perform the update step with these measurements in a consecutive manner, using SO(3)-EKF, IEKF, IterSO(3)-EKF, and IterIEKF. The results are shown in Figs. 1b, 1c, 1d, and 1e. We can observe that SO(3)-EKF does not reach any observed set, while IEKF and IterSO(3)-EKF reach only the first. Finally, IterIEKF reaches the intersection of the three observed sets, which corresponds to the true state. This behavior is due to the main property of IterIEKF, which ensures that, after each update step, the estimated state is kept on the observed state manifold while the uncertainty is confined to its tangent space; i.e., there is no uncertainty transversal to the submanifold [12, Theorem 1]. This implies that, if the method converges, the final state after the last update step will lie exactly on the intersection of the three submanifolds [12, Theorem 2]. 
+
+## 5 Discrete-Time Inertial Model 
+
+We assume the system dynamics is governed by IMU measurements, an old ap-proach known as strapdown navigation [10]. In this approach, the high-frequency dynamics evolution is obtained by integrating the IMU measurements, i.e., the angular velocity ˜ ωI,i and linear acceleration ˜ aI,i . We denote by the subscript 
+
+I all quantities expressed in the IMU frame. We assume the measurements are piecewise constant over the time interval [ ti, t i + ∆t ] and that they are corrupted by additive white Gaussian noise and biases modeled as zero-mean random walks: ˜ωI,i = ωI,i + wg,i + bg,i , wg,i ∼ N (03,1, Qg ), (7) ˜aI,i = aI,i + wa,i + ba,i , wa,i ∼ N (03,1, Qa), (8) 
+
+bg,i +1 = bg,i + wbg,i ∆t, wbg,i ∼ N (03,1, Qbg ), (9) Iterated Invariant EKF for 3D Landmark-Aided Inertial Navigation 7
+
+(a) (b) 
+
+(c) (d) (e) 
+
+Fig. 1: a) Setup of a simple localization problem with three landmarks and almost noise-free measurements. b) Three consecutive updates with SO(3)-EKF. No update lies in the observed sets. c) Three consecutive updates with IEKF using almost noise-free measurements. Only the first update lies in the first observed set. d) Three consecutive updates with IterSO(3)-EKF. Only the first update lies in the observed sets. The other updates did not converge. e) Three consecutive updates with IterIEKF. All updates lie in the observed sets, with the last update lying on their intersection. 
+
+ba,i +1 = ba,i + wba,i ∆t, wba,i ∼ N (03,1, Qba ). (10) In this work, the nominal state is propagated through the system dynamics, while the error state is propagated through the linearized dynamics. The error state propagation is discussed in Section 7 for the invariant filters and Section 8 for the multiplicative filters. The system dynamics for all filters considered in this work are governed by the IMU inputs and given by [19, 18]: ¯xi|i−1 := Fi−1(¯ xi−1, ˜ωI,i −1, ˜aI,i −1, ∆t )
+
+≈
+
+
+
+¯Ri−1 ⊕ ( ˜ ωI,i −1 − ¯bg,i −1)∆t 
+
+¯vi−1 + [ ¯Ri−1(˜ aI,i −1 − ¯ba,i −1) + g]∆t 
+
+¯pi−1 + ¯ vi−1∆t + [ ¯Ri−1(˜ aI,i −1 − ¯ba,i −1) + g] ∆t 2
+
+> 2
+
+¯bg,i −1
+
+¯ba,i −1
+
+ , (11) where g := [0 , 0, −9.81] T and the nominal biases are kept constant during the propagation step. Notice that Eq. 11 is also used to obtain X i|i−1 [5]. 8 H. Santana et al. 
+
+## 6 3D Landmark Measurement Model 
+
+Let bk represent a known landmark in the scene where the MAV is navigating. The MAV can measure the relative position of the landmark bk at instant ti
+
+with respect to its IMU frame I, which is denoted as yk,i . This measurement model can be expressed as follows: 
+
+yk,i = RTi (bk − pi) + nk,i , nk,i ∼ N (03,1, Nk,i ), (12) or alternatively through the group action of SE 2(3) × R6 required by invariant filter formulations [3]: ˜yk,i := 
+
+
+
+RTi (bk − pi) + nk,i 
+
+01
+
+07,1
+
+
+
+=
+
+RTi −RTi vi −RTi pi
+
+01,3 1 0
+
+01,3 0 1
+
+ 05,7
+
+07,5
+
+ I6
+
+−bg,i 
+
+−ba,i 
+
+
+
+01,6 1
+
+
+
+bk
+
+01
+
+07,1
+
+ +
+
+nk,i 
+
+09,1
+
+
+
+:= X −1 
+
+> i
+
+dk + ˜ nk,i ,
+
+(13) where ˜ nk,i ∼ N (012 ,1, ˜Nk,i := diag( Nk,i , 09,9)). When a set of landmarks {bk}Kk=1 is observed simultaneously at the same time instant ti, Eq. (12) can be stacked into a single consolidated measurement vector yi ∈ R3K given by: 
+
+yi := 
+
+
+
+y1,i 
+
+...
+
+yK,i 
+
+ =
+
+
+
+RTi (b1 − pi)...
+
+RTi (bK − pi)
+
+ + ¯ ni, (14) where ¯ ni ∼ N (03K, 1, ¯Ni := diag( N1,i , . . . , NK,i )), while Eq. (13) is stacked to form the augmented measurement vector ˜ yi ∈ R12 K :˜yi := 
+
+
+
+˜y1,i 
+
+...˜yK,i 
+
+ =
+
+
+
+X −1 
+
+> i
+
+012 ,12 · · · 012 ,12 
+
+012 ,12 X −1 
+
+> i
+
+· · · 012 ,12 
+
+... ... . . . ...
+
+012 ,12 012 ,12 · · · X −1
+
+> i
+
+
+
+d1
+
+...
+
+dK
+
+ +
+
+
+
+˜n1,i 
+
+...˜nK,i 
+
+
+
+:= X −1aug ,i d + naug ,i .
+
+(15) In practical applications, the measurement model in Eq. (12) is typically com-posed with an observation function determined by the sensing modality used to Iterated Invariant EKF for 3D Landmark-Aided Inertial Navigation 9
+
+detect the landmarks. For monocular and stereo cameras, this observation func-tion is given by the perspective projection of the landmark onto the image plane, whereas LiDAR and RGB-D sensors provide direct three-dimensional measure-ments (or equivalently range-based measurements) of the landmark. Although such sensor-specific observation models are omitted here for simplicity, they can be readily incorporated into the proposed estimation framework by composing Eq. (12) with the corresponding observation function [8]. 
+
+## 7 IEKF and IterIEKF 
+
+In this section, we describe the prediction and update steps for both the IEKF and IterIEKF formulations. 
+
+7.1 Prediction Step for Invariant Filtering 
+
+The prediction step for both IEKF and IterIEKF is identical and corresponds to the propagation of the right-invariant error ξi. This is obtained by linearizing the error kinematics: 
+
+ξi|i−1 = Log SE 2(3) ×R6 (Xi ¯X −1
+
+> i|i−1
+
+) ≈ Ai−1ξi−1 + Bi−1wi−1, (16) where wi−1 ∼ N (012 ,1, Qi−1), with the grouped noise covariance defined as 
+
+Qi−1 := diag( Qg,i −1, Qa,i −1, Qbg,i −1, Qba,i −1)), and the system matrices defined as [5, 18]: 
+
+Gi−1 = − ¯Ri|i−1Jr
+
+
+
+( ˜ ωI,i −1 − ¯bg,i −1)∆t 
+
+
+
+∆t, (17) 
+
+Ai−1 =
+
+
+
+I3 03 03 Gi−1 03
+
+g∧∆t I3 03 ¯v∧
+
+> i|i−1
+
+Gi−1 − ¯Ri−1∆t 
+
+g∧∆t 2/2 I3∆t I3 ¯p∧
+
+> i|i−1
+
+Gi−1 − ¯Ri−1∆t 2/2
+
+03 03 03 I3 03
+
+03 03 03 03 I3
+
+ , (18) 
+
+Bi−1 =
+
+
+
+Gi−1 03 03 03
+
+¯v∧
+
+> i|i−1
+
+Gi−1 − ¯Ri−1∆t 03 03
+
+¯p∧
+
+> i|i−1
+
+Gi−1 − ¯Ri−1∆t 2/2 03 03
+
+03 03 I3∆t 03
+
+03 03 03 I3∆t 
+
+ . (19) From this linearization, the state covariance is propagated via: 
+
+Pi|i−1 ≈ Ai−1Pi−1ATi−1 + Bi−1Qi−1BTi−1. (20) 10 H. Santana et al. 
+
+7.2 Update Step for Invariant Filtering 
+
+We define the innovation for the invariant filtering update step using the alge-braic structures from Eq. (13). For a right-invariant error definition, the innova-tion vector is expressed as [3]: 
+
+zk,i := ¯Xi|i−1 ˜yk,i − dk
+
+= ¯Xi|i−1X −1 
+
+> i
+
+dk − dk + ¯Xi|i−1 ˜nk,i 
+
+= δX −1 
+
+> i
+
+dk − dk + ¯Xi|i−1 ˜nk,i 
+
+= Exp( ξi)−1dk − dk + ¯Xi|i−1 ˜nk,i ,
+
+(21) where δXi := Xi ¯X −1 
+
+> i|i−1
+
+:= Exp( ξi) represents the right-invariant state error. The standard first-order Lie group approximation Exp( ξi)−1 ≈ I − ξ∧ 
+
+> i
+
+is applied to simplify the deterministic component: Exp( ξi)−1dk − dk ≈ − ξ∧ 
+
+> i
+
+dk
+
+= −
+
+ξ∧ 
+
+> i, SE 2(3)
+
+05,7
+
+07,5 ξ∧
+
+> i, R6
+
+
+
+dk
+
+= −
+
+
+
+(ξR 
+
+> i
+
+)∧bk + ξv 
+
+> i
+
+(0) + ξp 
+
+> i
+
+(1) + ξbg 
+
+> i
+
+(0) 
+
+01,3(bk) + 0(0) + 0(1) 
+
+01,3(bk) + 0(0) + 0(1) 
+
+01,3(ξbg 
+
+> i
+
+)
+
+01,3(ξba 
+
+> i
+
+)
+
+
+
+=
+
+ b∧ 
+
+> k
+
+03 −I3 03,6
+
+09,3 09,3 09,3 09,6
+
+
+
+ξR
+
+> i
+
+ξv
+
+> i
+
+ξp
+
+> i
+
+ξbg
+
+> i
+
+ξba
+
+> i
+
+ := Hkξi.
+
+(22) Substituting this back into Eq. (21) yields the linearized innovation: 
+
+zk,i ≈ Hkξi + ˆ nk,i , (23) where ˆ nk,i ∼ N (012 ,1, ˆNk,i := ¯Xi|i−1 ˜Nk,i ¯X Ti|i−1). Given that the trailing rows of zk,i are zero, the formulation can be reduced down to a 3-dimensional subsystem by projecting out the top block: ˜zk,i := [ zk,i ]1:3 ≈ ˜Hk,i ξi + ˆ˜nk,i , (24) where the reduced measurement matrix is: ˜Hk,i := b∧ 
+
+> k
+
+03 −I3 03,6
+
+ , (25) and ˆ˜nk,i ∼ N (03,1, ˆ˜Nk,i := ¯Ri|i−1Nk,i ¯RTi|i−1). Iterated Invariant EKF for 3D Landmark-Aided Inertial Navigation 11 
+
+For a simultaneous collection of K visual or spatial landmarks, the measure-ment structures are vertically stacked into a unified system framework: 
+
+zi =
+
+
+
+˜z1,i 
+
+...˜zK,i 
+
+ =
+
+
+
+b∧ 
+
+> 1
+
+03 −I3 03,6
+
+... ... ... ...
+
+b∧ 
+
+> K
+
+03 −I3 03,6
+
+ ξi +
+
+
+
+ˆ˜n1,i 
+
+...ˆ˜nK,i 
+
+ = Hiξi + ˜ ni, (26) where the collective stacked noise distribution tracks as ˜ni ∼ N (03K, 1, ˜Ni := diag( ˆ˜N1,i , . . . , ˆ˜NK,i )) . (27) The main difference between IterIEKF and IEKF is that instead of per-forming the linearization in Eq. 23 once per update, it applies a Gauss-Newton iterative method to linearize the innovation multiple times until convergence [12]. For the right-invariant error, this Gauss-Newton Sequence was obtained in [17]. We adapted this loop to be able to handle K visible landmarks, resulting in the following: 
+
+Φj = Exp SO(3) (−[ξji ]1:3 ), (28) 
+
+f jk = [Exp( −ξji )dk − dk]1:3 , k = 1 , . . . , K, (29) 
+
+Hji = diag( Φj , . . . , Φj
+
+| {z } 
+
+> Ktimes
+
+)HiJr, SE 2(3) ×R6 (−ξji ), (30) 
+
+Sji = Hji Pi|i−1(Hji )T + ˜Ni, (31) 
+
+Kji = Pi|i−1(Hji )T (Sji )−1, (32) 
+
+ξj+1  
+
+> i
+
+= Kji (zi − vec( f j 
+
+> 1
+
+, . . . , f jK ) + Hji ξji ), (33) 
+
+ξ0 
+
+> i
+
+:= 015 ,1. (34) Finally, let l denote the last iteration, then the update step for the right-invariant error IterIEKF is given as follows: ˆξi := ξli, (35) ¯Xi := ¯Xi|i := ˆξi ⊕ ¯Xi|i−1, (36) 
+
+Pi := Pi|i = ( I15 − K0 
+
+> i
+
+H0 
+
+> i
+
+)Pi|i−1, (37) To obtain the last iteration, we implemented as a stopping criterion the condition 
+
+∥ξj−1 − ξj ∥ < δ , where δ = 10 −4. We also implemented a second optional stopping criterion based on the computation of the loss in [17, Eq. 34]. If it increases, the algorithm stops. 
+
+## 8 SO(3)-EKF and IterSO(3)-EKF 
+
+In this section, we describe the prediction and update steps for both the stan-dard SO(3)-EKF and the IterSO(3)-EKF, also widely known as Multiplicative-EKF [16]. These formulations serve as the non-invariant reference baselines for our comparative study. 12 H. Santana et al. 
+
+8.1 Prediction Step for Multiplicative Filtering 
+
+The prediction step for these filters corresponds to the propagation of the stan-dard multiplicative local error state δxi. This is obtained by linearizing the discrete-time error kinematics around the nominal state trajectory [19]: 
+
+δxi|i−1 = Log SO(3) ×R12 (xi ¯x−1
+
+> i|i−1
+
+) ≈ ¯Ai−1δxi−1 + ¯Bi−1wi−1, (38) where: 
+
+Fi−1 = −[ ¯Ri−1(˜ aI,i −1 − ¯ba,i −1)] ∧, (39) ¯Ai−1 =
+
+
+
+I3 03 03 Gi−1 03
+
+Fi−1∆t I3 03 03 − ¯Ri−1∆t 
+
+Fi−1 ∆t 2 
+
+> 2
+
+I3∆t I3 03 − ¯Ri−1 ∆t 2
+
+> 2
+
+03 03 03 I3 03
+
+03 03 03 03 I3
+
+ , (40) ¯Bi−1 =
+
+
+
+Gi−1 03 03 03
+
+03 − ¯Ri−1∆t 03 03
+
+03 − ¯Ri−1 ∆t 2 
+
+> 2
+
+03 03
+
+03 03 I3∆t 03
+
+03 03 03 I3∆t 
+
+ . (41) Using this linearization, the state error covariance Σ is propagated forward in time through: 
+
+Σi|i−1 ≈ ¯Ai−1Σi−1 ¯ATi−1 + ¯Bi−1Qi−1 ¯BTi−1. (42) 
+
+8.2 Update Step for Multiplicative Filtering 
+
+For the multiplicative baseline, the measurement innovation is derived directly from the standard observation vector mapping in Eq. (12). Expanding using standard multiplicative perturbation steps ( Ri ≈ (δϕi) ⊕ ¯Ri and pi = ¯ pi + δpi), the measurement innovation yields: 
+
+δzk,i := yk,i − ¯RTi (bk − ¯pi)=  δϕi ⊕ ¯Ri
+
+T (bk − ¯pi − δpi) − ¯RTi (bk − ¯pi) + nk,i 
+
+≈ ¯RTi (−δϕ∧ 
+
+> i
+
+)( bk − ¯pi) − ¯RTi δpi + nk,i 
+
+= ¯RTi (bk − ¯pi)∧δϕi − ¯RTi δpi + nk,i ,
+
+(43) which yields the measurement Jacobian matrix: ¯Hk,i (¯ xi) :=  ¯RTi (bk − ¯pi)∧ 03 − ¯RTi 03,6
+
+ . (44) For a tracking sequence containing K visible spatial features, the observation parameters are vertically concatenated: 
+
+fk(¯ xi) = ¯RTi (bk − ¯pi), k = 1 , . . . , K, δzi = yi −
+
+
+
+f1(¯ xi)...
+
+fK (¯ xi)
+
+ ≈ ¯Hi(¯ xi)δxi + ¯ ni, (45) Iterated Invariant EKF for 3D Landmark-Aided Inertial Navigation 13 
+
+where the complete augmented measurement Jacobian block ¯Hi(¯ xi) ∈ R3K×15 
+
+is structured as: ¯Hi(¯ xi) := 
+
+
+
+¯RTi (b1 − ¯pi)∧ 03 − ¯RTi 03,6
+
+... ... ... ...¯RTi (bK − ¯pi)∧ 03 − ¯RTi 03,6
+
+ . (46) Importantly, as highlighted by contrasting Eq. (44) with the invariant formula-tion in Eq. (25), the multiplicative measurement matrix explicitly depends on the absolute state estimate trajectories ( ¯Ri, ¯pi). The update sequence for the IterSO(3)-EKF tracks a localized Gauss-Newton optimization iteration scheme. We adapt the single-measurement sequence from [17, Eq. 59] into a stacked multi-landmark framework evaluated at optimization in-dex j:
+
+Γji =
+
+
+
+δϕji ⊕ ¯Ri|i−1
+
+T
+
+, (47) ¯Hji =
+
+
+
+Γji (b1 − ¯pi|i−1 − δpji )∧Jr, SO(3) (−δϕji ) 03 −Γji 03,6
+
+... ... ... ...
+
+Γji (bK − ¯pi|i−1 − δpji )∧Jr, SO(3) (−δϕji ) 03 −Γji 03,6
+
+ , (48) ¯Sji = ¯Hji Σi|i−1( ¯Hji )T + ¯Ni, (49) ¯Kji = Σi|i−1( ¯Hji )T (¯Sji )−1, (50) 
+
+δxj+1  
+
+> i
+
+= ¯Kji
+
+yi −
+
+
+
+f1(¯ xji )...
+
+fK (¯ xji )
+
+ + ¯Hji δxji
+
+ , (51) initialized at the start of the optimization sequence with δx0 
+
+> i
+
+:= 015 ,1. Letting 
+
+l denote the final iteration step satisfying convergence, the posteriors are com-puted as: ¯xi := ¯ xi|i = δxli ⊕ ¯xi|i−1, (52) 
+
+Σi := Σi|i = ( I15 − ¯Kli ¯Hli)Σi|i−1. (53) The execution loop for the IterSO(3)-EKF employs identical convergence stop-ping criteria thresholds as those configured for the IterIEKF. 
+
+## 9 Results 
+
+We evaluate the performance of the proposed IterIEKF using a structured Monte Carlo simulation framework. The ground-truth inertial measurements are gener-ated by solving the inverse kinematic problem over a known reference trajectory. Specifically, we extract the true state trajectories from the V2 01 easy dataset 3 
+
+> 3
+
+https://github.com/rpng/open_vins/blob/master/ov_data/euroc_mav/V2_01_ easy.csv 14 H. Santana et al. 
+
+Fig. 2: V2 01 easy dataset trajectory (gray), MAV true state (blue), landmarks (diamonds), and a single MAV sample of the corrupted initial state configuration for the invariant estimators (green). of the EuRoC MAV repository [7] and reconstruct ideal IMU inputs that satisfy the discrete-time system kinematics: 
+
+Xi+1 = WiΦ(Xi)Yi(ωI,i , aI,i )
+
+⇒ (WiΦ(Xi)) −1 Xi+1 = Yi(ωI,i , aI,i )
+
+⇒
+
+
+
+Exp SO(3) (a), b
+
+
+
+=
+
+
+
+Exp SO(3) (ωI,i ∆t ), La I,i 
+
+
+
+,
+
+⇒ ωI,i = a
+
+∆t , aI,i = L†b, Wi, Φ, Yi ∈ SE 2(3) ,
+
+(54) where the kinematic prediction model from Eq. (11) is reformulated as a com-position of algebraic elements on SE 2(3) [5]. The coupling matrix L is defined as L = [ I3∆t ; I3 ∆t 2 
+
+> 2
+
+], and L† = ( LT L)−1LT represents its left pseudo-inverse. In addition to obtaining the true inertial measurements, we also artificially placed three landmarks in the world frame, b1 = [ −2.0, 1.0, 1.6] T , b2 = [0 .0, 2.0, 2.0] T
+
+and b3 = [1 .0, 0.5, 1.5] T .Across N = 50 localized Monte Carlo realizations, we corrupt the true initial state configuration, the proprioceptive inertial sequences, and the exteroceptive landmark updates with zero-mean white Gaussian noise structured as: 
+
+P0 = diag 
+
+ π
+
+4
+
+2
+
+I3, 1.02I3, 2.02I3, 10 −6I3, 10 −6I3
+
+
+
+,
+
+wa,i ∼ N (03,1, 1.6 × 10 −3I3), wg,i ∼ N (03,1, 4.0 × 10 −6I3),
+
+wbg,i , wba,i ∼ N (03,1, 1.0 × 10 −6I3), nk,i ∼ N (03,1, 1.0 × 10 −3I3).
+
+(55) During each initialization pass, the true baseline state is perturbed by an error displacement sample ξ0 ∼ N (015 ,1, P0). This generates the nominal starting Iterated Invariant EKF for 3D Landmark-Aided Inertial Navigation 15 
+
+state for the invariant filters via ¯X0 = ( −ξ0) ⊕ X 0, while the multiplicative variants initialize through ¯ x0 = ( −δx0) ⊕ x0, with δx0 = Jξ0 mapped via the state-space transformation Jacobian defined in [17, Eq. 76]. The trajectory trace and a sample visualization of this initialization are shown in Fig. 2. The simulated IMU feeds operate at 200 Hz, whereas landmark observations update at a reduced rate of 1 Hz with all landmarks visible during the entire trajectory, i.e., K = 3. Filter statistical consistency is evaluated over all time horizons using the Average Normalized Estimation Error Squared (NEES) metric: NEES SE 2(3) ×R6 
+
+> i
+
+= 1
+
+N
+
+> N
+
+X
+
+> n=1
+
+(ξni )T (Pni )−1ξni ,
+
+NEES SO(3) ×R12  
+
+> i
+
+= 1
+
+N
+
+> N
+
+X
+
+> n=1
+
+(δxni )T (Σni )−1δxni .
+
+(56) Trajectory accuracy is quantified through the Mean Absolute Error (MAE) eval-uated across the system’s observable state space, including the body-frame linear velocity ( ¯RTi|i ¯vi|i), global gravity vector orientation (¯ ui|i), and Euler attitude pa-rameters (yaw ¯ψi|i, pitch ¯ϕi|i, and roll ¯θi|i). The error metric tracks as: MAE x = 1
+
+M
+
+> M
+
+X
+
+> i=1
+
+e(¯ xi|i, xi), (57) where M defines the total number of timestamps across the mission duration. For position, velocity, and attitude states, e(·) corresponds to the standard Euclidean distance metric e := ∥xi − ¯xi|i∥. For tracking the gravity vector direction, the metric is defined as the angular displacement e := arccos(¯ ui|i · ui) to provide a physically intuitive representation of angular drift. 
+
+9.1 Accuracy and Consistency of the Observable State 
+
+The quantitative performance metrics across the N = 50 Monte Carlo simu-lation trials, consolidated in Table 1, reveal a performance disparity between the evaluated filtering paradigms under initial state corruption. The classical SO(3)-EKF exhibits the poorest performance, accumulating a substantial MAE of 9 .363 m in position and 4 .918 m /s in linear velocity due to the well-documented false observability problem, where state-dependent measurement Jacobians er-roneously introduce spurious information along unobservable directions. While the IterSO(3)-EKF mitigates local linearization errors through iterative refine-ment loops, reducing the position and velocity MAE to 2 .1 m and 1 .331 m /s, respectively, it lacks geometric error parameterization and remains significantly less accurate than the standard single-step IEKF (0 .511 m). In contrast, the pro-posed IterIEKF achieves state-of-the-art performance, outperforming the base-line IEKF by reducing position error to 0 .096 m (an 81 .12% reduction) and ve-locity error to 0 .095 m /s (an 80 .14% reduction). This remarkable tracking fidelity 16 H. Santana et al. 
+
+highlights the benefit of fusing Lie-group error dynamics on SE 2(3), which struc-turally decouple the error kinematics from the absolute trajectory to guarantee correct observability properties, with localized Gauss-Newton optimization loops that drive the estimated state precisely to the true intersection of the environ-mental landmark manifolds. The convergence of the estimated position, velocity and gravity direction are shown in Figs. 3a, 3b and 3c. The IterIEKF demon-strates superior convergence characteristics, rapidly aligning with the ground truth trajectory within the first 10 s of operation, while the IEKF exhibits a slower convergence rate and larger steady-state error. The IterSO(3)-EKF, al-though improving upon the SO(3)-EKF, still fails to achieve comparable accu-racy due to its inherent limitations in handling non-linearities and observability issues. In Fig. 3d we show the NEES metric for the different filters, where the IterIEKF maintains a NEES value close to 15 (the error-state dimension), indi-cating good consistency, while the IEKF and IterSO(3)-EKF show higher NEES values, suggesting overconfidence in their estimates. The SO(3)-EKF exhibits the highest NEES values, confirming its poor consistency and reliability in state estimation under severe initial state corruption. Table 1: Mean Absolute Error (MAE) and relative errors to IEKF (%) for dif-ferent filtering methods. Smallest MAE is marked in bold.         
+
+> Filters MAE velocity (m/s) MAE gravity direction (◦) MAE position (m) IEKF 0.48 (0%) 2.042 (0%) 0.511 (0%) IterIEKF 0.095
+> (-80.135%)
+> 0.661
+> (-67.641%)
+> 0.096
+> (-81.117%) SO(3)-EKF 4.918 (+925.35%) 11.244 (+450.7%) 9.363 (+1732.8%) IterSO(3)-EKF 1.331 (+177.49%) 4.439 (+117.41%) 2.1 (+311.15%)
+
+9.2 Attitude Estimation 
+
+The average attitude estimation (roll, pitch and yaw angles) computed in all Monte Carlo realizations is shown in Fig. 4. Overall, the proposed IterIEKF achieves the fastest convergence rate, settling almost 10 seconds ahead of the standard, single-step IEKF (see Fig. 4c). Interestingly, the IterIEKF exhibits a slightly prolonged settling time when converging the roll angle (Fig. 4a), whereas it experiences highly accelerated convergence characteristics in the pitch channel (Fig. 4b). Furthermore, both the classical SO(3)-EKF and its iterated counter-part, the IterSO(3)-EKF, demonstrate significantly slower response dynamics, though the IterSO(3)-EKF noticeably outperforms the baseline EKF due to its Iterated Invariant EKF for 3D Landmark-Aided Inertial Navigation 17   
+
+> (a) (b)
+> (c) (d)
+
+Fig. 3: Results of the numerical Monte Carlo experiment on the V2 01 easy 
+
+dataset. a) Average error for the position. b) Average error for the velocity in the base frame. c) Average error for the gravity direction. d) Average NEES.   
+
+> (a) (b) (c)
+
+Fig. 4: Average attitude estimates obtained with different filters across all real-izations. a) Estimate of the roll angle. b) Estimate of the pitch angle. c) Estimate of the yaw angle. local optimization loops. These tracking profiles confirm that the IterIEKF pos-18 H. Santana et al. 
+
+sesses superior robustness against severe initial state corruption, providing the most reliable and highly consistent attitude estimation performance among all evaluated filters. 
+
+9.3 Bias Convergence Analysis 
+
+The relative estimation errors of the IMU bias for a representative single real-ization of the Monte Carlo simulation are illustrated in Fig. 5. Overall, a similar trend to the previous state trajectory evaluations is observed, with the proposed IterIEKF demonstrating superior convergence and lower residual errors com-pared to all baseline filters. Moreover, it can be observed in Figs. 5b and 5c that the invariant filters presented low steady-state error for the gyroscope bi-ases. However, every evaluated filter, including the IterIEKF, experiences no-ticeable difficulty in accurately identifying the accelerometer biases, with the relative error persistently remaining above 1 .0. This limitation underscores a core structural constraint of the current formulation: appending the sensor bi-ases directly to the state space as a standard vector addition ( R6) breaks the strict group-affine property of the system dynamics during the propagation step. Consequently, the propagation mechanics are not fully invariant with respect to the bias states. This observability and consistency mismatch could potentially be resolved by adopting the recently introduced Two-Frame Group (TFG) frame-work [3], a novel Lie group structure designed to embed accelerometer biases in a structurally invariant manner. 
+
+## 10 Conclusion 
+
+In this work, we have presented the first formulation and systematic evaluation of the Iterated Invariant Extended Kalman Filter tailored for 3D landmark-aided inertial navigation in MAVs. By parameterizing the system state error via right-invariant group actions on SE 2(3), our framework structurally eliminates the false observability problem that plagues classical non-invariant architectures like the SO(3)-EKF and IterSO(3)-EKF. Furthermore, by incorporating local-ized Gauss-Newton optimization loops directly into the invariant measurement update, the IterIEKF overcomes the linearization limitations of the standard single-step IEKF. Extensive Monte Carlo simulations based on a trajectory pro-file from the EuRoC MAV dataset demonstrate that the IterIEKF yields a pro-found performance leap, securing upwards of an 80% reduction in both position and linear velocity errors compared to the standard IEKF, while establishing superior NEES statistical consistency and highly accurate gravity vector align-ment. While the IterIEKF demonstrates exceptional tracking robustness and prevents cross-state error corruption, online accelerometer biases remain poorly estimated. Future work aims to scale the proposed filter into a full SLAM frame-work that unifies invariant state estimation with online data association and unknown landmark map generation. Iterated Invariant EKF for 3D Landmark-Aided Inertial Navigation 19 0 20 40 60 80 100 
+
+Time (s)    
+
+> 10 -5
+> 10 0
+> 10 5
+> j7bg;x  ! bg;x j=jbg;x j
+
+(a) 0 20 40 60 80 100 
+
+Time (s)     
+
+> 10 -5
+> 10 0
+> 10 5
+> j7bg;y  ! bg;y  j=jbg;y  j
+
+(b) 0 20 40 60 80 100 
+
+Time (s)     
+
+> 10 -5
+> 10 0
+> 10 5
+> 10 10
+> j7bg;z  ! bg;z  j=jbg;z  j
+
+(c) 0 20 40 60 80 100 
+
+Time (s)      
+
+> 10 -5
+> 10 0
+> 10 5
+> 10 10
+> j7ba;x  ! ba;x j=jba;x j
+
+(d) 0 20 40 60 80 100 
+
+Time (s)      
+
+> 10 -4
+> 10 -2
+> 10 0
+> 10 2
+> 10 4
+> j7ba;y  ! ba;y  j=jba;y  j
+
+(e) 0 20 40 60 80 100 
+
+Time (s)     
+
+> 10 -5
+> 10 0
+> 10 5
+> j7ba;z  ! ba;z  j=jba;z  j
+
+(f) 
+
+Fig. 5: Relative error for the estimates of the IMU bias obtained with different filters on one realization of the Monte Carlo simulation. a) Gyroscope bias in the x-axis. b) Gyroscope bias in the y-axis. c) Gyroscope bias in the z-axis. d) Accelerometer bias in the x-axis. e) Accelerometer bias in the y-axis. f) Ac-celerometer bias in the z-axis. 
+
+## References 
+
+1. Barfoot, T.D.: State Estimation for Robotics. Cambridge Univ. Press (2024) 2. Barrau, A., Bonnabel, S.: The invariant extended Kalman filter as a stable observer. IEEE Trans. Autom. Control 62 (4), 1797–1812 (2016) 3. Barrau, A., Bonnabel, S.: The geometry of navigation problems. IEEE Trans. Au-tom. Control 68 (2), 689–704 (2022) 20 H. Santana et al. 4. Bloesch, M., Burri, M., Omari, S., Hutter, M., Siegwart, R.: Iterated extended Kalman filter based visual-inertial odometry using direct photometric feedback. Int. J. Robot. Res. 36 (10), 1053–1072 (2017) 5. Brossard, M., Barrau, A., Chauchat, P., Bonnabel, S.: Associating uncertainty to extended poses for on Lie group IMU preintegration with rotating earth. IEEE Trans. Robot. 38 (2), 998–1015 (2021) 6. Brossard, M., Bonnabel, S., Barrau, A.: Invariant Kalman filtering for visual iner-tial SLAM. In: Proc. Int. Conf. Inf. Fusion (FUSION). pp. 2021–2028 (2018) 7. Burri, M., Nikolic, J., Gohl, P., Schneider, T., Rehder, J., Omari, S., Achtelik, M.W., Siegwart, R.: The EuRoC micro aerial vehicle datasets. Int. J. Robot. Res. 
+
+35 (10), 1157–1163 (2016) 8. Debeunne, C., Vivet, D.: A review of visual-LiDAR fusion based simultaneous localization and mapping. Sensors 20 (7), 2068 (2020) 9. Dissanayake, M.W.M.G., Newman, P., Clark, S., Durrant-Whyte, H.F., Csorba, M.: A solution to the simultaneous localization and map building (SLAM) problem. IEEE Trans. Robot. Autom. 17 (3), 229–241 (2001) 10. Edwards Jr., A.: The state of strapdown inertial guidance and navigation. Navi-gation 18 (4), 386–401 (1971) 11. Elhousni, M., Huang, X.: A survey on visual map localization using LiDARs and cameras. arXiv preprint arXiv:2208.03376 (2022) 12. Goffin, S., Barrau, A., Bonnabel, S., Br¨ uls, O., Sacr` e, P.: Iterated invariant ex-tended Kalman filter (IterIEKF). IEEE Trans. Autom. Control 71 (5), 3380–3387 (2026) 13. He, D., Xu, W., Zhang, F.: Kalman filters on differentiable manifolds. arXiv preprint arXiv:2102.03804 (2021) 14. Leonard, J.J., Durrant-Whyte, H.F., et al.: Mobile robot localization by tracking geometric beacons. IEEE Trans. Robot. Autom. 7(3), 376–382 (1991) 15. Li, M., Mourikis, A.I.: High-precision, consistent EKF-based visual-inertial odom-etry. Int. J. Robot. Res. 32 (6), 690–711 (2013) 16. Markley, F.L.: Multiplicative vs. additive filtering for spacecraft attitude determi-nation quaternion estimation. J. Guid. Control Dyn. 26 (2), 311–317 (2003) 17. Santana, H.M.S., Soares, J.C.V., Goffin, S., Nistic` o, Y., Bonnabel, S., Semini, C., Meggiolaro, M.A.: Iterated invariant EKF for quadruped robot odometry. arXiv preprint arXiv:2604.15449 (2026) 18. Santana, H.M.S., Soares, J.C.V., Nistic` o, Y., Meggiolaro, M.A., Semini, C.: Pro-prioceptive state estimation for quadruped robots using invariant kalman filtering and scale-variant robust cost functions. In: 2024 IEEE-RAS 23rd International Conference on Humanoid Robots (Humanoids). pp. 213–220 (2024) 19. Sol` a, J.: Quaternion kinematics for the error-state Kalman filter. arXiv preprint arXiv:1711.02508 (2017) 20. Sol` a, J., Deray, J., Atchuthan, D.: A micro Lie theory for state estimation in robotics. arXiv preprint arXiv:1812.01537 (2018) 21. Trawny, N., Mourikis, A.I., Roumeliotis, S.I., Johnson, A.E., Montgomery, J.F.: Vision-aided inertial navigation for pin-point landing using observations of mapped landmarks. J. Field Robot. 24 (5), 357–378 (2007)
