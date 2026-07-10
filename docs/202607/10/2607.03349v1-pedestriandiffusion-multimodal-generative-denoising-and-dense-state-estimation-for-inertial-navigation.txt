@@ -1,0 +1,683 @@
+Title: PedestrianDiffusion: Multimodal Generative Denoising and Dense State Estimation for Inertial Navigation
+
+URL Source: https://arxiv.org/pdf/2607.03349v1
+
+Published Time: Tue, 07 Jul 2026 01:22:16 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+> JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 1
+
+# PedestrianDiffusion: Multimodal Generative Denoising and Dense State Estimation for Inertial Navigation 
+
+I-Hao Lu , Dongsoo Han Senior Member, IEEE, 
+
+Abstract —The accuracy of consumer-grade inertial naviga-tion is bottlenecked by the stochastic noise of Micro-Electro-Mechanical Systems (MEMS). Traditional deterministic neural architectures often succumb to “estimation jittering,” sacrific-ing high-frequency kinematic fidelity for numerical stability. We propose PedestrianDiffusion, a multimodal spectral-domain generative framework reformulating dense 6D state estimation as a continuous conditional denoising process. By operating in the frequency domain, our formulation bounds the spectral covariance, acting as a mathematical preconditioner to stabilize the reverse diffusion trajectory. Furthermore, we introduce a zero-shot semantic conditioning mechanism leveraging vision-language embeddings as categorical priors to generalize across heterogeneous sensor noise profiles. To address the computational intractability of generative tracking, we deploy a single-step de-terministic probability flow ODE solver ( T = 1 ). This yields high-capacity asynchronous batch trajectory refinement, establishing the viability of generative architectures for asynchronous batch trajectory refinement on edge hardware. Extensive evaluations on the OxIOD, RIDI, RoNIN, and TLIO benchmarks demonstrate that PedestrianDiffusion achieves state-of-the-art performance, exhibiting unprecedented robustness to impulse perturbations and coupled 6D kinematic drift. This work provides a rigorous algorithmic blueprint for next-generation Neural Inertial Mea-surement Units (N-IMUs). 
+
+Index Terms —IMUs, Navigation, diffusion, high-fidelity, spec-trum, N-IMUs 
+
+I. I NTRODUCTION 
+
+Despite the widespread integration of low-cost MEMS In-ertial Measurement Units (IMUs), achieving navigation-grade accuracy remains elusive due to stochastic noise and bias instability [1]. Traditional filtering techniques (e.g., ZUPT [2], EKF [3]) depend on restrictive physical priors that frequently fail in unconstrained environments. While deep learning ar-chitectures such as RoNIN [4] and TLIO [5] provide robust alternatives, they predominantly formulate navigation as a regression task. However, this paradigm has encountered a “estimation jittering” caused by optimizing for Mean Squared Error (MSE), discriminative models inevitably overestimate the velocity and lose high-frequency kinematic details to mini-mize variance. Consequently, these models yield jittered, over-estimated trajectories—statistically reflected by Total Length Ratios (TLR) consistently below unity—trading physical fi-delity for numerical stability. To overcome this limitation, we propose a conditional gen-erative denoising paradigm that fundamentally departs from 
+
+The source code for the proposed model is available on GitHub at https: //github.com/jacklu333333/PedestrianDiffusion 
+
+discriminative regression. We introduce PedestrianDiffusion (PD), a multimodal spectral-domain diffusion framework de-signed to actively reconstruct the clean motion manifold from noisy sensor inputs. By shifting from time-domain regression to spectral processing via the Short-Time Fourier Transform (STFT), our approach inherently isolates periodic pedestrian kinematics from stochastic sensor noise. This formulation enables PD to achieve optimal accuracy across the OxIOD [6], RIDI [7], RoNIN [4], and TLIO [5] benchmarks. Furthermore, we challenge the prevailing consensus that generative models are computationally prohibitive for edge deployment. Our empirical analysis yields a critical insight: spectral diffusion exhibits rapid convergence, saturating state estimation accuracy in a single inference step ( T = 1 ). This convergence translates to an amortized latency of 9.88 ms 
+
+per frame per inference. While strict hard real-time execu-tion currently necessitates discrete hardware accelerators due to sequential dependencies, this amortized efficiency proves that generative tracking is computationally viable for high-throughput edge buffering. Ultimately, PD serves as an al-gorithmic proof-of-concept for next-generation Neural Inertial Measurement Units (N-IMUs), demonstrating that the compu-tational demands of generative denoising constitute a justified investment for tactical-grade precision. The primary contributions of this paper are:  
+
+> •
+
+Generative Navigation Paradigm: We pioneer a spectral diffusion framework for inertial navigation, transitioning the field from MSE-based regression to high-fidelity gen-erative modeling capable of recovering high-frequency kinematic details.  
+
+> •
+
+Spectral & Physical Consistency: We demonstrate that processing IMU data in the frequency domain preserves superior signal resolution compared to temporal methods. We enforce kinematic coherence via a novel dual-domain loss function that jointly optimizes spectral reconstruction and rigid-body dynamics.  
+
+> •
+
+Device-Agnostic Adaptation: We propose a CLIP-based conditioning mechanism that adapts to heterogeneous device noise profiles (e.g., “handheld” vs. “handheld speed”). By leveraging semantic proximity, this strategy enables zero-shot categorical clustering to address the unseen sensor problem without model retraining. II. R ELATED WORK 
+
+Classical Methods: The Sensor Placement Barrier. Classi-cal inertial navigation systems traditionally employ Extended  
+
+> arXiv:2607.03349v1 [cs.LG] 3 Jul 2026 JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 2
+
+Kalman Filters (EKFs) constrained by physical priors to bound error accumulation. A foundational approach is the Zero-Velocity Update (ZUPT) [8], which mitigates velocity drift by detecting stationary phases during the gait cycle. Extending this principle, NavShoe [9] integrated ZUPT within a filtering framework to arrest cubic error growth, achieving a terminal position error of 0.34 m over 118 .5 m . Subsequently, Skog et al. [10] provided a rigorous evaluation of the zero-velocity detectors requisite for enforcing these constraints. However, the efficacy of classical methods is strictly bottle-necked by sensor placement. Their reliance on discernible sta-tionary periods (e.g., foot-mounted IMUs) renders them fun-damentally unsuitable for mass-market consumer electronics, such as smartphones or VR headsets, which are characterized by continuous motion and variable lever arms. Consequently, accurate navigation remains heavily constrained on ubiquitous devices where zero-velocity assumptions cannot be reliably satisfied. 
+
+Deep Learning Methods: Estimation Jittering. Deep inertial odometry circumvents placement constraints by formulating state estimation as data-driven sequence modeling. Building upon IONet [6] and RoNIN [4], CTIN [11] advanced the paradigm via a Robust Contextual Transformer. This archi-tecture couples a ResNet encoder with local and global self-attention to capture spatial dependencies, utilizing a Trans-former decoder for temporal fusion and multi-task learning to jointly estimate velocity and uncertainty covariance. Despite these architectural advancements, current discrimi-native models are bounded by a “estimation jittering” in ve-locity. The pervasive reliance on MSE optimization inevitably overestimates details to minimize variance. This optimization objective yields blurred, drifting trajectories—statistically evi-denced by TLR consistently deviating from unity—sacrificing the physical fidelity requisite for high-precision navigation. 
+
+Hybrid Methods: Sampling Efficiency Gap. Hybrid archi-tectures seek to reconcile the representational capacity of deep learning with the theoretical guarantees of recursive filtering. For instance, TLIO [5] proposed a tightly-coupled framework wherein a neural network acts as a pseudo-measurement gener-ator for an EKF. This synergy facilitates drift correction in the absence of strictly stationary phases, surpassing pure learning baselines. LLIO [12] later addressed similar objectives and claimed a more lightweight formulation. A primary limitation of hybrid systems like TLIO [5] is their strict dependence on high-frequency sampling. Maintaining EKF stability frequently demands IMU sampling rates of ap-proximately 1000 Hz [5], a specification that heavily penalizes the power and bandwidth constraints of commodity devices. In contrast, our generative approach achieves superior estimation accuracy at a standard 100 Hz sampling rate, demonstrating that expressive sequence modeling can effectively compensate for reduced temporal resolution. 
+
+Coordinate Normalization via Learned Canonical Frames. 
+
+To address the sensitivity of learning-based odometry to sen-sor orientation, EqNIO [13] learns an equivariant canonical frame directly from inertial measurements. By mapping IMU signals into a gravity-aligned coordinate system, this method enables downstream networks to process orientation-invariant representations. Jointly optimizing this canonicalization with the odometry objective significantly improves zero-shot gen-eralization across diverse sensor orientations and motion tra-jectories. 
+
+Generative Navigation: From Time to Spectral Domain. 
+
+The unprecedented success of diffusion models in continuous signal synthesis has recently motivated their application to trajectory estimation. While Yu et al. [14] validated diffusion for multimodal object-goal planning, DiffusionIMU [15] in-troduced the architecture to inertial navigation by denoising velocity estimates in the time domain. Unlike DiffusionIMU’s reliance on time-domain regression, PedestrianDiffusion formulates state estimation strictly in the spectral domain via the Short-Time Fourier Transform (STFT). By explicitly modeling the periodic structure of pedestrian kinematics, we mathematically isolate high-frequency details from stochastic noise. This spectral formulation not only maximizes physical reconstruction fidelity but critically en-ables the rapid convergence ( T = 1) necessary to render low-latency generative navigation computationally tractable on edge devices. III. M ETHODOLOGY 
+
+A. Spectral Disparity in Linear Sensor Spaces 
+
+While diffusion models excel in bounded domains like natural images [16]–[18], applying standard formulations to unbounded inertial data introduces instability. This failure arises from a fundamental mismatch between the isotropic Gaussian prior used in diffusion and the highly anisotropic spectral structure of inertial signals. 
+
+a) The Isotropic Assumption.: Let x0 ∈ Rd denote the clean signal. The standard forward process [16], [19], defined as 
+
+xt = √αtx0 + √1 − αt ϵ, ϵ ∼ N (0 , I ), (1) implicitly imposes an isotropic noise geometry. This is appro-priate for image data, where pixel values are bounded (e.g., 
+
+[0 , 1] ), and energy is relatively evenly distributed across spatial dimensions. However, inertial measurements are unbounded and exhibit extreme spectral skew: low-frequency integration drift often carries variance magnitudes higher than high-frequency motion dynamics. 
+
+b) Ill-Conditioned Reverse Dynamics.: The incompati-bility becomes evident in the signal covariance. For a signal with covariance Σ0 = Cov( x0), the perturbed covariance is given by: 
+
+Σt = αtΣ0 + (1 − αt)I. (2) In inertial spaces, Σ0 is typically rank-deficient or ill-conditioned due to physical constraints and sensor biases. As 
+
+t → 1, the isotropic term (1 − αt)I overwhelms the signal structure in directions corresponding to small eigenvalues of 
+
+Σ0. Conversely, directions with large eigenvalues (e.g., drift) require excessive noise levels to be effectively diffused. This disparity leads to a heteroscedastic signal-to-noise ratio (SNR) across dimensions. During the reverse process, the score network must approximate ∇xt log p(xt) [20], effec-tively inverting this noise. For dimensions where the SNR JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 3
+
+is vanishingly small, the denoising task becomes ill-posed, resulting in numerical divergence—observed empirically as value explosion. 
+
+c) Spectral Conditioning.: To remedy this, we propose aligning the diffusion process with the intrinsic geometry of the sensor space. By operating on a frequency-aligned basis and scaling noise injection according to the signal’s spectral energy, we ensure a balanced SNR across all modes. This geometric alignment stabilizes training and, as shown in our experiments, allows for saturation of performance at significantly lower parameter counts by removing the burden of learning to compensate for spectral mismatch. 
+
+B. Spectral-Domain Diffusion for Unbounded Signals 
+
+To decouple the denoising objective from global orientation, we align input sequences to a gravity-stabilized, heading-agnostic coordinate frame (HACF) [4]. We achieve the HACF by performing North-East rotation data augmentation. We then employ the Short-Time Fourier Transform (STFT) to mitigate the dynamic range issue and to separate periodic kinematic structure from high-frequency sensor noise. Processing 100 Hz inertial signals over one-second intervals, this transformation yields a compact (16 , 8, 2) time–frequency representation that preserves physically meaningful amplitude information while avoiding the failure modes of naive scalar normalization. The detailed spectral configuration, including windowing and Fourier parameters, is provided in subsection VIII-A. 
+
+C. Global Standardization Strategy 
+
+To preserve physical scale consistency during diffusion, we avoid instance-level normalization and instead adopt a global standardization strategy. Specifically, we compute a dataset-wide scaling factor based on the maximum empirical standard deviation observed across all training samples, ensuring that the majority of signals lie within a numerically stable range while maintaining relative amplitude relationships. Implemen-tation details and normalization hyperparameters are reported in subsection VIII-A. 
+
+D. PedestrianDiffusion Model 
+
+Figure 1 illustrates the PD architecture, which integrates inpainting [21], [22] with multimodal conditioning [23] for robust generation. The framework comprises a Variational Autoencoder (VAE), a text encoder, and a diffusion-based denoising network. Input IMU data is STFT-transformed and normalized (scaled 5× relative to Table VIII) to maximize dynamic range coverage, then concatenated with noisy state embeddings. A UNet, conditioned on fused VAE latents and CLIP embeddings, iteratively reconstructs high-fidelity trajec-tories. 
+
+Variational Autoencoder & Text Encoding. To learn a com-pact and noise-resilient representation of pedestrian motion, we employ a VAE [24] as a spectral feature extractor. The VAE is trained to encode input frequency-domain IMU signals into a latent variable z ∈ R512 ×1. This projection encapsulates essential motion primitives while attenuating high-frequency   
+
+> Fig. 1. The overall process of the PedestrianDiffusion model.
+> Fig. 2. Natural language prompt templates used for CLIP encoding. We serialize metadata into structured sentences to generate semantic embeddings for each dataset. “Example 1” illustrates a known configuration from the RIDI dataset, while “Example 2” demonstrates the template for unknown or unannotated scenarios. We iterate through all attribute combinations to prevent overfitting, using an “unknown” token as a fallback for unseen domains during inference.
+
+sensor noise, thereby providing a structured feature space for the subsequent diffusion process. By leveraging the VAE’s generative capabilities, we enhance the model’s ability to generalize across diverse motion patterns. To further improve robustness against distribution shifts— a common challenge when training and testing on disjoint domains—we incorporate auxiliary metadata provided by datasets such as RIDI [7] and OxIOD [25]. As illustrated in Figure 2, we serialize discrete attributes (e.g., device model, mounting position) into natural language prompts. We then utilize the CLIP ViT-B/32 model [26] to encode these prompts into semantic text embeddings c ∈ R512 ×77 .While the pre-trained CLIP model inherently possesses no physical or kinematic comprehension of inertial MEMS sensor JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 4
+
+noise, its text embeddings serve an invaluable epistemological role in our framework. By mapping textual metadata (e.g., device placement, model type) into high-dimensional semantic spaces, CLIP acts as a sophisticated, zero-shot categorical clustering and hashing mechanism. It constructs distinct de-cision boundaries that map specific text descriptors to highly correlated noise distributions observed during training. This categorical conditioning stabilizes denoising performance by allowing the network to explicitly associate specific sensor noise profiles with specific semantic clusters, facilitating ro-bust generalization to unseen sensors via semantic proximity rather than physical reasoning. To prevent overfitting to fixed syntactic patterns, we iterate through various sentence permutations during training, as shown in Figure 2. Furthermore, we introduce an “unknown” category—computed as the average embedding of all user profiles—which allows the model to generalize to uncharac-terized configurations during inference. Finally, we synthesize a unified input tensor by concate-nating the motion latent z and the contextual embedding 
+
+c along the feature dimension. The resulting representation 
+
+x ∈ R512 ×78 is fed into the diffusion network, enabling it to jointly leverage learned spectral features and semantic context for precise trajectory reconstruction. 
+
+Model Architecture. While the Transformer-based DiT [27] excels at scale, its lack of inductive bias is detrimental in the data-scarce inertial domain. In contrast, the convolutional UNet [28] provides essential priors for local temporal dynam-ics. Our ablations confirm that these priors confer superior stability and sample efficiency; accordingly, we adopt a con-ditional 3D UNet backbone. 
+
+E. Diffusion Backbone and Inference 
+
+We adopt the DPM-Solver++ framework [29], utilizing the Squared Cosine Schedule (v2) [30] to prevent boundary singularities. With T = 1000 , the cumulative retention ¯αt is defined as: 
+
+¯αt = f (t)
+
+f (0) , f (t) = cos 2
+
+ t/T + s
+
+1 + s · π
+
+2
+
+
+
+, (3) where s is a small offset. The model fθ (xt, t ) is configured to predict the clean data x0 directly by minimizing the reconstruction error: 
+
+L = Ex0,t,ϵ 
+
+∥x0 − fθ (√¯αtx0 + √1 − ¯αtϵ, t )∥2 . (4) 
+
+DPM-Solver Scheduler++. For efficient inference, we utilize the DPM-Solver++ [31] to solve the diffusion Probability Flow ODE. We employ the second-order deterministic solver (Order 2) to eliminate ancestral stochasticity. Furthermore, we enforce Zero-SNR rescaling to ensure the signal-to-noise ratio approaches zero at T , reducing exposure bias. 
+
+F. Dual-Domain Consistent Loss Function 
+
+Since we have dual objectives of denoising and high-fidelity estimation for both velocity and angular velocity, we design a dual-domain loss function by referencing the work of IoNet [6], [32]. 
+
+Algorithm 1 Training  
+
+> 1:
+
+repeat  
+
+> 2:
+
+Sample x0 ∼ q(x0), ϵ ∼ N (0, I) 
+
+> 3:
+
+Sample t ∼ Uniform ({1, . . . , T }) 
+
+> 4:
+
+¯αt ← Eq. 3  
+
+> 5:
+
+xt = √¯αtx0 + √1 − ¯αtϵ 
+
+> 6:
+
+θ ← θ − η∇θ ∥x0 − fθ (xt, t )∥2 
+
+> 7:
+
+until converged 
+
+Algorithm 2 Simplified DPM-Solver++  
+
+> 1:
+
+Sample xT ∼ N (0, I) 
+
+> 2:
+
+for t = T, . . . , 1 do  
+
+> 3:
+
+ˆx(t)0 = fθ (xt, t ) 
+
+> 4:
+
+ht = λt−1 − λt 
+
+> 5:
+
+if t = T then  
+
+> 6:
+
+˜x0 = ˆ x(t)0 
+
+> 7:
+
+else  
+
+> 8:
+
+rt = ht/h t+1  
+
+> 9:
+
+˜x0 = ˆ x(t)0 + 12 rt
+
+
+
+ˆx(t)0 − ˆx(t+1) 0
+
+ 
+
+> 10:
+
+end if  
+
+> 11:
+
+c1 =
+
+√1− ¯αt−1 
+
+> √1−¯αt
+
+e−ht 
+
+> 12:
+
+c2 = √1 − ¯αt−1(1 − e−ht ) 
+
+> 13:
+
+xt−1 = c1xt + c2 ˜x0 
+
+> 14:
+
+end for  
+
+> 15:
+
+return x0
+
+a) Total Loss with Uncertainty Weighting.: To adaptively balance the competing objectives during training, we utilize homoscedastic uncertainty weighting. The total loss function, denoted as Ltotal , aggregates individual loss terms ℓm,k across two sensor modalities and five distinct tasks. Specifically, let 
+
+m ∈ { ⃗ v,⃗ω} represent the modality (where ⃗ v denotes velocity and ⃗ω denotes angular velocity), and let k ∈ {1, . . . , 5}
+
+index the specific objective component (e.g., time-domain reconstruction, frequency alignment). We introduce a learnable log-variance parameter sm,k for each task-modality pair to regulate the trade-off between loss magnitude and model uncertainty. The final objective is defined as: 
+
+Ltotal = X 
+
+> m∈{ ⃗v,⃗ω}
+> 5
+
+X
+
+> k=1
+
+(exp( −sm,k ) · ℓm,k + sm,k ) (5) where the term exp( −sm,k ) acts as an adaptive precision weight for the raw loss ℓm,k , and the additive term sm,k serves as a regularizer to prevent the model from predicting infinite uncertainty. 
+
+b) Robust Reconstruction Objective.: The component losses utilize the Huber loss function Hδ (x, y ) with threshold 
+
+δ as standard Huber loss: 
+
+Hδ (x, y ) = 
+
+( 12 (x − y)2 if |x − y| ≤ δδ(|x − y| − 12 δ) otherwise (6) JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 5
+
+c) Component Objectives.: Let ˆyt, yt denote the time-domain predictions and targets, and ˆyf , yf denote their frequency-domain counterparts (via STFT). The individual loss components are defined as follows: 
+
+ℓm, 1 = Hδ
+
+
+
+ˆyf , yf
+
+
+
+(7) 
+
+ℓm, 2 = Hδ
+
+ X ˆyt∆t, X yt∆t
+
+
+
+(8) 
+
+ℓm, 3 = Hδ
+
+
+
+ˆyt, yt
+
+
+
+(9) 
+
+ℓm, 4 = Hδ
+
+
+
+S(ˆ yt, yt), 0
+
+
+
+(10) 
+
+ℓm, 5 = Hδ
+
+
+
+S(ˆ yf , yf ), 0
+
+
+
+(11) 
+
+d) Explanations of Objectives::  
+
+> •
+
+Frequency Reconstruction ( ℓm, 1, Equation 7): Min-imizes the spectral density error, ensuring the model captures the correct periodicity and vibration patterns of the inertial signal.  
+
+> •
+
+Integral Consistency ( ℓm, 2, Equation 8): Minimizes the error of the signal integral (velocity/orientation). This im-poses a physical constraint that prevents the accumulation of drift over time.  
+
+> •
+
+Time Reconstruction ( ℓm, 3, Equation 9): A direct re-construction loss on the raw waveform. We apply a higher scaling factor ( 10 κ) here to enforce strictly accurate fine-grained signal synthesis.  
+
+> •
+
+Time Domain Similarity ( ℓm, 4, Equation 10): Utilizes the Cosine similarity loss S to maximize the cosine similarity between the predicted and target embeddings in the time domain, focusing on shape and phase alignment rather than amplitude.  
+
+> •
+
+Frequency Domain Similarity ( ℓm, 5, Equation 11): 
+
+Analogous to ℓm, 4 but applied in the spectral domain, ensuring the distribution of dominant frequencies matches the target even if the exact phase alignment varies. 
+
+G. Single-Step Inference Theory 
+
+Recent advancements [33], [34] establish a rigorous theoret-ical foundation for accelerated sampling in diffusion models. By reformulating the iterative generation process as either a self-consistency mapping along the probability flow ordinary differential equation (PF-ODE) trajectory [33] or a direct dis-tribution matching task [34], these frameworks circumvent the cumulative discretization errors inherent in standard numerical solvers. Theoretically, they demonstrate that the statistical distance D between the generated distribution pθ and the true data distribution pdata is strictly bounded by the empirical optimization objective L(θ):
+
+D(pdata ∥pθ ) ≤ O (L(θ) + ϵ)
+
+where ϵ denotes the irreducible approximation error. This theoretical guarantee ensures that the inference budget can be reduced to a minimal Number of Function Evaluations (NFEs) without catastrophic degradation in sample fidelity. IV. E VALUATION 
+
+We evaluate the proposed PedestrianDiffusion (PD) frame-work through comprehensive experiments across multiple pub-lic datasets. To ensure fair comparisons, we adopt the standard evaluation protocols established by [35] and widely followed in recent literature [4], [5], [15], with specific metrics detailed in subsection IV-A. Furthermore, to conserve computational resources while maintaining consistent assessment across di-verse baselines, the results reported in Table I and Table II are derived from models trained exclusively on the RoNIN dataset [4]. 
+
+A. Analysis Metrics 
+
+Absolute Trajectory Error 
+
+ATE = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+∥ˆpi − pi∥2
+
+!1/2
+
+(12)  
+
+> •
+
+ˆpi, pi ∈ R3 are the estimated position (aligned to the ground truth frame) and the ground truth position at time step i, respectively.  
+
+> •
+
+N is the total number of poses in the trajectory.  
+
+> •
+
+∥·∥ denotes the Euclidean norm. Proposed by [35], the Absolute Trajectory Error (ATE, Equa-tion 12) quantifies global drift by calculating the Euclidean discrepancy between the estimated and ground-truth positions at the terminal time step. 
+
+Relative Trajectory Error 
+
+RTE = 1
+
+N − 1 
+
+> N−1
+
+X
+
+> i=1
+
+∥∆ˆ pi − ∆pi∥ (13)  
+
+> •
+
+∆ˆ pi = ˆ pi+1 − ˆpi is the estimated displacement vector between steps i and i + 1 . 
+
+> •
+
+∆pi = pi+1 −pi is the ground-truth displacement vector between steps i and i + 1 . 
+
+> •
+
+n is the total number of poses. The Relative Trajectory Error (RTE, Equation 13) [35] eval-uates local consistency by averaging positional errors over fixed distance intervals, isolating systemic drift from the total trajectory length. 
+
+Total Length Ratio 
+
+TLR =
+
+PNi=2 ∥ˆpi − ˆpi−1∥
+
+PNi=2 ∥pi − pi−1∥ (14)  
+
+> •
+
+∥ · ∥ denotes the Euclidean norm.  
+
+> •
+
+N is the total number of frames in the sequence (resulting in N − 1 segments). The Total Length Ratio (TLR, Equation 14) measures path scale consistency. Deviations from unity characterize the error modality: values > 1.0 imply high-frequency jitter, whereas values < 1.0 indicate systematic motion underestimation (oversmoothing). 
+
+Mean Cosine Similarity 
+
+MCS = 1
+
+N − 1
+
+> N
+
+X
+
+> i=2
+
+ˆdi · di
+
+∥ˆdi∥∥ di∥ (15) JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 6               
+
+> TABLE I
+> PERFORMANCE COMPARISON ON RONIN DATASETS IN 3D SPACE .VALUES ARE REPORTED AS MEAN ±STANDARD DEVIATION .BOLD INDICATES THE BEST PERFORMANCE . ATE AND RTE ( LOWER IS BETTER ); TLR AND MCS ( CLOSER TO 1IS BETTER ).
+
+RoNIN Seen RoNIN Unseen Method ATE (m) RTE (m) TLR MCS ATE (m) RTE (m) TLR MCS 
+
+Baseline Comparison 
+
+IoNet 4.08 ± 1.89 2.66 ± 1.35 0.97 ± 0.04 – 5.64 ± 4.62 3.95 ± 1.72 0.90 ± 0.07 –RoNIN-ResNet 4.14 ± 2.00 2.38 ± 1.28 0.97 ± 0.03 – 5.91 ± 3.24 3.79 ± 1.64 0.91 ± 0.07 –RoNIN-TCN 4.75 ± 2.25 2.80 ± 1.33 1.27 ± 0.16 0.58 ± 0.57 5.57 ± 3.59 4.12 ± 2.05 1.25 ± 0.17 0.52 ± 0.60 RoNIN-LSTM 4.47 ± 1.93 2.93 ± 1.41 1.27 ± 0.14 0.54 ± 0.58 6.18 ± 2.66 4.43 ± 2.11 1.24 ± 0.17 0.49 ± 0.60 TLIO 3.78 ± 1.78 2.56 ± 1.26 0.95 ± 0.03 – 4.90 ± 2.88 4.00 ± 1.87 0.89 ± 0.07 –LLIO 4.66 ± 2.03 3.42 ± 1.50 0.92 ± 0.06 – 6.14 ± 3.76 4.77 ± 2.38 0.84 ± 0.10 –
+
+Ours 
+
+PD single Domain 2.23 ± 0.12 2.19 ± 0.25 0.66 ± 0.06 0.14 ± 0.61 2.25 ± 0.09 2.20 ± 0.22 0.64 ± 0.03 0.04 ± 0.61 PD Time Regr. 3.48 ± 1.66 2.31 ± 1.20 0.97 ± 0.03 0.79 ± 0.44 5.14 ± 3.80 3.67 ± 1.80 0.91 ± 0.06 0.76 ± 0.47 
+
+PD Regression 3.74 ± 1.56 2.42 ± 1.32 1.02 ± 0.04 0.79 ± 0.44 5.69 ± 4.06 3.91 ± 2.02 0.96 ± 0.09 0.75 ± 0.46 PD Time 3.29 ± 1.41 2.25 ± 1.17 0.97 ± 0.03 0.79 ± 0.44 5.08 ± 2.55 3.69 ± 1.74 0.91 ± 0.06 0.76 ± 0.46 PD (Ours) 3.17 ± 1.32 2.24 ± 1.23 0.99 ± 0.03 0.80 ± 0.44 4.82 ± 3.24 3.71 ± 1.76 0.93 ± 0.07 0.76 ± 0.46 
+
+where ˆdi = ˆ pi − ˆpi−1 and di = pi − pi−1 represent the estimated and ground truth displacement vectors, respectively.  
+
+> •
+
+· denotes the dot product between two vectors.  
+
+> •
+
+∥·∥ denotes the Euclidean norm (magnitude of the vector).  
+
+> •
+
+N is the total number of frames in the sequence. The Mean Cosine Similarity (MCS, Equation 15) assesses directional consistency. An MCS of 1.0 implies perfect angular alignment, while lower values reflect trajectory drift, angular deviation, or high-frequency orientation jitter. 
+
+B. Performance Analysis 
+
+Comparison with Baseline Approaches. Table I reports evaluations on the RoNIN dataset [4] solely. For parity, we replicated the architectures of IoNet [6], RoNIN (ResNet, TCN, LSTM) [4], TLIO [5], and LLIO [12], extending all outputs to 3D space. Traditional recurrent and filter-based baselines exhibit substantial trajectory drift, yielding high ATE and RTE across users. While training exclusively on a single domain (PD Single Domain) artificially suppresses absolute positional errors (ATE of 2.23 m seen, 2.25 m unseen), it severely degrades trajectory shape retention and kinematic realism, yielding poor TLR ( ∼0.65 ) and MCS ( <0.15 ). Conversely, our full diffusion formulation, PD (Ours) ,balances positional accuracy with kinematic fidelity. In known users (RoNIN Seen), it achieves the lowest ATE ( 3.17 m ) and RTE ( 2.24 m ) among generalized models, alongside a near-perfect TLR of 0.99 . PD also demonstrates robust zero-shot generalization (RoNIN Unseen), securing the best overall ATE (4.82 m ) while maintaining competitive RTE ( 3.71 m ) and TLR ( 0.93 ) metrics. Across all scenarios, PD maintains stable MCS values ( 0.75 –0.80 ), confirming that beyond minimizing absolute numerical error, our spectral formulation synthesizes kinematically realistic and temporally coherent trajectories. 
+
+Diffusion versus Deterministic Regression. To isolate the contribution of the generative formulation, Table I compares our proposed single-step diffusion model against deterministic regression baselines trained with identical loss objectives. Re-placing the spectral diffusion process with a direct regression mapping (‘PD Regression’) systematically degrades the ATE from 3.17 m to 3.74 m on seen users, and from 4.82 m to 
+
+5.69 m in zero-shot unseen users. Furthermore, our full dual-domain generative model (‘PD (Ours)’) consistently outper-forms both its time-domain diffusion counterpart (‘PD Time’) and time-domain regression (‘PD Time Regr.’). These results confirm that the diffusion-based training objective, combined with spectral preconditioning, imparts superior structural pri-ors for robust state estimation compared to standard sequence-to-sequence regression. 
+
+Comparison with State-of-the-Art. Table II benchmarks PD against specialized 2D State-of-the-Art (SOTA) methods on the RoNIN dataset [4], utilizing strictly IMU observations. To ensure a fair evaluation against the planar models EqNIO [13] and DiffusionIMU [15], we project our 6D predictions onto the 2D horizontal plane. Under this unified protocol, PD achieves the lowest positional errors on seen users (ATE 3.15 m ,RTE 2.23 m ). On unseen users, while EqNIO demonstrates strong generalization in absolute trajectory (ATE 4.26 m ), PD achieves a superior relative trajectory error (RTE 3.70 m versus EqNIO’s 4.57 m ) and substantially outperforms DiffusionIMU (improving unseen ATE from 5.27 m to 4.79 m ). Crucially, whereas EqNIO and DiffusionIMU are inherently restricted to 2D velocity regression ( ⃗ v), PD performs holistic 6D state esti-mation ( ⃗v,⃗ω). Training this comprehensive 6D model requires 
+
+10 h on two consumer-grade RTX 3090 GPUs; although this trails EqNIO’s lightweight 1.4 h cycle, it is highly compute-efficient compared to the 10 h required by DiffusionIMU on an enterprise-grade NVIDIA A100. Finally, identical pre-trained weights are utilized across both Table I and Table II, with metric variations stemming entirely from the 2D spatial projection. 
+
+Comparison Across Datasets. Table III details the evaluation across the OxIOD [25], RIDI [7], RoNIN [4], and TLIO [5] datasets under a single-weight joint training regime, denoted as the hybrid dataset setting. This protocol highlights the performance nuances introduced by diverse ground-truth (GT) acquisition systems. PD demonstrates robust generalization on JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 7
+
+TABLE II 
+
+SOTA Q UANTITATIVE EVALUATION ON RONIN IN 2D SPACE . COMPARISON AGAINST SPECIALIZED 2D BASELINES ON BOTH SEEN AND UNSEEN ENVIRONMENTS . W E PROJECT OUR PD FROM 3D PREDICTIONS TO 2D FOR FAIRNESS . N OTE THAT BASELINES ONLY OUTPUT VELOCITY (⃗ v), WHEREAS OUR METHOD PRODUCES BOTH VELOCITY AND ANGULAR VELOCITY (⃗ v,⃗ω). B OLD VALUES INDICATE THE BEST PERFORMANCE IN EACH COLUMN .
+
+RoNIN (Seen) RoNIN (Unseen) 
+
+Position (m) Orientation (rad) Position (m) Orientation (rad) 
+
+Method Out. Dim. Hardware Time ATE ↓ RTE ↓ ATE ↓ RTE ↓ ATE ↓ RTE ↓ ATE ↓ RTE ↓
+
+CTIN [11] *⃗ v, σ 2D RTX 2080 Ti – 4.62 2.81 – – 5.61 4.48 – –DiffusionIMU [15] *⃗ v, σ 2D NVIDIA A100 10 h 3.64 2.72 – – 5.27 4.31 – –EqNIO( O(2) ) [13] †⃗ v, σ 2D/3D 2080 Ti 1,4 h 3.45 2.78 – – 4.57 4.26 – –
+
+PD (Ours) ⃗ v,⃗ω 6D 2× RTX 3090 10 h 3.15 2.23 1.78 1.55 4.79 3.70 1.83 1.59   
+
+> *Results reported from original manuscript. We include their reported performance for reference, but direct comparisons should be made with caution due to potential differences in evaluation protocols and hardware capabilities.
+> †The result is replicate via the official codebase and weight, which is slightly different from the reported values, and the training time is reported by the authors.
+
+TABLE III 
+
+OVERALL PERFORMANCE OF THE PEDESTRIAN DIFFUSION MODEL .
+
+WE REPORT PERFORMANCE BASED ON T = 2 , WHERE VALUES ARE REPORTED AS MEAN ± STANDARD DEVIATION . BOLD INDICATES THE AGGREGATED TOTAL PERFORMANCE .
+
+Dataset ATE RTE TLR MCS 
+
+↓ (1 min) ↓ → 1 → 1
+
+Orientation (rad) 
+
+OxIOD (V) † 0.59 ± 0.48 0.46 ± 0.22 0.90 ± 0.05 0.86 ± 0.28 
+
+OxIOD (T) ‡ 1.54 ± 0.34 1.13 ± 0.43 0.79 ± 0.04 0.69 ± 0.43 
+
+RIDI 0.13 ± 0.05 0.17 ± 0.09 0.99 ± 0.00 0.99 ± 0.07 
+
+RoNIN 2.24 ± 0.11 2.14 ± 0.19 0.88 ± 0.03 0.14 ± 0.63 
+
+RoNIN (U) § 2.26 ± 0.09 2.15 ± 0.23 0.86 ± 0.02 0.04 ± 0.62 
+
+TLIO 0.12 ± 0.06 0.15 ± 0.09 1.00 ± 0.00 0.99 ± 0.04 
+
+Total 1.26 ± 1.05 1 .21 ± 0.99 0 .92 ± 0.07 0 .35 ± 0.67 
+
+Position (m) 
+
+OxIOD (V) † 0.56 ± 0.20 0.30 ± 0.03 0.97 ± 0.02 0.99 ± 0.04 
+
+OxIOD (T) ‡ 1.60 ± 0.88 1.34 ± 0.73 1.03 ± 0.02 0.90 ± 0.37 
+
+RIDI 1.38 ± 0.79 1.39 ± 0.73 1.00 ± 0.02 0.96 ± 0.17 
+
+RoNIN 3.02 ± 1.40 2.19 ± 1.24 0.98 ± 0.03 0.80 ± 0.44 
+
+RoNIN (U) § 4.79 ± 2.79 3.64 ± 1.81 0.92 ± 0.07 0.76 ± 0.46 
+
+TLIO 1.21 ± 1.24 0.98 ± 2.01 0.98 ± 0.07 0.88 ± 0.29 
+
+Total 2.61 ± 2.30 2 .02 ± 1.91 0 .97 ± 0.06 0 .81 ± 0.41 
+
+> †
+
+VICON subset ‡Tango subset §Unseen subset 
+
+TLIO (Orientation ATE 0.12 rad ), which utilizes a rigorous visual-inertial setup for precise 3D tracking. Performance variations across other benchmarks directly reflect the fidelity of their supervision signals; for instance, the Position RTE disparity within OxIOD (VICON 0.30 m versus Tango 1.34 m )underscores the precision gap between optical motion capture and SLAM-based annotations. Notably, the TLR remains proximal to unity across all domains, demonstrating that PD consistently preserves accurate trajectory scale invariant to the underlying GT modality. 
+
+Inference Benchmark. 
+
+We evaluate the sensitivity of trajectory accuracy to the number of diffusion inference steps, T . As demonstrated in Figure 3, both ATE and RTE degrade as T increases, a behavior that diverges from the standard 20 –25 step conver-gence typically required in image generation [29]. We attribute this degradation to diffusion hallucination : excessive iterative refinement over-optimizes predictions toward the learned prior, introducing physically ungrounded kinematic artifacts. No-tably, tracking errors remain sufficiently low at T = 1 . This demonstrates that a single inference step can optimally recover the trajectory manifold and suppress hallucination-induced drift, concurrently reducing the computational overhead. 
+
+Computational Analysis. Table IV evaluates the computa-tional complexity and deployment efficiency of all methods utilizing an NVIDIA RTX 3090 GPU and a Raspberry Pi 5 edge CPU. Unlike discriminative baselines that compress a temporal window into a single motion estimate ( N = 1 ), PD performs dense state estimation to synthesize a physically con-sistent 100-frame trajectory in parallel ( N = 100 ). This neces-sitates a higher capacity architecture ( 37 .26 M parameters) and incurs a higher absolute computational cost ( 23 .37 GFLOPs ). Despite this absolute complexity, PD demonstrates highly favorable amortized efficiency. On the RTX 3090, PD gen-erates a complete 100-frame sequence in 107 .71 ms , yield-ing an amortized latency of 1.08 ms per frame. While trailing the lightweight RoNIN-TCN [4] and RoNIN-LSTM [4] (0.04 ms /frame ), it significantly outperforms single-output regression models: IoNet (3.54 ms /frame ), LLIO ( 5.85 ms /frame ), and TLIO [5] ( 6.93 ms /frame ). On the Raspberry Pi 5, PD achieves an amortized edge latency of 
+
+9.88 ms /frame while maintaining a lower peak memory foot-print ( 1.83 GB ) than all baselines ( 2.37 GB –2.45 GB ). Given the substantial gains in localization accuracy and kinematic fidelity (mitigating the severe scale distortion and poor TLR of lightweight models), this computational trade-off is justi-fied, proving that generative models are viable for resource-constrained edge platforms. 
+
+CLIP Conditioning Ablation. As detailed in Table V, we perform CLIP text encoding, with known cases and unknown cases on the RIDI [7] benchmark. In the unknown case, the keywords are placed with ‘unknown’ as shown in Figure 2. The report shows reducing orientation and positional ATE by 
+
+54 % (0.18 → 0.08 rad ) and 23 % (1.70 → 1.31 m ), respec-tively. This improvement validates the utility of CLIP’s shared semantic space for zero-shot generalization: by embedding unobserved noise profiles in close proximity to physically similar, known configurations (e.g., mapping a novel device JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 8
+
+Fig. 3. The figures illustrate the inference steps VS. metrics performance across datasets. The green area is the optimal range for the DPM-Solver++ scheduler 20–25 steps. TABLE IV 
+
+COMPUTATIONAL COMPLEXITY AND EFFICIENCY BENCHMARKS . HARDWARE PERFORMANCE EVALUATED USING FP32 PRECISION . B YCONSOLIDATING METRICS , WE CONTRAST ABSOLUTE PROCESSING COSTS AGAINST AMORTIZED PER -FRAME EFFICIENCY , HIGHLIGHTING THE GENERATION DENSITY OF OUR DIFFUSION MODEL OVER LONG SEQUENTIAL OUTPUTS (N = 100 ). 
+
+Model Specs GPU Inf. (RTX 3090) CPU Inf. (Edge) Amort. Latency Method Output Backbone Param FLOPs N VRAM Lat. RAM Lat. GPU Edge 
+
+(M) (G) (Fr) (MB) (ms) (GB) (ms) (ms/fr) (ms/fr) IoNet ⃗ v, ω ResNet 1.16 0.40 1 300.48 3.54 2.37 405.08 3.54 405.08 RoNIN-ResNet ⃗ v ResNet-101 15.57 0.72 1 338.47 16.31 2.45 143.94 16.31 143.94 RoNIN-TCN ⃗ v TCN 0.14 0.54 100 243.35 4.09 2.38 43.35 0.04 0.43 
+
+RoNIN-LSTM ⃗ v LSTM 0.22 0.17 100 279.82 3.58 2.39 64.48 0.04 0.64 TLIO ⃗ v, σ ResNet 5.03 0.18 1 298.17 6.93 2.44 67.13 6.93 67.13 LLIO ⃗ v, σ ResNet 7.19 0.21 1 302.28 5.85 2.38 56.99 5.85 56.99 
+
+PD (Ours) ⃗ v,⃗ω UNet 37.26 * 23.37 100 444.09 107.71 1.83 987.79 1.08 9.88  
+
+> *
+
+Includes a 2.63M VAE encoder and a 34.63M Conditional UNet framework. 
+
+TABLE V COMPARISON OF PERFORMANCE RESULTS ON THE RIDI DATASET (T = 1 ). T HE ROWS DISTINGUISH BETWEEN UNKNOWN (WITHOUT CLIP) AND 
+
+KNOWN (WITH CLIP) CONFIGURATIONS , WHILE COLUMNS SPLIT THE EVALUATION METRICS (ATE, RTE, TLR, AND MCS) FOR BOTH ORIENTATION AND POSITION . A LL VALUES ARE ROUNDED TO TWO DECIMAL PLACES , AND SUPERIOR PERFORMANCE RESULTS ARE HIGHLIGHTED IN BOLD .
+
+Config. Orientation (rad) Position (m) ATE RTE TLR MCS ATE RTE TLR MCS Unknown 0.29 ± 0.34 0.34 ± 0.35 1.00 ± 0.01 0.99 ± 0.10 1.70 ± 1.10 1.60 ± 0.80 0.98 ± 0.03 0.95 ± 0.19 
+
+Known 0.13 ± 0.05 0.17 ± 0.09 0.99 ± 0.00 0.99 ± 0.07 1.38 ± 0.79 1.39 ± 0.73 1.00 ± 0.02 0.96 ± 0.17 JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 9 
+
+> Fig. 4. t-SNE visualization of raw spectrum for RIDI user profiles. The plot demonstrates that semantically similar profiles (e.g., “handheld” and “handheld speed”) cluster closely in the embedding space.
+
+to a known “handheld” profile), the model robustly adapts to unseen motion dynamics without explicit retraining. Figure 4 visualizes the t-SNE embedding of raw spectral features for RIDI user profiles, demonstrating that semantically similar profiles cluster closely in the embedding space, thereby facili-tating effective generalization through semantic proximity. As shown in Figure 4, some of the different mounting positions (e.g., “handheld” and “handheld speed”) are partially clustered closely in the embedding space, which necessitates CLIP to leverage the semantic similarity to further distinguish them. V. D ISCUSSION & L IMITATIONS 
+
+Application Realistic Latency versus Hard Real-Time Ex-ecution. Existing approaches mentioned in section II rely on posterior processing, incurring a prohibitive latency of 1 s .Although our model achieves an amortized processing time of 9.88 ms per frame (processing a 100-frame window in 
+
+987 .79 ms ), a critical distinction must be made between offline batch throughput and hard real-time execution. In closed-loop navigation, causal dependencies dictate that state estimation cannot incorporate future frames. Given our sliding window hop size of 1 s (100 samples), strict sequential execution on a standard edge CPU (e.g., Raspberry Pi 5) would exceed this temporal constraint, potentially inducing buffer overflow. Therefore, while our T = 1 convergence drastically mitigates the computational overhead inherent to multi-step diffusion, deploying PedestrianDiffusion for strictly real-time continuous navigation currently mandates discrete hardware accelerators. Ultimately, the reported 9.88 ms amortized latency validates the architecture’s theoretical throughput capacity, establishing a pathway toward—rather than an immediate realization of— CPU-bound low-latency edge operability. The issue also ap-plies to all baselines and SOTA methods, given that all ap-proaches are posterior-processing methods. Hence, the latency within next observation window (e.g., 1 s ) is the same for all methods. 
+
+Limits of Cross-Domain Generalization. Despite substantial improvements in trajectory consistency, residual variance in orientation estimates delineates the boundaries of static seman-tic conditioning. While multimodal embeddings successfully mitigate global device heterogeneity, they cannot entirely com-pensate for disjoint, high-frequency sensor noise profiles. This suggests that the remaining orientation errors propagate from low-level stochastic distributional shifts rather than high-level semantic discrepancies. Consequently, achieving robust zero-shot orientation generalization likely necessitates complemen-tary paradigms, such as test-time adaptation, to dynamically align sensor distributions during inference. 
+
+Computational Capacity versus Localization Precision. 
+
+PedestrianDiffusion navigates the fundamental trade-off be-tween architectural capacity and state estimation precision. Although the 37 .26 M parameter backbone is substantially heavier than discriminative regression baselines, this represen-tational density is strictly necessary to model the full spec-tral bandwidth of pedestrian kinematics without underfitting complex motion manifolds. Crucially, our amortized efficiency benchmarks ( 1.08 ms /frame on GPU) demonstrate that this ar-chitectural scale does not preclude high-throughput operation, effectively decoupling model capacity from inference latency. 
+
+Contextual Semantic Conditioning. Our current implemen-tation relies on uniform prompt templates, which may not optimally represent individualized kinematic contexts. Future investigations will focus on fine-grained conditioning strate-gies, such as dynamically generating user-specific contextual descriptions. By more thoroughly exploiting the latent seman-tic space of the CLIP encoder, this approach aims to capture nuanced variations in stochastic sensor noise and motion dynamics across disparate operators and mounting configu-rations, thereby further enhancing zero-shot generalization. VI. C ONCLUSION 
+
+We introduced PedestrianDiffusion, a novel spectral-domain generative framework for inertial navigation. By reformulating trajectory estimation as a conditional denoising process, our approach successfully recovers the high-frequency kinematic details systematically suppressed by traditional MSE-based regression paradigms, achieving state-of-the-art performance across multiple standard benchmarks. Furthermore, our empir-ical analyses challenge the prevailing consensus that generative JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 10 
+
+models are computationally prohibitive for edge deployment. Demonstrating an amortized per-frame latency of 9.88 ms , our framework establishes a high-precision, viable alternative to lightweight sequential filters. Future research trajectories include:  
+
+> •
+
+Spectral Hardware Acceleration: Co-designing hard-ware architectures optimized for STFT processing to minimize the energy footprint of spectral backbones.  
+
+> •
+
+Adaptive Inference Scheduling: Dynamically modulat-ing the number of diffusion steps ( T ) contingent on in-stantaneous kinematic complexity to optimize the energy-accuracy Pareto front.  
+
+> •
+
+Universal Motion Foundation Models: Extending mul-timodal semantic conditioning to vehicular and aerial dy-namics, facilitating cross-domain zero-shot generalization within a unified navigational framework. VII. A CKNOWLEDGMENTS 
+
+This research was funded by the National Fire Agency (NFA) and the Korea Planning & Evaluation Institute of Industrial Technology (KEIT) of the Republic of Korea (No. RS-2025-02313957). The authors used Gemini (Google) to assist with language editing and improving the readability of portions of this manuscript. All technical content, analyses, interpretations, and conclusions were developed and verified by the authors, who take full responsibility for the contents of this paper. REFERENCES [1] J. Otegui, A. Bahillo, I. Lopetegi, and L. E. D´ ıez, “Performance evaluation of different grade imus for diagnosis applications in land vehicular multi-sensor architectures,” IEEE Sensors Journal , vol. 21, no. 3, pp. 2658–2668, 2021. [2] Z. Wang, H. Zhao, S. Qiu, and Q. Gao, “Stance-phase detection for zupt-aided foot-mounted pedestrian navigation system,” IEEE/ASME Transactions on Mechatronics , vol. 20, no. 6, pp. 3170–3181, 2015. [3] J. F. Wagner, M. Kohl, and B. Gy¨ orfi, “Reevaluation of algorithmic basics for zupt-based pedestrian navigation,” IEEE Access , vol. 10, pp. 118 419–118 437, 2022. [4] S. Herath, H. Yan, and Y. Furukawa, “Ronin: Robust neural inertial navigation in the wild: Benchmark, evaluations, & new methods,” in 2020 IEEE International Conference on Robotics and Automation (ICRA) , 2020, pp. 3146–3152. [5] W. Liu, D. Caruso, E. Ilg, J. Dong, A. I. Mourikis, K. Daniilidis, V. Kumar, and J. Engel, “Tlio: Tight learned inertial odometry,” IEEE Robotics and Automation Letters , vol. 5, no. 4, pp. 5653–5660, 2020. [6] C. Chen, X. Lu, A. Markham, and N. Trigoni, “Ionet: Learning to cure the curse of drift in inertial odometry,” Proceedings of the AAAI Conference on Artificial Intelligence , vol. 32, no. 1, Apr. 2018. [Online]. Available: https://ojs.aaai.org/index.php/AAAI/article/view/12102 [7] H. Yan, Q. Shan, and Y. Furukawa, “Ridi: Robust imu double integration,” 2017. [Online]. Available: https://arxiv.org/abs/1712.09004 [8] L. Sher, “Personal inertial navigation system (pins),” DARPA, Arlington, TX, USA, Tech. Rep , 1996. [9] E. Foxlin, “Pedestrian tracking with shoe-mounted inertial sensors,” 
+
+IEEE Computer Graphics and Applications , vol. 25, no. 6, pp. 38–46, 2005. [10] I. Skog, J.-O. Nilsson, and P. H¨ andel, “Evaluation of zero-velocity detec-tors for foot-mounted inertial navigation systems,” in 2010 International Conference on Indoor Positioning and Indoor Navigation , 2010, pp. 1–6. [11] B. Rao, E. Kazemi, Y. Ding, D. M. Shila, F. M. Tucker, and L. Wang, “Ctin: Robust contextual transformer network for inertial navigation,” in 
+
+Proceedings of the AAAI Conference on Artificial Intelligence , vol. 36, no. 5, 2022, pp. 5413–5421. [12] Y. Wang, J. Kuang, X. Niu, and J. Liu, “Llio: Lightweight learned inertial odometer,” IEEE Internet of Things Journal , vol. 10, no. 3, pp. 2508– 2518, 2022. [13] R. K. Jayanth, Y. Xu, Z. Wang, E. Chatzipantazis, K. Daniilidis, and D. Gehrig, “Eqnio: Subequivariant neural inertial odometry,” in 
+
+International Conference on Learning Representations , vol. 2025, 2025, pp. 40 857–40 893. [14] X. Yu, S. Zhang, X. Song, X. Qin, and S. Jiang, “Trajectory diffusion for objectgoal navigation,” Advances in Neural Information Processing Systems , vol. 37, pp. 110 388–110 411, 2024. [15] X. Teng, C. Li, S. Xu, Z. Hao, D. Guo, J. Li, H. Li, W. Meng, and X. Zhang, “Diffusionimu: Diffusion-based inertial navigation with iterative motion refinement,” in Proceedings of the Thirty-Fourth Inter-national Joint Conference on Artificial Intelligence , 2025, pp. 8787– 8795. [16] J. Ho, A. Jain, and P. Abbeel, “Denoising diffusion probabilistic models,” in Advances in Neural Information Processing Systems , vol. 33, 2020, pp. 6840–6851. [Online]. Available: https://proceedings.neurips. cc/paper/2020/file/4c5bcfec8584af0d967f1ab10179ca4b-Paper.pdf [17] P. Dhariwal and A. Nichol, “Diffusion models beat gans on image synthesis,” in Proceedings of the 35th International Conference on Neural Information Processing Systems , ser. NIPS ’21. Red Hook, NY, USA: Curran Associates Inc., 2021. [18] A. Ramesh, P. Dhariwal, A. Nichol, C. Chu, and M. Chen, “Hierarchical text-conditional image generation with clip latents,” arXiv preprint arXiv:2204.06125 , vol. 1, no. 2, p. 3, 2022. [19] J. Sohl-Dickstein, E. Weiss, N. Maheswaranathan, and S. Ganguli, “Deep unsupervised learning using nonequilibrium thermodynamics,” in 
+
+International conference on machine learning . pmlr, 2015, pp. 2256– 2265. [20] Y. Song, J. Sohl-Dickstein, D. P. Kingma, A. Kumar, S. Ermon, and B. Poole, “Score-based generative modeling through stochastic differential equations,” 2021. [Online]. Available: https://arxiv.org/abs/ 2011.13456 [21] A. Lugmayr, M. Danelljan, A. Romero, F. Yu, R. Timofte, and L. Van Gool, “Repaint: Inpainting using denoising diffusion probabilistic models,” in Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , 2022, pp. 11 461–11 471. [22] H. Lin, Y. Wang, M. Huo, C. Peng, Z. Liu, and M. Tomizuka, “Joint pedestrian trajectory prediction through posterior sampling,” in 2024 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, 2024, pp. 5672–5679. [23] W. Mao, C. Xu, Q. Zhu, S. Chen, and Y. Wang, “Leapfrog diffu-sion model for stochastic trajectory prediction,” in Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , 2023, pp. 5517–5526. [24] D. P. Kingma and M. Welling, “Auto-encoding variational bayes,” in 
+
+International Conference on Learning Representations (ICLR) , 2014. [25] C. Chen, P. Zhao, C. X. Lu, W. Wang, A. Markham, and N. Trigoni, “Oxiod: The dataset for deep inertial odometry,” 2018. [Online]. Available: https://arxiv.org/abs/1809.07491 [26] A. Radford, J. W. Kim, C. Hallacy, A. Ramesh, G. Goh, S. Agarwal, G. Sastry, A. Askell, P. Mishkin, J. Clark et al. , “Learning transferable visual models from natural language supervision,” in International Conference on Machine Learning . PMLR, 2021, pp. 8748–8763. [27] W. Peebles and S. Xie, “Scalable diffusion models with transformers,” 
+
+arXiv preprint arXiv:2212.09748 , 2022. [28] Y. Xie, M. Yuan, B. Dong, and Q. Li, “Diffusion model for generative image denoising,” 2023. [Online]. Available: https://arxiv.org/abs/2302. 02398 [29] C. Lu, Y. Zhou, F. Bao, J. Chen, C. Li, and J. Zhu, “Dpm-solver++: Fast solver for guided sampling of diffusion probabilistic models,” Machine Intelligence Research , pp. 1–22, 2025. [30] A. Q. Nichol and P. Dhariwal, “Improved denoising diffusion probabilis-tic models,” in International conference on machine learning . PMLR, 2021, pp. 8162–8171. [31] C. Lu, Y. Zhou, F. Bao, J. Chen, C. Li, and J. Zhu, “Dpm-solver: A fast ode solver for diffusion probabilistic model sampling in around 10 steps,” in Advances in Neural Information Processing Systems , vol. 35, 2022, pp. 5775–5787. [Online]. Available: https://proceedings.neurips.cc/paper files/paper/ 2022/file/27988358485203369a4d32095f9c9b13-Paper-Conference.pdf [32] A. Kendall, Y. Gal, and R. Cipolla, “Multi-task learning using uncer-tainty to weigh losses for scene geometry and semantics,” in Proceedings of the IEEE conference on computer vision and pattern recognition ,2018, pp. 7482–7491. [33] Y. Song, P. Dhariwal, M. Chen, and I. Sutskever, “Consistency models,” in International Conference on Machine Learning . PMLR, 2023, pp. 32 211–32 252. JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 11 
+
+[34] T. Yin, M. Gharbi, R. Zhang, E. Shechtman, F. Durand, W. T. Freeman, and T. Park, “One-step diffusion with distribution matching distillation,” in Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , 2024, pp. 6613–6623. [35] J. Sturm, N. Engelhard, F. Endres, W. Burgard, and D. Cremers, “A benchmark for the evaluation of rgb-d slam systems,” in 2012 IEEE/RSJ International Conference on Intelligent Robots and Systems , 2012, pp. 573–580. JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 12       
+
+> TABLE VI DETAILED STATISTICS FOR THE OXIOD, RIDI, R ONIN, AND TLIO DATASETS .SEQ : N UMBER OF SEQUENCES ,SAMPLES : N UMBER OF SAMPLES
+> (WINDOWS ). P ERCENTAGES IN PARENTHESES REPRESENT THE CONTRIBUTION OF EACH DATASET TO THE COMBINED HYBRID DATASET .
+
+Dataset GT Train Validation Test Seq Samples Seq Samples Seq Samples 
+
+OxIOD (VICON) VICON 138 (19.8%) 123,874 (12.8%) 22 (21.0%) 20,514 (14.2%) 6 (4.6%) 581 (1.2%) OxIOD (Tango) Tango 138 (19.8%) 12,153 (1.3%) 22 (21.0%) 736 (0.5%) 6 (4.6%) 303 (0.6%) RIDI Tango 66 (9.5%) 39,514 (4.1%) 10 (9.5%) 5,952 (4.1%) 18 (13.8%) 2,174 (4.3%) RoNIN ARCore 72 (10.3%) 240,838 (24.9%) 16 (15.2%) 49,348 (34.1%) 32 (24.6%) 17,713 (35.2%) (Seen) 
+
+32 (24.6%) 18,218 (36.2%) (Unseen) 
+
+TLIO VIO 283 (40.6%) 549,814 (56.9%) 35 (33.3%) 67,969 (47.0%) 36 (27.7%) 11,379 (22.6%) 
+
+> TABLE VII HYPERPARAMETERS EMPLOYED FOR THE SPECTRAL TRANSFORMATION AND GLOBAL NORMALIZATION STRATEGY .
+
+Parameter Value 
+
+Sampling Rate ( fs) ≈ 100 Hz STFT Window Size 30 FFT Points ( Nfft ) 30 Hop Size 14 Spectral Output Shape (16 , 8, 2) 
+
+Normalization Method Global Max Std    
+
+> TABLE VIII NORMALIZATION PARAMETERS (S PECTRAL DOMAIN )
+
+Signal Component Std. Dev. ( 5 × σ) Physical Unit 
+
+Spectral Accel. 28 .91 m/s2
+
+Spectral Gyro. 11 .92 rad /s
+
+Spectral Velocity 65 .76 m/s
+
+Spectral Ang. Vel. 14 .01 rad /s 
+
+> Note: Values represent the scaled standard deviation of the Short-Time Fourier Transform (STFT) magnitudes ×5.
+
+VIII. A PPENDIX 
+
+A. Spectral-Domain Configuration 
+
+Table VII and Table VIII detail the hyperparameters for the spectral transformation and global standardization. We employ a hop size of 14 samples ( 0.14 s stride) to prioritize high-resolution trajectory reconstruction. However, these STFT parameters—particularly window overlap—can be adjusted to balance computational throughput against responsiveness, accommodating strict low-latency constraints during deploy-ment, provided that hardware computational benchmarks per-mit it. To formalize the uniform bound of the approximation error, 
+
+ϵ, across the highly anisotropic 6D kinematic manifold, we analyze the spectral preconditioning properties of the Short-Time Fourier Transform (STFT). In the raw temporal domain, the signal covariance Σ0 is severely ill-conditioned due to vast scale and dynamic range disparities between translational velocity, ⃗ v, and rotational velocity, ⃗ω. The STFT projects these signals into a frequency-aligned basis, enabling modality-specific global standardization (normalized relative to 5σv
+
+and 5σω ). This diagonal scaling effectively preconditions the anisotropic covariance matrix, mapping the 6D manifold into an isotropic domain where the condition number is strictly bounded: 
+
+κ(Σ STFT ) = λmax 
+
+λmin 
+
+≤ C (16) In the context of a single-step deterministic Probability Flow ODE solve (e.g., via DPM-Solver), the local truncation error is intrinsically bounded by the Lipschitz constant of the score estimator, ∇xt log pt(xt). By enforcing a balanced signal-to-noise ratio (SNR) across both translational and rotational fre-quency bands, our spectral preconditioning averts asymmetric gradient inflation within the score network. This mathematical regularity guarantees that the approximation error ϵ remains uniformly and symmetrically bounded across majority kine-matic dimensions. 
+
+B. Datasets 
+
+We evaluate our method on four datasets: OxIOD [25], RIDI [7], RoNIN [4], and TLIO [5]. These datasets employ diverse ground truth acquisition mechanisms, ranging from high-precision motion capture to smartphone-based SLAM. The OxIOD dataset contains a subset with VICON annota-tions, offering the highest precision in temporal and spatial alignment, albeit in small-scale controlled environments. For larger-scale environments, RIDI and the remainder of OxIOD utilize Google Tango, which leverages active depth sensing and visual-inertial SLAM. In contrast, RoNIN utilizes Google ARCore annotations, and the TLIO dataset relies on a pro-prietary VIO pipeline. TLIO is notably the largest dataset, comprising 60 hours of data with complex 3D motion (e.g., stair traversal), whereas the other datasets primarily feature 2D planar trajectories. This diverse combination of high-precision and large-scale data ensures comprehensive coverage of real-world scenarios, enhancing the generalizability of our model. Detailed dataset statistics are provided in Table VI.
