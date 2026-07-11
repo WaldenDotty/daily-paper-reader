@@ -6,70 +6,58 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-10
-- 运行时间：2026-07-10 21:32:23 UTC
+- 最新运行日期：2026-07-11
+- 运行时间：2026-07-11 20:39:52 UTC
 - 运行状态：成功
-- 本次总论文数：16
-- 精读区：7
-- 速读区：9
+- 本次总论文数：12
+- 精读区：6
+- 速读区：6
 
 ### 今日简报（AI）
-今日精读聚焦航天器单目视觉位姿估计，速读涵盖接近安全区域与卡尔曼滤波改进。  
-最值得关注的是基于几何感知的GAP-GDRNet方法，在单目标合成数据集上实现高精度6D位姿感知。  
-后续可探索合成数据的真实场景迁移，并留意旋转约束下的安全接近策略。
-- 详情：[/202607/10/README](/202607/10/README)
+1) 今日12篇论文推荐，精读聚焦月球着陆轨迹优化与南极导航精度分析，高分论文揭示关键突破。  
+2) 最值得关注《Online Modeling and Sequential Convex Programming for Lunar Landing Trajectory Optimization》（10分）提出的序列凸规划方法，以及《The Cost of Lunar South-Polar Geometry, and Surface Beacons as the Efficient Fix》（9分）对表面信标降低几何稀释精度的验证。  
+3) 建议优先精读以上两篇，关注凸优化在复杂约束轨迹规划中的应用，以及信标部署对导航效能的实际增益。
+- 详情：[/202607/11/README](/202607/11/README)
 
 ### 精读区论文标签
-1. [GAP-GDRNet: Geometry-Aware Monocular Visual Pose Sensing on a Single-Target Synthetic Spacecraft Dataset](/202607/10/2607.02360v1-gap-gdrnet-geometry-aware-monocular-visual-pose-sensing-on-a-single-target-synthetic-spacecraft-dataset)  
+1. [Online Modeling and Sequential Convex Programming for Lunar Landing Trajectory Optimization](/202607/11/2607.02750v1-online-modeling-and-sequential-convex-programming-for-lunar-landing-trajectory-optimization)  
+   标签：评分：10.0/10、query:cislunar-dyn-nav
+   evidence：月球着陆轨迹优化与在线建模
+2. [The Cost of Lunar South-Polar Geometry, and Surface Beacons as the Efficient Fix: A Dilution-of-Precision Analysis](/202607/11/2607.06212v1-the-cost-of-lunar-south-polar-geometry-and-surface-beacons-as-the-efficient-fix-a-dilution-of-precision-analysis)  
    标签：评分：9.0/10、query:cislunar-dyn-nav
-   evidence：单目航天器位姿估计用于非合作交会
-2. [GAP-GDRNet: Geometry-aware monocular 6D pose estimation for spacecraft using synthetic geometric supervision](/202607/10/2607.02360v3-gap-gdrnet-geometry-aware-monocular-6d-pose-estimation-for-spacecraft-using-synthetic-geometric-supervision)  
-   标签：评分：9.0/10、query:cislunar-dyn-nav
-   evidence：利用合成几何监督的航天器单目6D位姿估计
-3. [Optimality-Informed Neural Networks for Lunar Landing Trajectory Optimization](/202607/10/2607.02741v1-optimality-informed-neural-networks-for-lunar-landing-trajectory-optimization)  
-   标签：评分：9.0/10、query:cislunar-dyn-nav
-   evidence：基于最优性信息神经网络的月球着陆轨迹优化；直接匹配月球近距离自主导航算法
-4. [Online Modeling and Sequential Convex Programming for Lunar Landing Trajectory Optimization](/202607/10/2607.02750v1-online-modeling-and-sequential-convex-programming-for-lunar-landing-trajectory-optimization)  
-   标签：评分：9.0/10、query:cislunar-dyn-nav
-   evidence：月球着陆轨迹优化与在线辨识
-5. [Two-boost problem for the rotating Kepler problem](/202607/10/2607.03139v1-two-boost-problem-for-the-rotating-kepler-problem)  
-   标签：评分：9.0/10、query:cislunar-dyn-nav
-   evidence：旋转开普勒问题的两次加速问题，适用于低能量转移轨道
-6. [An Efficient Non-Gaussian Chance Constraint Method for Stochastic Nonlinear Problems in Spaceflight](/202607/10/2607.03424v1-an-efficient-non-gaussian-chance-constraint-method-for-stochastic-nonlinear-problems-in-spaceflight)  
-   标签：评分：9.0/10、query:cislunar-dyn-nav
-   evidence：针对地月空间环境中的非高斯机会约束
-7. [The Cost of Lunar South-Polar Geometry, and Surface Beacons as the Efficient Fix: A Dilution-of-Precision Analysis](/202607/10/2607.06212v1-the-cost-of-lunar-south-polar-geometry-and-surface-beacons-as-the-efficient-fix-a-dilution-of-precision-analysis)  
-   标签：评分：9.0/10、query:cislunar-dyn-nav
-   evidence：月球PNT架构分析，南极精度因子分析
+   evidence：直接涉及月球定位导航授时架构、卫星几何及表面信标，用于南极多传感器融合定位授时。
+3. [An Efficient Non-Gaussian Chance Constraint Method for Stochastic Nonlinear Problems in Spaceflight](/202607/11/2607.03424v1-an-efficient-non-gaussian-chance-constraint-method-for-stochastic-nonlinear-problems-in-spaceflight)  
+   标签：评分：8.0/10、query:cislunar-dyn-nav
+   evidence：应用于地月环境及深空飞越，处理非高斯不确定性，用于轨迹优化与制导。
+4. [WinTA-GIL: Windowed Trajectory Alignment for GNSS-IMU-LiDAR Heading Refinement in Intermittent Signal Environments](/202607/11/2607.04879v1-winta-gil-windowed-trajectory-alignment-for-gnss-imu-lidar-heading-refinement-in-intermittent-signal-environments)  
+   标签：评分：8.0/10、query:cislunar-dyn-nav
+   evidence：针对GNSS-IMU-LiDAR的窗口轨迹对齐航向精化方法，适用于信号间歇环境的多传感器融合
+5. [Uncertainty-Aware Velocity Correction for Proprioceptive Vehicle Localization using Evidential Mamba](/202607/11/2607.05669v1-uncertainty-aware-velocity-correction-for-proprioceptive-vehicle-localization-using-evidential-mamba)  
+   标签：评分：8.0/10、query:cislunar-dyn-nav
+   evidence：利用证据深度学习进行不确定性感知的IMU漂移校正，实现自主定位，可应用于月球邻近操作
+6. [SCI-Mamba: Unsupervised Learning based Low-Light Image Enhancement for Non-Cooperative Spacecraft](/202607/11/2607.08033v1-sci-mamba-unsupervised-learning-based-low-light-image-enhancement-for-non-cooperative-spacecraft)  
+   标签：评分：8.0/10、query:cislunar-dyn-nav
+   evidence：面向非合作航天器的无监督低光照图像增强；直接支持月球接近段的自主交会与位姿估计
 
 ### 速读区论文标签
-1. [Reachability-Based Safe-Start Regions for Approach to a Tumbling Target with Rotating LOS Constraints](/202607/10/2607.02128v1-reachability-based-safe-start-regions-for-approach-to-a-tumbling-target-with-rotating-los-constraints)  
-   标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：翻滚目标自主接近与旋转视线约束
-2. [Neural-Enhanced Micro-Kalman Filtering for Satellite Tracking: A Comparative Study](/202607/10/2607.06830v1-neural-enhanced-micro-kalman-filtering-for-satellite-tracking-a-comparative-study)  
-   标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：提出神经增强微卡尔曼滤波器用于卫星跟踪，直接适用于月球自主导航算法
-3. [Derivations of Error-State Kalman Filter Kinematics for Globally Applicable Aided Inertial Navigation Systems](/202607/10/2607.03211v1-derivations-of-error-state-kalman-filter-kinematics-for-globally-applicable-aided-inertial-navigation-systems)  
+1. [Derivations of Error-State Kalman Filter Kinematics for Globally Applicable Aided Inertial Navigation Systems](/202607/11/2607.03211v1-derivations-of-error-state-kalman-filter-kinematics-for-globally-applicable-aided-inertial-navigation-systems)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：误差状态卡尔曼滤波用于惯性导航，适用于包括地月空间的全球系统
-4. [Lost in Time? Continuous Symmetry and Identifiability in Aided Inertial Navigation with Unknown Measurement Delays](/202607/10/2607.03699v1-lost-in-time-continuous-symmetry-and-identifiability-in-aided-inertial-navigation-with-unknown-measurement-delays)  
+   evidence：用于辅助惯性导航的误差状态卡尔曼滤波
+2. [Lost in Time? Continuous Symmetry and Identifiability in Aided Inertial Navigation with Unknown Measurement Delays](/202607/11/2607.03699v1-lost-in-time-continuous-symmetry-and-identifiability-in-aided-inertial-navigation-with-unknown-measurement-delays)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：多传感器辅助惯性导航中的未知延迟问题
-5. [GAP-GDRNet: Geometry-Aware Monocular Visual Pose Sensing on a Single-Target Synthetic Spacecraft Dataset](/202607/10/2607.02360v2-gap-gdrnet-geometry-aware-monocular-visual-pose-sensing-on-a-single-target-synthetic-spacecraft-dataset)  
+   evidence：未知测量延迟下的辅助惯性导航，与地月定位多传感器融合相关
+3. [Multi Impulse Low Earth Orbit Maneuver Synthesis Through Thrust Measure Primer Vector Conditions and Piecewise Multiple Shooting](/202607/11/2607.05057v1-multi-impulse-low-earth-orbit-maneuver-synthesis-through-thrust-measure-primer-vector-conditions-and-piecewise-multiple-shooting)  
+   标签：评分：7.0/10、query:cislunar-dyn-nav
+   evidence：适用于地月系统的轨迹优化方法
+4. [SASGeo: Stability-Aware Semantic Map Localization for GNSS-Denied UAVs -- A Framework and Synthetic Proof of Concept](/202607/11/2607.07737v1-sasgeo-stability-aware-semantic-map-localization-for-gnss-denied-uavs----a-framework-and-synthetic-proof-of-concept)  
+   标签：评分：7.0/10、query:cislunar-dyn-nav
+   evidence：面向GNSS拒止无人机的语义地图定位，可迁移至地月空间多传感器融合定位
+5. [Certified Breathing Stability Regions in Nonlinear Dynamical Systems: Composite Lyapunov Certificates, M-Matrix Conditions, and a Resilience-Fragility Correspondence](/202607/11/2607.04305v1-certified-breathing-stability-regions-in-nonlinear-dynamical-systems-composite-lyapunov-certificates-m-matrix-conditions-and-a-resilience-fragility-correspondence)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：航天器单目视觉自主位姿感知
-6. [Docking of Autonomous Vehicles with a Stationary Docking Station in 3D Space](/202607/10/2607.02478v1-docking-of-autonomous-vehicles-with-a-stationary-docking-station-in-3d-space)  
+   evidence：通过复合Lyapunov函数获得非线性动力系统的认证稳定区域；可应用于地月系统轨迹稳定性分析
+6. [Learning Stable Controlled Dynamical Systems via Input-Contraction Neural Differential Models](/202607/11/2607.05718v1-learning-stable-controlled-dynamical-systems-via-input-contraction-neural-differential-models)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：自主航天器对接的有限时间滑模控制策略
-7. [PedestrianDiffusion: Multimodal Generative Denoising and Dense State Estimation for Inertial Navigation](/202607/10/2607.03349v1-pedestriandiffusion-multimodal-generative-denoising-and-dense-state-estimation-for-inertial-navigation)  
-   标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：基于扩散模型的多模态生成式状态估计框架，可迁移至地月空间定位中的多传感器融合
-8. [Learning Stable Controlled Dynamical Systems via Input-Contraction Neural Differential Models](/202607/10/2607.05718v1-learning-stable-controlled-dynamical-systems-via-input-contraction-neural-differential-models)  
-   标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：学习具有控制输入的稳定动力系统，可应用于轨迹优化
-9. [UniLM-Nav: A Unified Framework for Zero-Shot Last-Mile Navigation](/202607/10/2607.06537v1-unilm-nav-a-unified-framework-for-zero-shot-last-mile-navigation)  
-   标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：基于多模态大语言模型的零样本开放词汇末端导航框架，可应用于月球接近操作中的自主导航
+   evidence：学习稳定受控动力系统的方法可应用于地月轨迹稳定性分析
 
 
 <div class="dpr-home-promo-card">

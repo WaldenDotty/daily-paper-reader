@@ -1,0 +1,253 @@
+Title: SASGeo: Stability-Aware Semantic Map Localization for GNSS-Denied UAVs – A Framework and Synthetic Proof of Concept
+
+URL Source: https://arxiv.org/pdf/2607.07737v1
+
+Published Time: Fri, 10 Jul 2026 00:01:07 GMT
+
+Number of Pages: 5
+
+Markdown Content:
+# SASGeo: Stability-Aware Semantic Map Localization for GNSS-Denied UAVs – A Framework and Synthetic Proof of Concept 
+
+Natalia Trukhina and Vadim Vashkelis 
+
+Embedded Intelligence Lab (emilab.org) 
+
+{ntrukhina, vvashkelis }@emilab.org 
+
+Abstract —GNSS-denied unmanned aerial vehicles require oc-casional absolute position fixes to bound the drift of visual– inertial odometry. Cross-view image retrieval can provide such fixes, but raw appearance is sensitive to season, illumination, viewpoint, map age, and sensor modality. We propose SASG EO ,a semantic map-localization framework that represents the envi-ronment through persistent structures such as roads, buildings, waterways, railways, intersections, and field boundaries. The method combines semantic raster alignment, relational graph evidence, feature stability and geographic distinctiveness, ex-plicit positive/contradictory/unknown observations, and integrity-aware rejection of ambiguous fixes. Unlike a broad architecture-only proposal, this paper specifies concrete weighting and decision models and reports a reproducible synthetic proof of concept. In 220 randomized retrieval trials with rotation, scale changes, partial crops, occlusion, simulated map changes, and hard semantic decoys, a global semantic descriptor achieved 58.6% Recall@1, while spatial semantic matching variants achieved 94.5–95.5%. Wilson 95% intervals separate the global descriptor from the spatial variants but overlap among the spatial variants, so the experiment supports semantic geometry rather than a definitive benefit from each proposed module. The preliminary experiment does not validate real-flight navigation; rather, it demonstrates that structured semantic geometry can discriminate locations under controlled cross-view perturbations and identifies the harder aliasing, map-aging, and rejection tests required next. 
+
+Index Terms —UAV localization, GNSS-denied navigation, se-mantic maps, cross-view geo-localization, map matching, integrity monitoring, visual–inertial odometry. 
+
+I. I NTRODUCTION 
+
+GNSS is lightweight and globally referenced, but can be-come unreliable under multipath, obstruction, jamming, or spoofing. Visual–inertial odometry (VIO) supplies high-rate relative motion, yet its error grows without absolute observa-tions [1]. A UAV can obtain global corrections by matching onboard imagery to georeferenced satellite or aerial imagery. Learned cross-view retrieval has progressed through datasets such as University-1652 and SUES-200 and practical UAV– satellite matching methods [2], [3], [4], but image appearance can differ substantially with altitude, season, illumination, viewpoint, sensor modality, and map age. Many geographic structures are more persistent than their pixels. Road topology, rivers, railways, bridges, building foot-prints, and coastlines may remain identifiable even when color and texture change. Prior studies have consequently explored OpenStreetMap (OSM), vector maps, semantic embeddings, object graphs, road-geometry bird’s-eye-view (BEV) calibra-tion, and sequential filters [5], [6], [7], [8], [9], [10], [11], [12], [13], [14], [15]. However, the literature generally covers subsets of five requirements that matter for safety-critical map fixes: dense semantic evidence, relational verification, temporal consistency, explicit persistence modeling, and a calibrated option to reject ambiguous observations. This paper proposes SASG EO , whose technical thesis is that an absolute map fix should be based on the joint evidence of (i) dense semantic alignment, (ii) semantic-object relationships, (iii) temporal and map-age persistence, and (iv) an integrity decision that can withhold the fix. The contributions are:  
+
+> •
+
+an operational stability-and-distinctiveness model rather than an unspecified semantic weight;  
+
+> •
+
+a joint raster–graph–temporal localization objective with separate positive, contradictory, and unknown evidence;  
+
+> •
+
+a decision-theoretic acceptance rule and risk–coverage eval-uation for false absolute fixes;  
+
+> •
+
+a reproducible synthetic proof of concept with controlled perturbations, hard decoys, confidence intervals, and ablated risk–coverage curves;  
+
+> •
+
+an embedded implementation and real-world evaluation plan that clearly distinguishes design targets from measured results. The experiment is intentionally modest. It tests the central semantic-discrimination mechanism, not end-to-end flight per-formance, learned perception, or calibrated field integrity. II. R ELATED WORK AND POSITIONING 
+
+A. Cross-view and semantic map localization 
+
+Cross-view methods commonly retrieve a satellite tile from a UAV image and optionally refine the pose. University-1652, SUES-200, and location-classification matching estab-lished strong benchmark-driven formulations for UAV–satellite retrieval [2], [3], [4]. Hierarchical matching adds semantic or structural constraints before fine correspondences [13]. Semantic-map methods instead align camera observations with vector or rasterized geographic information: Vojir et al. used building instances [5]; Zhou et al. used image-to-OSM likelihoods with sequential Monte Carlo [6]; Schmidt et al. and Zilke matched semantic UAV observations to OSM/map arXiv:2607.07737v1 [cs.RO] 7 Jul 2026 Real OSM map fragment Semantic classes       
+
+> roads + water + buildings
+> carry stronger evidence
+> Persistence-weighted cues
+> similar class counts,
+> different geometry
+> Confusable candidate
+> major road minor road building water green/landuse rail Data: OpenStreetMap contributors
+
+Fig. 1. Reader-level intuition for SASG EO using a real OpenStreetMap vector extract near Cambridge, Massachusetts. A map fragment is converted into semantic classes such as roads, buildings, water, green/land-use areas, and railways. Persistent and distinctive structures receive stronger evidence weights, while a confusable candidate can share similar class counts but differ in semantic geometry. Data: © OpenStreetMap contributors, ODbL; rendered locally from vector features rather than from a map tile. 
+
+data [7], [8]; Ouyang et al. combined vector-shape match-ing and particle filtering [9]; and VecMapLocNet learned UAV-to-vector-map features [11]. Object-graph matching and semantic-weighted particle filtering are recent complementary directions [14], [15]. Table I clarifies that the claimed novelty is not any individ-ual component. It is the integrated probabilistic role assigned to each component: raster evidence proposes and refines poses; object relations verify structure; persistence weights determine evidential reliability; and an integrity model decides whether the result may enter the navigation estimator. III. P ROBLEM FORMULATION 
+
+Let the map contain semantic raster layers M c(r), vector entities, and a graph GM = ( VM , E M ) for classes c ∈ C . A UAV observation window produces a local bird’s-eye semantic map Lct (r) and graph Gt. The candidate map-relative pose is 
+
+ξt = [ xt, y t, ψ t, s t]T , (1) where st optionally absorbs residual scale uncertainty. The objective is not merely to rank tiles but to estimate a posterior 
+
+p(ξt | L1: t, G 1: t, U 1: t, M) (2) and determine whether its best mode is safe to use as an absolute correction. For class c and local cell r, the observation state is 
+
+zc(r) ∈ { present , absent , unknown }. (3) Unknown means that occlusion, truncation, or perception uncertainty prevents a conclusion; it must not be counted as negative evidence. IV. SASG EO METHOD 
+
+A. Semantic BEV and temporal accumulation 
+
+Camera semantic predictions are projected to a local ground plane using calibration, attitude, altitude, and optionally a DEM; road-geometry calibration can estimate such BEV ho-mographies from lanes, borders, and crosswalks in oblique UAV video [12]. Multiple frames are warped by VIO and accumulated: 
+
+Lct (r) = 
+
+Ptτ =t−K ωτ (r) W(Scτ , T t←τ )
+
+Ptτ =t−K ωτ (r) + ϵ , (4) where ωτ reflects perception and projection uncertainty. 
+
+B. Stability and distinctiveness 
+
+Persistence and geographic informativeness are separated. For feature i,
+
+σi = pci exp( −λci ai)dseason (ci, s i)viqi, (5) where pc is a class prior, ai is map age, λc is a class-specific decay rate, dseason is seasonal compatibility, vi is visibility, and qi is perception confidence. Distinctiveness is 
+
+νi = − log( P (similar configuration to i) + ϵ), (6) and the final evidence weight is wi = σiνi. A straight road can therefore be highly persistent but weakly distinctive; a bridge near a rare junction can be both. 
+
+C. Three-state semantic raster likelihood 
+
+A compatibility function distinguishes agreement, contra-diction, and missing evidence: 
+
+ℓ(z, m ) = 
+
+
+
++λ+ 
+
+> c
+
+, z = present , m = present ,
+
+−λ− 
+
+> c
+
+, z = present , m = absent ,
+
+−¯λ− 
+
+> c
+
+, z = absent , m = present ,
+
+0, z = unknown .
+
+(7) The raster objective is 
+
+JR(ξ) = X
+
+> c, r
+
+wc(r)ℓ(zc(r), M c(Tξr)) . (8) Distance-transform compatibility is used for thin lines so small map-width errors do not dominate. TABLE I POSITIONING RELATIVE TO REPRESENTATIVE SEMANTIC , VECTOR -MAP , AND CROSS -VIEW UAV LOCALIZATION WORK . “P ERSIST .” DENOTES EXPLICIT PERSISTENCE MODELING UNDER MAP AGE , SEASON , VISIBILITY , OR TRANSIENT CONTENT ; “ REJECT ” DENOTES AN EXPLICIT DECISION TO WITHHOLD AN UNCERTAIN ABSOLUTE FIX . SASG EO ENTRIES ARE PROPOSED CAPABILITIES , NOT REAL -FLIGHT VALIDATION CLAIMS .Method Main reference cue Dense Graph Temporal Persist. Reject Unknown Vojir et al. [5] OSM building instances partial partial – – – –Zhou et al. [6] OSM semantic likelihood ✓ – SMC – partial –Ouyang et al. [9] Vector-map shapes partial partial PF – partial –Hu et al. [10] OSM with satellite imagery ✓ – – – – –VecMapLoc. [11] UAV-to-vector-map features ✓ partial – – – –Zhang et al. [13] Satellite coarse-to-fine matching ✓ partial – – margin –Liu et al. [14] Object graph matching – ✓ – – – –SWA-PF [15] Semantic-weighted particle filter ✓ – PF class weights partial –
+
+SASG EO Raster, vector, and graph semantics ✓ ✓ proposed explicit calibrated explicit 
+
+D. Relational graph verification 
+
+Nodes encode intersections, building clusters, river bends, crossings, and polygons. Edges encode relative distance, bear-ing, adjacency, connectivity, and crossing. Given correspon-dence hypothesis π,
+
+JG(ξ, π ) = X
+
+> i↔j
+
+wiϕV (i, j ) + X
+
+> (i,k )↔(j,l )
+
+wik ϕE (( i, k ), (j, l )) .
+
+(9) Raster matching efficiently generates pose candidates; graph matching suppresses candidates with similar occupancy but incompatible topology. 
+
+E. Temporal consistency and joint score 
+
+A VIO increment ∆ ˆTt induces 
+
+JT (ξt) = −∥ Log( ξ−1
+
+> t−1
+
+ξt∆ ˆT −1 
+
+> t
+
+)∥2Σ−1
+
+> T
+
+. (10) The joint objective is 
+
+J = αtJR + βtJG + γtJT − ηJ contradiction , (11) with evidence-adaptive weights rather than fixed constants. V. I NTEGRITY -A WARE POSE ACCEPTANCE 
+
+A false fix is a candidate whose error exceeds mission tolerance emax . Let Ft denote this event. Accepting and rejecting incur 
+
+Caccept = CFF P (Ft = 1 | Et), (12) 
+
+Creject = CMR P (Ft = 0 | Et). (13) The fix is accepted only when Caccept < Creject , equivalently 
+
+P (Ft = 1 | Et) < CMR 
+
+CFF + CMR 
+
+. (14) The probability can be calibrated from candidate margin, posterior entropy, cross-class agreement, graph consistency, unknown-evidence fraction, and VIO residual. The operating point is reported using a risk–coverage curve, where coverage is the fraction of accepted fixes and risk is the false-fix rate among accepted fixes. Query (60°, change=0.16) Known evidence True reference Hard decoy 
+
+Fig. 2. Example synthetic query, observability mask, true reference, and hard semantic decoy. 
+
+VI. S YNTHETIC PROOF OF CONCEPT 
+
+A. Purpose and protocol 
+
+The experiment asks whether structured semantic geometry can retrieve a transformed local observation from hard seman-tic decoys. It does not model real aerial image segmentation or closed-loop flight. We procedurally generated 30 semantic regions of 256 ×256 
+
+cells with five layers: major roads, buildings, water, minor roads, and field boundaries. Candidate crops measured 96 ×96 
+
+cells. Each query was transformed by a randomly selected rotation in {0, 30 , 60 , 90 }◦, scale in {0.85 , 1.0, 1.15 }, retained crop fraction in {0.70 , 0.85 , 1.0}, rectangular occlusion up to 24%, and class-dependent map-change probability up to 0.32. Decoys were selected from the nearest semantic descriptors rather than uniformly, making them intentionally confusable. We ran 220 trials with ten candidates each using seed 42; the released script accepts additional seeds for longer aggregate runs. Compared variants were: (1) global semantic descriptor; (2) uniform raster distance-transform matching; (3) raster plus graph descriptor; (4) stability-weighted raster plus graph; and (5) the full model that additionally ignores unknown regions. The graph descriptor used connected-component counts and rotation-invariant pairwise-distance histograms. These sim-plified components test the formulation, not a production implementation. 
+
+B. Results 
+
+Table III shows that a global semantic description is insuf-ficient for hard decoys, while spatial raster alignment raises Recall@1 from 58.6% to 94.5%. The Wilson intervals for TABLE II SCOPE OF THE CURRENT SYNTHETIC IMPLEMENTATION RELATIVE TO THE PROPOSED FORMULATION . T HIS TABLE IS INCLUDED TO MAKE CLEAR WHICH ELEMENTS ARE EXPERIMENTALLY EXERCISED AND WHICH REMAIN ENGINEERING TARGETS FOR THE REAL -WORLD STUDY .Component Proposed formulation Synthetic proof of concept Semantic BEV, Eq. (4) Multi-frame projection from camera semantics using calibration, attitude, altitude, and VIO. Starts from synthetic semantic layers; no raw imagery, segmen-tation model, projection error, or VIO drift. Stability, Eq. (5) Class prior, map age, seasonal compatibility, visibility, and per-ception confidence. Uses hand-set class weights; no longitudinal calibration of age or season. Distinctiveness, Eq. (6) Geographic rarity of local semantic configurations. Hard decoys are chosen by nearest global semantic descriptors; no learned rarity model. Raster likelihood, Eqs. (7)–(8) Three-state positive, contradictory, and unknown evidence with semantic weights. Distance-transform raster score with contradiction penalty; un-known mask removes unobserved cells from contradiction. Graph term, Eq. (9) Correspondence-hypothesis graph matching over objects and re-lations. Connected-component counts and rotation-invariant pairwise-distance histograms. Temporal term, Eq. (10) Multi-frame VIO consistency and filter/factor-graph fusion. Not evaluated; each retrieval trial is independent. Integrity, Eqs. (12)– (14) Calibrated false-fix probability and cost-sensitive acceptance. Candidate-score margin is used as an uncalibrated rejection statistic for risk–coverage curves. TABLE III SYNTHETIC RETRIEVAL RESULTS OVER 220 RANDOMIZED TRIALS .RECALL @1 INTERVALS ARE WILSON 95% CONFIDENCE INTERVALS .
+
+Method Recall@1 (95% CI) Recall@5 MRR Global descriptor 0.586 [0.520, 0.649] 0.886 0.701 Raster, uniform 0.945 [0.907, 0.969] 1.000 0.966 Raster + graph 0.950 [0.913, 0.972] 0.995 0.968 + stability 0.950 [0.913, 0.972] 0.995 0.967 Full + unknown handling 0.955 [0.918, 0.975] 1.000 0.971 Descriptor 
+
+> Raster
+> Raster+graph
+> +stability
+> Full SASGeo-lite
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Recall@1
+
+Fig. 3. Recall@1 ablation. Dense semantic geometry provides the dominant gain in this controlled setup; stability and unknown handling produce smaller changes. 
+
+the descriptor and raster variants are well separated, but the intervals for the four spatial variants overlap. Therefore the supported conclusion is that dense semantic geometry is highly informative in this controlled setting; the present benchmark does not statistically distinguish graph verification, stability weighting, or unknown-evidence handling. This is a useful negative result because it exposes a ceiling effect: raster alignment is already strong on these synthetic maps, leaving too little room for the distinctive SASGeo modules to show aggregate Recall@1 gains. Targeted aliasing tests with repetitive topology, realistic map aging, and absent-match cases are required before claiming that the stability or graph 0.00 0.05 0.10 0.15 0.20 0.25 0.30 
+
+> Simulated map-change probability
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Recall@1
+> Raster
+> Raster+graph
+> +stability
+> Full
+
+Fig. 4. Retrieval robustness versus simulated map-change probability. 0.0 0.2 0.4 0.6 0.8 1.0 
+
+> Coverage
+> 0.00
+> 0.01
+> 0.02
+> 0.03
+> 0.04
+> 0.05
+> 0.06
+> Risk among accepted fixes
+> Raster
+> Raster+graph
+> +stability
+> Full
+
+Fig. 5. Risk–coverage curves using candidate-score margin as an uncalibrated rejection statistic. Curves are shown for all spatial ablations to test whether the added terms reduce confident false fixes. 
+
+terms improve localization reliability. The experiment therefore validates the feasibility of the scoring pipeline and motivates a second-stage study using OSM vectors and public aerial imagery, where map age, sea-sonal mismatch, segmentation confidence, and true unknown regions can be measured rather than simulated. VII. E MBEDDED IMPLEMENTATION TARGETS 
+
+The intended architecture separates a certified flight con-troller from a companion computer. A Jetson Orin NX-class module is a plausible target, but the following are design budgets, not measurements: VIO at camera rate; semantic segmentation and BEV accumulation at 5–10 Hz; coarse retrieval at 1–2 Hz; raster alignment over a small top-N
+
+set; graph verification on the best candidates; and absolute correction only after multi-frame confirmation. The map pyra-mid stores low-resolution semantic rasters for search and compact vectors/graphs for refinement. Hybrid telemetry can preserve low-rate context while transmitting selected high-detail semantic ROIs under bandwidth limits [16]; SASG EO 
+
+treats this as an implementation layer. Real profiling must report latency, memory, energy, map size, communication load, and correction frequency. VIII. R EAL -W ORLD EVALUATION PLAN 
+
+A reproducible next step uses OSM vectors as reference se-mantics and publicly distributable aerial imagery as simulated UAV observations across urban, suburban, industrial, river-side, and agricultural scenes. Evaluation must use geographic holdout regions and transformations in scale, rotation, crop, occlusion, season, and map age. Besides broad retrieval, the benchmark should include targeted aliasing: repetitive road grids, similar parcels, structurally similar intersections, absent-match queries, and map-age conflicts where raster occupancy alone is ambiguous. Required metrics include Recall@1/5, metric translation and yaw error, false-fix probability, risk– coverage area, latency, memory, and map storage. Baselines should include appearance retrieval, global semantic descrip-tors, raster-only matching, graph-only matching, and standard sequential filtering. Real UAV sequences are ultimately re-quired for oblique views, motion blur, VIO coupling, and navigation recovery. IX. L IMITATIONS 
+
+The current experiment begins from semantic layers rather than raw images and therefore does not measure perception errors. It uses discrete rotations, planar maps, simplified graphs, single-frame retrieval trials, and synthetic changes. The stability parameters are hand-set rather than calibrated from longitudinal geographic data. The confidence intervals quantify binomial uncertainty for the released 220-trial seed, not multi-region, multi-seed performance. The gains do not establish real-time feasibility or safe closed-loop operation. Feature-poor environments such as forests, deserts, snow fields, and open water may remain weakly observable. X. C ONCLUSION 
+
+SASG EO reframes UAV geo-localization as integrity-aware matching of persistent geographic structure rather than appear-ance retrieval alone. The proposed method integrates semantic rasters, relational graphs, temporal motion, persistence, un-known evidence, and explicit rejection. A controlled proof of concept shows that spatial semantic alignment strongly outperforms global semantic description under hard decoys. It also reveals the current ceiling effect: the benchmark validates semantic geometry but does not yet validate the distinctive persistence and graph claims. The resulting preprint is aconcrete, falsifiable starting point for OSM-to-aerial and real-flight evaluation rather than a claim of a completed navigation system. REPRODUCIBILITY STATEMENT 
+
+The source package includes the generator, transforma-tions, scoring functions, fixed seed, raw trials, summary metrics, figure code, and OSM vector extract for Fig. 1. The complete source code is publicly available at https: //gitlab.com/emilab-group/sasgeo. It avoids nonstandard com-piled image-processing dependencies and regenerates ar-tifacts under figures/ and results/ . Run python run_synthetic_experiment.py ; longer checks can use --seeds 42,43,44,45,46 .REFERENCES [1] T. Qin, P. Li, and S. Shen, “VINS-Mono: A robust and versatile monocular visual-inertial state estimator,” IEEE Trans. Robot. , vol. 34, no. 4, pp. 1004–1020, 2018. [2] Z. Zheng, Y. Wei, and Y. Yang, “University-1652: A multi-view multi-source benchmark for drone-based geo-localization,” in ACM Multime-dia , 2020, pp. 1395–1403. [3] R. Zhu et al., “SUES-200: A multi-height multi-scene cross-view image benchmark across drone and satellite,” IEEE TCSVT , vol. 33, no. 9, pp. 4825–4839, 2023. [4] L. Ding, J. Zhou, L. Meng, and Z. Long, “A practical cross-view image matching method between UAV and satellite for UAV-based geo-localization,” Remote Sens. , vol. 13, no. 1, art. 47, 2021. [5] T. Vojir, I. Budvytis, and R. Cipolla, “Efficient large-scale semantic visual localization in 2D maps,” in ACCV , 2020. [6] M. Zhou, X. Chen, N. Samano, C. Stachniss, and A. Calway, “Efficient localisation using images and OpenStreetMaps,” in IROS , 2021. [7] R. Schmidt, J. R¨ uter, S. Krause, and S. Schubert, “Vision-based self-localization for UAVs using semantic features and OpenStreetMap,” in

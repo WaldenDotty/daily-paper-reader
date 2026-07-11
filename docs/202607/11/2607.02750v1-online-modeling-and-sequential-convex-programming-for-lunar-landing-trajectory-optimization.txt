@@ -1,0 +1,2239 @@
+Title: Online Modeling and Sequential Convex Programming for Lunar Landing Trajectory Optimization
+
+URL Source: https://arxiv.org/pdf/2607.02750v1
+
+Published Time: Tue, 07 Jul 2026 00:11:38 GMT
+
+Number of Pages: 22
+
+Markdown Content:
+# Online Modeling and Sequential Convex Programming for Lunar Landing Trajectory Optimization 
+
+Zhenbo Wang Department of Mechanical and Aerospace Engineering The University of Tennessee 1512 Middle Drive, Knoxville, TN 37996 zwang124@utk.edu 
+
+Abstract— This paper presents a guidance framework for lunar powered descent and landing that combines sequential convex pro-gramming (SCP) with real-time online model identification. Anonconvex energy-optimal landing problem is developed and then reformulated into a sequence of convex second-order cone programs (SOCPs) through a change of variables, successive linearization, and a lossless second-order cone relaxation of the thrust direction constraint. An online identification layer, built from a recursive least squares (RLS) filter with exponential forgetting and an exponential moving average (EMA) smoother, estimates unknown gravitational, thrust-scale, and mass-gauging perturbations from noisy navigation measurements and injects a corrected bias term into the dynamics constraint of each convex subproblem at every guidance cycle. Building on this architecture and my prior work in this area, a base-line SCP algorithm and a receding-horizon online SCP algorithm with model identification are developed. Also, I try to explore some theoretical foundations, establishing the losslessness of the convex relaxation, the mean-square stability and convergence of the iden-tification filters, the guaranteed convergence of the SCP iteration, and explicit convergence radius and convergence rate results. Nu-merical simulations across four perturbation scenarios of increasing complexity are implemented in MATLAB using YALMIP and the ECOS solver. The results show that the proposed online algorithm consistently reduces landing position and velocity error and better tracks the true propellant consumption relative to an uncorrected nominal trajectory, while retaining the predictable convergence and real-time computational properties of convex optimization. 
+
+# TABLE OF CONTENTS 
+
+1. I NTRODUCTION . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 1
+
+2. P ROBLEM FORMULATION . . . . . . . . . . . . . . . . . . . . . . . . 2
+
+3. C ONVEX RELAXATION . . . . . . . . . . . . . . . . . . . . . . . . . . . 4
+
+4. O NLINE MODEL IDENTIFICATION . . . . . . . . . . . . . . . 6
+
+5. S EQUENTIAL CONVEX PROGRAMMING . . . . . . . . . 8
+
+6. T HEORETICAL ANALYSIS . . . . . . . . . . . . . . . . . . . . . . . . 11 
+
+7. N UMERICAL SIMULATIONS . . . . . . . . . . . . . . . . . . . . . . 15 
+
+8. C ONCLUSIONS . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 21 
+
+ACKNOWLEDGEMENTS . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 21 
+
+REFERENCES . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 21 
+
+BIOGRAPHY . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 22 
+
+# 1. I NTRODUCTION 
+
+Lunar landing has remained one of the most demanding maneuvers in spaceflight , and its importance has recently grown with the resurgence of international and commercial interest in returning humans and robotic systems to the lunar surface [1], [2]. Because the Moon has no atmosphere, a  
+
+> 979-8-3195-1048-8/27/ $31 .00 ©2027 IEEE
+
+descending spacecraft cannot rely on aerodynamic drag or parachutes to slow down; instead, deceleration from orbital or suborbital speed to a safe touchdown must be accomplished entirely through propulsive thrust, typically over a descent lasting only tens of seconds to a few minutes. This places the vehicle in a regime where every kilogram of propellant is precious, where attitude and thrust-vector control must be coordinated continuously and precisely, and where the terminal phase of flight leaves little margin for recovery from a poorly executed approach. Trajectory optimization is the discipline responsible for converting these competing demands (e.g., fuel economy, operation constraints, actuator limits, and terminal accuracy) into an executable guidance command profile, and it has evolved from the largely open-loop, precomputed descent profiles of the Apollo era into a real-time, closed-loop computational capability that modern landers depend upon for autonomous, pinpoint, and hazard-aware descent [3]. As lunar missions increasingly target sci-entifically compelling but topographically challenging sites, such as the permanently shadowed regions near the lunar south pole, the trajectory optimization problem has become not merely a planning convenience but a safety-critical com-ponent of the guidance, navigation, and control stack [4]. A substantial body of work has addressed the lunar and planetary powered descent trajectory optimization problem using indirect and direct methods [5]. Indirect methods ap-ply Pontryagin’s minimum principle to derive the necessary conditions of optimality, transforming the original optimal control problem into a two-point boundary value problem in the states and costates. This approach yields elegant, often closed-form characterizations of the optimal control structure and has a long history of success in powered descent guid-ance; however, it is well documented that indirect methods suffer from a small region of convergence, extreme sensitivity to the initial guess of the costate variables (which typically lack direct physical interpretation), and the need for a priori knowledge of the constrained and unconstrained arc structure when path constraints such as thrust or attitude bounds are present. These challenges make indirect methods difficult to automate reliably across a wide range of initial conditions and mission scenarios. Direct methods, by contrast, transcribe the continuous-time optimal control problem into a finite-dimensional nonlinear program through collocation or pseu-dospectral discretization, and then rely on general nonlinear programming solvers to compute a solution. Direct methods are considerably more robust to poor initial guesses than indirect methods and can handle complex path constraints, but the resulting nonlinear programs are nonconvex in gen-eral, and the underlying solvers offer no guarantee of finding a global or even a local optimum, of converging within a bounded number of iterations, or of preserving feasibility if the solver is terminated early. There are serious concerns for any guidance algorithm that must execute within a fixed computational budget onboard a spacecraft. 1
+
+> arXiv:2607.02750v1 [math.OC] 2 Jul 2026
+
+Over roughly the past two decades, convex-optimization-based approaches have emerged as an increasingly attractive alternative, particularly following the demonstration that the powered descent guidance problem for planetary landing can be exactly or losslessly reformulated as a SOCP through a combination of variable substitution and convex relaxation [6]. Because convex programs, and SOCPs in particular, can be solved to global optimality by interior-point methods very efficiently that is predictable and largely insensitive to the initial guess, this line of work has enabled real-time, onboard trajectory generation with strong feasibility and optimal-ity guarantees, and convex-optimization-based guidance has since been extended, generalized, and flight-demonstrated across a range of planetary and lunar landing scenarios [7]. When the underlying dynamics or constraints are not already convex, sequential convex programming (SCP) offers a natu-ral extension: a sequence of convex subproblems is solved, each constructed by convexifying (usually linearizing) the nonconvex elements of the problem about the solution of the previous iteration, until the iterates converge to a point satisfying the necessary conditions of optimality of the orig-inal nonconvex problem. More recently, data-driven and machine-learning-based approaches, including deep learning and reinforcement learning architectures, have been explored as a means of learning descent or landing policies directly from simulated or historical trajectory data, with the appeal of extremely fast onboard inference once a policy has been trained and some demonstrated robustness to noise and pa-rameter uncertainty during training [8], [9], [10], [11]. Despite this progress, each of these methodological families exhibits limitations that are consequential for lunar landing. Indirect and direct methods, as well as the convex and SCP approaches built upon them, are often formulated around a fixed, nominal dynamical model specified before flight. Very few of these methods, in their standard form, provide a mechanism for revising that model in response to discrep-ancies observed during the mission operation. Data-driven and learning-based methods, for their part, typically offer no formal guarantee of constraint satisfaction, convergence, or real-time computational bound at deployment time, and their performance under conditions not represented in the training distribution remains difficult to certify, a significant concern for safety-critical, one-shot maneuvers such as a lunar landing. More broadly, essentially all of these ap-proaches share a common vulnerability: the true descent dynamics experienced by a lander, subject to lunar gravita-tional anomalies, thrust miscalibration, and propellant-mass measurement uncertainty, will inevitably deviate to some de-gree from whatever nominal model was used to compute the precomputed or onboard trajectory, and a guidance algorithm that cannot detect and adapt to such deviations in real time is correspondingly exposed to degraded landing accuracy or, in the worst case, mission failure. These observations motivate the central idea of this paper: the predictable convergence, constraint satisfaction, and real-time computational properties of SCP may be combined with an online model identification mechanism to produce a guidance framework that retains the theoretical guarantees of convex optimization while also adapting in closed loop to environmental and system uncertainties that cannot be characterized before flight. The key insight that makes this combination practical is that an additive correction to the nominal dynamics model, estimated in real time from onboard navigation measurements, can be introduced into the bias term of the linearized dynamics constraint of the convex subproblem without altering the convex structure of that subproblem. The SOCP solved at each guidance cycle remains tractable and amenable to the same convergence and optimality analysis, regardless of the magnitude or time-variation of the estimated perturbation. Building on this insight, this paper makes the following contributions: (1) It develops a convex relaxation of the lunar powered descent trajectory optimization problem, via a change of variables, successive linearization, and a lossless SOC relaxation of the thrust direction constraint, that reduces the original non-convex optimal control problem to a sequence of SOCPs. (2) It introduces an online model identification framework, combining a recursive least squares (RLS) filter with expo-nential forgetting and an exponential moving average (EMA) smoother, that estimates unknown gravitational, thrust, and mass-gauging perturbations from noisy flight measurements and feeds a corrected bias term into the convex subproblem at every guidance cycle. (3) It presents both a baseline SCP algorithm and an online, receding-horizon extension that integrates the model identification framework into closed-loop guidance. (4) It provides a detailed theoretical analysis establishing the losslessness of the convex relaxation, the mean-square stability and convergence of the online iden-tification filters, the guaranteed convergence of the SCP iteration, and explicit characterizations of the convergence radius and convergence rate. (5) It numerically validates the proposed framework across four representative perturbation scenarios of increasing complexity, demonstrating that the online algorithm consistently improves landing accuracy and robustness relative to the nominal, uncorrected trajectory. The remainder of this paper is organized as follows. Section 2 formulates an energy-optimal lunar landing trajectory opti-mization problem, including the governing dynamics, bound-ary conditions, path constraints, and objective functional. Section 3 develops the convex relaxation of this problem through a change of variables that linearizes the dynamics, a successive linearization and SOC relaxation of the remaining nonconvex constraints, and a trapezoidal discretization that yields a finite-dimensional convex subproblem. Section 4 introduces the online model identification framework, char-acterizing the sources of dynamical uncertainty considered in this work, developing the RLS and EMA filters used to estimate the resulting perturbation in real time, and describing how the identified perturbation is incorporated into an aug-mented linearized dynamical model. Section 5 presents the baseline SCP algorithm and its online extension, detailing the closed-loop measurement, estimation, and receding-horizon replanning architecture that integrates online model identi-fication with SCP. Section 6 provides a theoretical analysis of the proposed framework. Section 7 presents numerical simulations validating the proposed framework across four perturbation scenarios. Finally, Section 8 concludes the paper and discusses directions for future work. 
+
+# 2. P ROBLEM FORMULATION 
+
+This section formulates a three-dimensional (3D) lunar pow-ered descent and landing trajectory optimization problem that serves as the basis for this study. The lander must be guided from a given suborbital or near-surface state to a designated landing site using rocket thrust as the only means of maneuver, since the lunar environment provides neither an atmosphere nor aerodynamic forces. Consequently, every design choice or solution directly impacts propellant con-sumption, and the trajectory must respect physical bounds on the propulsion system throughout the entire landing mission. 2Coordinate Frame and State Variables 
+
+The motion of the lander is described in a local vertical, local horizontal (LVLH) frame with east–north–up (ENU) coordinates. The origin of the frame is fixed at the designated landing site on the lunar surface. Within this frame, the lander position is r = [ x, y, z ]T ∈ R3 and the velocity is v =[vx, v y , v z ]T ∈ R3, where the z-axis points radially upward and the x- and y-axes span the local horizontal plane. The lander mass at time t is denoted as m(t), and the gravitational acceleration at the lunar surface is taken as the constant vector 
+
+g = [0 , 0, −g]T with g = 1 .6229 m /s2. The aggregate state vector is 
+
+x(t) = x, y, z, v x, v y , v z , m T ∈ R7. (1) 
+
+Equations of Motion 
+
+The 3D governing equations of motion for the powered descent and landing are [9] 
+
+˙r = v, (2) 
+
+˙v = Tm ˆiθ + g, (3) 
+
+˙m = − TIsp g0
+
+, (4) where T ≥ 0 is the thrust magnitude, ˆiθ = [ iθx , i θy , i θz ]T is the unit vector defining the thrust direction, Isp is the specific impulse, and g0 = 9 .81 m /s2 is the standard gravitational acceleration at Earth’s sea level used as the reference constant in the rocket equation. The ratio T /m in (3) represents the thrust-induced specific force acting on the lander, while (4) models the propellant mass flow rate. Both equations are cou-pled through the time-varying mass m(t), which introduces a nonlinearity that will be addressed in Section 3. The control vector is defined as 
+
+u(t) = T, ˆiθ
+
+T = T, i θx , i θy , i θz 
+
+T ∈ R4, (5) comprising the thrust magnitude and the three components of the thrust direction. 
+
+Boundary Conditions 
+
+The powered descent trajectory begins at a prescribed initial state at time t0:
+
+r(t0) = r0, v(t0) = v0, m(t0) = m0, (6) where r0, v0, and m0 are given constants representing the initial position, velocity, and total (wet) mass of the lander, respectively. The trajectory terminates at a designated land-ing site at a fixed final time tf :
+
+r(tf ) = rf , v(tf ) = vf , (7) where rf specifies the target landing position and vf is the desired terminal velocity. For a soft landing, vf = 0 or a suitably small velocity within safe touchdown limits. The terminal mass m(tf ) is left free and will be determined as part of the optimization. 
+
+Constraints 
+
+First, the thrust magnitude is physically bounded between zero (engine off) and the maximum available thrust Tmax :
+
+0 ≤ T (t) ≤ Tmax , ∀ t ∈ [t0, t f ]. (8) The lower bound permits thrust-off intervals, which is an appropriate assumption for an energy-optimal formulation. Also, the thrust direction vector ˆiθ must be a unit vector at all times: 
+
+ˆiθ (t) 22
+
+= i2
+
+> θx
+
+(t) + i2 
+
+> θy
+
+(t) + i2 
+
+> θz
+
+(t) = 1 , ∀ t ∈ [t0, t f ]. (9) This equality constraint is nonconvex as it defines the surface of a unit sphere, and its treatment via convex relaxation is a central element of the methodology applied in this study. In addition, the lander mass must remain above the dry mass 
+
+mdry (the structural mass excluding all propellant) and below the initial wet mass m0 throughout the descent: 
+
+mdry ≤ m(t) ≤ m0, ∀ t ∈ [t0, t f ]. (10) The constraint m(t) ≥ mdry ensures that the optimizer does not consume propellant beyond physical availability. 
+
+Objective Function 
+
+A minimum-energy objective is adopted, which penalizes the integral of the squared thrust magnitude over the entire descent: 
+
+J =
+
+Z tf
+
+> t0
+
+T 2(t) d t. (11) Minimizing (11) promotes smooth, fuel-efficient thrust pro-files and avoids bang-bang (on-off) control behavior that is associated with minimum-time or minimum-fuel objectives. The energy-optimal formulation is particularly suitable for precision landing missions that require well-regulated thrust schedules compatible with onboard actuator and guidance constraints. 
+
+Optimal Control Problem Statement 
+
+Collecting the dynamics, boundary conditions, constraints, and objective defined above, a 3D energy-optimal lunar land-ing trajectory optimization problem is stated as follows. 
+
+Problem 1 (Lunar Landing Trajectory Optimization): 
+
+min   
+
+> x(·),u(·)
+
+J =
+
+Z tf
+
+> t0
+
+T 2(t) d t (12) 
+
+subject to 
+
+˙r(t) = v(t), ∀ t ∈ [t0, t f ], (13) 
+
+˙v(t) = T (t)
+
+m(t) ˆiθ (t) + g, ∀ t ∈ [t0, t f ], (14) 
+
+˙m(t) = − T (t)
+
+Isp g0
+
+, ∀ t ∈ [t0, t f ], (15) 
+
+r(t0) = r0, v(t0) = v0, m(t0) = m0, (16) 
+
+r(tf ) = rf , v(tf ) = vf , (17) 
+
+0 ≤ T (t) ≤ Tmax , ∀ t ∈ [t0, t f ], (18) 
+
+ˆiθ (t) 22
+
+= 1 , ∀ t ∈ [t0, t f ], (19) 
+
+mdry ≤ m(t) ≤ m0, ∀ t ∈ [t0, t f ]. (20) 3Problem 1 is a continuous-time nonlinear optimal control problem. Its nonconvexity arises from two sources. One is the nonlinear coupling between the thrust magnitude T
+
+and the lander mass m in the velocity dynamics (14) and mass flow equation (15). The other is the quadratic equality constraint (19), which requires ˆiθ to lie on the surface of the unit sphere rather than within the convex solid ball. Tradi-tional nonlinear programming approaches applied directly to this problem may suffer from slow convergence, sensitivity to initialization, and lack of convergence guarantees. The methodology presented in this paper addresses these chal-lenges by reformulating Problem 1 into a sequence of SOCPs through variable substitution, successive linearization, and lossless convex relaxation, while preserving full fidelity of the original dynamics and constraints. 
+
+# 3. C ONVEX RELAXATION 
+
+This section develops a systematic convex reformulation of Problem 1 through three steps: a change of variables that linearizes the dynamics, a convex relaxation of the remain-ing nonconvex constraints, and a trapezoidal discretization that transcribes the continuous-time optimal control problem into a finite-dimensional convex program amenable to SOCP solvers. The idea follows [6] and other relevant literature. 
+
+Change of Variables 
+
+The primary source of nonlinearity in Problem 1 is the T /m 
+
+term in the velocity equation (14), which couples the control 
+
+T and the state m. To decouple this product, two new variables are introduced. First, the specific thrust (thrust per unit mass) is defined as 
+
+τ = Tm , (21) and second, the log-mass is introduced as 
+
+w = ln m. (22) Differentiating (22) with respect to time and substituting the mass flow equation (15) yields 
+
+˙w = ˙mm = − Tm I sp g0
+
+= − τIsp g0
+
+. (23) Under the substitution (21), the velocity equation (14) be-comes ˙v = τ ˆiθ + g, (24) which is now bilinear in τ and ˆiθ rather than rational in T and 
+
+m. To remove this remaining nonlinearity, a second change of variables is introduced by decomposing the specific thrust vector into its Cartesian components: 
+
+τ1 = τ i θx , τ2 = τ i θy , τ3 = τ i θz . (25) With these definitions, the velocity dynamics (24) become fully linear in the new variables (τ1, τ 2, τ 3):
+
+˙vx = τ1, (26) 
+
+˙vy = τ2, (27) 
+
+˙vz = τ3 − g. (28) Collecting the transformed state vector 
+
+x = [ x, y, z, v x, v y , v z , w ]T ∈ R7
+
+and the new control vector 
+
+u = [ τ1, τ 2, τ 3, τ ]T ∈ R4,
+
+the complete landing dynamics admit the linear time-invariant (LTI) state-space representation 
+
+˙x = Ax + Bu + b, (29) where the system matrices are 
+
+A =
+
+
+
+0 0 0 1 0 0 00 0 0 0 1 0 00 0 0 0 0 1 00 0 0 0 0 0 00 0 0 0 0 0 00 0 0 0 0 0 00 0 0 0 0 0 0
+
+
+
+,B =
+
+
+
+0 0 0 00 0 0 00 0 0 01 0 0 00 1 0 00 0 1 00 0 0 − 1
+
+Isp g0
+
+
+
+, b =
+
+
+
+00000
+
+−g
+
+0
+
+
+
+.
+
+The LTI form (29) is exact, i.e., no approximation has been made. The change of variables has equivalently linearized the dynamics through an algebraic transformation of the state and control. Under the same transformation, the boundary conditions (16) and (17) become 
+
+r(t0) = r0, v(t0) = v0, w(t0) = ln m0, (30) 
+
+r(tf ) = rf , v(tf ) = vf , (31) the mass constraint (20) becomes 
+
+ln mdry ≤ w(t) ≤ ln m0, ∀ t ∈ [t0, t f ], (32) and the energy objective (12) becomes 
+
+J =
+
+Z tf
+
+> t0
+
+τ 2(t) d t, (33) since τ 2 = ( T /m )2 and the minimum of R τ 2 dt with respect to the new variables is equivalent to the minimum of R T 2 dt
+
+when the original thrust-to-mass coupling is restored. However, two new constraints arise from the variable trans-formation. The first links τ to w through the original thrust bound 0 ≤ T ≤ Tmax :
+
+0 ≤ τ (t) ≤ Tmax e−w(t), ∀ t ∈ [t0, t f ], (34) since T = τ m = τ e w implies τ ≤ Tmax /m = Tmax e−w.The second constraint arises from the unit-vector condi-tion (19) combined with the decomposition (25): 
+
+τ 21 (t) + τ 22 (t) + τ 23 (t) = τ 2(t), ∀ t ∈ [t0, t f ]. (35) Both (34) and (35) are nonconvex, and their convexification is addressed in the following subsection. 4Combining all of the above, the original Problem 1 is equiva-lently reformulated as: 
+
+Problem 2 (Transformed Optimal Control Problem): 
+
+min   
+
+> x(·),u(·)
+
+J =
+
+Z tf
+
+> t0
+
+τ 2(t) d t
+
+subject to (29), (30), (31), (32), (34), (35). Problem 2 is equivalent to Problem 1 in the sense that any optimal solution to one can be mapped to an optimal solution of the other via the invertible transformations (21) and (22). The key advantage is that the nonlinear dynamics of Prob-lem 1 have been exactly replaced by the linear dynamics (29), at the cost of introducing two new nonconvex constraints. 
+
+Convex Relaxation of Constraints 
+
+The remaining nonconvex constraints in Problem 2 are ad-dressed through successive linearization of the thrust-to-mass bound and SOC relaxation of the thrust direction constraint. The upper bound in constraint (34) is nonconvex because the function Tmax e−w is a nonlinear (convex) function of the state variable w. Since f (w) = Tmax e−w is convex and smooth, it admits a global linear underestimate via its first-order Taylor expansion at any reference point w∗(t):
+
+Tmax e−w ≈ Tmax e−w∗(t)1 − (w(t) − w∗(t)) . (36) Substituting this linearization into (34) yields the succes-sively linearized path constraint: 
+
+0 ≤ τ (t) ≤ Tmax e−w∗(t)1 − (w(t) − w∗(t)) , (37) where w∗(t) is the log-mass trajectory from the previous iteration of the SCP algorithm, or an initial guess on the first iteration. Because f (w) = Tmax e−w is convex, its first-order Taylor approximation is a global underestimate, meaning the linearized feasible set is always a subset of the original feasible set. This ensures that any solution feasible for the linearized problem is also feasible for Problem 2 in terms of the thrust magnitude bound. The quality of the linearization improves as the SCP iterates converge, becoming exact at the fixed point w(t) = w∗(t).The equality constraint (35) defines the surface of a cone in the control space (τ1, τ 2, τ 3, τ ) ∈ R4, which is a nonconvex set. Following the cone-like surface-to-solid relaxation ap-proach in [12], [13], the equality is relaxed to the inequality: 
+
+τ 21 (t) + τ 22 (t) + τ 23 (t) ≤ τ 2(t), ∀ t ∈ [t0, t f ], (38) which defines both the surface and interior of an SOC and is therefore a convex constraint. In standard form, (38) is written as [τ1, τ 2, τ 3]T 
+
+> 2
+
+≤ τ , a typical SOC constraint directly supported by interior-point SOCP solvers. The relaxation from equality (35) to inequality (38) is lossless under mild conditions of the energy-optimal formulation. Specifically, it can be shown via Pontryagin’s minimum principle that at any optimal solution of the relaxed problem, the SOC constraint (38) must be tight, i.e., τ 21 + τ 22 + τ 23 = τ 2
+
+holds automatically. This follows because the Lagrange mul-tiplier associated with the cone constraint is strictly positive at the optimum, forcing complementary slackness to activate the equality. Consequently, every optimal solution of the relaxed problem is also optimal and feasible for the original problem, and the two problems share the same optimal value. The formal proof of losslessness is presented in Section 6. Replacing constraint (34) with its successive lineariza-tion (37) and constraint (35) with the SOC relaxation (38), Problem 2 is reformulated as: 
+
+Problem 3 (Convex Optimal Control Problem): 
+
+min   
+
+> x(·),u(·)
+
+J =
+
+Z tf
+
+> t0
+
+τ 2(t) d t
+
+subject to (29), (30), (31), (32), (37), (38). Problem 3 is a convex optimal control problem: the objec-tive (33) is a convex quadratic functional in τ , the dynam-ics (29) are linear, the boundary conditions (30)–(31) are affine, the log-mass bounds (32) are linear, the thrust-to-mass bound (37) is linear in (τ, w ), and the cone constraint (38) is an SOC inequality. After discretization, Problem 3 becomes a finite-dimensional SOCP. 
+
+Discretization 
+
+The continuous-time Problem 3 is transcribed into a finite-dimensional optimization problem using the trapezoidal rule [14], which provides second-order accuracy in the step size and is well suited to the smooth, low-frequency thrust profiles characteristic of energy-optimal solutions. The time interval [t0, t f ] is uniformly partitioned into N − 1
+
+sub-intervals with N nodes t0 = t1 < t 2 < · · · < t N = tf
+
+and constant step size 
+
+∆t = tf − t0
+
+N − 1 . (39) The continuous state trajectory x(t) and control profile u(t)
+
+are approximated by the sequences {xi}Ni=1 and {ui}Ni=1 ,respectively, where xi ≈ x(ti) and ui ≈ u(ti). At each node i, the state and control vectors are 
+
+xi = xi, y i, z i, v x,i , v y,i , v z,i , w i
+
+T ∈ R7, (40) 
+
+ui = τ1,i , τ 2,i , τ 3,i , τ i
+
+T ∈ R4. (41) Applying the trapezoidal rule to the LTI dynamics (29) over the interval [ti, t i+1 ] gives 
+
+xi+1 = xi + ∆t
+
+2
+
+(Axi + Bui + b) + ( Axi+1 + Bui+1 + b)
+
+(42) for i = 1 , . . . , N − 1. Rearranging to isolate xi+1 on the left-hand side yields the linear equality constraint 
+
+
+
+I − ∆t
+
+2 A
+
+
+
+xi+1 −
+
+
+
+I + ∆t
+
+2 A
+
+
+
+xi
+
+− ∆t
+
+2 B(ui + ui+1 ) − ∆t b = 0
+
+(43) for i = 1 , . . . , N − 1, where I ∈ R7×7 denotes the identity matrix. Since A is strictly lower triangular in the relevant block structure, the matrix I − ∆t 
+
+> 2
+
+A is always invertible for 5any ∆t > 0, so (43) uniquely defines xi+1 given xi, ui, and 
+
+ui+1 .The boundary conditions (30) and (31) are enforced at the first and last nodes: 
+
+x1 = rT 
+
+> 0
+
+, vT 
+
+> 0
+
+, ln m0
+
+T, (44) 
+
+xN 1:6 = rT 
+
+> f
+
+, vT
+
+> f
+
+T, (45) where the notation xN |1:6 indicates that only the first six components (position and velocity) of xN are constrained; the seventh component wN = ln m(tf ) is left free to be optimized. The log-mass bounds (32), the successively linearized thrust-to-mass constraint (37), and the SOC constraint (38) are enforced pointwise at every node: 
+
+ln mdry ≤ wi ≤ ln m0, (46) 
+
+0 ≤ τi ≤ Tmax e−w∗
+
+> i
+
+1 − (wi − w∗ 
+
+> i
+
+), (47) 
+
+τ 21,i + τ 22,i + τ 23,i ≤ τ 2 
+
+> i
+
+, (48) for i = 1 , . . . , N , where w∗ 
+
+> i
+
+denotes the reference log-mass at node i from the previous SCP iteration. The continuous energy objective (33) is approximated by the trapezoidal quadrature rule. Since τ 2(t) is smooth and the trapezoidal rule incurs a second-order error in ∆t, the discrete objective is 
+
+J ≈ ∆t 
+
+> N−1
+
+X
+
+> i=1
+
+τ 2 
+
+> i
+
+. (49) Collecting all discretized components, the continuous Prob-lem 3 is transcribed into the following finite-dimensional optimization problem: 
+
+Problem 4 (Discretized Convex Subproblem): 
+
+min  
+
+> {xi,ui}Ni=1
+
+J = ∆ t 
+
+> N−1
+
+X
+
+> i=1
+
+τ 2
+
+> i
+
+subject to (43), (44), (45), (46), (47), (48). Problem 4 is a convex quadratic program with SOC con-straints and can be structured into a standard SOCP [15]. Its decision variables consist of N state vectors in R7 and N
+
+control vectors in R4, totalling 11 N scalar variables. The constraints comprise 7( N − 1) linear equality constraints from the trapezoidal dynamics (43), 6 equality constraints from the boundary conditions (44)–(45), 2N linear inequality constraints from (46)–(47), and N SOC constraints from (48). A new instance of Problem 4 is established and solved at each iteration of the SCP algorithm, with the reference trajectory 
+
+{w∗ 
+
+> i
+
+} updated to the solution of the previous iteration. The SCP framework will be presented in Section 5. 
+
+# 4. O NLINE MODEL IDENTIFICATION 
+
+The problem formulation in Section 2 and convex relaxation developed in Section 3 assume that the landing dynamics are fully characterized by the nominal model derived from a fixed set of physical parameters as shown in (13)–(15) or (29). In practice, however, the true dynamics encountered during flight may deviate from this nominal model due to unmodeled gravitational perturbations, thrust miscalibration, and propellant-mass measurement errors. These deviations cannot be fully characterized prior to the mission and must be identified in real time from flight measurements if the guidance law is to remain accurate throughout the descent. This section develops an online model identification frame-work that runs in parallel with the guidance loop. At each step of the descent, the onboard computer compares the measured lander state with the prediction of the nominal model, at-tributes the discrepancy to an unknown additive perturbation vector, and estimates this vector using a Recursive Least Squares (RLS) filter with exponential forgetting, followed by an Exponential Moving Average (EMA) smoother to suppress measurement noise before the estimate is injected into the tra-jectory optimizer. The identified perturbation is incorporated into the dynamics model to be used by the SCP algorithm in Section 5, yielding a corrected bias term that adapts to the true flight environment at every guidance cycle. 
+
+Sources of Uncertainty 
+
+In this work, three classes of uncertainty are considered, each of which manifests as an additive disturbance on one or more components of the transformed state dynamics (29). First, the nominal model assumes a constant, spatially uni-form gravitational acceleration g = 1 .6229 m /s2 directed along the negative z-axis. The true lunar gravitational field, however, is spatially non-uniform due to mass concentration anomalies (mascons) and subsurface density variations that deviate from a spherical-harmonic approximation. As the lander descends along its trajectory, it traverses regions of varying gravitational attraction that are not captured by the nominal constant g. These deviations appear as an additive vector perturbation δg (t) ∈ R3 acting on the velocity dy-namics, so that the true acceleration in the three translational channels becomes 
+
+˙v(t) = τ (t) ˆiθ (t) + g + δg (t). (50) Two representative gravitational perturbation models are con-sidered in the numerical simulations in Section 7. The first is a spatially constant mascon anomaly, 
+
+δg (t) = dc = [0 .05 , 0.05 , 0.03] T m/s2, (51) representing a uniform gravitational bias that might arise from a large mascon directly beneath the descent corridor. The second is a sinusoidal time-varying anomaly, 
+
+δg (t) = 
+
+
+
+Asin sin( ωsin t)
+
+Asin sin( ωsin t + π/ 4) 
+
+Asin cos( ωsin t)
+
+ , (52) with amplitude Asin = 0 .04 m /s2 and frequency ωsin =2π/ 25 rad /s, modelling a spatially oscillating anomaly whose period matches the descent time scale. The phase offset π/ 4 between the x- and y-channels prevents the per-turbation from being degenerate in the horizontal plane. Second, the onboard guidance computer commands a specific thrust vector [τ1, τ 2, τ 3, τ ]T based on the nominal thrust-to-mass ratio τ = T /m . In practice, the actual specific force delivered by the thruster may differ from the commanded value due to miscalibrated thrust sensors, valve nonlinearities, 6or attitude control cross-coupling. These effects are modeled as a multiplicative thrust scale error ηT , so that the effective specific force along each axis is (1 + ηT )τj rather than the commanded τj . The resulting additive perturbation on the velocity dynamics is 
+
+δT (t) = ηT [τ1(t), τ 2(t), τ 3(t)] T, (53) with ηT = 0 .04 (a 4% thrust scale bias) used in the simula-tions of this paper. In addition, propellant gauging in microgravity is subject to measurement uncertainty arising from fuel slosh, sensor drift, and the difficulty of measuring liquid volume in a partially filled tank under varying accelerations. If the onboard es-timate of the lander mass is ˆm(t) = (1 + ηm) m(t) with fractional error ηm, then the commanded specific thrust ˆτ =
+
+T / ˆm differs from the true specific thrust τ = T /m , and the log-mass evolution deviates from the nominal equation (23). The resulting perturbation on the log-mass channel is 
+
+δw(t) = − ηm τ (t)
+
+Isp g0
+
+, (54) with ηm = 0 .05 (a 5% mass gauging error) in the simulations. Collecting all three classes of uncertainty, the true discrete-time dynamics of the lander at guidance step k are 
+
+xk+1 =
+
+
+
+I − ∆t
+
+2 A
+
+−1 
+
+I + ∆t
+
+2 A
+
+
+
+xk
+
++ ∆t
+
+2 B uk + uk+1 
+
+ + ∆ t (b + δk)
+
+
+
+.
+
+(55) where A and B are defined in (29), b is the nominal bias vector, and δk ∈ R7 is the unknown additive perturbation vector at step k, defined as 
+
+δk =  0T 
+
+> 3
+
+, δT
+
+> d,k
+
+, δw,k 
+
+T, (56) in which δd,k = δg,k +δT,k ∈ R3 lumps the velocity-channel perturbations from gravitational anomalies and thrust errors, while δw,k ∈ R captures the mass-flow measurement error. The first three components of δk are identically zero because the position kinematics (13) are exact and unaffected by any of the three perturbation sources. 
+
+Online Perturbation Estimation via RLS and EMA 
+
+At each guidance step k, the onboard navigation system delivers a noisy measurement of the lander state: 
+
+xmeas  
+
+> k
+
+= xk + ηk, ηk
+
+> i.i.d.
+
+∼  0, R η
+
+, (57) where ηk ∈ R7 is zero-mean navigation noise with covari-ance Rη = diag( σ2 
+
+> r
+
+I3, σ 2 
+
+> v
+
+I3, σ 2
+
+> w
+
+). In the simulations, the noise standard deviations are set to σr = 0.5 m , σv =0.05 m /s, and σw = 0 .001 .The raw perturbation at step k is estimated by comparing the actual measured transition with the prediction of the nominal dynamics model. Given the measured state xmeas  
+
+> k
+
+,the commanded control uk, and the previous measured state 
+
+xmeas  
+
+> k−1
+
+, the nominal model predicts the next state as 
+
+xpred  
+
+> k
+
+=
+
+
+
+I − ∆t
+
+2 A
+
+−1 
+
+I + ∆t
+
+2 A
+
+
+
+xmeas 
+
+> k−1
+
++ ∆t
+
+2 B uk−1 + uk
+
+ + ∆ t b
+
+
+
+.
+
+(58) The raw perturbation estimate is then the scaled residual 
+
+ˆδraw  
+
+> k
+
+= xmeas  
+
+> k
+
+− xpred 
+
+> k
+
+∆t , (59) where division by ∆t recovers the perturbation in units of state per unit time, consistent with the additive bias inter-pretation in (55). In the absence of perturbations and noise, 
+
+ˆδraw  
+
+> k
+
+= 0. Any nonzero value directly reflects the combined effect of the true perturbation δk−1 and the measurement noise ηk.A single residual measurement is noisy and may not be representative of the current perturbation level. A more reliable estimate is obtained by recursively combining the current residual with the history of past residuals, discounting older measurements to allow tracking of time-varying pertur-bations. This is achieved via a Recursive Least Squares (RLS) filter with exponential forgetting factor λ ∈ (0 , 1) [16]. The RLS filter maintains a 7×7 covariance matrix Pk ∈ R7×7
+
+and a perturbation estimate ˆδk ∈ R7, initialized as 
+
+ˆδ0 = 0 ∈ R7, P0 = p0 I7, (60) with p0 = 10 4, which encodes high initial uncertainty. At each guidance step k ≥ 1, the filter computes the gain matrix, updates the estimate, and updates the covariance according to 
+
+Kk = Pk−1
+
+ λ I 7 + Pk−1
+
+−1, (61) 
+
+ˆδk = ˆδk−1 + Kk
+
+ ˆδraw  
+
+> k
+
+− ˆδk−1
+
+, (62) 
+
+Pk = λ−1  I7 − Kk
+
+ Pk−1. (63) The forgetting factor λ controls the balance between noise rejection and tracking ability. Values of λ close to 1 assign nearly equal weight to all past measurements and produce a smooth estimate that is less responsive to rapid changes; values further from 1 discount older measurements more ag-gressively, improving tracking of fast-varying perturbations at the cost of increased noise sensitivity. Before the RLS estimate is used to correct the dynamics model, an Exponential Moving Average (EMA) smoother [17] is applied to further reduce the influence of measurement noise on the trajectory optimizer. The EMA update at each step is 
+
+˜δk = (1 − α) ˜δk−1 + α ˆδk, (64) initialized with ˜δ0 = 0, where α is the EMA smoothing weight. The EMA filter is a first-order infinite impulse response filter with transfer function H(z) = αz / (z −
+
+(1 − α)) , whose pole at z = 1 − α lies strictly inside the unit disk, guaranteeing bounded-input bounded-output (BIBO) stability for any bounded input sequence. The steady-state gain H(1) = 1 ensures that the smoothed estimate ˜δk
+
+converges to the true perturbation in the absence of noise. The EMA and RLS filters run at every guidance step regard-less of whether a trajectory replan is triggered, ensuring that the perturbation estimate is as current as possible when a replan does occur. The complete online estimation procedure at each guidance step k is summarized in Algorithm 1. 7Algorithm 1: Online Perturbation Estimation via RLS and EMA at Guidance Step k
+
+Input: Previous measured state xmeas  
+
+> k−1
+
+, commanded controls uk−1, uk, current RLS state 
+
+(ˆδk−1, P k−1), current EMA state ˜δk−1
+
+Output: Smoothed estimate ˜δk, updated RLS state 
+
+(ˆδk, P k) 
+
+> 1
+
+// Step 1: Receive navigation measurement  
+
+> 2
+
+Obtain xmeas  
+
+> k
+
+= xk + ηk from the navigation system  
+
+> 3
+
+// Step 2: Compute nominal prediction and raw residual  
+
+> 4
+
+Compute xpred  
+
+> k
+
+via (58)  
+
+> 5
+
+Compute ˆδraw  
+
+> k
+
+= ( xmeas  
+
+> k
+
+− xpred  
+
+> k
+
+) / ∆t via (59)  
+
+> 6
+
+// Step 3: RLS update  
+
+> 7
+
+Kk ← Pk−1 (λ I 7 + Pk−1)−1 
+
+> 8
+
+ˆδk ← ˆδk−1 + Kk (ˆδraw  
+
+> k
+
+− ˆδk−1) 
+
+> 9
+
+Pk ← λ−1(I7 − Kk) Pk−1 
+
+> 10
+
+// Step 4: EMA smoothing  
+
+> 11
+
+˜δk ← (1 − α) ˜δk−1 + α ˆδk
+
+Augmented Linearized Dynamical Model 
+
+Once the smoothed perturbation estimate ˜δk is available at guidance step k, it is used to correct the nominal dynamics bias b before solving the next SOCP subproblem. The corrected bias vector at step k is defined as 
+
+˜bk = b + ˜δk, (65) where b = [0 , 0, 0, 0, 0, −g, 0] T is the nominal bias from (29) and ˜δk is the EMA-smoothed RLS estimate from (64). Since the first three components of δk are zero by construction (56), only the velocity channels (components 4–6) and the log-mass channel (component 7) of ˜bk differ from b. As the estimation error ˜δk − δk decreases over time, ˜bk converges toward the true bias b + δk.The corrected bias ˜bk replaces the nominal b in the trape-zoidal dynamics constraint (43). The augmented dynamics constraint for the reduced-horizon SOCP subproblem solved at guidance step k is therefore 
+
+
+
+I − ∆tk
+
+2 A
+
+
+
+xi+1 −
+
+
+
+I + ∆tk
+
+2 A
+
+
+
+xi
+
+− ∆tk
+
+2 B (ui + ui+1 ) − ∆tk ˜bk = 0,
+
+(66) for i = 1 , . . . , N k − 1, where ∆tk = ( tf − tk) / (Nk −
+
+1) is the step size of the reduced planning horizon at step 
+
+k, and Nk is the reduced-horizon node count used for online replans. All other constraints in Problem 4, including the log-mass bounds (46), the successively linearized thrust-to-mass bound (47), and the SOC constraint (48), remain structurally unchanged. Only the right-hand side of the dynamics equality is modified through ˜bk. This is the key architectural feature of the proposed method: the online identification is decoupled from the convex structure of the SOCP, so the subproblem retains all its convexity and feasibility properties regardless of the estimated perturbation magnitude. At every guidance step or every few guidance steps, a new SOCP subproblem of the form of Problem 4 is constructed using the augmented bias ˜bk and the current measured state 
+
+xmeas  
+
+> k
+
+as the initial condition. The remaining flight time 
+
+tf − tk is resampled to a number of uniformly spaced nodes by linear interpolation of the current plan, and the previous plan serves as a warm start. Between consecutive replanning events, the RLS filter and EMA smoother continue to run at every guidance step so that the perturbation estimate remains current. This frequency-gated replanning strategy ensures that the online scheme remains computationally tractable while still maintaining a sufficiently rapid response to the evolving perturbation estimate. The augmented SOCP subproblem at guidance step k is: 
+
+Problem 5 (Online-Corrected Reduced-Horizon SOCP at step k): 
+
+min  
+
+> {xi,ui}Nki=1
+
+Jk = ∆ tkNk −1X
+
+> i=1
+
+τ 2
+
+> i
+
+subject to (66) and 
+
+x1 1:6 = rT 
+
+> k
+
+, vT
+
+> k
+
+T, x1,7 = wmeas  
+
+> k
+
+, (67) 
+
+xNk 1:6 = rT 
+
+> f
+
+, vT
+
+> f
+
+T, (68) 
+
+ln mdry ≤ xi, 7 ≤ ln m0, i = 1 , . . . , N k, (69) 
+
+0 ≤ τi ≤ Tmax e−w∗
+
+> i
+
+1 − (xi, 7 − w∗ 
+
+> i
+
+), i = 1 , . . . , N k,
+
+(70) 
+
+[τ1,i , τ 2,i , τ 3,i ]T 
+
+> 2
+
+≤ τi, i = 1 , . . . , N k. (71) where rk, vk, and wmeas  
+
+> k
+
+are the position, velocity, and log-mass components of the current measured state xmeas  
+
+> k
+
+.Problem 5 has the same convex structure as Problem 4 and is solved to global optimality using interior-point solvers. The solution {x∗ 
+
+> i
+
+, u∗ 
+
+> i
+
+} is interpolated back onto the full N -node time grid to produce the updated planned trajectory for the subsequent guidance steps until the next replan. The com-plete online SCP algorithm that integrates the identification and replanning steps is presented in Section 5. 
+
+# 5. S EQUENTIAL CONVEX PROGRAMMING 
+
+The convex relaxation developed in Section 3 transforms the nonconvex lunar landing trajectory optimization Problem 1 into the convex subproblem Problem 4, which can be solved efficiently to global optimality by an interior-point SOCP solver. However, the successive linearization of the thrust-to-mass constraint (47) is performed around a reference log-mass trajectory {w∗ 
+
+> i
+
+} that must be updated iteratively, since the linearization is exact only at the true solution. SCP provides the iterative framework that coordinates this update. SCP solves a sequence of convex subproblems, each con-structed around the solution of the previous iteration, until convergence to a fixed point that satisfies the Karush–Kuhn– Tucker (KKT) conditions of the original Problem 1. In the nominal setting (no environmental uncertainty), a sin-gle SCP run at the beginning of the mission suffices to com-pute the optimal trajectory. In the online setting developed 8in Section 4, however, the identified perturbation ˜δk modifies the effective bias of the dynamics model at every guidance step k, so the SOCP subproblem must be re-solved in flight to maintain trajectory optimality under the updated model. This section presents the online SCP algorithm with model identification, which combines the perturbation estimation of Section 4 with receding-horizon replanning to produce a closed-loop guidance scheme that adapts to unknown and time-varying disturbances during the powered descent. 
+
+Baseline SCP Algorithm 
+
+Before developing the online extension, the baseline SCP al-gorithm is presented for reference, as its structure is inherited and extended by the online version. To start with, an initial reference trajectory {x(0)  
+
+> i
+
+, u(0)  
+
+> i
+
+}Ni=1 
+
+is required to construct the first linearization of the thrust-to-mass constraint. Formally, any trajectory satisfying the boundary conditions (44)–(45) and the log-mass bounds (46) may serve as a valid initialization. In practice, the straight-line interpolation between the boundary conditions can be used, defined at each node i as 
+
+x(0)  
+
+> i
+
+=
+
+
+
+(N − i) r0 + ( i − 1) rf
+
+N − 1(N − i) v0 + ( i − 1) vf
+
+N − 1ln m0
+
+ , i = 1 , . . . , N, (72) and the initial control is set to a constant hover-equivalent thrust aligned with the positive z-axis: u(0)  
+
+> i
+
+= [0 , 0, g, g ]T
+
+for all i. Despite the crude nature of this initialization (the straight-line guess may violate the dynamics constraints significantly), the SCP algorithm converges reliably within a small number of iterations, because the only non-equivalent approximation in the problem (the successive linearization of 
+
+Tmax e−w) is mild when the log-mass variation is small. The iteration counter is set to ℓ = 0 .At each SCP iteration ℓ ≥ 0, the current reference log-mass sequence {w(ℓ) 
+
+> i
+
+}Ni=1 is extracted from {x(ℓ) 
+
+> i
+
+} as the seventh component. A Problem 4 (ℓ) is then constructed and solved with the successively linearized thrust-to-mass bound 
+
+0 ≤ τi ≤ Tmax e−w(ℓ)
+
+> i
+
+h
+
+1 −  xi, 7 − w(ℓ)
+
+> i
+
+i
+
+, (73) for i = 1 , . . . , N , where xi, 7 denotes the seventh (log-mass) component of the decision variable xi. The subproblem is solved to global optimality by an interior-point SOCP solver, yielding the optimal solution {x∗(ℓ) 
+
+> i
+
+, u∗(ℓ) 
+
+> i
+
+}Ni=1 .Then, the reference trajectory is updated to the solution of the current subproblem: 
+
+x(ℓ+1)  
+
+> i
+
+, u(ℓ+1)  
+
+> i
+
+← x∗(ℓ) 
+
+> i
+
+, u∗(ℓ) 
+
+> i
+
+. (74) Convergence is declared when the maximum componentwise change in the state trajectory between successive iterates falls below a prescribed tolerance ε ∈ R7:
+
+max  
+
+> i=1 ,...,N
+
+x(ℓ+1)  
+
+> i
+
+− x(ℓ) 
+
+> i∞
+
+< ε j , j = 1 , . . . , 7, (75) where εj is a prescribed tolerance for each state channel. If the criterion (75) is not satisfied, the iteration counter is incremented to ℓ + 1 and the process returns to constructing and solving a new Problem 4 (ℓ). Upon convergence, the solution {x∗ 
+
+> i
+
+, u∗ 
+
+> i
+
+} = {x(ℓ+1)  
+
+> i
+
+, u(ℓ+1)  
+
+> i
+
+} is accepted as an ap-proximate solution to Problem 1. The baseline SCP algorithm is summarized in Algorithm 2. 
+
+Algorithm 2: Baseline SCP Algorithm 
+
+Input: System matrices A, B, b; boundary conditions 
+
+r0, v0, m0, rf , vf ; parameters N , ∆t, Tmax ,
+
+mdry ; tolerance ε; maximum iterations ℓmax 
+
+Output: Optimal state sequence {x∗ 
+
+> i
+
+}Ni=1 and control sequence {u∗ 
+
+> i
+
+}Ni=1  
+
+> 1
+
+// Step 1: Initialization  
+
+> 2
+
+Construct {x(0)  
+
+> i
+
+, u(0)  
+
+> i
+
+}Ni=1 via (72)  
+
+> 3
+
+Set ℓ ← 0
+
+> 4
+
+repeat  
+
+> 5
+
+// Step 2: Extract linearization point and build subproblem  
+
+> 6
+
+Set w(ℓ) 
+
+> i
+
+← x(ℓ) 
+
+> i, 7
+
+for i = 1 , . . . , N  
+
+> 7
+
+Formulate Problem 4 (ℓ) using constraint (73)  
+
+> 8
+
+// Step 3: Solve convex subproblem  
+
+> 9
+
+Solve Problem 4 (ℓ) to obtain {x∗(ℓ) 
+
+> i
+
+, u∗(ℓ) 
+
+> i
+
+} 
+
+> 10
+
+// Step 4: Update reference trajectory  
+
+> 11
+
+{x(ℓ+1)  
+
+> i
+
+, u(ℓ+1)  
+
+> i
+
+} ← { x∗(ℓ) 
+
+> i
+
+, u∗(ℓ) 
+
+> i
+
+} 
+
+> 12
+
+ℓ ← ℓ + 1 
+
+> 13
+
+until convergence criterion (75) satisfied or ℓ = ℓmax 
+
+> 14
+
+return {x∗ 
+
+> i
+
+, u∗ 
+
+> i
+
+} ← { x(ℓ) 
+
+> i
+
+, u(ℓ) 
+
+> i
+
+}
+
+Online SCP Algorithm with Model Identification 
+
+The online extension of the baseline SCP algorithm integrates the real-time perturbation estimation of Section 4 into a receding-horizon replanning loop. The central modification is the replacement of the nominal dynamics bias b by the online-corrected bias ˜bk = b+˜δk in every SOCP subproblem solved during flight. This makes the trajectory plan consistent with the best available model of the true flight environment at each guidance cycle. The algorithm proceeds through four stages at every guidance step k, which are described in detail below and consolidated in Algorithm 3. 
+
+Stage 1: Initialization— Before the descent begins, the base-line SCP (Algorithm 2) is executed using the nominal bias b
+
+to produce an initial nominal plan {xnom  
+
+> i
+
+, unom  
+
+> i
+
+}Ni=1 . This plan serves as the starting planned trajectory: 
+
+Xplan ← Xnom , Uplan ← Unom . (76) The RLS filter state and EMA smoother are initialized as 
+
+ˆδ0 = 0, P0 = p0 I7, ˜δ0 = 0, (77) with p0 = 10 4. The guidance step counter is set to k = 1 .
+
+Stage 2: State Measurement and Perturbation Estimation— 
+
+At guidance step k, the planned control uplan  
+
+> k
+
+is applied to the lander. The true state evolves according to the perturbed 9dynamics (55) with the unknown perturbation δk. The nav-igation system then delivers the noisy measurement xmeas 
+
+> k+1
+
+according to the model (57). Using xmeas  
+
+> k+1
+
+, uplan  
+
+> k
+
+, and uplan  
+
+> k+1
+
+, Algorithm 1 of Section 4 is executed to update the perturbation estimate. The outputs are the updated RLS estimate ˆδk+1 , covariance Pk+1 , and EMA-smoothed estimate ˜δk+1 . The corrected bias is then formed as ˜bk+1 = b + ˜δk+1 . (78) This estimation stage runs at every guidance step k, regard-less of whether a trajectory replan is triggered. 
+
+Stage 3: Frequency-Gated Trajectory Replanning— A trajec-tory replan is triggered at guidance step k if and only if k is a multiple of the replanning cadence nreplan . This frequency-gating strategy reduces the total number of SOCP solves from 
+
+N − 1 (one per step) to approximately (N − 1) /n replan over the full descent, while the RLS filter continues to accumulate measurements between replans, so the perturbation estimate is well-converged by the time each replan is executed. When a replan is triggered, a reduced-horizon SOCP of the form of Problem 5 is constructed and solved as follows. 
+
+Horizon construction. The remaining flight time at step k + 1 
+
+is trem = tf − tk+1 . This is partitioned into Nplan uniformly spaced planning nodes with step size 
+
+∆tk = trem 
+
+Nplan − 1 , (79) producing the reduced planning time grid {tk+1 , t k+1 +∆tk, . . . , t f }. A fixed node count Nplan can be used regardless of how many steps remain to ensure that every online SOCP has the same size with the same number of decision variables, so the solver execution time is bounded and predictable across all replanning events. 
+
+Warm start. The current full-horizon plan {Xplan , Uplan } is resampled onto the reduced planning grid {Xwarm , Uwarm }
+
+by linear interpolation. The first node of Xwarm is then over-ridden by the current measured state to ensure the replanned trajectory originates from the true current position: 
+
+Xwarm 1 ← xmeas  
+
+> k+1
+
+. (80) Using the previous plan as a warm start exploits the fact that consecutive replanning problems differ only slightly from one another, so the warm-started solver typically converges in very few inner SCP iterations. 
+
+Inner SCP loop. Starting from the warm-started reference trajectory {X(0) , U(0) } = {Xwarm , Uwarm }, the inner SCP loop solves a sequence of convex subproblems of the form of Problem 5, each constructed using the augmented bias ˜bk+1 
+
+and the linearization point {w(ℓ) 
+
+> i
+
+} from the previous inner iteration. At inner iteration ℓ, the subproblem is: 
+
+Problem 5 (ℓ) (Online-Corrected Subproblem at Inner Itera-tion ℓ of Guidance Step k): 
+
+min  
+
+> {xi,ui}Nplan
+> i=1
+
+J(ℓ) 
+
+> k
+
+= ∆ tkNplan −1
+
+X
+
+> i=1
+
+τ 2 
+
+> i
+
+(81) 
+
+subject to 
+
+
+
+I − ∆tk
+
+2 A
+
+
+
+xi+1 −
+
+
+
+I + ∆tk
+
+2 A
+
+
+
+xi
+
+− ∆tk
+
+2 B(ui + ui+1 ) − ∆tk ˜bk+1 = 0,i = 1 , . . . , N plan − 1,
+
+(82) 
+
+x1 1:6 = rT
+
+> k+1
+
+, vT
+
+> k+1
+
+T, x1,7 = wmeas  
+
+> k+1
+
+, (83) 
+
+xNplan 1:6 = rT 
+
+> f
+
+, vT
+
+> f
+
+T, (84) 
+
+ln mdry ≤ xi, 7 ≤ ln m0, i = 1 , . . . , N plan , (85) 
+
+0 ≤ τi ≤ Tmax e−w(ℓ)
+
+> i
+
+h
+
+1 −  xi, 7 − w(ℓ)
+
+> i
+
+i
+
+,i = 1 , . . . , N plan ,
+
+(86) 
+
+[τ1,i , τ 2,i , τ 3,i ]T 
+
+> 2
+
+≤ τi, i = 1 , . . . , N plan . (87) Problem 5 (ℓ) is solved to obtain {x∗(ℓ) 
+
+> i
+
+, u∗(ℓ) 
+
+> i
+
+}. The inner SCP update and convergence check follow the same logic as the baseline: the reference is updated to {x(ℓ+1)  
+
+> i
+
+, u(ℓ+1)  
+
+> i
+
+} ← {x∗(ℓ) 
+
+> i
+
+, u∗(ℓ) 
+
+> i
+
+} and convergence is checked against the same criterion (75). The inner loop terminates after a maximum number of iterations or upon satisfaction of (75), whichever occurs first. The key difference between Problem 5 (ℓ) and the baseline Problem 4 (ℓ) is the appearance of ˜bk+1 in place of b in the dynamics constraint (82), and the use of the reduced step size ∆tk and node count Nplan . The convex structure of the subproblem is identical to that of Problem 4 (ℓ) and is preserved unconditionally regardless of the value of ˜bk+1 .
+
+Plan update. Upon completion of the inner SCP loop, the converged reduced-horizon plan {x∗ 
+
+> i
+
+, u∗ 
+
+> i
+
+}Nplan  
+
+> i=1
+
+is interpo-lated back onto the original N -node full-horizon time grid by linear interpolation over the remaining nodes k + 1 , . . . , N .This ensures that the full-horizon plan remains consistent with the latest replan for all future guidance steps until the next replanning event. 
+
+Stage 4: Guidance Step Advance and Termination— After Stage 3 (or after the estimation update in Stage 2 if no replan is triggered), the guidance step counter is advanced to k + 1 
+
+and the algorithm returns to Stage 2. The descent terminates when either k = N − 1 (the final planned node is reached) or the horizon is too short to support a further replan (e.g., the remaining flight time trem < 2∆ t), at which point the last available planned control is applied and the lander executes touchdown. 
+
+Complete Online SCP Algorithm 
+
+The four stages described above are consolidated in Algo-rithm 3. It is not difficult to identify the differences between the baseline SCP (Algorithm 2) and the online SCP (Algo-rithm 3), since the two algorithms share the same convex subproblem structure and differ only in how the dynamics model is specified. However, the online algorithm introduces three elements absent from the baseline: (i) a closed-loop measurement–estimation–correction cycle that runs at every guidance step; (ii) a receding-horizon architecture in which the initial condition of the SOCP is updated to the current measured state at each replanning event; and (iii) a modified dynamics constraint in which the nominal bias is replaced 10 by the adaptively corrected bias. All other aspects (the decision variables, the objective function, the SOC and log-mass constraints, and the convergence criterion) of the two algorithms are identical. The most important structural observation is that replacing b
+
+with ˜bk does not alter the convex structure of the SOCP in any way. The corrected bias appears exclusively as a constant right-hand-side term in the linear equality constraint (82); it does not appear in the objective, the SOC constraint, or the log-mass or thrust-magnitude bounds. Consequently, the feasibility, convexity, and global optimality properties of the SOCP subproblem are preserved regardless of the magnitude or direction of ˜δk. This decoupling between the identification layer and the optimization layer is the key architectural prop-erty that enables the online algorithm to inherit all theoretical guarantees of the baseline SCP. 
+
+Algorithm 3: Online SCP Algorithm with Model Identi-fication 
+
+Input: Nominal plan {Xnom , Unom }; system matrices 
+
+A, B, b; filter parameters λ, p0, α; replanning cadence nreplan ; reduced horizon Nplan ; inner iteration limit ℓon max ; convergence tolerance ε
+
+Output: True state sequence {xtrue  
+
+> k
+
+}Nk=1 ; planned control sequence {Uplan } 
+
+> 1
+
+// Stage 1: Initialization  
+
+> 2
+
+Xplan ← Xnom , 
+
+> 3
+
+Uplan ← Unom , 
+
+> 4
+
+ˆδ0 ← 0, 
+
+> 5
+
+P0 ← p0I7, 
+
+> 6
+
+˜δ0 ← 0 
+
+> 7
+
+xtrue 1 ← [rT 
+
+> 0
+
+, vT 
+
+> 0
+
+, ln m0]T
+
+> 8
+
+for k = 1 , 2, . . . , N − 1 do  
+
+> 9
+
+// Stage 2: State measurement and perturbation estimation  
+
+> 10
+
+Apply uplan  
+
+> k
+
+to the lander  
+
+> 11
+
+True state advances via (55)  
+
+> 12
+
+Receive measurement: xmeas  
+
+> k+1
+
+← xtrue  
+
+> k+1
+
++ ηk via (57)  
+
+> 13
+
+Execute Algorithm 1 to obtain ˜δk+1 , ˆδk+1 , Pk+1  
+
+> 14
+
+Form corrected bias: ˜bk+1 ← b + ˜δk+1  
+
+> 15
+
+// Stage 3: Frequency-gated trajectory replanning 
+
+> 16
+
+if k mod nreplan = 0 and tf − tk+1 ≥ 2∆ t then  
+
+> 17
+
+Compute ∆tk, Nplan , planning grid via (79)  
+
+> 18
+
+Interpolate warm start {Xwarm , Uwarm } 
+
+> 19
+
+Override Xwarm 1 ← xmeas  
+
+> k+1
+
+via (80)  
+
+> 20
+
+Set ℓ ← 0, {x(0)  
+
+> i
+
+, u(0)  
+
+> i
+
+} ← { Xwarm , Uwarm }
+
+> 21
+
+repeat  
+
+> 22
+
+w(ℓ) 
+
+> i
+
+← x(ℓ) 
+
+> i, 7
+
+, i = 1 , . . . , N plan  
+
+> 23
+
+Solve Problem 5 (ℓ) ⇒ { x∗(ℓ) 
+
+> i
+
+, u∗(ℓ) 
+
+> i
+
+} 
+
+> 24
+
+{x(ℓ+1)  
+
+> i
+
+, u(ℓ+1)  
+
+> i
+
+} ← { x∗(ℓ) 
+
+> i
+
+, u∗(ℓ) 
+
+> i
+
+} 
+
+> 25
+
+ℓ ← ℓ + 1 
+
+> 26
+
+until criterion (75) satisfied or ℓ = ℓon max  
+
+> 27
+
+Update full-horizon plan through linear interpolation 
+
+> 28
+
+end  
+
+> 29
+
+// Stage 4: Advance guidance step 
+
+> 30
+
+end 
+
+# 6. T HEORETICAL ANALYSIS 
+
+This section explores some theoretical foundations underly-ing the convex relaxation of Section 3, the online model iden-tification of Section 4, and the SCP algorithms of Section 5. Specifically, five main results are developed: the losslessness of the SOC relaxation; the stability and convergence of the RLS and EMA filters used for online perturbation estimation; the guaranteed convergence of the SCP iteration to a KKT point of the original nonconvex problem; the radius of conver-gence within which this guarantee holds; and the convergence rate at which the SCP iterates approach the optimal solution. These analyses are motivated by the results in [6], [18], [19], and customized for the lunar landing problem in this paper. 
+
+Lossless Convex Relaxation 
+
+The convex relaxation introduced in Section 3 replaces the nonconvex unit-norm equality constraint (35) with the con-vex SOC inequality (38). I will show that the relaxation introduces no optimality gap, i.e., any optimal solution of the relaxed Problem 3 automatically satisfies the original equality constraint, so the two problems share the same optimal value. 
+
+Assumption 1: The minimum thrust magnitude is zero, that is, Tmin = 0 in the thrust bound (8), so the engine may be commanded off at any instant. 
+
+Assumption 2: The velocity dynamics are affine in the de-composed thrust vector [τ1, τ 2, τ 3]T, as given in (26)–(28), with no additional dependence of the dynamics on the thrust direction beyond this affine term. 
+
+Assumption 3: The objective functional (33) depends on the control only through the thrust magnitude τ , and not on the thrust direction ˆiθ .
+
+Assumption 4: Problem 3 admits at least one feasible trajec-tory. 
+
+Lemma 6.1: Suppose (τ ∗ 
+
+> 1
+
+, τ ∗ 
+
+> 2
+
+, τ ∗ 
+
+> 3
+
+, τ ∗) is feasible for the re-laxed constraint (38) and the inequality is strict, i.e., 
+
+(τ ∗ 
+
+> 1
+
+)2 + ( τ ∗ 
+
+> 2
+
+)2 + ( τ ∗ 
+
+> 3
+
+)2 < (τ ∗)2, on a sub-interval within 
+
+[t0, t f ]. Then there exists an alternative thrust decomposition 
+
+(˜ τ1, ˜τ2, ˜τ3, τ ∗), sharing the same thrust magnitude τ ∗ and the same objective value, that satisfies the original equality constraint (35) everywhere on [t0, t f ].
+
+Proof: Let S ⊆ [t0, t f ] denote the set on which the SOC inequality is strict. At every t ∈ S, the magnitude τ ∗(t) must be strictly positive, since otherwise the inequality (τ ∗ 
+
+> 1
+
+)2 +(τ ∗ 
+
+> 2
+
+)2 + ( τ ∗ 
+
+> 3
+
+)2 ≤ (τ ∗)2 = 0 forces τ ∗ 
+
+> 1
+
+= τ ∗ 
+
+> 2
+
+= τ ∗ 
+
+> 3
+
+= 0 , at which point equality already holds, contradicting t ∈ S. For 
+
+t ∈ S, define the rescaled components 
+
+˜τj (t) = τ ∗(t) τ ∗ 
+
+> j
+
+(t)
+
+∥[τ ∗ 
+
+> 1
+
+(t), τ ∗ 
+
+> 2
+
+(t), τ ∗ 
+
+> 3
+
+(t)] T∥2
+
+, j = 1 , 2, 3, (88) and set ˜τj (t) = τ ∗ 
+
+> j
+
+(t) for t /∈ S. By construction, 
+
+˜τ 21 + ˜ τ 22 + ˜ τ 23 = ( τ ∗)2 holds at every t ∈ [t0, t f ], so the equality constraint (35) is satisfied exactly. The rescaling (88) preserves the direction of the original thrust vector, ˜τj /τ ∗ =
+
+τ ∗ 
+
+> j
+
+/∥[τ ∗ 
+
+> 1
+
+, τ ∗ 
+
+> 2
+
+, τ ∗ 
+
+> 3
+
+]T∥2, so the unit thrust-direction vector is unchanged. Because the objective functional depends only on τ by Assumption 3, and τ ∗ is unchanged, the objective value is identical for the two solutions. This establishes the claim. 11 Theorem 6.2: Under Assumptions 1–4, the optimal value of the relaxed Problem 3 equals the optimal value of the original Problem 2. Moreover, every optimal solution of Problem 3 satisfies the equality constraint (35) pointwise, so no further recovery step of the kind described in Lemma 6.1 is in fact necessary at the optimum. 
+
+Proof: The proof proceeds via Pontryagin’s minimum principle applied to the relaxed problem. Adjoin the SOC inequality (38) to the Hamiltonian with a nonnegative multi-plier μ(t) ≥ 0:
+
+H = λT 
+
+> r
+
+v + λT
+
+> v
+
+ [τ1, τ 2, τ 3]T + g − λw
+
+τIsp g0
+
++ τ 2 − μ  τ 2 − τ 21 − τ 22 − τ 23
+
+,
+
+(89) where λr , λv , and λw are the costate variables associated with position, velocity, and log-mass, respectively. Minimizing H over the thrust components (τ1, τ 2, τ 3) with τ
+
+held fixed gives the first-order condition 
+
+∂H ∂τ j
+
+= λv,j + 2 μ τ j = 0 =⇒ τ ∗ 
+
+> j
+
+= − λv,j 
+
+2μ , j = 1 , 2, 3.
+
+(90) If μ = 0 , then ∂H/∂τ j = λv,j is constant in τj and the Hamiltonian is unbounded below as τj → ±∞ whenever 
+
+λv,j ̸ = 0 , contradicting the existence of a bounded optimal control. Hence μ > 0 at every optimal solution. By comple-mentary slackness, μ (τ 2 −τ 21 −τ 22 −τ 23 ) = 0 , and since μ > 0
+
+this forces τ 21 +τ 22 +τ 23 = τ 2 identically. The SOC constraint is therefore tight at every optimal solution, establishing that the original equality (35) holds automatically. With the optimal direction ˆi∗ 
+
+> θ
+
+= −λv /∥λv ∥2 recovered from (90), minimizing H over τ yields a scalar quadratic whose unconstrained minimizer is 
+
+τ ∗ = 12
+
+
+
+λT 
+
+> v
+
+ˆi∗ 
+
+> θ
+
++ λw
+
+Isp g0
+
+
+
+, (91) clamped to [0 , T max e−w] by the (linearized) thrust bound. Since we have shown that every optimal solution of the re-laxed problem satisfies the original equality constraint, every optimal solution of Problem 3 is feasible for Problem 2, and conversely every feasible solution of Problem 2 is feasible for Problem 3 (since the equality constraint (35) implies the inequality (38)). The two feasible sets therefore have the same set of optimal solutions, and the optimal objective values coincide. 
+
+Remark 6.1: The losslessness result of Theorem 6.2 relies critically on Assumption 1. If a strictly positive minimum thrust Tmin > 0 were imposed, the multiplier analysis above would need to account for the possibility that the lower thrust bound, rather than the SOC constraint, is active, and the relaxation could in principle leave a nonzero gap between the relaxed and original optimal values. Similarly, if additional constraints were imposed directly on the thrust direction ˆiθ
+
+(e.g., a maximum gimbal angle relative to the body axis) or if the objective depended explicitly on the thrust direction (violating Assumption 3), the optimal direction in (90) would no longer be guaranteed to saturate the SOC constraint, and the relaxation would require separate justification. 
+
+Stability and Convergence of Online Model Identification 
+
+The online perturbation estimator of Section 4 combines an RLS filter with exponential forgetting and an EMA smoother. This subsection establishes that the resulting estimate con-verges, in a mean-square sense, to the true perturbation, and that the EMA post-processing stage is bounded-input bounded-output (BIBO) stable. 
+
+Assumption 5: The perturbation is bounded, i.e., there exists a finite constant δmax such that the true perturbation vector at every guidance step satisfies ∥δk∥2 ≤ δmax for all k.
+
+Assumption 6: The drift is bounded, i.e., there exists a finite constant νmax such that ∥δk+1 − δk∥2 ≤ νmax for all k. The case νmax = 0 corresponds to a perturbation that is constant in time. 
+
+Assumption 7: The navigation or measurement noise ηk in-troduced in (57) is zero-mean, independent across guidance steps, with isotropic covariance Rη = σ2 I7 and bounded support, ∥ηk∥2 ≤ ηmax almost surely. 
+
+Assumption 8: The RLS forgetting factor satisfies λ ∈ (0 , 1) 
+
+and the EMA smoothing weight satisfies α ∈ (0 , 1) .
+
+Lemma 6.3: Under Assumption 8, the RLS covariance ma-trix defined by the recursion (63), initialized as P0 = p0I7, is bounded and satisfies the two-sided bound 
+
+(1 − λ) I7 ⪯ Pk ⪯ I7, k ≥ 1, (92) where ⪯ denotes the positive semidefinite partial order. 
+
+Proof: The proof of upper bound is by induction on 
+
+k. The base case P0 = p0I7 ⪯ p0 λ0 I7 holds trivially. Assume Pk−1 ⪯ p0 λ−(k−1) I7. Using the identity I7 −Kk =
+
+λ (λI 7 + Pk−1)−1 together with (63), 
+
+Pk = λ−1(I7 − Kk)Pk−1 = ( λI 7 + Pk−1)−1Pk−1.
+
+Each eigenvalue of (λI 7 + Pk−1)−1Pk−1 has the form 
+
+pi/(λ + pi) for an eigenvalue pi of Pk−1, and this quantity is strictly less than 1 for any pi > 0. Hence (λI 7 +
+
+Pk−1)−1Pk−1 ⪯ I7, and therefore Pk ⪯ I7, completing the induction. For the lower bound, the steady-state covariance P∞ satisfies the fixed-point relation P∞ = λ−1(I7 − K∞) P∞, which under the isotropic noise model resolves to P∞ = (1 − λ) I7.Since the gain Kk has eigenvalues in [0 , 1) , the sequence Pk
+
+is monotonically non-increasing in the positive semidefinite order, and therefore Pk ⪰ P∞ for all finite k, which is the stated lower bound. 
+
+Theorem 6.4 (Convergence of the RLS Estimator) Under As-sumptions 5–8, let ek = ˆδk − δk denote the estimation error of the RLS filter defined by (61)–(63). Then, for all k ≥ 1,
+
+E∥ek∥22
+
+ ≤ λ2k ∥e0∥22 + 1 − λ
+
+1 + λ · 7σ2 + 7 ν2max 
+
+(1 − λ)2 . (93) 
+
+Proof: Writing yk = δk + ηk for the raw residual observation defined in (59), and letting δν k = δk − δk−1
+
+denote the perturbation increment with ∥δν k∥2 ≤ νmax by Assumption 6, subtracting δk from both sides of the RLS update (62) and rearranging gives the error recursion 
+
+ek = ( I7 − Kk) ek−1 + Kk ηk − (I7 − Kk) δν k. (94) 12 Applying the elementary inequality ∥a + b + c∥2 ≤ 3( ∥a∥2 +
+
+∥b∥2 + ∥c∥2) and taking expectations, using E[ηk] = 0 and 
+
+E[∥ηk∥22] = 7 σ2 under the isotropic noise model of Assump-tion 7, and bounding ∥Kk∥2 → (1 − λ) and ∥I7 − Kk∥2 → λ
+
+at steady state by Lemma 6.3, 
+
+E∥ek∥22
+
+ ≤ λ2 E∥ek−1∥22
+
+ + (1 − λ)2 · 7σ2 + λ2 ν2max .
+
+(95) Unrolling (95) over k steps and summing the resulting geo-metric series Pk−1 
+
+> j=0
+
+λ2j ≤ (1 − λ2)−1 gives 
+
+E∥ek∥22
+
+ ≤ λ2k ∥e0∥22 + (1 − λ)2
+
+1 − λ2 · 7σ2 + λ2 ν2max 
+
+1 − λ2 .
+
+Simplifying (1 −λ)2/(1 −λ2) = (1 −λ)/(1+ λ) and bounding 
+
+λ2/(1 − λ2) ≤ (1 − λ)−2 for λ near 1 yields the stated bound (93). 
+
+Theorem 6.5 (Stability of the EMA Smoother) Under Assump-tion 8, the EMA recursion (64) is BIBO stable. Moreover, the composite estimation error εk = ˜δk − δk satisfies 
+
+∥εk∥22 ≤ (1 − α)2k ∥ε0∥22 + α2
+
+1 − (1 − α)2 E∥ek∥22
+
+
+
++ (1 − α)2
+
+1 − (1 − α)2 ν2max .
+
+(96) 
+
+Proof: The EMA recursion (64) has the z-transform transfer function H(z) = αz / (z − (1 − α)) , with a single pole at z = 1 − α. Since α ∈ (0 , 1) by Assumption 8, 
+
+|1 − α| < 1 and the pole lies strictly inside the unit disk, which is the standard necessary and sufficient condition for BIBO stability of a first-order infinite impulse response filter. For the error bound, subtracting δk from (64) gives εk =(1 − α) εk−1 + α e k − (1 − α) δν k, and squaring, taking expectations, and summing the resulting geometric series exactly as in the proof of Theorem 6.4 yields (96). 
+
+Remark 6.2: The asymptotic mean-square error implied by Theorem 6.4 as k → ∞ ,
+
+E∞(λ) = 1 − λ
+
+1 + λ · 7σ2 + λ2
+
+1 − λ2 · 7 ν2max ,
+
+exhibits a tradeoff between noise rejection (favoring λ → 1)and tracking responsiveness to time-varying perturbations (favoring λ → 0). Minimizing E∞(λ) over λ yields the ap-proximate design rule λ∗ ≈ 1 − pνmax /σ for small νmax /σ .The value λ = 0 .98 used in the simulations in Section 7 corresponds to νmax /σ ≈ 4 × 10 −4, consistent with the slowly varying gravitational and mass-gauging perturbations considered in Section 4. 
+
+Convergence of SCP 
+
+This subsection establishes that the SCP iteration converges to a KKT point of the original nonconvex Problem 1. 
+
+Assumption 9: The feasible set of Problem 1 is nonempty and compact. This holds because the time of flight tf is finite, the log-mass is bounded by ln mdry ≤ w ≤ ln m0 as in (32), and the position and velocity trajectories are bounded by the dynamics driven by the bounded thrust 0 ≤ T ≤ Tmax over the finite time horizon. 
+
+Assumption 10: The subproblem is strongly convex, i.e., there exists a constant μ > 0 such that the quadratic objective 
+
+J = ∆ t PN −1 
+
+> i=1
+
+τ 2 
+
+> i
+
+of Problem 4 is strongly convex satisfying 
+
+∇2f ⪰ μI everywhere on the feasible set. 
+
+Assumption 11: The function f (w) = Tmax e−w ap-pearing in the thrust-to-mass bound (34) has Lipschitz-continuous second derivative on the feasible log-mass do-main [ln mdry , ln m0], with Lipschitz constant L =sup w |f ′′ (w)| = Tmax /m dry .
+
+Assumption 12: Problem 4 (ℓ) is feasible for every lineariza-tion point w(ℓ) arising in the SCP iteration within the compact domain of Assumption 9. 
+
+Lemma 6.6: Under Assumptions 9–12, the sequence of opti-mal objective values {J(ℓ)} produced by the baseline SCP algorithm (Algorithm 2) is monotonically non-increasing, i.e., J(ℓ+1) ≤ J(ℓ) for all ℓ ≥ 0.
+
+Proof: Because f (w) = Tmax e−w is convex, its first-order Taylor expansion about any point w(ℓ) is a global underestimate, Tmax e−w(ℓ) 1 − (w − w(ℓ)) ≤ Tmax e−w for all w. Consequently, the feasible set defined by the linearized constraint (73) at iteration ℓ is a subset of the feasible set defined by the true (nonlinear) bound (34). Moreover, the current iterate {x(ℓ) 
+
+> i
+
+, u(ℓ) 
+
+> i
+
+} is feasible for Problem 4 (ℓ+1) ,since the linearization at iteration ℓ + 1 is performed about 
+
+w(ℓ) itself, at which point the linearized bound coincides exactly with the true bound. Since {x(ℓ+1)  
+
+> i
+
+, u(ℓ+1)  
+
+> i
+
+} is by definition the minimizer of Problem 4 (ℓ+1) over a feasible set that contains the previous iterate, 
+
+J(ℓ+1) = J x(ℓ+1) , u(ℓ+1)  ≤ J x(ℓ), u(ℓ) = J(ℓ).
+
+Theorem 6.7: Under Assumptions 9–12 and the lossless re-laxation result of Theorem 6.2, the SCP iteration of Algo-rithm 2 generates a sequence {(x(ℓ) 
+
+> i
+
+, u(ℓ) 
+
+> i
+
+)} with the follow-ing properties: (a) Every subsequential limit point of the sequence is a KKT point of Problem 1; (b) The objective sequence {J(ℓ)} converges to J∗ = J(x∗, u∗), the objective value at any such KKT point; and (c) If the KKT point is unique, the full sequence converges, i.e., (x(ℓ) 
+
+> i
+
+, u(ℓ) 
+
+> i
+
+) →
+
+(x∗ 
+
+> i
+
+, u∗ 
+
+> i
+
+) as ℓ → ∞ .
+
+Proof: (a) By Lemma 6.6, {J(ℓ)} is non-increasing, and by Assumption 9 the iterate sequence is confined to a com-pact set. By the Bolzano–Weierstrass theorem, every such sequence admits a convergent subsequence. Let (x∗, u∗) be the limit of one such subsequence, (x(ℓj ), u(ℓj )) → (x∗, u∗).Because the SCP update map is continuous under Assump-tions 10–12 (continuity of the optimal solution of a strongly convex parametric program with respect to the linearization parameter), the successor iterates (x(ℓj +1) , u(ℓj +1) ) converge to the same limit, so (x∗, u∗) is a fixed point of the SCP map. At a fixed point, w(ℓ) = w∗, and the linearized bound (73) coincides exactly with the original nonlinear bound (34) at 
+
+w = w∗. The KKT conditions of the subproblem at the fixed point therefore coincide with the KKT conditions of Problem 2: stationarity is unaffected since the objective is unchanged and the dynamics constraint (29) is already linear and exact; complementary slackness for the SOC and thrust-bound multipliers carries over unchanged; and primal 13 feasibility for the original (un-relaxed) Problem 1 follows from the lossless relaxation of Theorem 6.2. Hence (x∗, u∗)
+
+is a KKT point of Problem 1. 
+
+(b) Since {J(ℓ)} is non-increasing (Lemma 6.6) and bounded below by the optimal value of Problem 1 (finite by Assump-tions 9–10), the monotone convergence theorem guarantees 
+
+J(ℓ) → J∞ for some J∞. Along the convergent subsequence from part (a), J(ℓj ) → J(x∗, u∗), so J∞ = J∗.
+
+(c) If the KKT point of Problem 1 is unique, every sub-sequential limit identified in part (a) must equal (x∗, u∗).Since every subsequence of a bounded sequence has a further subsequence converging to the same unique limit, the full sequence converges to (x∗, u∗).
+
+Convergence Radius of the SCP Iteration 
+
+Theorem 6.7 guarantees convergence of the SCP sequence but does not quantify the basin of attraction around the KKT point within which this convergence is assured. This subsection derives an explicit radius. The Taylor remainder of the convex function f (w) =
+
+Tmax e−w about the iterate w(ℓ) is, by Taylor’s theorem with Lagrange remainder, for some ξ(ℓ) between w and w(ℓ),
+
+e(ℓ)(w) = f (w) − Tmax e−w(ℓ) 1 − (w − w(ℓ))
+
+= 12 f ′′ (ξ(ℓ)) ( w − w(ℓ))2. (97) Since e−w(ℓ)
+
+≤ e− ln mdry = 1 /m dry on the feasible log-mass domain, the remainder is bounded by 
+
+e(ℓ)(w) ≤ Tmax 
+
+2 mdry 
+
+(w − w(ℓ))2 = L
+
+2 (w − w(ℓ))2, (98) where L = Tmax /m dry is the Lipschitz constant of Assump-tion 11. Let μw > 0 denote the curvature of the Lagrangian of Problem 4 with respect to the log-mass variable w at the KKT point, that is, μw = λ∗ 
+
+> τ
+
+f ′′ (w∗), where λ∗ 
+
+> τ
+
+≥ 0 is the Lagrange multiplier associated with the thrust-to-mass bound at the optimum. 
+
+Theorem 6.8: Under Assumptions 9–12, let (x∗, u∗) be a KKT point of Problem 1 with log-mass component w∗. The SCP iteration converges to (x∗, u∗) from any initialization satisfying 
+
+w(0) − w∗ < r conv = μw
+
+L = μw mdry 
+
+Tmax 
+
+. (99) 
+
+Proof: The optimality condition of Problem 4 (ℓ) with respect to w at iteration ℓ + 1 , together with the optimality condition of the original (non-relaxed) problem at the KKT point w∗, differ only through the linearization error in the gradient of f . Subtracting the two stationarity conditions and applying the mean value theorem to the resulting expression yields, after dividing through by the curvature μw,
+
+w(ℓ+1) − w∗ ≤ Lμw
+
+w(ℓ) − w∗ 2. (100) If |w(ℓ) − w∗| < r conv = μw/L , then substituting into (100) gives 
+
+w(ℓ+1) −w∗ ≤ Lμw
+
+rconv w(ℓ)−w∗ = w(ℓ)−w∗ < r conv ,
+
+so the ball {w : |w − w∗| < r conv } is forward-invariant under the SCP map. Since the iterate remains within this ball for all ℓ once it starts there, and the contraction factor (100) is strictly less than one throughout, the sequence {w(ℓ)}
+
+converges to w∗, and by Theorem 6.7 the full state-control sequence converges to the corresponding KKT point. 
+
+Remark 6.3: Using the parameter settings in Section 7, L =
+
+Tmax /m dry = 44 ,000 /1,000 = 44 . Since the energy-optimal thrust profile does not saturate Tmax (confirmed nu-merically in Section 7), the dominant curvature contribution comes from the quadratic objective rather than the thrust-bound multiplier, giving μw ≈ 2∆ t = 2 × 50 /199 ≈ 0.503 
+
+and therefore rconv ≈ 0.503 /44 ≈ 0.0114 . The straight-line initialization (72) produces an initial log-mass error of approximately |w(0) − w∗| ≈ 0.034 , which exceeds rconv 
+
+by a small factor. Nonetheless, the contraction factor (100) shrinks rapidly as the iterate approaches w∗, and in practice convergence is observed within two to four iterations, consis-tent with the conservative nature of the bound in (99). 
+
+Convergence Rate of the SCP Iteration 
+
+This subsection characterizes the asymptotic rate at which the SCP iterates approach the KKT point, distinguishing a globally valid linear rate from a locally sharp quadratic rate, and extending the analysis to the online SCP algorithm of Section 5 to account for the residual perturbation estimation error. 
+
+Theorem 6.9: Under the hypotheses of Theorem 6.8 and the initialization condition w(0) ∈ (w∗ − rconv , w ∗ + rconv ), the SCP iterates satisfy 
+
+w(ℓ) − w∗ ≤ κℓ w(0) − w∗ , κ = Lμw
+
+w(0) − w∗ < 1.
+
+(101) 
+
+Proof: By the forward invariance established in the proof of Theorem 6.8, |w(ℓ) − w∗| ≤ | w(0) − w∗| for all ℓ.Substituting this bound into the contraction inequality (100), 
+
+w(ℓ+1) −w∗ ≤ Lμw
+
+w(ℓ) −w∗ · w(ℓ) −w∗ ≤ κ w(ℓ) −w∗ ,
+
+and iterating this relation ℓ times from ℓ = 0 yields the stated geometric bound. 
+
+Theorem 6.10: Under Assumptions 9–12, the SCP iteration exhibits, in a neighborhood of w∗, a quadratic convergence rate 
+
+w(ℓ+1) − w∗ ≤ Cq w(ℓ) − w∗ 2, C q = L
+
+2μw
+
+= Tmax 
+
+2μwmdry 
+
+.
+
+(102) 
+
+Proof: The KKT stationarity condition of the subprob-lem at iteration ℓ + 1 and that of the original problem at w∗
+
+differ by a term involving f ′(w∗) − f ′(w(ℓ)) (the mismatch between the true gradient of f at w∗ and its value at the linearization point w(ℓ), which the linear approximation uses as a constant) plus a term of order |w(ℓ) − w∗| arising from the sensitivity of the dual variable to the linearization point. Applying a second-order Taylor expansion to the gradient mismatch, 
+
+f ′(w∗)−f ′(w(ℓ))−f ′′ (w(ℓ))( w∗ −w(ℓ)) ≤ L
+
+2 w(ℓ) −w∗ 2,
+
+14 using the Lipschitz bound on f ′′ from Assumption 11 applied to f ′ = −Tmax e−w, whose own derivative f ′′ satisfies 
+
+sup w|f ′′′ (w)| = Tmax /m dry = L. The first-order term 
+
+f ′′ (w(ℓ))( w∗ − w(ℓ)) is absorbed into the Hessian on the left-hand side of the KKT perturbation equation, leaving a residual of order |w(ℓ) −w∗|2 on the right-hand side. Dividing through by the curvature μw gives the stated quadratic bound with constant Cq = L/ (2 μw).
+
+Remark 6.4: Theorems 6.9 and 6.10 together explain the two-phase convergence pattern observed numerically in Sec-tion 7. In the first one to two iterations, the iterate w(ℓ)
+
+may lie outside the quadratic convergence neighborhood {w :
+
+|w − w∗| < 1/C q }, and the contraction proceeds at the slower, linear rate of Theorem 6.9. Once the iterate enters this neighborhood, the quadratic bound of Theorem 6.10 dominates and the error decreases by orders of magnitude in a single additional iteration, consistent with the rapid drop in the objective value and state-trajectory difference observed between the second and third SCP iterations. Using the numerical values of Remark 6.3, Cq = L/ (2 μw) ≈
+
+44 /(2 × 0.503) ≈ 43 .7, so the quadratic regime is entered once |w(ℓ) − w∗| falls below approximately 1/C q ≈ 0.023 .
+
+Theorem 6.11: Let εest = ˜bk − (b + δ∗ 
+
+> k
+
+) 2 = ˜δk − δ∗ 
+
+> k2
+
+denote the perturbation estimation error at a given replanning instant, where δ∗ 
+
+> k
+
+is the (unknown) true perturbation. Under Assumptions 5–12, the inner SCP iterates of the online algo-rithm (Algorithm 3) satisfy 
+
+w(ℓ+1) − w∗ 
+
+> b
+
+≤ Cq w(ℓ) − w∗ 
+
+> b
+> 2
+
++ εest 
+
+μw
+
+, (103) where w∗ 
+
+> b
+
+denotes the optimal log-mass for the problem with the true bias b + δ∗ 
+
+> k
+
+. Consequently, the iterates converge not to w∗ 
+
+> b
+
+exactly, but to a residual neighborhood of radius 
+
+rres = 1 − p1 − 4Cq εest /μ w
+
+2Cq
+
+≈ εest 
+
+μw
+
+for small εest . (104) 
+
+Proof: The online SCP subproblem uses the corrected bias ˜bk in place of the true bias b + δ∗ 
+
+> k
+
+in the dynamics constraint (82). The resulting mismatch contributes an ad-ditional term of size ∆tk εest to the right-hand side of the dynamics equality at every node. Repeating the proof of Theorem 6.10 with this additional forcing term, and using the implicit function theorem for parametric convex programs to bound the sensitivity of the optimal w to the bias error by 
+
+1/μ w, yields 
+
+μw w(ℓ+1) − w∗ 
+
+> b
+
+≤ L
+
+2 w(ℓ) − w∗ 
+
+> b
+> 2
+
++ εest ,
+
+which, after dividing by μw, gives (103). The residual ball radius rres is obtained as the fixed point of the recursion r =
+
+Cq r2 + εest /μ w, which has the closed-form solution given in (104). The approximation for small εest follows from the first-order expansion 1 − √1 − x ≈ x/ 2.
+
+Remark 6.5: As the RLS and EMA filters converge (Theo-rems 6.4 and 6.5), the estimation error εest decreases toward the steady-state floor characterized in Remark 6.2. In the idealized limit of perfect identification, εest → 0, the residual ball radius rres → 0 and the online SCP recovers the exact quadratic convergence rate of Theorem 6.10. In practice, the residual ball radius is bounded by the noise floor of the estimator, so the online SCP trajectory tracks the true optimal trajectory to within an error that is fundamentally limited by the navigation noise level σ and the forgetting factor λ, rather than by any limitation of the SCP algorithm itself. Collectively, these theoretical results show that the convex relaxation introduces no loss of optimality, that the online perturbation estimator is stable and converges in a mean-square sense, that the baseline SCP algorithm is guaranteed to converge to a KKT point of the original nonconvex problem from within an explicitly characterized convergence radius, and that the rate of convergence transitions from linear to quadratic as the iterates approach the optimum, with the on-line extension converging to a residual neighborhood whose size is governed entirely by the quality of the online pertur-bation estimate. The numerical validation of these theoretical predictions is presented in Section 7. 
+
+# 7. N UMERICAL SIMULATIONS 
+
+This section presents numerical simulations that validate the methods developed in previous sections. All simulations are implemented in MATLAB, with the convex subproblems modeled using YALMIP [20] and solved with the ECOS interior-point SOCP solver [21]. The nominal (baseline) SCP is first run to establish a reference trajectory and to confirm the convergence behavior predicted in Section 6. The online SCP algorithm with model identification is then exercised under four perturbation scenarios, and its closed-loop performance is compared against both the nominal plan and the (unknown, ground-truth) perturbed trajectory. The nominal scenario considered throughout this section is a short-range lunar powered descent beginning approximately one kilometer above the designated landing site, with lateral position and velocity offsets that require the lander to correct its horizontal drift while simultaneously decelerating its ver-tical descent rate. Specifically, the lander begins at position 
+
+r0 = [100 , 200 , 1000] T m in the ENU frame defined in Section 2, with initial velocity v0 = [10 , 10 , −5] T m/s, indi-cating simultaneous lateral drift in both horizontal directions and a modest descent rate. The target landing site is the origin of the frame, rf = [0 , 0, 0] T m, with a soft-landing terminal velocity requirement vf = [0 , 0, 0] T m/s. The lander begins the descent with a wet mass of m0 = 10 ,000 kg and must not deplete its propellant below the dry mass mdry = 1 ,000 kg ,giving a maximum available propellant mass of 9,000 kg ,or 90% of the initial mass. The descent is constrained to a fixed time of flight of tf = 50 s , and the maximum thrust available from the propulsion system is Tmax = 44 ,000 N .This combination of a relatively short time of flight, a sub-stantial lateral correction requirement, and a generous but finite propellant budget produces a descent profile in which the energy-optimal solution executes a pronounced lateral arc before settling into a nearly vertical terminal approach, as confirmed in the plots discussed later in this section. Table 1 summarizes the key parameter settings used through-out the numerical simulations. 
+
+Perturbation Scenarios 
+
+Four perturbation scenarios, corresponding to the uncertainty sources introduced in Section 4, are used to exercise the online identification and replanning framework under pro-gressively more demanding conditions. In each scenario, a closed-loop truth propagator integrates the lander dynamics 15 Table 1 . Key simulation parameter settings Parameter Value 
+
+Lunar gravitational acceleration, g 1.6229 m /s2
+
+Earth sea-level gravity, g0 9.81 m /s2
+
+Specific impulse, Isp 311 s 
+
+Initial (wet) mass, m0 10 ,000 kg 
+
+Dry mass, mdry 1,000 kg 
+
+Maximum thrust magnitude, Tmax 44 ,000 N 
+
+Number of nodes (full horizon), N 200 
+
+Convergence tolerance, εj 0.001 
+
+Initialization Straight line Replanning cadence, nreplan 10 guidance steps Reduced-horizon node count, Nplan 30 
+
+Maximum inner iterations, ℓon max 5
+
+Forgetting factor, λ 0.98 
+
+Initial RLS covariance scalar, p0 10 4
+
+EMA smoothing weight, α 0.3
+
+forward using the true (perturbed) bias, while the online SCP algorithm has access only to noisy state measurements and must infer the perturbation through the RLS and EMA filters described in Section 4. 
+
+Scenario 1: Constant Mascon Anomaly. A spatially uni-form gravitational anomaly of dc = [0 .05 , 0.05 , 0.03] T m/s2
+
+is added to the velocity dynamics for the entire descent, as defined in (51). This scenario represents the simplest case for the identification framework, since the perturbation is constant and the RLS filter need only converge once at the start of the descent and then track a fixed value. 
+
+Scenario 2: Sinusoidal Gravitational Perturbation. Atime-varying anomaly with amplitude Asin = 0.04 m /s2
+
+and frequency ωsin = 2 π/ 25 rad /s is applied according to (52), with a π/ 4 phase offset between the east and north channels. This scenario tests the RLS filter’s ability to track a perturbation that varies continuously over a period comparable to the descent duration itself, exercising the bias– variance tradeoff discussed in Section 6. 
+
+Scenario 3: Mass-Gauging and Thrust-Scale Error. A
+
+4% thrust-scale bias ( ηT = 0 .04 ) and a 5% mass-gauging error ( ηm = 0.05 ) are applied simultaneously, following (53) and (54). Unlike the gravitational perturbations of Scenarios 1 and 2, this perturbation is state- and control-dependent: it scales with the commanded thrust components, so its magnitude grows as the thrust profile itself increases toward the end of the descent. 
+
+Scenario 4: Combined Perturbation. All three perturba-tion sources from Scenarios 1–3 are superimposed simulta-neously, representing a worst-case stress test in which the gravitational anomaly, the sinusoidal time-varying compo-nent, and the thrust- and mass-dependent errors all act on the lander concurrently. This scenario evaluates whether the online identification framework remains effective when the lumped perturbation no longer corresponds to any single simple model. In every scenario, the navigation measurement noise de-scribed in Section 4 (with σr = 0 .5 m , σv = 0 .05 m /s,and σw = 0 .001 ) is added to the true state at each guidance step before it is passed to the RLS filter, so the identification problem reflects realistic sensor noise in addition to the unknown deterministic perturbation. Figure 1 plots the SCP objective value J(ℓ) against the iteration number for the baseline (nominal) SCP run. The objective starts at approximately 254 .7505 at the first itera-tion, drops sharply to approximately 254 .7475 by the second iteration, and remains essentially unchanged at the third itera-tion, at which point the convergence criterion (75) is satisfied. This rapid, near-immediate convergence is consistent with the theoretical discussion of Section 6. Because the straight-line initialization produces an initial log-mass error well within the convergence radius, and because the only nonlinearity in the problem (the thrust-to-mass exponential bound) is mild over the narrow log-mass operating range, the SCP iteration enters its quadratic-convergence regime almost immediately, producing the characteristic single large drop in objective value followed by negligible further change. 
+
+Figure 1 . Convergence of objective (nominal SCP). 
+
+Scenario 1: Constant Mascon Anomaly 
+
+Figures 2–6 present the detailed results for Scenario 1. Fig-ure 2 shows the converged trajectory in 3D position space, be-ginning at the start point approximately one kilometer above and offset from the landing site, executing a smooth lateral arc that simultaneously reduces the east and north position offsets, and terminating precisely at the target landing site. The trajectory shape (an initial shallow lateral correction followed by a steepening, nearly vertical final approach) is consistent with energy-optimal descent profiles reported in the literature and reflects the SCP solution’s efficient use of the available time of flight to spread the lateral correction over the early portion of the descent while reserving the final seconds for vertical deceleration. Figure 3 overlays the vehicle mass trajectory m(t) =exp( w(t)) for the nominal (uncorrected) plan, the online (corrected) plan, and the true mass actually consumed by the perturbed lander, for Scenario 1. The nominal mass profile, which assumes no perturbation, depletes propellant more slowly than the true trajectory, since the constant mascon anomaly of Scenario 1 requires additional thrust beyond the 16 nominal prediction to counteract the gravitational anomaly. The online (corrected) mass profile closely tracks the true mass consumption after the RLS filter has had a brief initial period to converge, demonstrating that the online identifi-cation and replanning mechanism successfully detects and compensates for the additional propellant demand imposed by the unmodeled perturbation. Figure 4 compares the nominal and online thrust magnitude profiles against the maximum available thrust Tmax . The nominal profile follows a smooth, classical energy-optimal shape: starting at a moderate level, dipping to a minimum near the midpoint of the descent, and rising toward the end as the vehicle decelerates for touchdown. The online thrust profile exhibits visible oscillations superimposed on this same overall shape. These oscillations arise from the frequency-gated replanning strategy, in which the commanded thrust is held fixed between replanning events and then adjusted in a step change at each nreplan -step replan, producing the charac-teristic sawtooth-like pattern visible in the figure. Critically, the online thrust never approaches the maximum thrust limit 
+
+Tmax , confirming the assumption used in Remark 6.3 that the thrust bound remains inactive throughout the energy-optimal descent even under perturbation. Figure 5 shows the three velocity-channel components of the true perturbation, the raw RLS estimate, and the EMA-filtered estimate over the course of the descent for Scenario 1. All three estimated curves converge toward the constant true perturbation values ( 0.05 , 0.05 , and 0.03 m /s2) within the first several seconds of the descent, after which the EMA-filtered estimate (the one actually used to correct the dynam-ics model) tracks the true value closely with only small resid-ual fluctuations attributable to navigation measurement noise. This behavior is consistent with the mean-square convergence behavior discussed in Section 6: an initial transient as the filter state moves away from its zero initialization, followed by a steady-state tracking regime whose accuracy is governed by the noise level and the forgetting factor. The upper panel of Figure 6 shows the mass-flow perturbation channel δw, which is identically zero for Scenario 1 (since the constant mascon anomaly affects only the velocity channels). The RLS and EMA estimates correctly converge toward this zero value after an initial transient, correctly avoiding a false detection of a mass-channel perturbation that does not exist in this scenario. The lower panel compares the log-mass tra-jectory for the nominal, online, and true cases, showing that the online and true log-mass trajectories track one another closely while the nominal trajectory, which does not account for the additional propellant demand of the mascon anomaly, diverges visibly toward the end of the descent. 
+
+Scenario 2: Sinusoidal Gravitational Perturbation 
+
+Figures 7–9 present the trajectory, mass, and thrust profiles for Scenario 2, which are consistent with the discussion above in Scenario 1. The truth trajectory (the trajectory actually flown under the true perturbation) is also overlaid, confirming visually that both the online corrected plan and the true trajectory remain close to one another and only mildly diverge from the overly optimistic nominal plan. Figure 10 shows the velocity-channel perturbation estimation for the sinusoidal gravitational perturbation of Scenario 2. The true perturbation now oscillates continuously according to (52) rather than remaining constant, and the EMA-filtered estimate visibly tracks the slow oscillation with a small phase lag, consistent with the lag term identified in the mean-square error discussion of Section 6: because the forgetting factor 
+
+λ = 0 .98 is tuned for slowly drifting perturbations, the filter smooths over some of the faster oscillation detail while still capturing the overall trend and amplitude. Figure 11 confirms that the mass-channel perturbation remains correctly identi-fied as approximately zero throughout, and that the online log-mass trajectory continues to track the true trajectory more closely than the nominal trajectory does. 
+
+Scenario 3: Mass Gauging Error 
+
+Figures 12–14 present the results for Scenario 3. The overall trajectory shape is essentially unchanged from the nominal case, since neither the thrust-scale bias nor the mass-gauging error substantially redirects the lateral correction maneuver. The thrust profile again shows the characteristic step-change pattern induced by the frequency-gated replanning, with the online profile oscillating around the nominal profile as the perturbation estimate itself oscillates. Figures 15–16 present the velocity- and mass-channel perturbation estimation re-sults for the thrust-scale and mass-gauging error of Sce-nario 3. Unlike the gravitational perturbations of Scenarios 1 and 2, this perturbation is proportional to the commanded thrust components and therefore grows in magnitude as the descent progresses and the required thrust increases. The true perturbation curves in Figure 15 visibly grow over time rather than remaining at a constant amplitude, and the RLS and EMA estimates track this growing trend reasonably well, though with somewhat larger transient deviations than in the constant-perturbation case of Scenario 1, reflecting the more challenging, state-dependent nature of this perturbation source. Figure 16 confirms a small but nonzero mass-channel perturbation δw that is correctly identified by the filters, consistent with the mass-gauging error model of (54). 
+
+Scenario 4: Combined (Scenarios 1–3 Simultaneously) 
+
+Figures 17–19 parallel the previous trajectory, mass, and thrust comparisons. The vehicle mass profile shows the largest divergence between the nominal and true/online tra-jectories among the first three scenarios, consistent with the growing perturbation magnitude noted above. The online corrected plan nonetheless continues to track the true mass depletion closely, demonstrating that the online identification framework remains effective even when the underlying per-turbation is state-dependent rather than purely a function of time. Figures 20–21 present the velocity- and mass-channel perturbation estimation results for the combined scenario, in which all three perturbation sources are superimposed. The true perturbation curves in Figure 20 exhibit the most complex behavior among all four scenarios, combining a constant offset, a sinusoidal oscillation, and a growing thrust-dependent trend. Despite this complexity, the EMA-filtered estimate continues to track the overall shape and magnitude of the combined perturbation reasonably well, though with visibly larger instantaneous tracking error than in the simpler scenarios, particularly during the more rapidly varying por-tions of the descent. Figure 21 confirms that the mass-channel perturbation, now driven by the combined mass-gauging error contribution, is also tracked successfully. Collectively, the Scenario 4 results demonstrate that the online identification and replanning framework degrades gracefully rather than catastrophically when confronted with a perturbation that does not correspond to any single simple model, consistent with the discussion in Section 6 that the RLS and EMA filters operate on the lumped perturbation vector without requiring it to match any particular parametric structure. Across all four scenarios, the online SCP algorithm with model identification consistently reduces the landing position 17 and velocity errors relative to the uncorrected nominal plan, with the magnitude of the improvement scaling with the severity and complexity of the perturbation: the constant mas-con anomaly of Scenario 1, being the simplest perturbation to identify, shows the smallest residual error in the online solution, while the combined stress test of Scenario 4 shows the largest residual error among the online results, though still substantially smaller than the corresponding nominal error. This pattern is consistent with the theoretical discussion of Section 6, in which the online SCP was shown to converge not to the exact optimum of the true perturbed problem but to a residual neighborhood whose size scales with the perturba-tion estimation error. The more complex and rapidly varying perturbations of Scenarios 2 through 4 are inherently more difficult for the RLS and EMA filters to track exactly, leading to a correspondingly larger (but still substantially reduced relative to the nominal case) residual landing error. The propellant consumption results similarly show that the online corrected plan consumes propellant in a pattern much closer to the true required consumption than the overly optimistic nominal plan, which in every scenario underestimates the propellant required to counteract the unmodeled perturbation. 
+
+Figure 2 . 3D landing trajectory (Scenario 1). 
+
+Figure 3 . Vehicle mass profile (Scenario 1). 
+
+Figure 4 . Thrust magnitude profile (Scenario 1). 
+
+Figure 5 . Perturbation estimation (Scenario 1). 
+
+Figure 6 . Mass-channel perturbation and log-mass profile (Scenario 1). 18 Figure 7 . 3D landing trajectory (Scenario 2). 
+
+Figure 8 . Vehicle mass profile (Scenario 2). 
+
+Figure 9 . Thrust magnitude profile (Scenario 2). 
+
+Figure 10 . Perturbation estimation (Scenario 2). 
+
+Figure 11 . Mass-channel perturbation and log-mass profile (Scenario 2). 
+
+Figure 12 . 3D landing trajectory (Scenario 3). 19 Figure 13 . Vehicle mass profile (Scenario 3). 
+
+Figure 14 . Thrust magnitude profile (Scenario 3). 
+
+Figure 15 . Perturbation estimation (Scenario 3). 
+
+Figure 16 . Mass-channel perturbation and log-mass profile (Scenario 3). 
+
+Figure 17 . 3D landing trajectory (Scenario 4). 
+
+Figure 18 . Vehicle mass profile (Scenario 4). 20 Figure 19 . Thrust magnitude profile (Scenario 4). 
+
+Figure 20 . Perturbation estimation (Scenario 4). 
+
+Figure 21 . Mass-channel perturbation and log-mass profile (Scenario 4). 
+
+# 8. C ONCLUSIONS 
+
+This paper has developed and analyzed a guidance framework that integrates online model identification with sequential convex programming for three-dimensional lunar powered descent trajectory optimization. The nonconvex landing problem was reformulated into a sequence of convex second-order cone programs through a change of variables, suc-cessive linearization of the thrust-to-mass constraint, and a second-order cone relaxation of the thrust direction constraint that was shown to be lossless under mild and physically rea-sonable conditions. An online identification layer combining a recursive least squares filter with exponential forgetting and an exponential moving average smoother was introduced to estimate unknown gravitational, thrust-scale, and mass-gauging perturbations from noisy flight measurements in real time, and the resulting corrected bias was incorporated into the convex subproblem solved at each guidance cycle without compromising its convexity or feasibility. Both a baseline offline SCP algorithm and a receding-horizon online extension with model identification were presented, and a theoretical analysis established the losslessness of the convex relaxation, the mean-square convergence and stability of the identification filters, the guaranteed convergence of the SCP iteration to a stationary point of the original nonconvex prob-lem, and explicit characterizations of the convergence radius and convergence rate, including the residual neighborhood to which the online algorithm converges as a function of the perturbation estimation error. Numerical simulations across four perturbation scenarios of increasing complexity confirmed these theoretical predictions, demonstrating that the proposed online algorithm consistently improves land-ing accuracy and propellant-budget fidelity relative to an uncorrected nominal trajectory, while preserving the rapid, predictable convergence behavior characteristic of convex optimization. Collectively, these results indicate that online model identification and sequential convex programming can be combined without sacrificing the theoretical guarantees that make convex-optimization-based guidance attractive for safety-critical, real-time deployment. 
+
+# ACKNOWLEDGEMENTS 
+
+Generative AI tools were used for language refinement during the preparation of this paper. All technical content and interpretations were developed by the author. 
+
+# REFERENCES 
+
+[1] Z. Wang, “From new commercial moon landers to as-teroid investigations, expect a slate of exciting space missions in 2025,” 2025, https://theconversation.co m/from-new-commercial-moon-landers-to-asteroid-i nvestigations-expect-a-slate-of-exciting-space-mission s-in-2025-243645 [Accessed: 2026-06-25]. [2] ——, “Landing on the moon is an incredibly difficult feat – 2025 has brought successes and shortfalls for companies and space agencies,” 2025, https://thecon versation.com/landing-on-the-moon-is-an-incredibl y-difficult-feat-2025-has-brought-successes-and-s hortfalls-for-companies-and-space-agencies-256046 [Accessed: 2026-06-25]. [3] Z. Song, C. Wang, S. Theil, D. Seelbinder, M. Sagliano, X.-f. Liu, and Z.-j. Shao, “Survey of autonomous guid-ance methods for powered planetary landing,” Frontiers of Information Technology & Electronic Engineering ,21 vol. 21, no. 5, pp. 652–674, 2020. [4] R. D. Lorenz, “Planetary landings with terrain sensing and hazard avoidance: A review,” Advances in Space Research , vol. 71, no. 1, pp. 1–15, 2023. [5] X. Liu, S. Li, and M. Xin, “Survey of trajectory opti-mization methods for mars entry and powered descent,” 
+
+Journal of Guidance, Control, and Dynamics , vol. 49, no. 1, pp. 216–239, 2026. [6] B. Acikmese and S. R. Ploen, “Convex programming approach to powered descent guidance for mars land-ing,” Journal of Guidance, Control, and Dynamics ,vol. 30, no. 5, pp. 1353–1366, 2007. [7] Z. Wang, “A survey on convex optimization for guid-ance and control of vehicular systems,” Annual Reviews in Control , vol. 57, p. 100957, 2024. [8] L. Cheng, Z. Wang, F. Jiang, and J. Li, “Fast genera-tion of optimal asteroid landing trajectories using deep neural networks,” IEEE Transactions on Aerospace and Electronic Systems , vol. 56, no. 4, pp. 2642–2655, 2019. [9] L. Cheng, Z. Wang, and F. Jiang, “Real-time control for fuel-optimal moon landing based on an interactive deep reinforcement learning algorithm,” Astrodynamics ,vol. 3, no. 4, pp. 375–386, 2019. [10] L. Cheng, Z. Wang, Y. Song, and F. Jiang, “Real-time optimal control for irregular asteroid landings using deep neural networks,” Acta Astronautica , vol. 170, pp. 66–79, 2020. [11] B. Gaudet, R. Linares, and R. Furfaro, “Deep rein-forcement learning for six degree-of-freedom planetary landing,” Advances in Space Research , vol. 65, no. 7, pp. 1723–1741, 2020. [12] Z. Wang and M. J. Grant, “Minimum-fuel low-thrust transfers for spacecraft: A convex approach,” IEEE Transactions on Aerospace and Electronic Systems ,vol. 54, no. 5, pp. 2274–2290, 2018. [13] ——, “Optimization of minimum-time low-thrust trans-fers using convex programming,” Journal of Spacecraft and Rockets , vol. 55, no. 3, pp. 586–598, 2018. [14] ——, “Constrained trajectory optimization for plane-tary entry via sequential convex programming,” Journal of Guidance, Control, and Dynamics , vol. 40, no. 10, pp. 2603–2615, 2017. [15] S. Boyd and L. Vandenberghe, Convex optimization .Cambridge University Press, 2004. [16] S. A. U. Islam and D. S. Bernstein, “Recursive least squares for real-time implementation [lecture notes],” 
+
+IEEE Control Systems Magazine , vol. 39, no. 3, pp. 82– 85, 2019. [17] F. Klinker, “Exponential moving average versus moving exponential average,” Mathematische Semesterberichte ,vol. 58, no. 1, pp. 97–107, 2011. [18] Y. Mao, M. Szmuk, X. Xu, and B. Ac ¸ikmese, “Succes-sive convexification: A superlinearly convergent algo-rithm for non-convex optimal control problems,” arXiv preprint arXiv:1804.06539 , 2018. [19] S. S. Haykin, Adaptive filter theory . Pearson Education India, 2008. [20] J. Lofberg, “Yalmip: A toolbox for modeling and opti-mization in matlab,” in 2004 IEEE International Con-ference on Robotics and Automation , 2004, pp. 284– 289. [21] A. Domahidi, E. Chu, and S. Boyd, “Ecos: An socp solver for embedded systems,” in 2013 European con-trol conference (ECC) , 2013, pp. 3071–3076. 
+
+# BIOGRAPHY [
+
+Zhenbo Wang received his B.E. degree in Astronautics from Nanjing Univer-sity of Aeronautics and Astronautics in 2010 and his M.E. degree in Control Engineering from Beihang University in 2013. In 2018, he received his Ph.D. degree in Aeronautics and Astronau-tics from Purdue University and joined the University of Tennessee Knoxville (UTK) as an Assistant Professor. He is now an Associate Professor in the Department of Me-chanical and Aerospace Engineering and the director of the Autonomous Systems Laboratory at UTK. He is a recipient of the 2023 NSF Faculty Early Career Development Program (CAREER) Award, the 2023 Louis and Ann Hoffman En-dowed Excellence in Research Award, and the 2024 Profes-sional Promise in Research Award. His research interests are control, optimization, and machine learning for various en-gineering applications including space systems, air vehicles, connected and automated vehicles, and power and energy systems. He is a Senior Member of the American Institute of Aeronautics and Astronautics (AIAA) and a member of the AIAA Atmospheric Flight Mechanics (AFM) Technical Committee. He is a Senior Editor of IEEE Transactions on Aerospace and Electronic Systems .22
