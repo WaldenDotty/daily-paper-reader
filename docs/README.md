@@ -6,58 +6,53 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-11
-- 运行时间：2026-07-11 20:39:52 UTC
+- 最新运行日期：2026-07-12
+- 运行时间：2026-07-12 21:00:47 UTC
 - 运行状态：成功
-- 本次总论文数：12
-- 精读区：6
-- 速读区：6
+- 本次总论文数：11
+- 精读区：3
+- 速读区：8
 
 ### 今日简报（AI）
-1) 今日12篇论文推荐，精读聚焦月球着陆轨迹优化与南极导航精度分析，高分论文揭示关键突破。  
-2) 最值得关注《Online Modeling and Sequential Convex Programming for Lunar Landing Trajectory Optimization》（10分）提出的序列凸规划方法，以及《The Cost of Lunar South-Polar Geometry, and Surface Beacons as the Efficient Fix》（9分）对表面信标降低几何稀释精度的验证。  
-3) 建议优先精读以上两篇，关注凸优化在复杂约束轨迹规划中的应用，以及信标部署对导航效能的实际增益。
-- 详情：[/202607/11/README](/202607/11/README)
+今日阅读11篇，精读2篇聚焦月球南极导航信标与神经网络卫星跟踪。最值得关注的是月球南极几何成本与信标效率的DOP分析（9分），以及神经增强微卡尔曼滤波在卫星跟踪中的对比研究（8分）。建议优先精读这两篇高评分论文，速读中《Lost in Time?》对惯性导航延迟问题的分析也值得参考。
+- 详情：[/202607/12/README](/202607/12/README)
 
 ### 精读区论文标签
-1. [Online Modeling and Sequential Convex Programming for Lunar Landing Trajectory Optimization](/202607/11/2607.02750v1-online-modeling-and-sequential-convex-programming-for-lunar-landing-trajectory-optimization)  
-   标签：评分：10.0/10、query:cislunar-dyn-nav
-   evidence：月球着陆轨迹优化与在线建模
-2. [The Cost of Lunar South-Polar Geometry, and Surface Beacons as the Efficient Fix: A Dilution-of-Precision Analysis](/202607/11/2607.06212v1-the-cost-of-lunar-south-polar-geometry-and-surface-beacons-as-the-efficient-fix-a-dilution-of-precision-analysis)  
+1. [The Cost of Lunar South-Polar Geometry, and Surface Beacons as the Efficient Fix: A Dilution-of-Precision Analysis](/202607/12/2607.06212v1-the-cost-of-lunar-south-polar-geometry-and-surface-beacons-as-the-efficient-fix-a-dilution-of-precision-analysis)  
    标签：评分：9.0/10、query:cislunar-dyn-nav
-   evidence：直接涉及月球定位导航授时架构、卫星几何及表面信标，用于南极多传感器融合定位授时。
-3. [An Efficient Non-Gaussian Chance Constraint Method for Stochastic Nonlinear Problems in Spaceflight](/202607/11/2607.03424v1-an-efficient-non-gaussian-chance-constraint-method-for-stochastic-nonlinear-problems-in-spaceflight)  
+   evidence：月球南极PNT，椭圆月球冻结轨道星座，精度衰减分析
+2. [Neural-Enhanced Micro-Kalman Filtering for Satellite Tracking: A Comparative Study](/202607/12/2607.06830v1-neural-enhanced-micro-kalman-filtering-for-satellite-tracking-a-comparative-study)  
    标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：应用于地月环境及深空飞越，处理非高斯不确定性，用于轨迹优化与制导。
-4. [WinTA-GIL: Windowed Trajectory Alignment for GNSS-IMU-LiDAR Heading Refinement in Intermittent Signal Environments](/202607/11/2607.04879v1-winta-gil-windowed-trajectory-alignment-for-gnss-imu-lidar-heading-refinement-in-intermittent-signal-environments)  
+   evidence：使用神经卡尔曼滤波进行卫星状态估计，适用于自主导航
+3. [A circumbinary approach to the study of spin-orbit resonances around irregular shaped bodies. Application to the Quaoar system](/202607/12/2607.08543v1-a-circumbinary-approach-to-the-study-of-spin-orbit-resonances-around-irregular-shaped-bodies-application-to-the-quaoar-system)  
    标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：针对GNSS-IMU-LiDAR的窗口轨迹对齐航向精化方法，适用于信号间歇环境的多传感器融合
-5. [Uncertainty-Aware Velocity Correction for Proprioceptive Vehicle Localization using Evidential Mamba](/202607/11/2607.05669v1-uncertainty-aware-velocity-correction-for-proprioceptive-vehicle-localization-using-evidential-mamba)  
-   标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：利用证据深度学习进行不确定性感知的IMU漂移校正，实现自主定位，可应用于月球邻近操作
-6. [SCI-Mamba: Unsupervised Learning based Low-Light Image Enhancement for Non-Cooperative Spacecraft](/202607/11/2607.08033v1-sci-mamba-unsupervised-learning-based-low-light-image-enhancement-for-non-cooperative-spacecraft)  
-   标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：面向非合作航天器的无监督低光照图像增强；直接支持月球接近段的自主交会与位姿估计
+   evidence：使用受限N体问题的双星近似方法研究自旋轨道共振
 
 ### 速读区论文标签
-1. [Derivations of Error-State Kalman Filter Kinematics for Globally Applicable Aided Inertial Navigation Systems](/202607/11/2607.03211v1-derivations-of-error-state-kalman-filter-kinematics-for-globally-applicable-aided-inertial-navigation-systems)  
+1. [Lost in Time? Continuous Symmetry and Identifiability in Aided Inertial Navigation with Unknown Measurement Delays](/202607/12/2607.03699v1-lost-in-time-continuous-symmetry-and-identifiability-in-aided-inertial-navigation-with-unknown-measurement-delays)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：用于辅助惯性导航的误差状态卡尔曼滤波
-2. [Lost in Time? Continuous Symmetry and Identifiability in Aided Inertial Navigation with Unknown Measurement Delays](/202607/11/2607.03699v1-lost-in-time-continuous-symmetry-and-identifiability-in-aided-inertial-navigation-with-unknown-measurement-delays)  
+   evidence：辅助惯性导航，未知时间延迟，多传感器融合的可辨识性
+2. [Uncertainty-Aware Velocity Correction for Proprioceptive Vehicle Localization using Evidential Mamba](/202607/12/2607.05669v1-uncertainty-aware-velocity-correction-for-proprioceptive-vehicle-localization-using-evidential-mamba)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：未知测量延迟下的辅助惯性导航，与地月定位多传感器融合相关
-3. [Multi Impulse Low Earth Orbit Maneuver Synthesis Through Thrust Measure Primer Vector Conditions and Piecewise Multiple Shooting](/202607/11/2607.05057v1-multi-impulse-low-earth-orbit-maneuver-synthesis-through-thrust-measure-primer-vector-conditions-and-piecewise-multiple-shooting)  
+   evidence：基于学习的自主定位速度校正，适用于GNSS拒止环境
+3. [SCI-Mamba: Unsupervised Learning based Low-Light Image Enhancement for Non-Cooperative Spacecraft](/202607/12/2607.08033v1-sci-mamba-unsupervised-learning-based-low-light-image-enhancement-for-non-cooperative-spacecraft)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：适用于地月系统的轨迹优化方法
-4. [SASGeo: Stability-Aware Semantic Map Localization for GNSS-Denied UAVs -- A Framework and Synthetic Proof of Concept](/202607/11/2607.07737v1-sasgeo-stability-aware-semantic-map-localization-for-gnss-denied-uavs----a-framework-and-synthetic-proof-of-concept)  
-   标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：面向GNSS拒止无人机的语义地图定位，可迁移至地月空间多传感器融合定位
-5. [Certified Breathing Stability Regions in Nonlinear Dynamical Systems: Composite Lyapunov Certificates, M-Matrix Conditions, and a Resilience-Fragility Correspondence](/202607/11/2607.04305v1-certified-breathing-stability-regions-in-nonlinear-dynamical-systems-composite-lyapunov-certificates-m-matrix-conditions-and-a-resilience-fragility-correspondence)  
+   evidence：用于航天器的无监督低光增强，支持自主导航
+4. [Weighted Phase Volume Method in Stability Analysis: Integral Criteria and Ellipsoidal Reachable Sets](/202607/12/2607.05033v1-weighted-phase-volume-method-in-stability-analysis-integral-criteria-and-ellipsoidal-reachable-sets)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：通过复合Lyapunov函数获得非线性动力系统的认证稳定区域；可应用于地月系统轨迹稳定性分析
-6. [Learning Stable Controlled Dynamical Systems via Input-Contraction Neural Differential Models](/202607/11/2607.05718v1-learning-stable-controlled-dynamical-systems-via-input-contraction-neural-differential-models)  
+   evidence：用于动力系统稳定性分析的加权相体积方法
+5. [Multi Impulse Low Earth Orbit Maneuver Synthesis Through Thrust Measure Primer Vector Conditions and Piecewise Multiple Shooting](/202607/12/2607.05057v1-multi-impulse-low-earth-orbit-maneuver-synthesis-through-thrust-measure-primer-vector-conditions-and-piecewise-multiple-shooting)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：学习稳定受控动力系统的方法可应用于地月轨迹稳定性分析
+   evidence：基于初值向量理论和分段多步打靶的LEO多脉冲机动优化
+6. [Learning Stable Controlled Dynamical Systems via Input-Contraction Neural Differential Models](/202607/12/2607.05718v1-learning-stable-controlled-dynamical-systems-via-input-contraction-neural-differential-models)  
+   标签：评分：6.0/10、query:cislunar-dyn-nav
+   evidence：学习稳定受控动力系统用于轨迹预测
+7. [D-CLIPSE: Distributed Consensus-based Localization with Passive Listening on Shared State Exchange](/202607/12/2607.07995v1-d-clipse-distributed-consensus-based-localization-with-passive-listening-on-shared-state-exchange)  
+   标签：评分：6.0/10、query:cislunar-dyn-nav
+   evidence：基于分布式一致性的多机器人定位
+8. [Input-Constrained Spatiotemporal Tubes for Safe Navigation of Unknown Euler-Lagrange Systems in Dynamic Environments](/202607/12/2607.08189v1-input-constrained-spatiotemporal-tubes-for-safe-navigation-of-unknown-euler-lagrange-systems-in-dynamic-environments)  
+   标签：评分：6.0/10、query:cislunar-dyn-nav
+   evidence：针对未知欧拉-拉格朗日系统输入约束的安全导航控制框架
 
 
 <div class="dpr-home-promo-card">
