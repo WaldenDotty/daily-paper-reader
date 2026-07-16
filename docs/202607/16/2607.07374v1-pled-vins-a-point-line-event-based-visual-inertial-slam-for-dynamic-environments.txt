@@ -1,0 +1,516 @@
+Title: PLED-VINS: A Point-Line Event-Based Visual Inertial SLAM for Dynamic Environments
+
+URL Source: https://arxiv.org/pdf/2607.07374v1
+
+Published Time: Thu, 09 Jul 2026 00:53:28 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# PLED-VINS: A Point-Line Event-Based Visual Inertial SLAM for Dynamic Environments 
+
+Seunghun Lee 1†, Jihun Nam 2†, Dong-Uk Seo 2, and Hyun Myung 2∗, Senior Member, IEEE 
+
+Abstract — Dynamic environments remain a fundamental challenge for visual SLAM, where unreliable observations from moving objects and rapid motion degrade state estimation accuracy. Although event cameras preserve fine-grained spatio-temporal information, most existing event-based SLAM frame-works still assume static scenes and lack approaches to estimate the reliability of features. To this end, we propose PLED-VINS , a monocular event camera-based visual-inertial SLAM framework that enables robust state estimation in dynamic environments. We propose an entropy-recency score map to characterize the temporal reliability of both point and line features based on event temporal statistics. Concurrently, ge-ometric reliability is estimated via a unified point–line robust bundle adjustment. Building upon these, we design an adaptive weighting strategy that fuses temporal and geometric reliability, including motion-conditioned reliability modeling for line fea-tures, to suppress unreliable observations. Experimental results demonstrate that PLED-VINS improves state estimation on the evaluated dynamic sequences with moving objects. 
+
+I. I NTRODUCTION 
+
+Most visual simultaneous localization and mapping (SLAM) systems have been developed under the assump-tion of a static environment. This assumption, however, is frequently violated in dynamic scenes, where moving objects introduce erroneous geometric constraints during optimization, degrading pose estimation accuracy. Although several frame-based dynamic SLAM methods have attempted to identify dynamic objects or adjust feature weights [1]–[7], these methods remain fragile in highly aggressive scenarios, due to motion-blurred frame observations. Event cameras [10] help address the limitations of frame-based cameras in low-light and high-speed motion scenes. By asynchronously recording per-pixel brightness changes, event cameras achieve high temporal resolution, enabling precise analysis of instantaneous motion. Despite the advantages, the majority of event-based SLAM frameworks [11]–[15] assume static environments. One promising direction is to integrate event-based motion segmentation into SLAM for dynamic scenes. Existing methods based on contrast maxi-mization and clustering [16]–[18], however, are computation-ally expensive and introduce substantial integration overhead, limiting their real-time applicability for state estimation. Thus, a unified event-based SLAM framework that efficiently incorporates dynamic information remains underexplored.  
+
+> ∗Corresponding author: Hyun Myung.
+> †Both authors have equally contributed.
+> 1Robotics Program, KAIST (Korea Advanced Institute of Science and Technology), Daejeon, 34141, South Korea.
+
+shleee@kaist.ac.kr  
+
+> 2School of Electrical Engineering, KAIST (Korea Advanced Institute of Science and Technology), Daejeon, 34141, South Korea.
+
+{namjh1228, dongukseo, hmyung }@kaist.ac.kr (a) 
+
+(b) 
+
+> Static
+> Dynamic
+
+Fig. 1. Our algorithm, PLED-VINS , in dynamic envi-ronments. (a) Weighted line features and estimated tra-jectory on parking lot high sequence of VIODE dataset [8]. (b) Weighted point features and event streams on 
+
+zurich city 01 e sequence of DSEC dataset [9]. Green and red indicate high and low feature weights, respectively. In this context, we propose PLED-VINS , a robust monocu-lar event camera-based visual-inertial SLAM framework for dynamic environments. As illustrated in Fig. 1, PLED-VINS incorporates feature-level temporal and bundle adjustment (BA)-based geometric reliability cues for real-time perfor-mance instead of explicit object-level segmentation. Event cameras offer rich temporal dynamics, yet their potential for dynamic SLAM remains underexplored. To leverage this capability, we construct an entropy–recency score map that captures the distribution and recency of events at each pixel, thereby quantifying feature-level temporal reliability. We further estimate geometric reliability as feature weights optimized in a unified point–line robust BA [3], and adap-tively fuse the temporal and geometric cues to weight point and line features, improving pose estimation robustness. Our contributions are summarized as follows:  
+
+> •
+
+We propose a novel entropy–recency score map that captures temporal distributions of event streams to es-timate the reliability of dynamic observations.  
+
+> •
+
+We develop an adaptive weighting strategy that com-bines temporal and geometric reliability to jointly reflect the consistency of observations.  
+
+> •
+
+We evaluate PLED-VINS against existing methods on dynamic sequences, showing improved state estimation in scenes with moving objects. arXiv:2607.07374v1 [cs.RO] 8 Jul 2026 Geometric Reliability Estimator     
+
+> Image data
+> IMU data
+> Event data Motion compensation
+> Point feature detection & tracking
+> IMU pre-integration
+> Create time surface Point / Line features detection & tracking
+> Entropy score
+> Temporal reliability estimator
+> Regularization
+> factor
+> Weighted momentum
+> factor
+> Recency score
+> Bins of event stream BGeometric reliability estimator
+> Adaptive fusion Adaptive fusion
+
+Fig. 2. The architecture of the proposed PLED-VINS. The system takes monocular images, IMU, and raw event data as inputs. The temporal reliability estimator divides the event stream into temporal bins B to compute an entropy–recency score map, producing weights wEV . Concurrently, the geometric reliability estimator evaluates geometric reliability via a line-augmented robust BA, producing weights wBA . These cues are adaptively fused to obtain weights w = {wpt , w line },which are fed back into the subsequent BA for robust state estimation. II. R ELATED WORKS 
+
+A. Feature-based Event SLAM 
+
+Feature-based event SLAM methods [12]–[15] estimate camera poses by extracting and tracking event features. Event cameras asynchronously generate a stream of events 
+
+E = {ei}Ni=1 . Each event ei = {xi, y i, t i, p i} consists of the pixel coordinates ui = ( xi, y i)T , the timestamp ti, and the polarity pi ∈ { +1 , −1} indicating the direction of brightness change. To adopt events for SLAM frameworks, a surface of active events (SAE) [19] is typically maintained. The SAE stores the timestamp of the most recent event at the pixel location u, denoted as tlast (u). Based on SAE, the time surface (TS) [20] is widely used to encode the recency of events. The TS at time t ≥ tlast (u) is defined as: 
+
+T S (u, t ) = exp 
+
+
+
+− t − tlast (u)
+
+η
+
+
+
+, (1) where η is the decay rate parameter. Using these representations, point features [21], [22] and line features [23] are commonly extracted from the TS or SAE, while direct raw-event approaches have also been explored [24]. In practice, many event-based SLAM systems primarily rely on point features, whose scarcity in low-texture environments can degrade pose accuracy. To mitigate this, several studies [13], [25] integrate point and line fea-tures for more reliable geometric constraints. Nevertheless, these frameworks assume static environments, leaving robust handling of dynamic scenes an open challenge. 
+
+B. Robust SLAM in Dynamic Environments 
+
+Most visual SLAM frameworks assume static environ-ments, resulting in errors in dynamic scenes, whereas dy-namic SLAM improves robustness by detecting dynamic objects via semantic or geometric methods. Semantic ap-proaches [1], [2], [4] leverage deep learning-based segmen-tation to detect dynamic objects. Bescos et al. [1] adopted Mask R-CNN with multi-view geometry, Yu et al. [2] utilized SegNet, and Wang et al. [4] integrated point, line, and plane features with semantic and multi-view constraints. However, a common limitation of these methods is that they can only extract segmentation information for predefined classes. Geometric approaches [3], [5], [6], [26], [27] distinguish dynamic objects based on geometric constraints, offering real-time efficiency and generalization. Song et al. [3], [26] mitigated dynamic features via IMU-aided optimization. Yin 
+
+et al. [5] utilized virtual landmarks from stereo scene flow and IMU data. Zhang et al. [6] integrated point and line features with a dynamic grid algorithm. Fu et al. [27] refined feature matching through multiple constraints, including flow vector bound. However, these methods often struggle in aggressive scenes, where rapid motion induces severe motion blur that can lead to incorrect geometric constraints. In dynamic scenes, point-based methods are prone to data sparsity [3], [5], [27], as suppressing dynamic observations reduces valid static ones. To address this, several frame-based studies [4], [6] have explored line features as complemen-tary structural cues, providing stronger geometric constraints when point features are insufficient. However, most line-based dynamic SLAM methods rely on stereo or RGB-D configurations for stable geometric consistency enabled by explicit depth. In monocular systems, reliably evaluating line-based motion consistency remains challenging due to scale ambiguity and motion degeneracy. These limitations motivate moving beyond purely geo-metric approaches for modeling feature reliability. A recent method leverages event cameras for temporal modeling [7], but compresses temporal information into a single aver-age value. Consequently, different temporal behaviors may become indistinguishable, limiting reliable dynamic object discrimination in complex scenes. III. PLED-VINS 
+
+A. System Overview 
+
+The overall pipeline is illustrated in Fig. 2, and our framework is based on DynaVINS [3]. Given incoming event and IMU measurements, IMU-based motion compensation on raw events [18] is first performed. Following this, the compensated events are encoded into a time surface (TS) [20] (a) (b) Fig. 3. Comparison of IMU-based motion compensation. (a) Raw event streams. (b) Compensated event streams with sharpen edges for pixel-wise temporal analysis. via a surface of active events (SAE) [19]. In parallel, IMU measurements are pre-integrated [28] for the sliding-window VIO backend. For image data, only point features are extracted using the Shi–Tomasi [29] and tracked with Kanade–Lucas–Tomasi (KLT) [30]. For event data, point and line features are extracted from TS using Arc* [22] and the line segment detector (LSD) [23], respectively, with lines tracked by the line band descriptor [31]. To handle dynamic features, we construct an entropy-recency score map from compensated events (Section III. B) based on their ego-motion consistency and use it to estimate the temporal reliability of point and line features (Section III. C). In the backend (Section III. D), the sliding-window VIO jointly opti-mizes visual-inertial measurements while estimating geomet-ric reliability by extending robust BA in DynaVINS [3] with weighted line factors. The temporal and geometric reliabil-ities are then adaptively fused through recursive refinement (Section III. E) to determine feature weights, yielding stable trajectory estimation in dynamic scenes. 
+
+B. Entropy-Recency Score Map 
+
+In dynamic environments, independently moving objects often produce temporal behaviors that cannot be fully ex-plained by geometric motion consistency alone. To capture such pixel-wise temporal characteristics in asynchronous event streams, we introduce the entropy–recency score map . This representation integrates information-theoretic en-tropy [32] with temporal recency to characterize the stability of motion-compensated event distributions. 
+
+Motion compensation: Event streams are generated by both independently moving objects and the camera’s ego-motion. In the presence of rotation, even static scene struc-tures produce events that are spatially displaced over time. If such ego-motion is not compensated, these events spread across different pixels, distorting temporal statistics. To re-store spatial alignment, we warp events to a reference frame using IMU measurements [18]. As shown in Fig. 3, this compensation sharpens event structures that are consistent with the dominant camera motion. 
+
+Entropy score: To estimate feature-level temporal relia-bility, we analyze the temporal distribution of events after motion compensation. For static scene structures, motion compensation aligns events at consistent pixels, producing a structured timestamp distribution consistent with a single rigid camera motion hypothesis. In contrast, events from independently moving objects remain inconsistent with the (a) (b)  
+
+> (c) (d)
+> high
+> low
+> Moving object
+
+Fig. 4. (a) Raw image and event. (b) Map of entropy score h(x, y ). (c) Map of recency score q(x, y ). (d) Map of entropy-recency score s(x, y ).compensated motion, resulting in an unstructured temporal distribution even after alignment. Specifically, for the motion-compensated event streams, the time window Wtime is uniformly divided into B con-secutive bins. The probability mass function for each pixel is defined as pk(x, y ) = ck(x, y )/(n(x, y ) + ϵ) for k ∈{0, . . . , B − 1}, where ck(x, y ) is the event count in the 
+
+k-th time bin, n(x, y ) is the total event count within the time window Wtime , and ϵ is a small positive constant. The resulting distribution {pk(x, y )}B−1 
+
+> k=0
+
+represents how events are distributed along the temporal axis within the time window. To quantify temporal consistency at each pixel, we compute the normalized Shannon entropy [33]: 
+
+h(x, y ) = − 1log B
+
+> B−1
+
+X
+
+> k=0
+
+pk(x, y ) log( pk(x, y ) + ϵ). (2) A higher h(x, y ) indicates that the temporal distribution is more dispersed within the time window, suggesting weaker temporal concentration under the compensated motion. However, as shown in Fig. 4(b), elevated entropy responses may also arise in low-light or highly textured static back-ground regions (e.g., the building edges on the right), where dense or noise-induced event generation spreads across mul-tiple time bins. By incorporating the recency term described below, we suppress such temporally persistent activations. 
+
+Recency score: While entropy score in (2) captures tem-poral dispersion, it ignores the temporal order of events. For static structures aligned by compensation, events accumu-lated at a fixed pixel are distributed over the time window rather than concentrated in the latest bins. In contrast, independently moving objects tend to produce late-biased activations after compensation. Prior work leverages the average timestamp as an indicator of dynamic regions [18]. However, such global averaging may be sensitive to the degree of dynamic activity and does not preserve the underly-ing temporal distribution. To explicitly model structured late activation without collapsing the distribution into a single statistic, we define the temporal recency score q(x, y ) as: 
+
+q(x, y ) = 
+
+PB−1 
+
+> k=0
+
+ωkpk(x, y ) − ωmin 
+
+1 − ωmin + ϵ , (3) with 
+
+ωk = exp 
+
+
+
+−α
+
+
+
+1 − k + 0 .5
+
+B
+
+ 
+
+, (4) where ωmin = e−α is the minimum weight, α > 0 is the temporal decay rate, and ϵ is a small positive constant. This formulation assigns larger values when the event distribu-tion is biased toward later bins, capturing recent activation patterns that are less typical in temporally persistent static structures. As illustrated in Fig. 4(c), high recency scores are concentrated along the edge structures of the moving object. 
+
+Entropy-recency score: Entropy and recency capture complementary aspects of temporal behavior. Entropy re-flects deviations from motion-consistent temporal structure, while recency measures bias toward recent activation. Pixels with jointly high entropy and recency exhibit weak consis-tency with the single-motion assumption and a bias toward recent activation, characteristics commonly associated with independently moving objects. To jointly reflect these com-plementary cues into a unified entropy–recency score, we employ the following nonlinear symmetric fusion: 
+
+s(x, y ) = h(x, y )q(x, y )
+
+h(x, y )q(x, y ) + (1 − h(x, y ))(1 − q(x, y )) . (5) The fusion in (5) emphasizes strong agreement between entropy and recency while suppressing cases where only one indicator is elevated, yielding a normalized score for temporal inconsistency. Unlike a simple product, the nor-malization promotes symmetric agreement and suppresses unilateral elevation. As shown in Fig. 4(d), the fused score suppresses static background regions and low-texture areas while clearly highlighting the independently moving object. 
+
+C. Temporal Reliability Estimation 
+
+We compute the temporal reliability of point and line features using the entropy–recency score map to suppress dynamic observations. 
+
+Point feature: The temporal reliabilities of the points are evaluated using (5). For a point feature located at coordinates (x, y ), the temporal reliability is defined as 
+
+wEV pt (x, y ) = 1 − s(x, y ), representing the probability that the point belongs to a static structure. 
+
+Line feature: Unlike point features, line measurements have spatial extent. Therefore, temporal reliability is com-puted by aggregating entropy–recency statistics within a narrow neighborhood around each line, denoted as the line band region Ωℓ.Concretely, given a line feature ℓ = ( p0, p1) extracted from the TS, where p0, p1 ∈ R2 denote its endpoints, Ωℓ is defined as a band region parameterized by the unit direction vector v and the orthogonal vector n:
+
+Ωℓ = {x = p0 +λL v+δn | λ ∈ [0 , 1] , δ ∈ − W 
+
+> 2
+
+, W
+
+> 2
+
+} (6) where λ is the axial interpolation factor, δ is the orthogonal offset, L = ∥p1 − p0∥ is the line length, W is the band width, v = ( p1 − p0)/L is the unit direction vector, and n
+
+is the unit normal vector orthogonal to v.To compute the entropy–recency score, Sline , for a line feature, we consider the set of pixels within Ωℓ, and utilize Gaussian-weighted averaging. A Gaussian distance weight 
+
+γdist (δ) based on the orthogonal offset δ is applied to emphasize samples closer to the line axis while suppressing peripheral noise. Accordingly, Sline is defined as: 
+
+Sline =
+
+P 
+
+> x∈Ωℓ∩Z2
+
+γdist (δ(x)) · s(x)
+
+P 
+
+> x∈Ωℓ∩Z2
+
+γdist (δ(x)) , (7) where s(x) is the entropy–recency score of pixel x, and 
+
+Ωℓ ∩ Z2 represents the set of image pixels within Ωℓ. The line temporal reliability is defined as wEV line = 1 − Sline .The temporal reliabilities wEV pt and wEV line are jointly in-tegrated with the geometric reliability in Section III. D to de-termine the point and line feature weights wpt , w line ∈ [0 , 1] 
+
+through the adaptive fusion in Section III. E.
+
+D. Geometric Reliability Estimation 
+
+Beyond temporal reliability, we model geometric reliabil-ity through a unified robust optimization for point and line features by extending [3] with line factors. Specifically, we jointly optimize the sliding-window state X , following [34], together with the feature weights wpt and wline as: 
+
+min  
+
+> X,W
+
+(
+
+∥rp − HpX ∥ 2 + X
+
+> k∈B
+
+rk 
+
+> I
+
+(X ) 2
+
+> PI
+
++ X
+
+> j∈F pt
+
+ρ(wj
+
+> pt
+
+, rj
+
+> pt
+
+) + X
+
+> j∈F line
+
+ρ(wj
+
+> line
+
+, rj
+
+> line
+
+)
+
+)
+
+,
+
+(8) where rp and Hp represent the residual and measurement matrix of the marginalization prior, respectively. B is the set of IMU preintegration indices, and rk 
+
+> I
+
+is the IMU preintegration residual with covariance PI. The robust loss 
+
+ρ for feature j is: 
+
+ρ(wj , rj ) =( wj )2 X 
+
+> i∈P (fj)
+
+|rj,i (X )|2
+
++ λw(1 − wj )2 + λm(nj ( ˜ wj − wj )) 2,
+
+(9) where wj is the current weight and ˜wj is its previous estimate. rj,i denotes the visual residual in the i-th frame, 
+
+P(fj ) is the set of observing frames, nj is the number of observations of the j-th feature, and the hyperparameters λw
+
+and λm control their strengths [3]. For a point feature j observed in the i-th frame, the reprojection residual rj,i  
+
+> pt
+
+is defined as the difference between the observed coordinate uij and its reprojected position: 
+
+rj,i  
+
+> pt
+
+= uij − π  T−1 
+
+> bc
+
+(Tiwb )−1pjw
+
+ , (10) where π(·) is the camera projection model, (Tiwb )−1 is the body pose at the i-th frame, Tbc is the fixed extrinsic, and 
+
+pjw is the 3D position of feature j in the world frame. For a line feature l observed in the i-th frame, the repro-jection residual rl,i  
+
+> line
+
+[34] is the perpendicular distance from endpoints ul,i  
+
+> s
+
+, ul,i  
+
+> e
+
+to the projected line l′ = [ l′
+
+> 1
+
+, l ′
+
+> 2
+
+, l ′
+
+> 3
+
+]⊤:
+
+rl,i  
+
+> line
+
+=
+
+"
+
+(ul,i  
+
+> s
+
+)⊤l′
+
+pl′21 + l′22
+
+, (ul,i  
+
+> e
+
+)⊤l′
+
+pl′21 + l′22
+
+#⊤
+
+. (11) Subsequently, the optimized weights wpt and wline in (8) serve as geometric reliability measures in Section III. E.(a)  
+
+> (b)
+> old recent
+
+Fig. 5. Gradient alignment within the line band region. Mean temporal gradient ¯gt on the recency score map q(x, y ) and tracking motion direction mtrack . (a) Motion and gradient are misaligned, inconsistent with the assumed motion hypothe-sis. (b) Motion aligned with the temporal gradient structure, indicating motion-consistent temporal behavior. 
+
+E. Adaptive Fusion with Temporal and Geometric Reliability 
+
+Temporal reliability in Section III. C captures motion-consistent timing in event streams, while geometric reliability in Section III. D reflects reprojection consistency in BA. Since they assess observation consistency from different domains, their joint consideration enables a more comprehensive re-liability estimation. To this end, we introduce an adaptive fusion scheme to refine feature weights. The point and line weights wpt and wline are computed as: 
+
+wpt = (1 − αpt )wBA pt + αpt wEV pt , (12) 
+
+wline = (1 − αline )wBA line + αline wEV line , (13) where αpt and αline are adaptive coefficients controlling the contribution of temporal reliability. The geometric reliability cues wBA pt and wBA line correspond to the optimized weights 
+
+wpt and wline for points and lines in (8), respectively. Subsequently, the fused weights from (12) and (13) are used in the next BA iteration of (8), enabling recurrent refinement. 
+
+Fusion coefficient for point features: Using geometric reliability wBA pt and temporal reliability wEV pt , the fusion coefficient αpt is defined as: 
+
+αpt = α0 exp 
+
+
+
+− |wEV pt − wBA pt |
+
+τ
+
+
+
+, (14) where α0 is the base fusion rate and τ controls the decay. This formulation reduces αpt when wEV pt and wBA pt differ significantly, limiting the contribution of temporal reliability and mitigating the effect of temporal-geometric disagreement on the fused weight. 
+
+Fusion coefficient for line features: The reliability of line features depends on the interaction between camera motion and line geometry. Since the line residual in (11) only accounts for the perpendicular distance, motion normal to the line provides stronger geometric constraints, whereas tangential motion yields weak observability. To capture this, we define a motion-conditioned fusion coefficient αline that integrates geometric observability and temporal consistency, defined as: 
+
+αline = 1 − pn(1 − r), (15) where pn denotes the normal flow ratio and r represents the gradient alignment term. By design, αline increases when r
+
+indicates strong alignment and remains high under tangential motion, where the normal flow ratio pn is small. To reflect geometric observability, we define the normal flow ratio pn as the proportion of the tracking motion projected onto the line normal direction. Let mtrack denote the 2D tracking motion direction of the line estimated from feature tracking, decomposed into normal and tangential components as mtrack = mn + mt. The normal flow ratio is then defined as: 
+
+pn = ∥mn∥∥mn∥ + ∥mt∥ + ϵ , (16) which represents the relative magnitude of the normal motion component. As defined in (11), the line projection residual measures the perpendicular distance to the projected line; thus, increasing the normal motion component enhances residual sensitivity and geometric discriminability. Under such conditions, the line residual becomes more informative, so the fused weight in (13) places greater emphasis on the geometric reliability term wBA line by reducing αline .We then define the gradient alignment term r to quantify whether temporal evidence supports the estimated motion as: 
+
+r = |¯gt · mtrack |∥¯gt∥∥ mtrack ∥ + ϵ , ¯gt = 1
+
+|Ωℓ|
+
+X
+
+> x∈Ωℓ
+
+∇q(x), (17) where ¯gt is the mean temporal gradient within the line band region Ωℓ. A higher r indicates stronger agreement between the temporal gradient structure and the tracking motion direction. Under a motion-consistent hypothesis, the temporal gradient aligns with the dominant motion direction. As illustrated in Fig. 5, alignment reflects motion-consistent temporal behavior, whereas misalignment indicates incon-sistency with the assumed motion model, in which case the fusion shifts greater reliance to geometric evidence. Conse-quently, αline increases when temporal evidence aligns with the motion pattern and decreases when geometric observ-ability is strong, as reliable geometric constraints diminish the reliance on temporal cues. It thus adaptively modulates the weights of temporal and geometric reliability in (13), shifting wline between wEV line and wBA line depending on motion conditions. IV. E XPERIMENTAL EVALUATION 
+
+A. Experimental Settings and Metrics 
+
+All experiments were conducted on a desktop PC with an AMD Ryzen 9 5950X CPU. For the proposed method, TABLE I. Absolute trajectory error (ATE, m) on the VIODE dataset [8] across different dynamic levels, with λw = 2 .0 and λm = 0 .2. The setup column denotes sensor types (E: Event, V: Visual, I: Inertial), camera configurations (M: Monocular, S: Stereo), and utilized features (P: Point, L: Line). The best results are highlighted in bold , while the second-best are underlined. Method Setup city day city night parking lot Sensor Cam / Feat none low mid high none low mid high none low mid high                                                                                       
+
+> PL-VINS [34] V-I M / P+L 0.435 0.219 0.741 7.102 0.709 0.732 1.441 2.393 0.151 ———DynaVINS [3] V-I M / P 0.201 0.181 0.189 0.226 0.339 0.302 0.425 0.284 0.093 0.216 0.175 0.200 PL-EVIO [13] E-V-I M / P+L 0.322 0.666 1.219 3.215 1.255 1.568 1.796 1.451 1.066 1.017 5.343 2.576 E2-VINS [7] E-V-I M / P 0.280 0.328 0.475 0.225 0.712 1.014 1.306 0.566 0.396 0.123 0.606 0.422 ESVIO [14] E-V-I S / P 0.432 0.451 0.585 0.559 0.299 0.767 1.048 1.418 0.170 0.143 0.162 0.237
+> Ours E-V-I M / P+L 0.184 0.215 0.157 0.170 0.290 0.262 0.125 0.137 0.076 0.183 0.087 0.076 city_day high city_night high parking lot_high
+> 10 −1
+> 10 0
+> ATE (m)
+> DynaVINS
+> E2-VINS
+> ESVIO
+> Ours
+
+Fig. 6. ATE comparison on the high sequences of VIODE dataset [8]. we used a TS decay of η = 20 ms , B = 8 temporal bins, 
+
+α = 2 .0 for recency weighting, and α0 = 0 .4, τ = 0 .2
+
+for adaptive fusion. Trajectory accuracy was evaluated using absolute trajectory error (ATE, m) and mean position error (MPE, %/m), with all trajectories aligned to ground truth via SE(3) Umeyama alignment [35]. We compared ours against representative feature-based open-source baselines: PL-VINS [34], DynaVINS [3], PL-EVIO [13], E2-VINS [7], ESVIO [14], and Ultimate-SLAM [12]. 
+
+B. Datasets 
+
+VIODE dataset: VIODE dataset [8] provides simulated image-IMU sequences with moving vehicles and dynamic occlusions. As it does not provide event data, synthetic events were generated using v2e [36]. The subsequences (none , low , mid , and high ) represent increasing dynamic levels, providing structured geometry for evaluating line feature integration. 
+
+DAVIS 240C dataset: DAVIS 240C dataset [37] provides real-world data with asynchronous events, images, IMU data, and ground-truth poses. The dynamic translation and 
+
+dynamic 6dof sequences involving a moving human sub-ject were used for evaluation. These sequences include aggressive motion, making them suitable for evaluating ro-bustness under highly dynamic conditions. 
+
+DSEC dataset: DSEC dataset [9] provides high-resolution driving sequences with image, event, IMU, and LiDAR data. As ground-truth poses are unavailable, qualitative evaluation was performed to assess feature reliability and visualize the estimated trajectories. Specifically, we em-ployed highly dynamic sequences, zurich city 01 e and 
+
+zurich city 01 f , to evaluate the stability of the pro-posed framework in outdoor scenarios while discriminating dynamic objects. Ground truth       
+
+> DynaVINS
+> E2-VINS
+> ESVIO
+> Ours
+> y [m]
+> x [m]
+> 10
+> 0
+> -10
+> -20
+> -30
+> -30 -20 -10 010 20 30
+> Early
+> stage
+> ×2
+
+(a) (b) 
+
+Fig. 7. (a) Trajectory comparison on the city night high sequence of VIODE dataset [8]. (b) Feature weights in our proposed method (green: high, red: low). 
+
+C. Evaluation on the VIODE Dataset 
+
+In the VIODE dataset, the number of dynamic ob-jects increases across four levels (none to high ). Ta-ble I reports the RMSE of ATE across all dynamic levels. Ultimate-SLAM [12], a monocular method based on event-image point features, was excluded from the comparison, as it failed to produce stable trajectory estimates on all sequences in the VIODE dataset. Overall, the proposed framework delivered consistently improved accuracy across most sequences and dynamic levels. DynaVINS [3] sup-presses dynamic observations via motion agreement but does not consider temporal information, resulting in consis-tently higher errors than our temporally-aware method. PL-VINS [34], PL-EVIO [13], and ESVIO [14] exhibited per-formance degradation in the high sequences. These degra-dations stem from their reliance on static-scene geometric assumptions. Although E2-VINS [7] incorporates temporal cues to improve robustness under dynamic environments, it still degraded in these sequences, due to limited exploitation of temporal information. In contrast, our method leveraged temporal reliability and achieved the lowest ATE in all high 
+
+sequences as shown in Fig. 6. Fig. 7 presents trajectory comparisons and corresponding point and line weights on the city night high se-quence. The compared methods deviate from the ground truth along the early curved segment. In this stage, incomplete convergence of IMU biases and initialization errors can distort reprojection residuals. Estimation driven mainly by geometric consistency may therefore suffer unstable conver-gence under dynamic interference. By incorporating com-plementary temporal reliability, our method mitigates early TABLE II. Mean position error (MPE, %/m) on the DAVIS 240C dataset [37], with λw = 8 .0 and λm = 1 .0. The best results are highlighted in bold , while the second-best are underlined. Method dynamic translation dynamic 6dof             
+
+> PL-VINS [34] 0.158 0.402 Ultimate-SLAM [12] 0.263 0.360 PL-EVIO [13] 0.175 0.653 E2-VINS [7] 0.121 0.292 DynaVINS [3] 0.139 0.217
+> Ours 0.089 0.176
+
+(a) (b) (c) 
+
+Fig. 8. Feature detection and weighting on the DAVIS 240C dataset. (a) Image-based detection. (b) Event-based detection. (c) Representation of feature weights (green: high, red: low). residual distortion and stabilizes convergence under strong dynamics, remaining closely aligned with the ground truth. 
+
+D. Evaluation on the DAVIS 240C Dataset 
+
+The evaluation on the DAVIS 240C dataset assesses tra-jectory estimation in the presence of dynamic objects and real-world sensor noise. The dynamic translation and 
+
+dynamic 6dof sequences were evaluated using MPE nor-malized by traveled distance, providing a stable evaluation metric for the short trajectories. As shown in Table II, our method achieved the lowest MPE in both sequences, even in more challenging sequence dynamic 6dof , outperforming competing methods. PL-VINS [34], Ultimate-SLAM [12], and PL-EVIO [13] exhibit rapid error accumulation, while E2-VINS [7] and DynaVINS [3] maintain partial robustness yet degrade under sustained dynamic conditions. In contrast, our method compensates for unstable geometric observations under aggressive motion by adaptively weighting features with complementary temporal reliability. Qualitative results on the dynamic translation se-quence in Fig. 8 show effective suppression of dynamic features while preserving static structures. Under this DAVIS 240C setting, the proposed method showed an average pro-cessing frequency of 21.25 Hz at 240 × 180 resolution. 
+
+E. Evaluation on the DSEC Dataset 
+
+Fig. 9 illustrates qualitative results of our framework on the DSEC dataset [9], with λw = 2 .0 and λm = 2 .0.These results qualitatively validate the proposed reliability estimator across driving scenarios with dynamic objects. In 
+
+zurich city 01 e and zurich city 01 f , our frame-work effectively suppressed features associated with moving vehicles, retaining reliable features from the static back-ground. Ground-truth poses are not provided in DSEC dataset; thus, we did not perform quantitative comparisons against ground-truth. Instead, the trajectories were compared with a FAST-LIO reference trajectory [38]. The results show plausible motion patterns consistent with the driving scenarios and close agreement between the two methods, despite the highly dynamic nature of the evaluated sequences.              
+
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+>  
+>    
+> 
+> 
+>  
+> 
+>  
+> 
+> 
+> 
+>   
+
+(b )(a) 
+
+Fig. 9. Qualitative results of PLED-VINS on the DSEC dataset [9]: (a) zurich city 01 e . (b) 
+
+zurich city 01 f . Top : Point and line feature tracking results on the event stream. Middle : Feature weights (green: high, red: low) Bottom : Estimated trajectories of the proposed method and FAST-LIO [38].                       
+
+> TABLE III. Ablation study on parking lot high of VIODE dataset [8]. Weight quality is evaluated using MAE ( ↓) and weight ratio wratio (↑). Method Point Line MAE ↓wratio ↑MAE ↓wratio ↑
+> Geometric-only 0.449 1.577 0.627 1.162 Geometric + Temporal 0.382 1.870 0.339 2.151
+
+F. Ablation Study 
+
+To analyze the contribution of the temporal reliability estimator, we compared two configurations: geometric-only weighting based solely on robust BA reliability, and the full model integrating temporal and geometric reliability. To assess weighting quality without fixed thresholds, we used two metrics. First, the mean absolute error (MAE) between estimated weights and ground-truth dynamic object labels from VIODE segmentation annotations [8] measures how well the continuous weights align with the ground-truth static/dynamic labels, where static labels correspond to a target weight of 1 and dynamic labels to 0. Second, we define the weight ratio wratio = mean( wstat )/mean( wdyn ), where 
+
+wstat and wdyn are the estimated weights of ground-truth static and dynamic features, respectively. A higher wratio 
+
+indicates more effective suppression of dynamic observations relative to static ones. As shown in Table III, integrating temporal reliability reduced MAE and increased wratio for both point and line features. The improvement was particularly pronounced for line features, as incorporating temporal information more effectively suppressed dynamic observations insufficiently distinguished by geometric reliability alone. V. C ONCLUSION 
+
+In this paper, we presented PLED-VINS, a monocular event-based visual–inertial SLAM framework that models feature reliability in dynamic environments. By introducing an entropy–recency score map, we quantify temporal relia-bility from motion-compensated events and fuse them with geometric reliability, including motion-conditioned weight-ing for line features. This unified formulation suppresses dynamic observations while preserving stable structures. Experimental results demonstrate consistent improvements under highly dynamic scenarios. However, our framework assumes a dominant rigid-motion hypothesis for temporal modeling, which may be less reliable under depth-dependent parallax effects or complex multi-body dynamics. Future work will extend the reliability formulation to multi-motion hypotheses for clearer differentiation between ego-motion-consistent structures and independently moving objects. REFERENCES [1] B. Bescos, J. M. F´ acil, J. Civera, and J. Neira, “DynaSLAM: Tracking, mapping, and inpainting in dynamic scenes,” IEEE Robot. Automat. Lett. , vol. 3, no. 4, pp. 4076–4083, 2018. [2] C. Yu, Z. Liu, X. J. Liu, F. Xie, Y. Yang, Q. Wei, and Q. Fei, “DS-SLAM: A semantic visual SLAM towards dynamic environments,” in 
+
+Proc. IEEE/RSJ Int. Conf. Intell. Robot. Syst. , 2018, pp. 1168–1174. [3] S. Song, H. Lim, A. J. Lee, and H. Myung, “DynaVINS: A visual-inertial SLAM for dynamic environments,” IEEE Robot. Automat. Lett. , vol. 7, no. 4, pp. 11 523–11 530, 2022. [4] Y. Wang, K. Xu, Y. Tian, and X. Ding, “DRG-SLAM: A semantic RGB-D SLAM using geometric features for indoor dynamic scene,” in Proc. IEEE/RSJ Int. Conf. Intell. Robot. Syst. , 2022, pp. 1352–1359. [5] H. Yin, S. Li, Y. Tao, J. Guo, and B. Huang, “Dynam-SLAM: An accurate, robust stereo visual-inertial SLAM method in dynamic environments,” IEEE Trans. Robot. , vol. 39, no. 1, pp. 289–308, 2022. [6] B. Zhang, X. Ma, H. J. Ma, and C. Luo, “DynPL-SVO: A robust stereo visual odometry for dynamic scenes,” IEEE Trans. Instrum. Meas. , vol. 73, pp. 1–10, 2024. [7] J. Huang, S. Zhao, and L. Zhang, “E2-VINS: An event-enhanced visual-inertial SLAM scheme for dynamic environments,” Appl. Sci. ,vol. 15, no. 3, p. 1314, 2025. [8] K. Minoda, F. Schilling, V. W¨ uest, D. Floreano, and T. Yairi, “VIODE: A simulated dataset to address the challenges of visual-inertial odom-etry in dynamic environments,” IEEE Robot. Automat. Lett. , vol. 6, no. 2, pp. 1343–1350, 2021. [9] M. Gehrig, W. Aarents, D. Gehrig, and D. Scaramuzza, “DSEC: A stereo event camera dataset for driving scenarios,” IEEE Robot. Automat. Lett. , vol. 6, no. 3, pp. 4947–4954, 2021. [10] G. Gallego, T. Delbr¨ uck, G. Orchard, C. Bartolozzi, B. Taba, A. Censi, S. Leutenegger, A. J. Davison, J. Conradt, K. Daniilidis, and D. Scara-muzza, “Event-based vision: A survey,” IEEE Trans. Pattern Anal. Mach. Intell. , vol. 44, no. 1, pp. 154–180, 2020. [11] H. Rebecq, T. Horstsch¨ afer, G. Gallego, and D. Scaramuzza, “EVO: A geometric approach to event-based 6-DOF parallel tracking and mapping in real time,” IEEE Robot. Automat. Lett. , vol. 2, no. 2, pp. 593–600, 2017. [12] A. R. Vidal, H. Rebecq, T. Horstsch¨ afer, and D. Scaramuzza, “Ultimate SLAM? Combining Events, Images, and IMU for Robust Visual SLAM in HDR and High-Speed Scenarios,” IEEE Robot. Automat. Lett. , vol. 3, no. 2, pp. 994–1001, 2018. [13] W. Guan, P. Chen, Y. Xie, and P. Lu, “PL-EVIO: Robust monocular event-based visual inertial odometry with point and line features,” 
+
+IEEE Trans. Autom. Sci. Eng. , vol. 21, no. 4, pp. 6277–6293, 2023. [14] P. Chen, W. Guan, and P. Lu, “ESVIO: Event-based stereo visual inertial odometry,” IEEE Robot. Automat. Lett. , vol. 8, no. 6, pp. 3661– 3668, 2023. [15] K. Tang, X. Lang, Y. Ma, Y. Huang, L. Li, Y. Liu, and J. Lv, “Monocular event-inertial odometry with adaptive decay-based time surface and polarity-aware tracking,” in Proc. IEEE/RSJ Int. Conf. Intell. Robot. Syst. , 2024, pp. 12 544–12 551. [16] T. Stoffregen, G. Gallego, T. Drummond, L. Kleeman, and D. Scara-muzza, “Event-based motion segmentation by motion compensation,” in Proc. IEEE Int. Conf. Comput. Vis. , 2019, pp. 7244–7253. [17] Y. Zhou, G. Gallego, X. Lu, S. Liu, and S. Shen, “Event-based motion segmentation with spatio-temporal graph cuts,” IEEE Trans. Neural Netw. Learn. Syst. , vol. 34, no. 8, pp. 4868–4880, 2023. [18] C. Zhao, Y. Li, and Y. Lyu, “Event-based real-time moving object detection based on IMU ego-motion compensation,” in Proc. IEEE Int. Conf. Robot. Automat. , 2023, pp. 690–696. [19] R. Benosman, C. Clercq, X. Lagorce, S.-H. Ieng, and C. Bartolozzi, “Event-based visual flow,” IEEE Trans. Neural Netw. Learn. Syst. ,vol. 25, no. 2, pp. 407–417, 2013. [20] X. Lagorce, G. Orchard, F. Galluppi, B. E. Shi, and R. B. Benosman, “HOTS: A hierarchy of event-based time-surfaces for pattern recog-nition,” IEEE Trans. Pattern Anal. Mach. Intell. , vol. 39, no. 7, pp. 1346–1359, 2017. [21] V. Vasco, A. Glover, and C. Bartolozzi, “Fast event-based harris corner detection exploiting the advantages of event-driven cameras,” in Proc. IEEE/RSJ Int. Conf. Intell. Robot. Syst. , 2016, pp. 4144–4149. [22] I. Alzugaray and M. Chli, “Asynchronous corner detection and track-ing for event cameras in real-time,” IEEE Robot. Automat. Lett. , vol. 3, no. 4, pp. 3177–3184, 2018. [23] R. Grompone von Gioi, J. Jakubowicz, J.-M. Morel, and G. Randall, “LSD: A fast line segment detector with a false detection control,” 
+
+IEEE Trans. Pattern Anal. Mach. Intell. , vol. 32, no. 4, pp. 722–732, 2010. [24] S. Hu, Y. Kim, H. Lim, A. J. Lee, and H. Myung, “eCDT: Event clustering for simultaneous feature detection and tracking,” in Proc. IEEE/RSJ Int. Conf. Intell. Robot. Syst. , 2022, pp. 3808–3815. [25] B. Choi, H. Lee, and C. G. Park, “Event-frame-inertial odometry using point and line features based on coarse-to-fine motion compensation,” 
+
+IEEE Robot. Automat. Lett. , vol. 10, no. 3, pp. 2622–2629, 2025. [26] S. Song, H. Lim, A. J. Lee, and H. Myung, “DynaVINS++: Robust visual-inertial state estimator in dynamic environments by adaptive truncated least squares and stable state recovery,” IEEE Robot. Au-tomat. Lett. , vol. 9, no. 10, pp. 9127–9134, 2024. [27] D. Fu, H. Xia, Y. Liu, and Y. Qiao, “VINS-Dimc: A visual-inertial navigation system for dynamic environment integrating multiple con-straints,” ISPRS Int. J. Geo-Inf. , vol. 11, no. 2, p. 95, 2022. [28] C. Forster, L. Carlone, F. Dellaert, and D. Scaramuzza, “On-manifold preintegration for real-time visual–inertial odometry,” IEEE Trans. Robot. , vol. 33, no. 1, pp. 1–21, 2016. [29] J. Shi et al. , “Good features to track,” in Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. , 1994, pp. 593–600. [30] B. D. Lucas and T. Kanade, “An iterative image registration technique with an application to stereo vision,” in Proc. Int. Joint Conf. on Artif. Intell. , 1981, pp. 674–679. [31] L. Zhang and R. Koch, “An efficient and robust line segment matching approach based on LBD descriptor and pairwise geometric consis-tency,” J. Vis. Commun. Image Represent. , vol. 24, no. 7, pp. 794–805, 2013. [32] C. E. Shannon, “A mathmatical theory of communication,” The Bell System Technical Journal , vol. 27, no. 3, pp. 370–423, 1948. [33] T. M. Cover and J. A. Thomas, Elements of Information Theory . John Wiley & Sons, 1999. [34] Q. Fu, J. Wang, H. Yu, I. Ali, F. Guo, Y. He, and H. Zhang, “PL-VINS: Real-time monocular visual-inertial SLAM with point and line features,” arXiv preprint arXiv:2009.07462 , 2020. [35] S. Umeyama, “Least-squares estimation of transformation parameters between two point patterns,” IEEE Trans. Pattern Anal. Mach. Intell. ,vol. 13, no. 4, pp. 376–380, 1991. [36] Y. Hu, S.-C. Liu, and T. Delbruck, “v2e: From video frames to realistic DVS events,” in Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. , 2021, pp. 1312–1321. [37] E. Mueggler, H. Rebecq, G. Gallego, T. Delbruck, and D. Scaramuzza, “The event-camera dataset and simulator: Event-based data for pose estimation, visual odometry, and SLAM,” Int. J. Robot. Res. , vol. 36, no. 2, pp. 142–149, 2017. [38] W. Xu and F. Zhang, “Fast-LIO: A fast, robust LiDAR-inertial odometry package by tightly-coupled iterated Kalman filter,” IEEE Robot. Automat. Lett. , vol. 6, no. 2, pp. 3317–3324, 2021.

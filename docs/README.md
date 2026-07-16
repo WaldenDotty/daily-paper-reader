@@ -6,71 +6,62 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-15
-- 运行时间：2026-07-15 21:24:21 UTC
+- 最新运行日期：2026-07-16
+- 运行时间：2026-07-16 21:27:50 UTC
 - 运行状态：成功
-- 本次总论文数：17
-- 精读区：6
-- 速读区：11
+- 本次总论文数：14
+- 精读区：5
+- 速读区：9
 
 ### 今日简报（AI）
-今日精读两篇高分论文，分别聚焦月球南极导航信标与深空姿态轨道联合解算。最值得关注的是《月球南极几何与信标精度分析》中提出的表面信标高效定位方案，以及《全乘法深空导航》中的新型滤波方法。建议普通读者先速读《SCI-Mamba》的低光照增强方法作为技术背景补充。
-- 详情：[/202607/15/README](/202607/15/README)
+今天推荐14篇论文，重点精读月球南极PNT与地月中继任务的高分研究。最值得看的是郁金香形轨道设计与局部地月动力学多保真不确定性传播。建议进一步了解事件触发传感器融合与高动态LiDAR-IMU算法。
+- 详情：[/202607/16/README](/202607/16/README)
 
 ### 精读区论文标签
-1. [The Cost of Lunar South-Polar Geometry, and Surface Beacons as the Efficient Fix: A Dilution-of-Precision Analysis](/202607/15/2607.06212v1-the-cost-of-lunar-south-polar-geometry-and-surface-beacons-as-the-efficient-fix-a-dilution-of-precision-analysis)  
+1. [Tulip-Shaped Orbits for Lunar South-Pole PNT and Direct-to-Earth Relay Missions](/202607/16/2607.10482v1-tulip-shaped-orbits-for-lunar-south-pole-pnt-and-direct-to-earth-relay-missions)  
    标签：评分：9.0/10、query:cislunar-dyn-nav
-   evidence：月球PNT架构，南极地区几何精度因子分析
-2. [Fully Multiplicative Attitude and Orbit Determination for Deep space Navigation](/202607/15/2607.10072v1-fully-multiplicative-attitude-and-orbit-determination-for-deep-space-navigation)  
+   evidence：利用三体动力学进行月球轨道设计用于PNT
+2. [Multi-Fidelity Uncertainty Propagation with Model Adaptation to Local Cislunar Dynamics](/202607/16/2607.12150v1-multi-fidelity-uncertainty-propagation-with-model-adaptation-to-local-cislunar-dynamics)  
    标签：评分：9.0/10、query:cislunar-dyn-nav
-   evidence：完全乘法UKF用于深空导航，融合陀螺、星敏感器、行星视线观测
-3. [Analytical Confidence Boundaries for Non-Gaussian Uncertainty in Perturbed Spacecraft Dynamics](/202607/15/2607.10095v1-analytical-confidence-boundaries-for-non-gaussian-uncertainty-in-perturbed-spacecraft-dynamics)  
+   evidence：针对地月动力学自适应的多保真度不确定性传播方法
+3. [DreamSat-Pose: Spacecraft Pose Estimation from Single-View 3D Reconstructions and Learned 2D-3D Feature Matching](/202607/16/2607.13449v1-dreamsat-pose-spacecraft-pose-estimation-from-single-view-3d-reconstructions-and-learned-2d-3d-feature-matching)  
    标签：评分：9.0/10、query:cislunar-dyn-nav
-   evidence：受扰航天器动力学解析不确定性传播
-4. [Tulip-Shaped Orbits for Lunar South-Pole PNT and Direct-to-Earth Relay Missions](/202607/15/2607.10482v1-tulip-shaped-orbits-for-lunar-south-pole-pnt-and-direct-to-earth-relay-missions)  
-   标签：评分：9.0/10、query:cislunar-dyn-nav
-   evidence：使用共享三体轨道进行月球PNT
-5. [Multi-Fidelity Uncertainty Propagation with Model Adaptation to Local Cislunar Dynamics](/202607/15/2607.12150v1-multi-fidelity-uncertainty-propagation-with-model-adaptation-to-local-cislunar-dynamics)  
-   标签：评分：9.0/10、query:cislunar-dyn-nav
-   evidence：自适应多保真度不确定性传播用于地月动力学
-6. [Neural-Enhanced Micro-Kalman Filtering for Satellite Tracking: A Comparative Study](/202607/15/2607.06830v1-neural-enhanced-micro-kalman-filtering-for-satellite-tracking-a-comparative-study)  
+   evidence：面向自主交会与近距操作的航天器位姿估计
+4. [Neural-Enhanced Micro-Kalman Filtering for Satellite Tracking: A Comparative Study](/202607/16/2607.06830v1-neural-enhanced-micro-kalman-filtering-for-satellite-tracking-a-comparative-study)  
    标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：用于卫星跟踪的神经增强卡尔曼滤波，适用于空间自主导航
+   evidence：用于卫星跟踪的神经增强卡尔曼滤波与状态估计
+5. [Fully Multiplicative Attitude and Orbit Determination for Deep space Navigation](/202607/16/2607.10072v1-fully-multiplicative-attitude-and-orbit-determination-for-deep-space-navigation)  
+   标签：评分：8.0/10、query:cislunar-dyn-nav
+   evidence：用于深空航天器姿态轨道确定的多传感器融合
 
 ### 速读区论文标签
-1. [SCI-Mamba: Unsupervised Learning based Low-Light Image Enhancement for Non-Cooperative Spacecraft](/202607/15/2607.08033v1-sci-mamba-unsupervised-learning-based-low-light-image-enhancement-for-non-cooperative-spacecraft)  
-   标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：弱光图像增强用于航天器自主导航
-2. [Exact Solutions to a Class of Constrained Optimal Control Problems via Lossless Convexification for Digital Control](/202607/15/2607.12109v1-exact-solutions-to-a-class-of-constrained-optimal-control-problems-via-lossless-convexification-for-digital-control)  
-   标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：无损凸化用于航天器约束最优控制
-3. [Discrete-time generalized canonical transformations for non-autonomous systems](/202607/15/2607.12914v1-discrete-time-generalized-canonical-transformations-for-non-autonomous-systems)  
-   标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：非自治哈密顿系统的离散正则变换方法
-4. [Learning Stable Controlled Dynamical Systems via Input-Contraction Neural Differential Models](/202607/15/2607.05718v1-learning-stable-controlled-dynamical-systems-via-input-contraction-neural-differential-models)  
+1. [Event-triggered parameter estimator for sensor fusion](/202607/16/2607.09496v1-event-triggered-parameter-estimator-for-sensor-fusion)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：学习输入依赖收缩的稳定受控动力系统
-5. [Machines that Predict Trajectories from Templates](/202607/15/2607.11551v1-machines-that-predict-trajectories-from-templates)  
+   evidence：事件触发的传感器融合参数估计器
+2. [Machines that Predict Trajectories from Templates](/202607/16/2607.11551v1-machines-that-predict-trajectories-from-templates)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：基于动力学系统模板库的轨迹预测
-6. [Expansion of the planetary Hamiltonian for small eccentricities and inclinations: a vector formalism](/202607/15/2607.12003v1-expansion-of-the-planetary-hamiltonian-for-small-eccentricities-and-inclinations-a-vector-formalism)  
+   evidence：基于模板库的轨迹预测方法，无需识别状态空间模型
+3. [WNOJ-LIO: A White-Noise-on-Jerk Motion-Prior EKF for High-Dynamic LiDAR-IMU Fusion](/202607/16/2607.13405v1-wnoj-lio-a-white-noise-on-jerk-motion-prior-ekf-for-high-dynamic-lidar-imu-fusion)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：行星哈密顿量展开适用于三体问题
-7. [Learning Forced Multibody Dynamics on Lie Groups](/202607/15/2607.12627v1-learning-forced-multibody-dynamics-on-lie-groups)  
-   标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：李群上学习受迫多体动力学，保持几何结构
-8. [Physics-Regularized Machine Learning for Proprioceptive Vehicle Localization Using Onboard Sensors](/202607/15/2607.05663v1-physics-regularized-machine-learning-for-proprioceptive-vehicle-localization-using-onboard-sensors)  
+   evidence：用于自主导航的LiDAR-IMU融合EKF方法
+4. [PLED-VINS: A Point-Line Event-Based Visual Inertial SLAM for Dynamic Environments](/202607/16/2607.07374v1-pled-vins-a-point-line-event-based-visual-inertial-slam-for-dynamic-environments)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：物理正则化机器学习用于多传感器融合定位
-9. [PIER-Flow: Physics-Informed Efficient Rectified Flow for Real-Time Mobile Robot Navigation](/202607/15/2607.10288v1-pier-flow-physics-informed-efficient-rectified-flow-for-real-time-mobile-robot-navigation)  
+   evidence：面向动态环境的点线事件相机视觉惯性SLAM
+5. [Robustly Invertible Nonlinear Dynamics and the BiLipREN: From Inversion-Based Control to Generative Trajectory Modelling](/202607/16/2607.10026v1-robustly-invertible-nonlinear-dynamics-and-the-bilipren-from-inversion-based-control-to-generative-trajectory-modelling)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：物理信息整流流用于实时移动机器人导航
-10. [An augmented Lagrangian algorithm for constrained nonlinear least-squares](/202607/15/2607.11239v1-an-augmented-lagrangian-algorithm-for-constrained-nonlinear-least-squares)  
+   evidence：非线性动力学的鲁棒可逆性方法，可用于轨迹建模与控制
+6. [Analytical Confidence Boundaries for Non-Gaussian Uncertainty in Perturbed Spacecraft Dynamics](/202607/16/2607.10095v1-analytical-confidence-boundaries-for-non-gaussian-uncertainty-in-perturbed-spacecraft-dynamics)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：约束优化算法可用于轨道优化
-11. [AutoPath: Learning Transferable Goal-Conditioned Stochastic Path Prior for Safe Navigation Without Human Demonstrations](/202607/15/2607.11739v1-autopath-learning-transferable-goal-conditioned-stochastic-path-prior-for-safe-navigation-without-human-demonstrations)  
+   evidence：受扰航天器动力学不确定性传播，可应用于地月轨道
+7. [Exact Solutions to a Class of Constrained Optimal Control Problems via Lossless Convexification for Digital Control](/202607/16/2607.12109v1-exact-solutions-to-a-class-of-constrained-optimal-control-problems-via-lossless-convexification-for-digital-control)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：机器人自主导航路径规划
+   evidence：用于航天约束最优控制的无损凸化方法，可应用于地月轨迹优化
+8. [Residual-Certified Adaptive Tracking of Solution Manifolds in Parametric Dynamical Systems](/202607/16/2607.12351v1-residual-certified-adaptive-tracking-of-solution-manifolds-in-parametric-dynamical-systems)  
+   标签：评分：6.0/10、query:cislunar-dyn-nav
+   evidence：参数动力系统中解流形的自适应追踪
+9. [Advanced Techniques in Stability Analysis of Trans-Neptunian Objects](/202607/16/2607.13629v1-advanced-techniques-in-stability-analysis-of-trans-neptunian-objects)  
+   标签：评分：6.0/10、query:cislunar-dyn-nav
+   evidence：稳定性分析技术可迁移至地月轨道稳定性评估
 
 
 <div class="dpr-home-promo-card">
