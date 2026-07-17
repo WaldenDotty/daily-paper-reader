@@ -1,0 +1,420 @@
+Title: Multi-Fidelity Uncertainty Propagation with Model Adaptation to Local Cislunar Dynamics
+
+URL Source: https://arxiv.org/pdf/2607.12150v1
+
+Published Time: Wed, 15 Jul 2026 11:56:10 GMT
+
+Number of Pages: 23
+
+Markdown Content:
+# Multi-Fidelity Uncertainty Propagation with Model Adaptation to Local Cislunar Dynamics 
+
+Cedric Petion ∗, Benjamin L. Reifler †, and Brandon A. Jones ‡
+
+The University of Texas at Austin, Austin, TX 78712 
+
+# I. Introduction 
+
+# The cislunar regime is increasingly receiving attention from governmental and commercial entities, with the growing number of planned missions expected to increase the number of anthropogenic space objects ( ASO s) in the region. This proliferation of ASO s, along with cislunar space’s size and illumination conditions that contribute to sparse measurements and the chaotic multi-body dynamics that complicate uncertainty propagation, presents a need for advances in cislunar space situational awareness ( SSA ) [ 1– 6]. This paper presents an adaptive multi-fidelity uncertainty propagation method that dynamically adjusts the included perturbing forces based on position in cislunar space, minimizing computation time while maintaining a prescribed modeling accuracy. The proposed adaptive method is then integrated into a multi-target tracking ( MTT ) framework to reduce the computational cost of track prediction without sacrificing accuracy, which is important for managing the growing number of objects in cislunar space. An essential capability for cislunar SSA is the ability to track a large number of ASO s, which may include both operational spacecraft and space debris. Multi-target tracking algorithms provide a framework to achieve this, but incur a computational cost for the prediction step proportional to the cost of propagating a single object’s state probability density function ( PDF ) times the number of hypothesized tracks. Thus, to maintain computational tractability, efficient orbit uncertainty propagation methods must be employed. The adaptive multi-fidelity orbit propagation method developed in this paper is applied to an ensemble Gaussian mixture filter ( EnGMF ), a particle-based filter that is robust to sparse measurements [ 7 –9 ]. The EnGMF is used in a generalized labeled multi-Bernoulli filter ( GLMBF ), which is a multiple hypothesis multi-target filter based on labeled random finite sets (RFSs) [10–12]. Multi-fidelity methods were first proposed for orbit uncertainty propagation by [ 13 ]. This approach propagates a particle-based representation of a state-space PDF using a fast-to-compute but possibly inaccurate low-fidelity model, and then identifies a small subset of “important” samples to re-propagate with an accurate yet computationally expensive high-fidelity model. These low- and high-fidelity particles are then used in a stochastic collocation procedure to produce an approximate high-fidelity solution (designated the multi-fidelity solution) for each point in the full particle ensemble. The multi-fidelity solution then has accuracy close to that of the high-fidelity model but runtime close to the low-fidelity model. 
+
+> ∗Graduate Research Assistant, Department of Aerospace Engineering and Engineering Mechanics; cpetion@utexas.edu (Corresponding Author).
+> †Postdoctoral Fellow, Oden Institute for Computational Engineering & Sciences. Member AIAA.
+> ‡Associate Professor, Department of Aerospace Engineering and Engineering Mechanics. Associate Fellow AIAA. arXiv:2607.12150v1 [eess.SY] 13 Jul 2026
+
+The accuracy and runtime of the multi-fidelity solution are contingent on the low- and high-fidelity models that are selected. For cislunar applications, the optimal model pair varies throughout cislunar space as the relative contributions of Earth gravity, Lunar gravity, and perturbing forces change throughout different domains. Thus, when propagating a PDF through cislunar space with the multi-fidelity method, the optimal model pair may change over time and space and may not be known a priori. Our solution is an adaptive approach to model selection that varies the perturbations included in the high-fidelity model as a function of position in cislunar space. We pose the issue as an optimization problem, with the objective being to minimize runtime subject to an upper bound on the expected error in acceleration magnitude. The solution is obtained using a precomputed library of recommended gravity field terms from [ 14 ] and [ 15 ]. This work was previously presented at the 9th European Conference on Space Debris as [ 5] and advances prior research from [ 16 ] that used a limited set of three models: one pair of models near the Earth, one near the Moon, and one in all other regimes, as well as the work of [17] that examined non-adaptive cislunar multi-fidelity propagation. Background on the multi-fidelity method, the EnGMF , and the GLMBF are provided in Sections II.A, II.B, and II.C, respectively. The adaptive multi-fidelity model selection method is outlined in Section III. Lastly, numerical results for simulated test cases are presented in Section IV, which assesses the propagation accuracy, tracking accuracy, and runtime for cislunar SSA scenarios. 
+
+# II. Background 
+
+A. Multi-Fidelity Orbit Uncertainty Propagation 
+
+The multi-fidelity method employed in this paper was first proposed in [ 18 ] and [ 19 ] and later extended to orbit uncertainty propagation by [ 13 ]. The approach used in this paper is bi-fidelity, with a low-fidelity model that is intended to be fast to evaluate but may possess relatively poor accuracy, and a high-fidelity model with greater accuracy at the expense of increased computation time. Reference [ 13 ] suggests using a general perturbations propagator for the low-fidelity model to provide analytic or semi-analytic solutions that are rapid to compute. However, in cislunar space, where the gravities of the Earth and the Moon are of similar magnitudes, general perturbations methods, which typically assume small third-body perturbations (if any at all), often fail to provide sufficiently accurate solutions. Therefore, in this work, the low-fidelity model is a special perturbations propagator that numerically integrates the differential equations for a limited, and thus relatively fast to evaluate, force model. The high-fidelity model is also a special perturbations propagator, but with a force model containing substantially more perturbations that are relatively slow to compute. See Section III for an in-depth discussion on the model selection. Conceptually, the multi-fidelity method works by using a low-fidelity dynamics model to propagate a set of particles 2(such as Monte Carlo samples or sigma points), and then re-propagates a limited subset of particles that are dynamically important with a high-fidelity dynamics model and uses these “important” samples to adjust the low-fidelity samples via stochastic collocation. The remainder of this section provides an abbreviated explanation of the multi-fidelity method in an orbit propagation context. For a complete derivation and discussion, see [ 18 ], [ 19 ], and [ 13 ]. Let (Ω, Σ, P) be a probability space with the sample space Ω, 𝜎 -algebra Σ, and probability measure P. For a stochastic system with 𝑑 independent random inputs, denote the vector of random inputs by 𝝃 : Ω → Γ𝑑 ⊆ R𝑑 defined on (Ω, Σ, P) . The support Γ𝑑 is determined by the probability distribution of 𝝃 . For 𝑑 -dimensional Gaussian random variables, Γ𝑑 = R𝑑 , whereas bounded distributions yield compact support. In this work, a fixed realization of 𝝃 corresponds to a Monte Carlo sample from the probability distribution of initial conditions and may also be concatenated with a realization of the process noise acceleration. We seek a solution to the orbit uncertainty propagation problem governed by the dynamical system 
+
+
+
+¤𝒙 (𝑡, 𝝃 ) = 𝒇 (𝑡, 𝒙 (𝑡, 𝝃 ), 𝝃 ),
+
+𝒙 (𝑡 0, 𝝃 ) = 𝒙 0 (𝝃 ),
+
+P a.s. in Ω, (1) where 𝒇 : [𝑡 0, 𝑡 𝑓 ] × R𝑛 𝑥 × Γ𝑑 → R𝑛 𝑥 are the equations of motion, 𝑡 ∈ [ 𝑡 0, 𝑡 𝑓 ] is the time variable, 𝒙 ∈ R𝑛 𝑥 is the state variable, and 𝒙 0 (𝝃 ) is the initial condition. In other words, the uncertainty propagation problem is to quantify the effect of the random inputs 𝝃 on the state 𝒙 (𝑡, 𝝃 ).In the multi-fidelity setting, a low-fidelity model for 𝒇 is denoted by 𝒇 𝐿 and a high-fidelity model by 𝒇 𝐻 . We seek a multi-fidelity solution for the quantity of interest ( QoI ) ˜𝒙 ∈ R𝑛 , which in this paper is the orbit state vector, possibly at multiple times, thus 
+
+˜𝒙 (𝝃 ) =
+
+
+
+𝒙 (𝑡 1, 𝝃 )⊺ 𝒙 (𝑡 2, 𝝃 )⊺ · · · 𝒙 (𝑡 𝑇 , 𝝃 )⊺
+
+⊺
+
+. (2) The reason for defining the QoI as the state vector at multiple times will be made apparent shortly. The state vector in this work is the Cartesian position and velocity, i.e., 𝒙 (𝑡 𝑗 , 𝝃 ) = 𝒓 (𝑡 𝑗 , 𝝃 )⊺ ¤𝒓 (𝑡 𝑗 , 𝝃 )⊺ ⊺, though in general the state may be represented by an orbital element set and ˜𝒙 may contain other QoIs that are not state variables. We use 𝒇 𝐿 and 𝒇 𝐻 to generate low- and high-fidelity QoI s (propagated samples) ˜𝒙 𝐿 (𝝃 ) and ˜𝒙 𝐻 (𝝃 ), respectively. Then, for the set of realizations of random inputs Ξ = {𝝃 𝑖 }𝑚 𝑖 =1, define the snapshot matrix of low-fidelity samples 
+
+𝑿 𝐿 (Ξ) =
+
+
+
+˜𝒙 𝐿 (𝝃 1) · · · ˜𝒙 𝐿 (𝝃 𝑚 )
+
+
+
+∈ R𝑛 ×𝑚 , (3) 3and the subspace 
+
+X𝐿 (Ξ) = span ( 𝑿 𝐿 (Ξ)) . (4) We desire a multi-fidelity approximation provided by a stochastic collocation surrogate 
+
+˜𝒙 𝐻 (𝝃 ) ≈ ˆ˜𝒙 𝐻 (𝝃 ) =
+
+> 𝑟
+
+∑︁ 
+
+> 𝑙 =1
+
+𝑐 𝑙 (𝝃 ) ˜𝒙 𝐻 ( ¯𝝃 𝑙 ), (5) where ˆ· denotes an approximate value for the variable ·, 𝑐 𝑙 are expansion coefficients, ¯𝝃 𝑙 are the important samples and used as the random inputs for the collocation points in the expansion, and 𝑟 is the rank of the surrogate with 𝑟 ≪ 𝑚 .The important samples are identified iteratively, with each iteration’s important sample being the point that maximizes the distance to the subspace of previously identified important samples. Let Ξ𝑘 −1 = { ¯𝝃 1, ..., ¯𝝃 𝑘 −1 } for 𝑘 > 1 be the current set of important samples, initialized with Ξ0 = ∅ at 𝑘 = 1. The 𝑘 th important sample is 
+
+¯𝝃 𝑘 = arg max  
+
+> 𝝃 ∈Ξ
+
+dist ( ˜𝒙 𝐿 (𝝃 ), X𝐿 (Ξ𝑘 −1)) , (6) where 
+
+dist (𝒙 , X) ≡ inf   
+
+> 𝒚 ∈X
+
+𝒙 − 𝒚 , (7) and 
+
+Ξ𝑘 = Ξ 𝑘 −1 ∪ { ¯𝝃 𝑘 }. (8) The set of important samples is then ¯Ξ = Ξ 𝑘 = { ¯𝜉 𝑙 }𝑟 𝑙 =1. The maximum number of important samples is limited to the rank of the surrogate, with 𝑟 ≤ 𝑛 ≪ 𝑚 . Orbit state vectors typically have dimension 𝑛 = 6, hence why we augmented 
+
+˜𝒙 (𝝃 ) with the state trajectory at multiple points in time following the recommendation of [ 13 ]. Doing so increases the rank of the surrogate, thus permitting surrogates with more important samples which improves the accuracy of the multi-fidelity solution. Consequently, the QoI vector is defined by points along a trajectory instead of a single-epoch state. To solve the discrete optimization problem in Eq. 6, [ 18 ] suggests a greedy approach via the pivoted Cholesky decomposition to produce an approximate solution given by 
+
+h
+
+𝑿 𝐿 i⊺
+
+𝑿 𝐿 = 𝑨 ⊺ 𝑳 𝑳 ⊺ 𝑨 , (9) where 𝑿 𝐿 ⊺ 𝑿 𝐿 is the Gram matrix of the low-fidelity samples with respect to the Euclidean inner product, 𝑳 is lower triangular, and 𝑨 is a pivot matrix. 4The expansion coefficients are solved such that the basis of low-fidelity important samples may be used to approximately reconstruct the snapshot matrix. The expansion coefficients 𝑐 𝑙 must then satisfy 
+
+˜𝒙 𝐿 (𝝃 ) ≈ ˆ˜𝒙 𝐿 (𝝃 ) =
+
+> 𝑟
+
+∑︁ 
+
+> 𝑙 =1
+
+𝑐 𝑙 (𝝃 ) ˜𝒙 𝐿 ( ¯𝝃 𝑙 ), (10) which parallels Eq. 5. Reference [ 13 ] proposes an iterative approach to determine 𝑟 by incrementing it until the reconstructed snapshot matrix produced by Eq. 10 is within some user-specified tolerance of the original snapshot matrix from Eq. 3. Expressing Eq. 10 in matrix form and combining it with Eq. 9, we obtain 
+
+𝑳 𝑳 ⊺ 𝒄 = 𝑿 ( ¯Ξ)⊺ 𝑿 (Ξ), (11) where 𝒄 is a matrix of the coefficients 𝑐 𝑙 and may be solved using forward / backward substitution. The coefficients can then be used in Eq. 5 to obtain the multi-fidelity solution. 
+
+B. The Ensemble Gaussian Mixture Filter 
+
+The EnGMF enables accurate and efficient nonlinear estimation. It parameterizes the estimated state PDF as a set of particles and uses kernel density estimation ( KDE ) to avoid particle depletion, allowing it to function with fewer particles than a particle filter [ 7 , 8]. The presentation of the EnGMF in this section follows that of [ 16 ]. To initialize the EnGMF , 𝑁 random samples are drawn from the initial PDF . The PDF is then predicted by propagating each particle forward in time. To update the PDF , we first convert the particles to a Gaussian mixture model ( GMM ) via KDE using Silverman’s rule [8, 20]: each particle becomes the mean of a GMM component with weight 𝑁 −1 and covariance 
+
+𝑩 𝑆 =
+
+ 4
+
+𝑁 (𝑑 + 2)
+
+ 2
+
+> 𝑑 +4
+
+𝑷 , (12) where 𝑷 is the particles’ sample covariance. The GMM is then updated using a filtering algorithm formulated for GMM s, after which 𝑁 new particles are sampled from the updated distribution. The estimated state mean and covariance are likewise computed from the KDE-based GMM representation rather than directly from the particle ensemble. In this work, the measurement update of the GMM is performed using the square root unscented Kalman filter ( SR-UKF ) [ 21 ], which provides accurate nonlinear updates with relatively few particles. This approach lowers the computational expense associated with the prediction and high-fidelity correction stages, although it increases the per-particle computational cost of the measurement update. The EnGMF generally performs better for orbit determination when its particles’ states are parameterized by equinoctial orbital elements instead of Cartesian coordinates, because their more linear evolution improves the accuracy of the bandwidth parameter in Eq. 12 [ 8, 22 ]. However, because 5equinoctial elements are designed to represent two-body orbits, here we instead use Cartesian coordinates. 
+
+C. The Generalized Labeled Multi-Bernoulli Filter 
+
+The presentation of the GLMBF in this section follows that of [ 16 ]. The multi-target tracking simulations in Section IV.C use the joint predict–update formulation of the GLMBF , which is a closed-form solution to the Bayes multi-target filter recursion based on labeled RFS s [ 10 – 12 ]. An RFS may be thought of as a set of random vectors whose cardinality is also a random variable. More formally, given a space X, an RFS is a random variable on F (X) ,the set of finite subsets of X. A labeled RFS is a random variable on F (X × L) , where L is a discrete label space. This means that each element in a realization 𝑋 of a labeled RFS is of the form (𝒙 , 𝑙 ), where 𝒙 is the state and 𝑙 is the label. A labeled RFS realization may not contain duplicate labels, and this is enforced using the distinct label indicator 
+
+Δ(𝑋 ) = 𝛿 | 𝑋 |
+
+ lab (𝑋 ) , where 𝛿 · [·] is the Kronecker delta, lab (𝒙 , 𝑙 ) = 𝑙 denotes the projection of the label-augmented state space X × L onto its discrete label space L, and lab (𝑋 ) = 𝑙 : (𝒙 , 𝑙 ) ∈ 𝑋 .The PDF for a 𝛿 -generalized labeled multi-Bernoulli ( GLMB ) RFS may be parameterized by components (𝐼, ℎ ) ∈ F (L) × H , where H is a discrete space, and associated weights 𝑤 (𝐼, ℎ ) . For MTT , each component typically represents a data association hypothesis, with 𝐼 being a set of objects that may exist, ℎ being their combined measurement association history, and 𝑤 (𝐼, ℎ ) being the estimated probability that the hypothesis is true. A 𝛿 -GLMB RFS density is of the form 
+
+𝜋 (𝑋 ) = Δ (𝑋 )∑︁ 
+
+> (𝐼, ℎ ) ∈ F ( L) ×H
+
+𝑤 (𝐼, ℎ ) 𝛿 𝐼 
+
+lab (𝑋 ) 
+
+𝑝 (ℎ)  𝑋 
+
+, (13) where 𝑓 𝑋 = Î𝒙 ∈𝑋 𝑓 (𝒙 ) is the multi-object exponential and 𝑝 (ℎ) (· , 𝑙 ) is an object’s state PDF given association history 
+
+ℎ and label 𝑙 .Given the initial filtering density in Eq. 13 at time step 𝑗 , the predicted and updated density at time step 𝑗 + 1 given measurement set 𝑍 + is 
+
+𝜋 + (𝑋 +) ∝ Δ(𝑋 +)∑︁  
+
+> 𝐼, ℎ, 𝐼 +, 𝜃 +
+
+𝑤 (𝐼, ℎ ) 𝑤 (𝐼, ℎ, 𝐼 + , 𝜃 + )+ (𝑍 +)𝛿 𝐼 +
+
+lab (𝑋 +) 
+
+𝑝 (ℎ, 𝜃 + )+ (· | 𝑍 +)
+
+ 𝑋 +
+
+, (14) where 𝐼 ∈ F (L) , ℎ ∈ H , 𝐼 + ∈ F (L +), 𝜃 + ∈ Θ+, L+ = L ∪ B +, B+ is the space of object labels that could be born at this time, Θ+ is the set of maps 𝜃 + : L+ → 0 : |𝑍 + | assigning measurements in 𝑍 + to object labels, where 
+
+𝜃 + (𝑙 ) = 0 implies that label 𝑙 is not assigned a measurement, and 𝑤 (𝐼, ℎ, 𝐼 + , 𝜃 + )+ (𝑍 +) is the weight of the new hypothesis 
+
+(𝐼, ℎ, 𝐼 +, 𝜃 +) given prior hypothesis (𝐼, ℎ ) and measurement set 𝑍 +. For the full definition of these terms, as well as implementation details, see [12]. The number of possible hypotheses grows exponentially over time. To maintain computational tractability, the set of new hypotheses (𝐼, ℎ, 𝐼 +, 𝜃 +) in Eq. 14 resulting from each prior hypothesis (𝐼, ℎ ) is truncated using a ranked 6assignment algorithm and a cost matrix based on the terms that make up 𝑤 (𝐼, ℎ, 𝐼 + , 𝜃 + )+ (𝑍 +). The classic approach to solve this ranked assignment problem is to use Murty’s algorithm [ 10 , 11 , 23 ], but for large cost matrices, a Gibbs sampler-based approach is more efficient [12]. 
+
+# III. Adaptive Multi-Fidelity Model Selection 
+
+The accuracy and computational efficiency of the multi-fidelity solution depend on the choice of low- and high-fidelity models. We seek the optimal model pair that minimizes computation time while satisfying a user-defined requirement for accuracy in the multi-fidelity solution. Accordingly, the low- and high-fidelity force models must incorporate sufficient perturbing forces to maintain the desired accuracy while avoiding extraneous perturbations that would unnecessarily increase computational cost. Thus, for cislunar applications, the optimal model pair will vary throughout cislunar space as the relative contributions of Earth gravity, Lunar gravity, and perturbing forces change as a function of position. For the filtering applications considered in this work, we would ideally define the accuracy requirement as an upper limit on the PDF divergence between the multi-fidelity and a full-fidelity solution in the prediction step of the filter, as proposed by [16]. Formulated as an optimization problem, this becomes 
+
+min 
+
+( 𝒇 𝐿 , 𝒇 𝐻 )∈𝐹 ×𝐹 
+
+𝑡 𝑅 
+
+
+
+𝒇 𝐿 , 𝒇 𝐻 
+
+
+
+subject to D
+
+
+
+𝑝, ˆ𝑝 
+
+
+
+𝒇 𝐿 , 𝒇 𝐻 
+
+
+
+< 𝜀 D ,
+
+(15) where 𝒇 𝐿 and 𝒇 𝐻 are the low- and high-fidelity models, respectively, that solve the optimization problem and belong to a set of force models 𝐹 = { 𝒇 1, 𝒇 2, . . . } that vary in which perturbing forces are included. We seek a map 
+
+𝑚 : X → 𝐹 × 𝐹 such that ( 𝒇 𝐿 , 𝒇 𝐻 ) = 𝑚 
+
+
+
+{𝒙 (𝑡 𝑗 , 𝝃 𝑖 )} 𝑚 𝑖 =1
+
+
+
+, (16) where X is the state-space and {𝒙 (𝑡 𝑗 , 𝝃 𝑖 )} 𝑚 𝑖 =1 is the set of particles approximating the state-space PDF (i.e., Monte Carlo samples) at some time 𝑡 𝑗 . Also, 𝑡 𝑅 ( 𝒇 𝐿 , 𝒇 𝐻 ) is the runtime of selecting and evaluating the model pair ( 𝒇 𝐿 , 𝒇 𝐻 ),
+
+D (· , ·) is a PDF divergence metric, 𝑝 is the state-space PDF predicted from time 𝑡 𝑗 to 𝑡 𝑗 +1 using a full-fidelity model, 
+
+ˆ𝑝 ( 𝒇 𝐿 , 𝒇 𝐻 ) is the PDF predicted using the multi-fidelity algorithm with 𝒇 𝐿 and 𝒇 𝐻 , and 𝜀 D is a user-defined value. As posed, this optimization problem is intractable to compute online because evaluating D ( 𝑝, ˆ𝑝 ( 𝒇 𝐿 , 𝒇 𝐻 )) requires both a full-fidelity solution for 𝑝 , which is prohibitively expensive to compute, and the multi-fidelity solution ˆ𝑝 
+
+
+
+𝒇 𝐿 , 𝒇 𝐻 
+
+
+
+,which is itself the unknown quantity we seek as the end result, making its direct computation in the optimization problem impractical. We therefore reformulate the optimization problem to have an accuracy requirement that the expected error in acceleration magnitude remain below some threshold. Since evaluating the acceleration at a particular state 
+
+𝒙 (𝑡 𝑗 , 𝝃 𝑖 ) does not require the numerical solution to the differential equations of the force models, this makes the problem 7formulation tractable. Moreover, by enforcing a bound on the mean-square acceleration error of the force model, we indirectly enforce mean-square convergence of the resulting state trajectories under standard regularity assumptions of the dynamics. Since mean-square convergence implies convergence in distribution, this acceleration-based criterion is, in that sense, stronger than the original requirement of convergence in density of the predicted PDFs. Additionally, we will simplify the optimization problem by considering only one low-fidelity model over the space 
+
+X (over the entire cislunar domain). This not only eliminates a decision variable, but also allows us to use the trajectory from the low-fidelity propagation to inform the model choice for the high-fidelity propagation. This is possible within the multi-fidelity framework since the low-fidelity propagation is always done before the high-fidelity propagation, meaning the high-fidelity model does not yet need to be determined when the low-fidelity propagation is performed. Moreover, a truncated force model that is constant across cislunar space may still account for the dominant forces, and as demonstrated by the numerical simulations in Section IV, yields sufficient multi-fidelity accuracy and runtime, making it justified from a dynamical and computational standpoint. The reformulated optimization problem is then 
+
+min   
+
+> 𝒇 𝐻 ∈𝐹
+
+𝑡 𝑅 
+
+
+
+𝒇 𝐿 , 𝒇 𝐻 
+
+
+
+subject to E [𝑎 error ] < 𝜀 𝑎 ,
+
+(17) where E [𝑎 error ] is the expected value of the error in acceleration magnitude and 𝜀 𝑎 is a user-defined value. The high-fidelity force model that solves this optimization problem is the one that includes only the minimal set of perturbations necessary to satisfy the accuracy requirement for a given region of cislunar space, as incorporating additional perturbations generally increases runtime. Since the high-fidelity model is selected as a function of position in cislunar space, only perturbations that vary spatially need to be adjusted – specifically, the non-spherical gravitational perturbations of the Earth and Moon (which we note also vary temporally due to the rotation of these bodies). As a space object approaches one of these bodies, its non-spherical gravity terms become more significant and should be included in the model. Conversely, as the object moves farther away, those terms diminish in influence and can be truncated. Among orbital perturbations, non-spherical gravity is one of the primary contributors to computational cost, as evaluating spherical harmonic expansions becomes increasingly expensive with degree and order; in particular, the number of terms (and thus the computational complexity) grows quadratically with the maximum degree and order [ 14 ], and these evaluations must be performed at every integration step. In contrast, perturbations such as solar radiation pressure ( SRP ) and the Sun’s gravity remain relatively constant across cislunar space and impose negligible computational overhead compared to spherical harmonic evaluations. Therefore, these perturbations are kept constant in both the low- and high-fidelity models. Additionally, Earth atmospheric drag is not considered, as trajectories that 8encounter significant atmospheric effects are better suited to an Earth-centric multi-fidelity framework rather than a cislunar one. The low- and high-fidelity models 𝒇 𝐿 and 𝒇 𝐻 for 𝒇 in Eq. 1 are then 
+
+𝒇 𝐿 =
+
+
+
+¤𝒓 𝒂 2𝐵 + Í𝑛 𝒂 𝑁 𝐵,𝑛 + 𝒂 𝑆𝑅 
+
+
+
+, (18) 
+
+𝒇 𝐻 =
+
+
+
+¤𝒓 𝒂 2𝐵 + Í𝑛 𝒂 𝑁 𝐵,𝑛 + Í𝑖 𝒂 𝑆𝐻,𝑖 + 𝒂 𝑆𝑅 
+
+
+
+, (19) where 𝒂 2𝐵 is the acceleration due to the central body (the two-body term), 𝒂 𝑁 𝐵,𝑛 is the acceleration due to other celestial bodies (the 𝑛 -body term), 𝒂 𝑆𝐻,𝑖 is the acceleration due to spherical harmonic gravity on the 𝑖 th body, and 𝒂 𝑆𝑅 
+
+is the acceleration from SRP , modeled with a “cannonball” model assuming constant area and reflectance and a simple eclipsing function. The equations for these accelerations are provided by [24]. Since non-spherical gravity is the only perturbation that varies in the high-fidelity model, we focus on determining the appropriate spherical harmonic expansion degree and order as a function of position in space and acceptable acceleration error. The solution is obtained separately for each celestial body’s gravity (in this work, the Earth and Moon) using a lookup table from [ 14 ] and [ 15 ], which provides the appropriate expansion degree and order for a given altitude to a celestial body and user-defined acceleration noise, thereby defining the mapping in Eq. 16. For a spherical harmonic expansion of degree and order 𝐿 , [14] defines the total acceleration error as 
+
+E[∥∇ 𝑈 𝑇 ,𝐿 ∥2] = E[∥∇ 𝑈 𝑂,𝐿 ∥2] + E[∥∇ 𝑈 𝐶,𝐿 ∥2], (20) where E[∥∇ 𝑈 𝑂,𝐿 ∥2] is the omission error, E[∥∇ 𝑈 𝐶,𝐿 ∥2] is the commission error, and 𝑈 is the gravitational potential. The omission error represents the expected acceleration error due to truncation of spherical harmonic terms beyond degree and order 𝐿 , while the commission error accounts for the expected acceleration error due to published uncertainties in the included spherical harmonic terms up to and including degree and order 𝐿 . The mean omission and commission errors are computed by averaging the squared acceleration errors in Cartesian coordinates for the celestial body in question. The 𝑥 -, 𝑦 -, and 𝑧 -components of error are assumed to be Gaussian distributed, meaning the squared error in Eq. 20 follows a chi-squared distribution. Reference [ 14 ] then computes the upper bound of a 99.7% confidence interval for all expansion degrees to produce the lookup table. Our adaptive high-fidelity model selection method uses the low-fidelity trajectory to determine the space object’s altitude relative to the Earth and Moon at discrete points along the trajectory. It then queries the appropriate lookup table to select the expansion degree and order to use in the high-fidelity model for 9the current position in cislunar space. ∗
+
+In regions of cislunar space far from either body, the recommended expansion degree and order for both the Earth and Moon may approach zero. When this occurs, the low- and high-fidelity models become sufficiently similar such that no multi-fidelity correction is needed. Therefore, at a specified threshold for the high-fidelity model’s expansion degree, our implementation performs only a low-fidelity propagation and skips the multi-fidelity procedure. The sequence of steps for the adaptive multi-fidelity method is summarized in Algorithm 1. 
+
+Algorithm 1 Adaptive Multi-Fidelity Propagation 
+
+Input: Realizations of random inputs (Monte Carlo samples) Ξ = {𝝃 𝑖 }𝑚 𝑖 =1, maximum acceleration error 𝜀 𝑎 ,expansion degree/order 𝐿 min below which to skip multi-fidelity correction 
+
+Output: Multi-fidelity samples { ˆ˜𝒙 𝐻 (𝝃 𝑖 )} 𝑚 𝑖 =1 
+
+> 1:
+
+Propagate all particles with the low-fidelity model (Eq. 18) to get 𝑿 𝐿 (Ξ) 
+
+> 2:
+
+Compute altitude and corresponding gravity expansion degree and order 𝐿 for the Earth and Moon at discrete intervals along the low-fidelity trajectories using the lookup table  
+
+> 3:
+
+if 𝐿 > 𝐿 min then  
+
+> 4:
+
+Identify important samples ¯Ξ with Eqs. 6–8  
+
+> 5:
+
+Propagate ¯Ξ with the high-fidelity model (Eq. 19), with 𝐿 changing at each interval used in step 2  
+
+> 6:
+
+Compute the multi-fidelity solution with Eqs. 5 and 11  
+
+> 7:
+
+else  
+
+> 8:
+
+Skip multi-fidelity procedure, output 𝑿 𝐿 (Ξ)
+
+To obtain the time steps and associated state vectors used in the multi-fidelity algorithm’s snapshot matrix (Eq. 3), we propagate the particles backward in time 𝑁 time steps rather than store their histories to reduce memory footprint, as was done in [ 16 ]. This is beneficial in the context of MTT since storing the time histories for multiple different tracks can become overly memory intensive. For applications where speed is desired over memory, the time histories could instead be stored from the initial forward propagation, rather than doing the backward propagation. Lastly, the number of time steps serves as a user-defined tuning parameter. Since the rank of the snapshot matrix limits the number of important samples that can be identified, increasing the number of time steps generally raises the matrix rank, enabling the identification of more important samples and enhancing the accuracy of the multi-fidelity solution. However, as pointed out in [ 25 ], this comes at the cost of increased computation, as additional important samples must be propagated, and the improvement in accuracy exhibits diminishing returns. Eventually, the state vectors introduced from additional time steps lack sufficient linear independence to increase the rank of the snapshot matrix. In general, longer propagation times warrant the use of more time steps.  
+
+> ∗This work uses a C++ port of the MATLAB code published in [ 14 ] (available at https://doi.org/10.5281/zenodo.6814713 ,accessed January 2025).
+
+10 IV. Numeric Simulations 
+
+A. Test Case Descriptions 
+
+This section provides the test case scenarios and parameters that are used for assessing the adaptive multi-fidelity model selection method in the next two subsections. Five scenarios are used: a distant retrograde orbit ( DRO ), a near-rectilinear halo orbit ( NRHO ), a lunar transfer orbit ( LTO ), a low Lunar flyby, and a low lunar orbit ( LLO ), with the first four scenarios using orbital parameters from [ 16 ]. Orbits such as these are candidates for upcoming cislunar missions, and are therefore relevant to cislunar SSA . Furthermore, these orbits span large swaths of cislunar space, making them challenging test cases for the adaptive method. In the tracking results presented in Section IV.C, each of the five scenarios includes a cluster of five ASO s. The ASO s in each cluster are sampled from the same initial state PDF , with the means and variances provided in Table 1 and diagonal covariances of 𝜎 2 
+
+> state
+
+𝑰 6. Figure 1 depicts the nominal trajectory for each of the five scenarios, computed from a deterministic propagation of the mean for ten days for the DRO , NRHO , LTO , and flyby (the length of these scenarios), and 24 h for the LLO (the length of the LLO scenario). The nominal trajectory of the Lunar flyby scenario has a close approach altitude with the Moon of 133 km , assuming a spherical Moon. The nominal LLO trajectory has periapsis altitude 125 km , again assuming a spherical Moon, and period 143 min . However, due to random realizations of the initial conditions, the closest approaches in the test cases will vary. 
+
+Table 1 Initial means in normalized units (LU, LU/TU) and variances (LU 2, LU 2/TU 2) for each scenario, expressed in the rotating barycentric frame.                                           
+
+> Scenario Mean 𝜎 2
+> state
+> 𝑥 𝑦 𝑧 ¤𝑥 ¤𝑦 ¤𝑧
+> DRO 0.806 0.000 0.000 0.000 0.519 0.000 10 −4
+> NRHO 1.022 0.000 -0.182 0.000 -0.103 0.000 10 −4
+> LTO -0.112 0.000 0.000 2.194 -3.440 0.000 10 −4
+> Flyby 0.949 -0.019 0.304 -0.006 0.064 0.003 10 −4
+> LLO 0.993 0.000 0.000 0.000 1.570 0.000 10 −5
+
+Fig. 1 Nominal trajectories for each cluster in the rotating barycentric frame. Inset shows the LLO in Moon-centered coordinates in the rotating frame. 
+
+11 The acceleration noise limit from Eq. 17 is set to 𝜀 𝑎 = 10 −15 km/s 2 for all simulations. This value was found to provide a suitable balance between increased computation time from additional spherical harmonic gravity terms and accuracy in propagated states. The low-fidelity, high-fidelity, and “truth” propagators all use a 4th order accurate Runge-Kutta integrator with a 5th order error estimate and adaptive step size [ 26 ]. The low-fidelity model uses Earth and Moon point-mass gravity and the “truth” model uses 120 ×120 gravity for both bodies. The degree and order for the adaptive method never exceeds that of the truth in these test cases. The Earth and Moon use the EGM2008 [27] and LP165P [28] gravity fields, respectively, as well as the IAU2006 coordinate system reduction [ 29 ] for the Earth. Models of all fidelity have cannonball SRP and Sun point-mass gravity. Additional force model parameters from [ 13 ] may be found in Table 2. The positions of celestial bodies are determined by the JPL DE440 ephemerides [30]. 
+
+Table 2 Force model and satellite parameters.      
+
+> Parameter Value Satellite mass 500 kg Satellite SRP area 1 m 2
+> Reflectivity coefficient 1.5 Epoch time 2455200.5 UTC
+
+Runtime tests are generated on a Dell Precision Tower 3430 desktop computer running Red Hat Enterprise Linux 8.10 and the Linux 4.18.0 kernel with a 3.2 GHz Intel Core i7-8700 processor and 16 GB of random-access memory. The propagation software is written in C and all other software (tracker and adaptive model selection) is written in C++ and compiled with the GCC 8.5.0 compiler. 
+
+B. Results: Multi-Fidelity Propagation 
+
+This section evaluates the performance of the adaptive multi-fidelity method solely in the context of propagation, without incorporating it into a tracking framework. Analyzing the propagation in isolation is informative due to its broad applicability to uncertainty propagation. Here, a particle ensemble is propagated using a Monte Carlo approach, though the multi-fidelity method can also be applied to Gaussian mixture propagation via the unscented transform [ 13 ]. Additionally, this analysis can be viewed as the prediction step of a filtering process. The integration of the method into a full filtering and tracking framework is presented in the subsequent section. Process noise is excluded from the propagation in this section to isolate the accuracy of the adaptive multi-fidelity method from the confounding effects that stochastic processes may introduce. The degree and order of the spherical harmonic gravity expansion is updated in time increments Δ𝑡 , where Δ𝑡 is 10 min in the LLO case and 1 h otherwise, and the multi-fidelity snapshot matrix is constructed using seven time steps in increments of Δ𝑡 at the end of the propagation. If a dense-output ODE solver is used, states at intermediate time steps for Step 2 of Algorithm 1 may be computed with 12 negligible additional computational cost. If an ODE solver without dense output is used (as is the case with [ 24 ], which was used to generate these results), solving for state values at many small time steps may increase computation time. Therefore, we only request state values from the integrator at the ends of the Δ𝑡 time intervals when above 2000 km altitude, and in 14 Δ𝑡 intervals below 2000 km altitude where the dynamics evolve more quickly. All test cases use 1000 low-fidelity samples with the number of high-fidelity important samples being the rank of the snapshot matrix in Eq. 3, as suggested by [25]. To evaluate the adaptive multi-fidelity method, four non-adaptive multi-fidelity baselines are considered, each using a constant gravity expansion for the high-fidelity model throughout the entire propagation: 30 ×30, 60 ×60, 90 ×90, and the maximum degree and order found by the adaptive method for the particular scenario. In a non-adaptive approach, an operator tasked with propagating uncertainty or tracking space objects may not have prior knowledge of the specific regions of cislunar space through which the objects will pass, and therefore would have to select the gravity expansion heuristically. The 30 ×30, 60 ×60, and 90 ×90 non-adaptive methods are chosen to represent the range of possible gravity expansions that might be used in the absence of such prior knowledge and fall within the set of gravity expansions used by the adaptive method in Secs. IV.B and IV.C. All other aspects of the force models in the non-adaptive method are identical to the force models in the adaptive method. For the propagation results in this section, the multi-fidelity correction is never skipped (i.e., 𝐿 min in Algorithm 1 is set to 0). Runtime and accuracy statistics may be found in Tables 3 and 4, respectively. Each set of results reflects the average of 10 Monte Carlo simulations, with each simulation having a different set of random initial states sampled from the distribution described for each test case in Section IV.A. For each Monte Carlo simulation, the same set of initial states is used for all propagation methods (low-fidelity, high-fidelity, non-adaptive multi-fidelity, and adaptive multi-fidelity). The position root-mean-square error ( RMSE ) is computed for each propagation method using the “truth” defined in Section IV.A. In Tables 3 and 4 and Fig. 2 and 3, 𝐿 × 𝐿 indicates the maximum degree and order found by the adaptive method for that particular test case across all ten Monte Carlo runs, and is reported in the last row of each of Tables 3 and 4. In these tables, the low-fidelity results reflect using only the low-fidelity model to propagate the entire particle ensemble. Likewise, the high-fidelity results reflect using only the high-fidelity model to propagate all particles, with the results presented for all four (30 ×30, 60 ×60, 90 ×90, and 𝐿 × 𝐿 ) non-adaptive high-fidelity models. The non-adaptive multi-fidelity results reflect using those four non-adaptive high-fidelity models in the multi-fidelity framework. The non-adaptive and adaptive multi-fidelity runtime and accuracy results are plotted in Fig. 2 and 3, respectively. The multi-fidelity algorithm achieves a multiple-order-of-magnitude improvement in the RMSE compared to the low-fidelity solution across all test cases, yielding kilometer to sub-kilometer accuracy, depending on the scenario. Additionally, the use of multi-fidelity propagation significantly reduces runtime relative to high-fidelity propagation, demonstrating an approximately tenfold speedup across test cases. The difference between high- and multi-fidelity runtime is amplified as the degree and order of the gravity expansion used in the high-fidelity model increase. The 13 Table 3 Runtime (sec) for all test cases. LF, HF, and MF are shorthand for low-fidelity, high-fidelity, and multi-fidelity, respectively. 
+
+Method Scenario DRO NRHO LTO Flyby LLO LF 1.054 2.102 3.637 1.879 3.866 
+
+𝐿 × 𝐿 HF 11.82 73.41 73.65 237.8 353.5 30 ×30 HF 23.29 56.15 101.5 49.00 110.7 60 ×60 HF 55.82 140.6 244.9 117.1 268.9 90 ×90 HF 108.2 273.9 476.5 217.1 537.5 
+
+𝐿 × 𝐿 MF 1.352 4.650 5.692 9.669 18.08 30 ×30 MF 1.592 4.108 6.477 3.453 8.184 60 ×60 MF 2.231 6.894 10.31 5.555 14.75 90 ×90 MF 3.262 11.28 16.20 8.499 24.96 Adaptive 1.390 3.346 4.922 3.029 9.885 Truth 175.6 430.4 794.5 378.4 876.0 
+
+𝐿 × 𝐿 3 39 20 91 71 
+
+Table 4 Position RMSE (km) for all test cases. 
+
+Method Scenario DRO NRHO LTO Flyby LLO LF 0.6323 203.4 299.2 42.86 102.6 
+
+𝐿 × 𝐿 HF 4.770 ·10 −6 0.03239 6.882 ·10 −6 0.006116 0.003720 30 ×30 HF 0 0.03296 1.454 ·10 −9 0.8167 0.2441 60 ×60 HF 0 0.03195 0 0.1828 0.007048 90 ×90 HF 0 0.02604 0 0.006414 0.001509 
+
+𝐿 × 𝐿 MF 6.565 ·10 −6 0.1203 1.726 0.03008 0.007872 30 ×30 MF 5.758 ·10 −6 0.1201 1.726 0.8207 0.2428 60 ×60 MF 5.758 ·10 −6 0.1206 1.726 0.1814 0.008804 90 ×90 MF 5.758 ·10 −6 0.1215 1.726 0.03021 0.006661 Adaptive MF 1.684 ·10 −5 0.1188 1.726 0.02669 0.01151 
+
+𝐿 × 𝐿 3 39 20 91 71 
+
+Fig. 2 Runtime of non-adaptive and adaptive multi-fidelity methods for all test cases. 
+
+14 Fig. 3 RMSE of non-adaptive and adaptive multi-fidelity methods for all test cases. Note the logarithmic scaling of the vertical axis. 
+
+RMSE also generally decreases with more terms in the gravity expansion, though Table 4 indicates diminishing returns. Notably, for the DRO and LTO test cases, the high-fidelity propagation reaches zero RMSE relative to the truth model. This arises because these test cases remain at high altitudes, where, beyond a certain degree and order expansion, non-spherical gravitational accelerations fall below machine precision. This highlights a benefit of the adaptive method: by dynamically adjusting the gravity expansion based on an acceleration error threshold, it prevents the inclusion of unnecessary terms, thereby reducing computational cost. As shown in Tables 3 and 4 and Fig. 2 and 3, the adaptive multi-fidelity method consistently achieves nearly-equal or superior accuracy compared to the non-adaptive multi-fidelity approach while maintaining a lower runtime. This is most evident in the flyby and LLO test cases, where the non-adaptive method continues to improve in RMSE with increasing gravity expansion order but at the cost of greater runtime. In contrast, the adaptive method achieves the accuracy of the non-adaptive approach (from the 𝐿 × 𝐿 case) while maintaining a significantly faster runtime. For the flyby, this may be attributed to the orbit having the largest altitude variation of all test cases. At perilune, a large gravity expansion is necessary to maintain accuracy, but at higher altitudes during the remainder of the trajectory, these additional terms become extraneous. For the LLO , this may be attributed to the fact that at low altitudes, the required spherical harmonic degree and order for a given acceleration error is more sensitive to small changes in altitude. This indicates that the adaptive method is most beneficial for cases where the distance to the Earth or Moon varies significantly over the trajectory, or for low-altitude orbits in general. Figure 4 depicts the mean trajectory for each test case colored by the degree and order of the spherical harmonic gravity expansion. As expected, the degree and order increase closer to the Moon, reaching a maximum at perilune as the higher order terms gain significance. This effect is further demonstrated in Fig. 5, which plots the degree and order as a function of time and exhibits a sharp peak at periapsis for cases that pass near the Earth or Moon. It should be 15 observed that the degree and order in Fig. 4 and 5 is determined from the lowest altitude across the entire Monte Carlo particle set (not shown in the figure), as per Section III, and therefore the maximum and minimum degree and order may not correspond exactly with when the mean trajectory reaches periapsis and apoapsis. This is most apparent in the LTO test case, where some Monte Carlo samples stay near the Earth after the mean trajectory has passed perigee, causing the degree and order to remain high. 
+
+Fig. 4 Mean trajectories colored by the spherical harmonic gravity degree and order of the Earth or Moon (whichever bodies’ expansion is larger at the particular time step) for up to one revolution. Since the degree and order is computed across the entire particle set (not shown), the apsides of the mean trajectory may not correspond exactly with the extrema of degree and order. Color bar indicates degree and order. Note that the Earth (blue dot) and Moon (gray dot) are not shown to scale. C. Results: Multi-Target Tracking 
+
+This section presents Monte Carlo analyses of the multi-target filter’s performance in two simulated cislunar tracking scenarios. Each scenario involves a single sensor in a polar lunar orbit tracking one or more clusters of space objects using the GLMBF with each of the following propagation methods: low-fidelity propagation with no correction, non-adaptive multi-fidelity propagation, and adaptive multi-fidelity propagation. Each cluster contains five objects sampled from one of the initial state PDF s given in Table 1. The first MTT scenario combines the DRO , NRHO , LTO ,and Lunar flyby scenarios from the previous subsection, with all twenty objects across the four clusters being tracked simultaneously over a period of ten days. In the second MTT scenario, only the five-object LLO cluster is tracked over a period of 24 h . The LLO scenario is kept separate bcause a significantly higher observation rate is required to accurately track objects in LLO than the other orbit families. This is implemented by setting the simulation time step Δ𝑡 to 1 h in 16 Fig. 5 Spherical harmonic gravity degree and order as a function of time for the Moon (left vertical axis) and Earth (right vertical axis). 
+
+the combined scenario and 10 min in the LLO scenario, as in the previous section. Additionally, the high-fidelity model used in the non-adaptive multi-fidelity cases uses a higher degree and order in the LLO scenario to achieve comparable tracking accuracy to the adaptive method. The low-fidelity, truth, and adaptive multi-fidelity propagators are the same as in the previous subsection, but when using the adaptive multi-fidelity method, the EnGMF skips the multi-fidelity correction when the maximum recommended gravity model resolution has stayed less than 5 ×5 since the last correction. The non-adaptive multi-fidelity propagator in this subsection uses 30 ×30 gravity field models for both bodies in the combined scenario and 70 ×70 in the LLO scenario. Note that these are below the values given in the last row of Table 3 for some orbits. The EnGMF uses 200 particles to parameterize each track. These simulations use a single optical sensor located in a high Lunar polar orbit to obtain measurements of right ascension and declination and their respective rates. The sensor’s initial orbital state in normalized units in the rotating barycentric frame is [0.988 0 0 .018 0 0 .788 0 ]⊺. Sensor parameters from [ 16 ] are used, with the angle and angle-rate measurements possessing Gaussian distributed errors with a mean of zero and standard deviation of 0.1 arcsec for the angles and 0.001 arcsec/s for the angle-rates. The measurement errors are assumed to be uncorrelated. The sensor generates measurements every 12 time steps ( 12 Δ𝑡 ) after the start of the simulation, with probability of detection 
+
+𝑃 𝐷 = 0.95 . Target occlusion by the Earth and Moon is not simulated. The simulated sensor does not generate clutter returns and the multi-target filter assumes a constant clutter intensity of 𝜅 = 10 −9.The multi-target filter is initialized with the correct number of objects with each of the initial state PDF s from Table 1 that are included in the scenario under consideration. Birth is not modeled in the filter, which assumes a survival 17 probability near one for all objects, discards hypotheses with weights below 10 −3, and employs Murty’s algorithm to cap the number of hypotheses at 50 . This limit is distributed among prior GLMB components in proportion to the square root of their respective weights. The snapshot matrix is again constructed using the last seven time steps at the time of multi-fidelity correction. Additionally, the EnGMF assumes a process noise covariance 𝑸 = 𝜎 2 
+
+> 𝑎
+
+𝑰 3, where the acceleration standard deviation is 𝜎 𝑎 = 10 −12 km/s 2.The average results over 20 runs of each of the two scenarios with each of the three propagation methods are summarized in Table 5. The times shown are the total filtering time for one run of the simulation, broken down between track prediction (prediction time) and the rest of the GLMBF algorithm (update time). Note that in the multi-fidelity cases, multi-fidelity correction (i.e., steps 2–8 of Algorithm 1) is included in the update time, because it is only performed when needed to facilitate a measurement update. Tracking errors are averaged over the simulation time span. Tracking error is defined here as the optimal subpattern assignment ( OSPA ) multi-object distance between the GLMBF ’s estimate of the states of the objects and their true states [ 31 ]. The OSPA metric used here is based on the Euclidean distance in Cartesian position space and has order 2 and cutoff 100 km. 
+
+Table 5 Summary statistics for multi-target tracking simulations. Times are total values for one run of the simulation and tracking errors are averaged over the simulation time span. Update time includes multi-fidelity correction when applicable.                          
+
+> Method Combined Scenario LLO Scenario Prediction Time (s) Update Time (s) Error (km) Prediction Time (s) Update Time (s) Error (km) LF 14.965 9.623 20.241 11.620 1.506 30.296 Non-Adaptive MF 15.860 59.603 11.832 12.201 181.093 5.210 Adaptive MF 16.047 30.828 11.865 15.779 76.706 5.209
+
+The results in Table 5 show nearly equal tracking accuracy between the non-adaptive and adaptive multi-fidelity cases in each scenario, while the low-fidelity cases see much higher average tracking errors. In the combined case, the computational cost of track prediction is roughly equal, on average, between the three propagation methods, while the adaptive method yields almost half the update time of the non-adaptive method. In the LLO case, the prediction time for the adaptive multi-fidelity method is somewhat higher than that of the non-adaptive method. This is because the nominal trajectory is below 2000 km , so the adaptive method is mostly using the reduced time step size of 14 Δ𝑡 for low-fidelity prediction to ensure that the minimum altitude is calculated accurately. However, the slight difference in prediction times is insignificant compared to the difference in update time between the two multi-fidelity methods in the LLO scenario. Figure 6 shows the GLMBF ’s tracking error using each method in the combined scenario. As the figure shows, all three methods initially perform well, but the low-fidelity method begins to diverge around four days into the simulation. This is primarily due to difficulty in maintaining custody of the objects in the NRHO and flyby clusters, due to the strong effect of non-spherical gravity at the time of closest approach to the Moon. On the other hand, both the non-adaptive 18 and adaptive methods have almost the same tracking error over the course of the simulation. The small spike in error around nine days into the simulation is caused by the LTO cluster passing close to the Earth, as evidenced by Fig. 5. 
+
+Fig. 6 Tracking error over time for the combined scenario. Markers coincide with measurement updates. 
+
+Figure 7 breaks down the runtime cost between track prediction and the rest of the filter’s update step at each simulation time step in the combined scenario. The prediction time plots are nearly identical for all three methods in this scenario, as we would expect given the results in Table 5. The figure shows that update time is generally zero, with a spike every 12 Δ𝑡 when measurements are taken. These spikes are consistently small in the low-fidelity case but vary more with the multi-fidelity methods. The higher spikes in update time correspond to times when one or more clusters are close to one of the bodies, while the lower spikes correspond to times when the clusters are farther away. The update time plot for the adaptive method can be seen to approach that of the low-fidelity method in the latter case, which occurs over the first two days and again around seven days into the simulation. This happens because the recommended degree and order for most tracks falls below the 5 ×5 threshold during these windows (compare Fig. 5), so few, if any, tracks undergo multi-fidelity correction. 
+
+Fig. 7 Computational cost of each filter step for the combined scenario, broken down by GLMBF algorithm stage. Markers coincide with measurement updates. 
+
+Figures 8 and 9 show the tracking error and runtime breakdowns for the LLO scenario. As in the combined scenario, all three methods initially show similar tracking accuracy, but the low-fidelity method begins to diverge after the 19 first measurement update, two hours into the simulation. After an initial rise, both the prediction and update time plots are relatively steady, with a slow decrease in computation time over the simulation duration. This contrasts with Fig. 5, where the recommended degree and order slowly increase, due to differing trends in state uncertainty: without measurements, state uncertainty grows over time, causing the particles parameterizing the state PDF to spread out and lowering their minimum altitude. With measurements, state uncertainty shrinks over time, so the particles parameterizing each track in the GLMBF tend to converge to the true altitude of the object they represent, raising their minimum altitude. Notably, in comparison to Fig. 7, the adaptive method generally yields higher prediction times than the other two methods. This is driven by the low-fidelity time step size reduction below 2000 km , as noted earlier. However, once again, the adaptive method yields significantly lower average update times than the non-adaptive method. This result shows that computational cost of determining the correct degree and order for multi-fidelity correction is less than the cost of assuming a constant degree and order that is known to be sufficient. 
+
+Fig. 8 Tracking error over time for the LLO scenario. Markers coincide with measurement updates. 
+
+Fig. 9 Computational cost of each filter step for the LLO scenario, broken down by GLMBF algorithm stage. Markers coincide with measurement updates. 
+
+20 V. Conclusion 
+
+This paper developed an adaptive method for multi-fidelity uncertainty propagation in cislunar space by posing the issue as an optimization problem to minimize runtime subject to an upper bound on the expected acceleration error. The solution was obtained by varying the perturbations included in the high-fidelity model as a function of position via a precomputed library of acceleration errors for differing gravity expansion degrees and orders. This permits rapid and accurate uncertainty propagation of space objects in the cislunar domain. The effectiveness of the method for uncertainty propagation was demonstrated via Monte Carlo analysis. For ASO tracking, the propagator was integrated in a combined EnGMF and GLMBF multiple-hypothesis, multi-target filter. In simulated test cases, the adaptive approach yielded a significant reduction in runtime when compared to a non-adaptive approach while maintaining equivalent or superior accuracy. Furthermore, the test scenarios demonstrated the method’s applicability to orbits relevant to upcoming cislunar missions and SSA , including a DRO , NRHO , LTO , low Lunar flyby, and LLO . The adaptive method also obviates the need for the user to determine an appropriate gravity expansion degree and order, instead determining these automatically to satisfy a specified accuracy requirement. Future work may entail dynamically adjusting the time intervals at which the high-fidelity model is updated, allowing for more rapid adaptation in regions with faster-varying dynamics. 
+
+# Funding Sources 
+
+This material is based on research sponsored by the Air Force Research Laboratory (AFRL) under agreement number FA9453-21-2-0064. The U.S. Government is authorized to reproduce and distribute reprints for Governmental purposes notwithstanding any copyright notation thereon. The views and conclusions contained herein are those of the authors and should not be interpreted as necessarily representing the official policies or endorsements, either expressed or implied, of AFRL and/or the U.S. Government. AFRL Public Release Case Number: AFRL-2026-3095. 
+
+# References        
+
+> [1] Holzinger, M. J., Chow, C. C., and Garretson, P., A Primer on Cislunar Space , Air Force Research Laboratory, 2021. [2] Wishnek, S., Holzinger, M. J., and Handley, P., “Robust Cislunar Initial Orbit Determination,” Proceedings of the Advanced Maui Optical and Space Surveillance (AMOS) Technologies Conference , 2021, pp. 1–16. [3] Bolden, M., Hussein, I., Borowski, H., See, R., and Griggs, D. E., “Probabilistic Initial Orbit Determination and Object Tracking in Cislunar Space Using Optical Sensors,” Proceedings of the Advanced Maui Optical and Space Surveillance (AMOS) Technologies Conference , 2022, pp. 1–15. [4] Bhadauria, S., and Frueh, C., “Optical Observation Regions in Cislunar Space Using the Bi-Circular Restricted Four Body Problem Geometry,” Proceedings of the Advanced Maui Optical and Space Surveillance (AMOS) Technologies Conference ,2022, pp. 1–10.
+
+21 [5] Petion, C., Reifler, B. L., and Jones, B. A., “Trajectory-Informed Adaptive Multi-Fidelity Propagation in Cislunar Space,” 
+
+Proceedings of the 9th European Conference on Space Debris, Bonn, Germany , 2025, pp. 1–12. [6] Petion, C., and Jones, B. A., “Cislunar Admissible Regions from Periodic Orbit Manifolds,” Proceedings of the Advanced Maui Optical and Space Surveillance (AMOS) Technologies Conference , 2025, pp. 1–16. https://doi.org/10.64861/VSAT2607. [7] Anderson, J. L., and Anderson, S. L., “A Monte Carlo Implementation of the Nonlinear Filtering Problem to Produce Ensemble Assimilations and Forecasts,” Monthly Weather Review , Vol. 127, No. 12, 1999, pp. 2741–2758. https://doi.org/10.1175/1520-0493(1999)127<2741:AMCIOT>2.0.CO;2. [8] Yun, S., Zanetti, R., and Jones, B. A., “Kernel-Based Ensemble Gaussian Mixture Filtering for Orbit Determination with Sparse Data,” Advances in Space Research , Vol. 69, No. 12, 2022, pp. 4179–4197. https://doi.org/10.1016/j.asr.2022.03.041. [9] Reifler, B. L., Popov, A. A., Jones, B. A., and Zanetti, R., “Large-Scale Space Object Tracking in a Proliferated LEO Scenario,” 
+
+Proceedings of the 26th International Conference on Information Fusion , 2023, pp. 1–8. https://doi.org/10.23919/fusion52260. 2023.10224229. [10] Vo, B.-T., and Vo, B.-N., “Labeled Random Finite Sets and Multi-Object Conjugate Priors,” IEEE Transactions on Signal Processing , Vol. 61, No. 13, 2013, p. 3460–3475. https://doi.org/10.1109/tsp.2013.2259822. [11] Vo, B.-N., Vo, B.-T., and Phung, D., “Labeled Random Finite Sets and the Bayes Multi-Target Tracking Filter,” IEEE Transactions on Signal Processing , Vol. 62, No. 24, 2014, p. 6554–6567. https://doi.org/10.1109/tsp.2014.2364014. [12] Vo, B.-N., Vo, B.-T., and Hoang, H. G., “An Efficient Implementation of the Generalized Labeled Multi-Bernoulli Filter,” IEEE Transactions on Signal Processing , Vol. 65, No. 8, 2017, p. 1975–1987. https://doi.org/10.1109/tsp.2016.2641392. [13] Jones, B. A., and Weisman, R., “Multi-fidelity orbit uncertainty propagation,” Acta Astronautica , Vol. 155, 2019, pp. 406–417. https://doi.org/10.1016/j.actaastro.2018.10.023. [14] McArdle, S., “Gravity Modeling for Lunar Orbits,” Ph.D. thesis, The University of Texas at Austin, 2022. https://doi.org/10. 26153/tsw/43345. [15] McArdle, S., Russell, R. P., and Bettadpur, S., “A practical method for truncating spherical harmonic gravity fields, application at the Moon,” Proceedings of the 43rd American Astronautical Society Annual Guidance, Navigation and Control Conference ,2020, pp. 1–15. Paper AAS 20-048. [16] Reifler, B. L., and Jones, B. A., “Efficient Cislunar Multi-Target Tracking with Adaptive Multi-Fidelity Propagation,” 
+
+Proceedings of the Advanced Maui Optical and Space Surveillance (AMOS) Technologies Conference , 2024, pp. 1–10. https://doi.org/10.64861/btxt4965. [17] Wolf, T. N., Zucchelli, E. M., and Jones, B. A., “Multi-Fidelity Uncertainty Propagation for Objects in Cislunar Space,” 
+
+Proceedings of the 2022 AIAA SciTech Forum , 2022, pp. 1–13. https://doi.org/10.2514/6.2022-1774. 
+
+22 [18] Narayan, A., Gittelson, C., and Xiu, D., “A Stochastic Collocation Algorithm with Multifidelity Models,” SIAM Journal on Scientific Computing , Vol. 36, No. 2, 2014, pp. A495–A521. https://doi.org/10.1137/130929461. [19] Zhu, X., Narayan, A., and Xiu, D., “Computational Aspects of Stochastic Collocation with Multifidelity Models,” SIAM/ASA Journal on Uncertainty Quantification , Vol. 2, No. 1, 2014, pp. 444–463. https://doi.org/10.1137/130949154. [20] Silverman, B. W., “The kernel method for multivariate data,” Density Estimation for Statistics and Data Analysis , Chapman & Hall/CRC, London, 1998, Chap. 4, pp. 75–94. https://doi.org/10.1201/9781315140919-4. [21] Van der Merwe, R., and Wan, E. A., “The square-root unscented Kalman filter for state and parameter-estimation,” Proceedings of the 2001 IEEE International Conference on Acoustics, Speech, and Signal Processing , 2001, pp. 1–4. https://doi.org/10. 1109/ICASSP.2001.940586. [22] Broucke, R. A., and Cefola, P. J., “On the equinoctial orbital elements,” Celestial Mechanics , Vol. 5, 1972, pp. 303–310. https://doi.org/10.1007/BF01228432. [23] Murty, K. G., “An algorithm for ranking all the assignments in order of increasing cost,” Space Operations Research , Vol. 16, No. 3, 1968, pp. 682–687. https://doi.org/10.1287/opre.16.3.682. [24] Hill, K., and Jones, B., TurboProp Version 4.1 , The University of Texas at Austin and University of Colorado Boulder, Jan. 2016. [25] Petion, C., Wolf, T. N., and Jones, B. A., “Multi-Fidelity Propagation and Adaptive Gaussian Mixture Refinement of Admissible Regions,” Proceedings of the 35th AAS/AIAA Space Flight Mechanics Meeting, Kaua’i, Hawaii , 2025, pp. 1–20. Paper AAS 25-107. [26] Dormand, J., and Prince, P., “A family of embedded Runge–Kutta formulae,” Journal of Computational and Applied Mathematics ,Vol. 6, No. 1, 1980, pp. 19–26. https://doi.org/https://doi.org/10.1016/0771-050X(80)90013-3. [27] Pavlis, N. K., Holmes, S. A., Kenyon, S. C., and Factor, J. K., “The development and evaluation of the Earth Gravitational Model 2008 (EGM2008),” Journal of Geophysical Research: Solid Earth , Vol. 117, No. B4, 2012, pp. 1–38. https: //doi.org/10.1029/2011JB008916. [28] Konopliv, A., Asmar, S., Carranza, E., Sjogren, W., and Yuan, D., “Recent Gravity Models as a Result of the Lunar Prospector Mission,” Icarus , Vol. 150, No. 1, 2001, pp. 1–18. https://doi.org/10.1006/icar.2000.6573. [29] Petit, G., and Luzum, B., “IERS Conventions (2010),” IERS Technical Note 36, International Earth Rotation and Reference Systems Service (IERS), Frankfurt am Main, Germany, 2010. ISSN: 1019-4568. [30] Park, R. S., Folkner, W. M., Williams, J. G., and Boggs, D. H., “The JPL Planetary and Lunar Ephemerides DE440 and DE441,” 
+
+The Astronomical Journal , Vol. 161, No. 3, 2021, p. 105. https://doi.org/10.3847/1538-3881/abd414. [31] Schuhmacher, D., Vo, B.-T., and Vo, B.-N., “A consistent metric for performance evaluation of multi-object filters,” IEEE Transactions on Signal Processing , Vol. 56, No. 8, 2008, pp. 3447–3457. https://doi.org/10.1109/TSP.2008.920469. 
+
+23
