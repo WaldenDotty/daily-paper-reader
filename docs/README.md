@@ -6,58 +6,59 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-21
-- 运行时间：2026-07-21 20:30:46 UTC
+- 最新运行日期：2026-07-22
+- 运行时间：2026-07-22 21:40:04 UTC
 - 运行状态：成功
-- 本次总论文数：12
-- 精读区：5
+- 本次总论文数：13
+- 精读区：6
 - 速读区：7
 
 ### 今日简报（AI）
-今日精读聚焦地月空间的多保真不确定性传播与碎片演化，两篇均获9.0高分。  
-最值得关注地月环境下的模型适应方法以及远距离逆行轨道的碎片长期演化规律。  
-建议普通读者优先阅读这两篇精读，以把握地月空间动力学前沿。
-- 详情：[/202607/21/README](/202607/21/README)
+今日精读6篇速读7篇，聚焦航天器姿态估计与空间碎片演化两大高分方向。最值得关注《DreamSat-Pose》中的单视图3D重建与特征匹配技术，以及《Debris Evolution》中地月轨道碎片演化分析。普通读者可重点跟踪深度学习在航天器自主导航与高动态运动估计中的融合应用。
+- 详情：[/202607/22/README](/202607/22/README)
 
 ### 精读区论文标签
-1. [Multi-Fidelity Uncertainty Propagation with Model Adaptation to Local Cislunar Dynamics](/202607/21/2607.12150v1-multi-fidelity-uncertainty-propagation-with-model-adaptation-to-local-cislunar-dynamics)  
+1. [DreamSat-Pose: Spacecraft Pose Estimation from Single-View 3D Reconstructions and Learned 2D-3D Feature Matching](/202607/22/2607.13449v1-dreamsat-pose-spacecraft-pose-estimation-from-single-view-3d-reconstructions-and-learned-2d-3d-feature-matching)  
    标签：评分：9.0/10、query:cislunar-dyn-nav
-   evidence：针对地月空间动力学的自适应多保真不确定性传播
-2. [Debris Evolution from Spacecraft Fragmentation in Earth-Moon Distant Retrograde Orbits](/202607/21/2607.15709v1-debris-evolution-from-spacecraft-fragmentation-in-earth-moon-distant-retrograde-orbits)  
+   evidence：用于自主交会接近操作的航天器姿态估计
+2. [Debris Evolution from Spacecraft Fragmentation in Earth-Moon Distant Retrograde Orbits](/202607/22/2607.15709v1-debris-evolution-from-spacecraft-fragmentation-in-earth-moon-distant-retrograde-orbits)  
    标签：评分：9.0/10、query:cislunar-dyn-nav
-   evidence：基于圆型限制性三体问题的地月空间碎片演化
-3. [DreamSat-Pose: Spacecraft Pose Estimation from Single-View 3D Reconstructions and Learned 2D-3D Feature Matching](/202607/21/2607.13449v1-dreamsat-pose-spacecraft-pose-estimation-from-single-view-3d-reconstructions-and-learned-2d-3d-feature-matching)  
+   evidence：地月系统碎片演化，基于圆型限制性三体问题
+3. [Lagrange points of the restricted three-body problem in spaces of constant curvature](/202607/22/2607.19148v1-lagrange-points-of-the-restricted-three-body-problem-in-spaces-of-constant-curvature)  
+   标签：评分：9.0/10、query:cislunar-dyn-nav
+   evidence：常曲率空间中限制性三体问题拉格朗日点的推广
+4. [Polynomial-Based Solutions to Targeting Problems for Onboard Applications](/202607/22/2607.15801v1-polynomial-based-solutions-to-targeting-problems-for-onboard-applications)  
    标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：面向近距离操作的航天器姿态估计
-4. [AI-Augmented Model Predictive Control for Safe and Adaptive Rendezvous and Proximity Operations](/202607/21/2607.16630v1-ai-augmented-model-predictive-control-for-safe-and-adaptive-rendezvous-and-proximity-operations)  
+   evidence：基于多项式的星上轨迹目标优化
+5. [PRISM: Multimodal Terrain Mapping for Rover Navigation in Unstructured Environments](/202607/22/2607.16366v1-prism-multimodal-terrain-mapping-for-rover-navigation-in-unstructured-environments)  
    标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：自主交会接近操作，用于轨道机器人的MPC框架
-5. [Geometric Projection Particle Filtering under Model Uncertainty](/202607/21/2607.17781v1-geometric-projection-particle-filtering-under-model-uncertainty)  
+   evidence：面向漫游车导航的多模态地形图
+6. [AI-Augmented Model Predictive Control for Safe and Adaptive Rendezvous and Proximity Operations](/202607/22/2607.16630v1-ai-augmented-model-predictive-control-for-safe-and-adaptive-rendezvous-and-proximity-operations)  
    标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：面向模型不确定性的几何投影粒子滤波自主制导导航与控制
+   evidence：AI增强MPC用于自主交会接近操作
 
 ### 速读区论文标签
-1. [Residual-Certified Adaptive Tracking of Solution Manifolds in Parametric Dynamical Systems](/202607/21/2607.12351v1-residual-certified-adaptive-tracking-of-solution-manifolds-in-parametric-dynamical-systems)  
+1. [Geometric Projection Particle Filtering under Model Uncertainty](/202607/22/2607.17781v1-geometric-projection-particle-filtering-under-model-uncertainty)  
+   标签：评分：8.0/10、query:cislunar-dyn-nav
+   evidence：面向自主GNC系统中非线性状态估计的几何投影粒子滤波器
+2. [NGPS: GPS-Denied Aerial Geo-Localization and 2.5D Reconstruction via Deep Satellite Image Matching and Multi-Rate Sensor Fusion](/202607/22/2607.18936v1-ngps-gps-denied-aerial-geo-localization-and-25d-reconstruction-via-deep-satellite-image-matching-and-multi-rate-sensor-fusion)  
+   标签：评分：8.0/10、query:cislunar-dyn-nav
+   evidence：基于深度卫星图像匹配和多速率传感器融合的无GPS定位框架
+3. [WNOJ-LIO: A White-Noise-on-Jerk Motion-Prior EKF for High-Dynamic LiDAR-IMU Fusion](/202607/22/2607.13405v1-wnoj-lio-a-white-noise-on-jerk-motion-prior-ekf-for-high-dynamic-lidar-imu-fusion)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：参数动力系统解流形的自适应跟踪
-2. [Polynomial-Based Solutions to Targeting Problems for Onboard Applications](/202607/21/2607.15801v1-polynomial-based-solutions-to-targeting-problems-for-onboard-applications)  
+   evidence：用于自主导航的LiDAR-IMU融合EKF
+4. [STL-GCS: A Planner-Controller Framework for Signal Temporal Logic via Graphs of Time-varying Convex Sets](/202607/22/2607.19196v1-stl-gcs-a-planner-controller-framework-for-signal-temporal-logic-via-graphs-of-time-varying-convex-sets)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：多项式优化方法用于在轨轨迹瞄准
-3. [An augmented Lagrangian algorithm for constrained nonlinear least-squares](/202607/21/2607.11239v1-an-augmented-lagrangian-algorithm-for-constrained-nonlinear-least-squares)  
+   evidence：基于STL与凸集图的统一轨迹规划控制框架
+5. [Learning Forced Multibody Dynamics on Lie Groups](/202607/22/2607.12627v1-learning-forced-multibody-dynamics-on-lie-groups)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：用于轨迹优化的约束优化算法
-4. [Exact Solutions to a Class of Constrained Optimal Control Problems via Lossless Convexification for Digital Control](/202607/21/2607.12109v1-exact-solutions-to-a-class-of-constrained-optimal-control-problems-via-lossless-convexification-for-digital-control)  
+   evidence：学习李群上的受迫多体动力学用于动力学建模
+6. [AeroMap3D: Anchoring Monocular UAV 6-DoF Localization to Visual-Geometric-Semantic Map Priors](/202607/22/2607.14009v1-aeromap3d-anchoring-monocular-uav-6-dof-localization-to-visual-geometric-semantic-map-priors)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：无损凸化方法用于航天器最优控制
-5. [Learning Forced Multibody Dynamics on Lie Groups](/202607/21/2607.12627v1-learning-forced-multibody-dynamics-on-lie-groups)  
+   evidence：GNSS拒止环境下的单目无人机定位
+7. [Implicit Virtual Leader: Decentralized Vision-Only Relative Pose Estimation for Multi-Robot Formations](/202607/22/2607.15708v1-implicit-virtual-leader-decentralized-vision-only-relative-pose-estimation-for-multi-robot-formations)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：适用于三体问题的多体系统李群动力学学习方法
-6. [WNOJ-LIO: A White-Noise-on-Jerk Motion-Prior EKF for High-Dynamic LiDAR-IMU Fusion](/202607/21/2607.13405v1-wnoj-lio-a-white-noise-on-jerk-motion-prior-ekf-for-high-dynamic-lidar-imu-fusion)  
-   标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：面向自主导航的多传感器LiDAR-IMU融合
-7. [Hierarchical Three-Body Problem at High Eccentricities = Simple Pendulum, IV: Octupole for Librating Kozai-Lidov Cycles](/202607/21/2607.14226v1-hierarchical-three-body-problem-at-high-eccentricities--simple-pendulum-iv-octupole-for-librating-kozai-lidov-cycles)  
-   标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：层级三体问题与振动Kozai-Lidov周期
+   evidence：GPS拒止环境中多机器人编队的去中心化纯视觉相对位姿估计
 
 
 <div class="dpr-home-promo-card">
