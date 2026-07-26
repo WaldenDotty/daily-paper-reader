@@ -1,0 +1,340 @@
+Title: Dynamical and Optimization Trade-offs of Levi–Civita Coordinates for Learned Close-Encounter Dynamics
+
+URL Source: https://arxiv.org/pdf/2607.20235v1
+
+Published Time: Thu, 23 Jul 2026 01:15:36 GMT
+
+Number of Pages: 16
+
+Markdown Content:
+# Dynamical and Optimization Trade-offs of Levi–Civita Coordinates for Learned Close-Encounter Dynamics 
+
+Abhishek Shankar openproblem.ai 
+
+abhishek.shankar@openproblem.ai 
+
+ORCID: 0009-0002-6552-3622 
+
+Abstract 
+
+Classical regularization removes the binary-collision singularity from the Kepler problem, but its value as a representation for learned Hamiltonian dynamics has not been systematically isolated. We compare Cartesian and planar Levi–Civita formulations of a perturbed Kepler system with a smooth quadrupole potential. With the perturbation supplied analytically, a Levi–Civita Hamiltonian splitting holds the maximum relative energy error near 2 .1 × 10 −5
+
+through eccentricity e = 0 .99 (a discretization baseline converging as O(∆ s2), not a ceiling), while the Cartesian splitting becomes unstable. This advantage survives a matched-horizon, matched-budget control — at equal physical horizon T0 and equal force-evaluation count the regularized baseline is 3 × 10 −5, approximately 4 .7–8 .3 orders of magnitude below the Cartesian arm depending on eccentricity. In held-out high-eccentricity tests with matched physical-time sampling, the regularized models produce finite rollouts in 40 /40 runs versus 0 /40 for Cartesian — though in a fixed-shell formulation that supplies the regularized model with the exact initial orbit energy, an asymmetry we disclose but do not yet control, and though “survival” at these settings still carries O(1) energy error (survival, not accuracy). Four neural residual objectives fail to approach the analytic result. We trace this with exact-feature controls: the regular-ized residual is exactly a four-monomial degree-6 polynomial that a direct least-squares solve fits to the baseline, so the exact-feature gap is one of optimization geometry (severe raw-basis ill-conditioning that orthogonalization removes for L-BFGS in two iterations), not nonrepre-sentability. We therefore report a trade-off between dynamical/numerical conditioning, which regularization improves, and regression/optimization conditioning, which the raw transformed basis worsens. The separate small-MLP gap remains unexplained (a gauge-invariant variant does not close it). This is a controlled falsification-plus-trade-off study, not a solution to learned close-encounter dynamics. 
+
+# 1 Introduction 
+
+A physics-native model of gravitational dynamics aims to combine a neural parameterization of the interaction with structural guarantees — energy and momentum conservation, symplecticity — so that predictions remain physical over long horizons. The dominant design pattern is a Hamiltonian neural network (HNN) or Hamiltonian graph network whose scalar Hθ(q, p ) is differentiated to yield forces, integrated by a symplectic scheme. Most neural celestial-dynamics benchmarks we identified operate in physical Cartesian states or orbital-element representations rather than analytically reg-ularized Levi–Civita/Kustaanheimo–Stiefel phase space; HNN research does also include canonical generalized, latent, and learned coordinate systems. 1arXiv:2607.20235v1 [physics.comp-ph] 22 Jul 2026 Cartesian coordinates carry a structural liability that is specific to gravitation and absent from the pendulum/spring/molecular benchmarks the field grew up on: the two-body potential −μ/r 
+
+and its force −μ q/r 3 are singular at r → 0. Near a close encounter the force spans orders of magnitude over a short arc, which (i) makes the target ill-conditioned for a fixed-capacity network at a fixed training budget, and (ii) forces any fixed-step integrator to take prohibitively small steps or diverge. Classical celestial mechanics solved this a century ago by regularization : a coordinate and time transformation that removes the collision singularity analytically. In the planar Levi–Civita map 
+
+q = z2 (with z = u + iw ) together with the Sundman time transform dt = r ds , the Kepler problem becomes a harmonic oscillator in the fictitious time s [1, 2]. This is exact and classical. We are not aware of prior work that combines an analytic Levi–Civita Kepler core, a learned regularized residual potential, and symplectic splitting specifically to study neural close-encounter dynamics, though adjacent ideas exist: learned invertible coordinate transforms that enforce dynamics constraints in a transformed frame [12], and deep Koopman models of perturbed two-body and restricted three-body motion [13]. Our positioning claim is correspondingly narrow: we identify this specific combination — an analytic regularizing map with a learned smooth, nonsingular residual (over the sampled compact domain) and a close-encounter symplectic rollout — as the contribution, not the individual components. This paper asks the narrow, falsifiable question: what numerical benefit does Levi–Civita regular-ization provide to learned close-encounter models, and what optimization cost does the transformed residual introduce? The answer has several parts: the analytic architecture removes the numerical close-encounter instability (yes); the learned formulation improves bounded rollout survival but not accuracy; the raw transformed polynomial basis introduces an optimization cost that the controls attribute to raw-basis conditioning; and accurate neural residual learning remains unresolved. 
+
+Contributions. 
+
+1. We show that a gray-box separable Hamiltonian (analytic harmonic Kepler core + residual) with a symplectic integrator, in Levi–Civita coordinates, holds relative energy error at ∼2.1×
+
+10 −5 through e = 0 .99 while the Cartesian equivalent becomes numerically unstable; we show by a step-size sweep that this value is the N =400 discretization baseline converging as O(∆ s2), not an architectural ceiling. The advantage persists when both representations are integrated to the same physical horizon T0 with the same 400-step force-evaluation budget (Section 3). 2. In a controlled multi-seed ablation with time-step adaptivity held fixed, the regularized formu-lation produces a large high-eccentricity rollout-survival advantage under matched sampling and compute: the Cartesian formulation diverges in 40 /40 in-distribution high-e close encoun-ters, while the regularized formulation diverges in 0 /40 (Section 4). We flag that its fixed-shell construction additionally supplies the exact orbit energy, an information asymmetry we treat as a confound rather than a clean coordinate isolation. 3. We separate the exact-feature optimization gap from the unresolved neural approximation gap (Section 5). For the exact polynomial basis, the residual is a four-monomial degree-6 polynomial that a direct linear solve fits to the baseline; for the same underlying physical perturbation represented in the two coordinate systems, iterative optimizers reach the base-line in physical coordinates but the raw Levi–Civita basis is severely ill-conditioned and QR orthogonalization restores baseline fitting for L-BFGS in two iterations. Small tanh MLPs, however, remain at O(1) rollout error even after gauge symmetrization, and their failure re-mains open. The Levi–Civita transform therefore trades improved dynamical conditioning 
+
+2for worsened regression conditioning of this raw polynomial parameterization — the paper’s central finding — while the neural gap is left explicitly unexplained. 
+
+What we do not claim. We do not claim that regularized coordinates are a novel idea, that this is a working world model, or that the residual-learning gap is a fundamental bottleneck. The system is two-body-dominated with a fixed regularization chart and a smooth analytic perturbation; the orbit energy E entering the regularized Hamiltonian is computed analytically at the initial state (Section 2), so the learned experiments are not fully self-contained and the survival ablation carries an E-information confound (Section 4). We do not benchmark against production integrators (REBOUND/WHFast, IAS15, TRACE, chain regularization), which remain the correct tools for the forward problem, and we report a single conserved quantity (energy); trajectory-level metrics are left to future work. 
+
+# 2 Setup 
+
+We work with the planar perturbed Kepler problem in units μ = 1: 
+
+H(q, p ) = 12 ∥p∥2 − μ
+
+∥q∥ + Vpert (q), (1) with a smooth tidal-quadrupole perturbation Vpert (x, y ) = A (x2 − 12 y2), A = 0 .02. Its gradient 
+
+∇Vpert = (2 Ax, −Ay ) is smooth and bounded over the compact state domain sampled in our experiments (it grows linearly at large ∥q∥, but the bound orbits never reach that regime); crucially it is non-singular at r → 0, so the residual difficulty is not a singularity artifact. 
+
+Regularized coordinates. With z = u + iw , the Levi–Civita map is x = u2 − w2, y = 2 uw ,
+
+r = u2 + w2, and the Sundman transform dt = r ds . Writing P = 4 z′ for the conjugate momentum in s, the regularized (Poincar´ e) Hamiltonian on the energy shell H = E is Γ = ∥P ∥2
+
+8 + |E| (u2 + w2) − μ + Ures , Ures = r V pert , (2) which is separable : the Kepler part is an exact harmonic oscillator |E|(u2 +w2), and all perturbation content sits in Ures . The general fixed-shell Poincar´ e term is −E r ; all trajectories considered here are bound ( E < 0), so |E| = −E and the oscillator stiffness |E| > 0 is written with the absolute value for clarity. The map is completed by the canonical momentum transformation and its inverse, which we state explicitly so the experiment is reproducible without the code. With P = Pu + iP w
+
+the momentum conjugate to z = u + iw and p = ( px, p y) the physical momentum, and r = u2 + w2,
+
+Pu
+
+Pw
+
+
+
+= 2 
+
+ u w
+
+−w u
+
+  px
+
+py
+
+
+
+,
+
+px
+
+py
+
+
+
+= 12r
+
+u −ww u
+
+  Pu
+
+Pw
+
+
+
+, (3) equivalently P = 2¯ z p and p = zP/ (2 r) in complex form; the Sundman relation is dt/ds =
+
+r, integrated alongside the equations of motion, and initial conditions are chosen on the shell Γ( u0, w 0, P 0) = 0 by evaluating E analytically at the physical periapsis state and setting P0 = 2¯ z0p0.We verified these maps and the canonical initial conditions reconstruct the physical state to machine precision, and that on the pure Kepler problem at e = 0 .9 a fixed-step velocity-Verlet integration gives a maximum relative energy error of 1 .46 × 10 −7 in Levi–Civita coordinates versus 6 .16 × 10 −3
+
+in Cartesian — a factor of 4 .2×10 4 — with u(s) a pure sinusoid, confirming the harmonic reduction. 3Treatment of the orbit energy E. The regularized Hamiltonian (2) contains the orbit energy 
+
+E as the oscillator frequency parameter. Throughout, we compute E = H(q0, p 0) analytically at the initial state , including the analytic perturbation, and hold it fixed on the energy shell. This is a fixed-shell reduction, not the full extended-phase-space construction ( E = −pt), and it means E
+
+carries information a fully self-contained learned model would not have. We flag this as a scope limitation rather than a solved design choice; the cleaner extended-phase-space formulation is future work. 
+
+Gray-box decomposition. Following standard physics-informed practice, we do not learn grav-ity: the harmonic Kepler core in Eq. (2) is hardcoded and exact, and a network learns only the residual Ures . Because the network outputs a scalar potential and the force is its gradient, the force is curl-free by construction. Our analytic experiments (Table 1, Figure 1, exact-feature ladder) integrate the separable Eq. (2) with a fixed-∆ s symplectic St¨ ormer–Verlet splitting; the learned 
+
+2 × 2 ablation (Section 4) instead uses explicit RK4 for all arms, which is non-symplectic — we keep the two integrator choices distinct and label each where it is used. 
+
+Branch/gauge and metrics. The planar map q = z2 is 2:1 (( u, w ) ∼ (−u, −w)). We select the initial square-root branch by z0 = √q0 (principal branch) and continue it smoothly along each trajectory via np.unwrap (θ)/2 on the polar angle; the analytic residual (4) is gauge-invariant by construction, whereas a generic MLP is not (Section 5). Unless stated otherwise, “max |∆E/E |” is the maximum over the rollout of the relative physical-energy error |H(q, p ) − H0|/|H0|. We define survival operationally: a rollout survives if it reaches its prescribed numerical endpoint (the fixed step count over its prescribed horizon) without producing a non-finite state (NaN/Inf) and without 
+
+∥q∥ > 60 a; otherwise it is counted as diverged . This endpoint-based definition is unambiguous for the precessing perturbed trajectories, the 2 S0 fictitious-time arms, and rollouts whose s 7 → t(s)map is distorted by O(1) energy error; whether a physical periapsis return actually occurred is reported separately where relevant. “Fit residual” in Table 4 is the maximum absolute error of the fitted potential over the training samples. Multi-seed learned results report the median over seeds of the per-run max |∆E/E |.
+
+Protocol. We use two training grids. The learned-residual experiments (Sections 3, 5) train on 
+
+a ∈ { 0.7, 1.0, 1.3} × e ∈ { 0.90 , 0.93 , 0.96 } and are evaluated on held-out orbits up to e = 0 .99, so the highest-eccentricity test points are mild extrapolation beyond the training range. The in-distribution ablation (Section 4), designed specifically to remove that extrapolation confound, trains on the extended grid a ∈ { 0.7, 1.0, 1.3} × e ∈ { 0.90 , 0.93 , 0.96 , 0.99 } and tests on held-out orbits 
+
+interior to e ∈ [0 .90 , 0.99], so its generalization is interpolation. Networks are tanh MLPs (hidden width 32–48) trained with Adam; the analytic and exact-feature experiments (Sections 3, 5) use 
+
+N = 400 steps over the nominal LC horizon S0, while the learned 2 × 2 ablation (Table 2) uses 
+
+N = 200, with its s-arms spanning 2 S0 and its uniform-t arms spanning T0; all learned results are reported over 5–8 random seeds. The reported metric is the maximum relative energy error max t|H(t) − H0|/|H0| along the rollout. 
+
+# 3 The architecture result: a regularized discretization baseline 
+
+We first remove the learning question and ask what the architecture can do, using the analytic residual Ures = r V pert so that force error is zero. With a symplectic integrator on Eq. (2): 4Cartesian Levi–Civita Levi–Civita eccentricity e (horizon T0) (nominal S0, t≈0.8T0) (matched t=T0)0.915 1.44 2.0 × 10 −5 3.1 × 10 −5
+
+0.945 1.31 × 10 1 2.1 × 10 −5 3.2 × 10 −5
+
+0.975 2.2 × 10 2 2.1 × 10 −5 3.3 × 10 −5
+
+0.990 6.4 × 10 3 2.1 × 10 −5 3.3 × 10 −5
+
+Table 1: Maximum relative energy error, analytic residual, symplectic St¨ ormer–Verlet, N = 400 steps (equal force-evaluation budget across all three columns). Cartesian : N = 400 over the physical horizon 
+
+T0 = 2 πa 3/2. Levi–Civita (nominal) : N = 400 over the nominal fictitious horizon S0 = π/ p|E|/2, whose measured physical elapsed time is only t/T 0 ≈ 0.79–0 .81 once the perturbation is present. Levi–Civita (matched) : N = 400 over the fictitious endpoint S∗ chosen so t(S∗) = T0 (S∗/S 0 ≈ 1.24, i.e. slightly larger ∆s), the decisive equal-horizon and equal-budget control. The regularized formulation holds ∼(2–3) × 10 −5
+
+through e = 0 .99 under both horizon conventions, while the Cartesian arm degrades by orders of magnitude at the same budget and physical horizon. Symplecticity alone does not rescue Cartesian coordinates — fixed-step symplectic integrators still require vanishingly small steps near periapsis. Physical time is accumulated by trapezoidal quadrature of dt = r ds along the rollout. 
+
+The ∼10 −5 value is a discretization baseline, not a ceiling. The regularized Hamiltonian is integrated at a fixed step in fictitious time s (with dt = r ds ), so the relevant convergence is second-order in the fictitious-time step, O(∆ s2), equivalently O(N −2) for N steps per nominal Kepler horizon S0 (see “Fictitious-time horizon”). For pure Kepler, one physical orbit corresponds to s = π/ p|E|/2, half the lifted oscillator’s period, because the Levi–Civita map q = z2 identifies 
+
+z and −z with the same physical state (Section 2). For pure Kepler, S0 maps to one physical orbit; in the perturbed experiments N denotes steps over the explicitly stated fictitious-time horizon ( S0
+
+here), with the actual physical elapsed time reported separately ( t/T 0 ≈ 0.8; Section 2). A sweep at e = 0 .9 confirms the order (velocity-Verlet): max |∆E/E | = 3 .22 × 10 −4, 8.05 × 10 −5, 2.01 ×
+
+10 −5, 5.03 × 10 −6, 1.26 × 10 −6, 3.14 × 10 −7 for N = 100 , 200 , 400 , 800 , 1600 , 3200 (a factor ≈4 per doubling, log–log slope −2.00; Figure 4, left). The ∼2.1 × 10 −5 we quote at N = 400 (Table 1, measured at e = 0 .975–0 .99; the sweep gives 2 .01 × 10 −5 at e = 0 .9) is therefore a resolution-dependent discretization baseline at that step count, not an architectural limit: it falls ≈4× per step-count doubling with no plateau. We use “baseline” rather than “floor” throughout to avoid implying refinement stops helping — it does not — and ∼10 −5 at this step count is not by itself high-precision celestial propagation. Figure 1 also records a methodological point we had to debug: a residual potential trained to near-perfect value accuracy (MSE 5 × 10 −8) can still have 5% median (and 138% maximum) gradient 
+
+error, and the symplectic integrator faithfully integrates the wrong force. Potential-value accuracy alone is thus insufficient to ensure accurate forces or rollouts; derivative-aware (Sobolev) objectives are an important control but were not, on their own, sufficient here. 
+
+# 4 Rollout-survival advantage under matched sampling 
+
+A natural objection is that the advantage is really adaptive time-stepping (the Sundman clock concentrates steps at periapsis), which the recent neural-symplectic literature already provides by other means. We ran a 2 × 2 ablation over {Cartesian , Levi–Civita } × { uniform-t, Sundman-ds } at matched step budget N = 200 (Table 2). The cells differ in their state equations and step variable but not in the integrator: all four use the same explicit RK4 scheme (Section 2, “Integration 5Figure 1: Left: with the correct (analytic) force, the Levi–Civita gray-box is flat at ∼2 × 10 −5 to e = 0 .99 while the Cartesian rollout becomes numerically unstable (finite but catastrophic energy error, growing to   
+
+> O(10 3) at e= 0 .99; Table 1). Right: why value-trained residuals fail — tiny value error, large force (gradient) error.
+
+protocol”), so none is symplectic: using the same RK4 method removes integrator order and symplecticity as explanations, and the experiment compares the complete coordinate-and-clock formulations, including their different analytic cores and learned targets. The Cartesian arms integrate ˙q = p, ˙p = −μq/ ∥q∥3 − ∇ Uθ; the LC uniform-t arm re-expresses the lifted field in physical time via d/dt = (1 /r ) d/ds , which reintroduces the 1 /r scaling; and the LC Sundman-ds 
+
+arm advances the separable field of Eq. (2) in fictitious time (still with RK4, not a symplectic splitting). “Matched” means equal integrator, equal step count, and equal integrator output points across arms. The Levi–Civita formulation outperforms the Cartesian one even under a uniform physical-time clock (adaptivity removed), although this comparison still conflates the coordinate change, the analytic oscillator core, the altered learned target, and the oracle energy (Section 4, “E-information confound”); we do not attribute the effect to the coordinate change in isolation. The Sundman clock in a learned rollout did not help and could hurt. 
+
+Integration protocol and discrete maps. Each arm advances a fixed step count over its prescribed horizon: T0 = 2 πa 3/2 for the uniform-time arms and 2 S0 for the Sundman-time arms (Table 2 uses N = 200; the analytic experiments of Sections 3, 5 use N = 400 over S0). All four learned ablation arms use the same explicit classical fourth-order Runge–Kutta (RK4) integrator 
+
+— k1 = f (y), k2 = f (y + h 
+
+> 2
+
+k1), k3 = f (y + h 
+
+> 2
+
+k2), k4 = f (y + hk 3), y + = h 
+
+> 6
+
+(k1 + 2 k2 + 2 k3 +
+
+k4) — applied to each arm’s first-order vector field f with step h (∆ t for the uniform-t arms, ∆s for the Sundman-s arms). The vector fields differ by arm: Cartesian uniform-t uses ˙q =
+
+p, ˙p = −μq/r 3 − ∇ Uθ; LC Sundman-s uses the separable Γ field of Eq. (2) ( ˙ z = P/ 4, ˙P =
+
+−2|E|z − ∇ z Ures ); Cartesian Sundman-s uses q′ = r p, p ′ = r(−μq/r 3 − ∇ Uθ); and LC uniform-
+
+t uses ˙z = P/ 4r, ˙P = −r−1 2|E|z + ∇z Ures 
+
+, i.e. the physical-time re-expression of the same 
+
+lifted field as the Sundman-s arm (equivalently VLC ≡ | E|r + Ures , which retains the harmonic Kepler core, not only the residual). RK4 is fourth-order accurate but not symplectic for any arm (including LC-Sundman, whose separable Hamiltonian admits a symplectic splitting we do not use here), so this is a matched-order, matched-scheme, matched-step-count comparison in which no arm has an integrator-symplecticity advantage — the differences are not integrator-order or symplecticity artifacts, but reflect the complete coordinate-and-clock formulations (analytic cores, 6representation clock numerical scheme finite runs median max |∆E/E |
+
+Cartesian uniform t RK4 (4th-order, non-sympl.) 4/4 ≈ 25 Cartesian Sundman s RK4 (4th-order, non-sympl.) 0/4 diverged (all seeds) Levi–Civita uniform t RK4 (4th-order, non-sympl.) 4/4 ≈ 7.0Levi–Civita Sundman s RK4 (4th-order, non-sympl.) 4/4 ≈ 7.1                               
+
+> Table 2: Full 2 ×2 coordinate ×clock ablation, test orbit a= 1 .0, e = 0 .9 (periapsis start) — at the low edge of the training grid e∈ { 0.90 ,0.93 ,0.96 }, i.e. in-distribution , not OOD; 4 seeds per arm. All four arms use the same explicit RK4 integrator (Section 2, “Integration protocol”): a matched-order, matched-scheme comparison in which no arm has an integrator-symplecticity advantage. The differences are thus not integrator-order or symplecticity artifacts; they reflect the complete coordinate-and-clock formulations, including their analytic cores, learned targets, and oracle-Easymmetry (see “ E-information confound”). The
+> s-arms ran the full lifted oscillator period (2 S0) at N= 200 versus the nominal period for the uniform-tarms; because learned energy errors distort the s7→t(s) map, we do not interpret this as a matched or longer
+> physical horizon (Section 2, “Fictitious-time horizon”), and read the table as a boundedness comparison under the stated horizons. “Finite runs” counts seeds with a bounded rollout ( ∥q∥<60 a); the median is over finite runs. The finite-rollout advantage persists under both tested clocks, while neither learned LC arm achieves accurate energy conservation (medians ∼7, i.e. 700% energy error — survival, not accuracy). Central values are to two significant figures; the finite-run counts are the robust, seed-independent part of this result.
+
+learned targets, and oracle-E asymmetry included). RK4 uses four force evaluations per step. (The 
+
+analytic experiments of Table 1 and Figure 1 instead use a symplectic St¨ ormer–Verlet splitting of the separable Γ, which is where the O(∆ s2) discretization baseline is measured; the learned and analytic tracks therefore use different integrators, stated here to avoid conflation.) 
+
+Fictitious-time horizon. For the unperturbed Kepler problem, one physical orbit corresponds to s = S0 ≡ π/ p|E|/2 — half the lifted oscillator period 2 π/ p|E|/2 — because q = z2 makes 
+
+z and −z the same physical state, so the physical trajectory completes a full orbit in half an oscillator period. These are two different clocks: the fictitious-time horizon is S0 = 2 π√a, and integrating dt/ds = r over this interval yields the physical Kepler period T0 = 2 πa 3/2 for pure Kepler motion (verified numerically: the pure-Kepler physical state first returns at s = S0, with 
+
+t(S0) = T0). We use S0 as the nominal (unperturbed) Kepler horizon for the analytic experiments (Table 1, Figure 1, and the exact-feature ladder); all step counts N are steps over this nominal horizon. The half-period identity is exact only for pure Kepler. With the quadrupole perturbation (Ures ̸ = 0) the lifted motion is no longer a pure harmonic oscillator, so integrating to S0 need not correspond to exactly one completed physical orbit. We therefore report the actual physical elapsed time tend = R S0 
+
+> 0
+
+r ds (accumulated by trapezoidal quadrature of dt = r ds along the rollout) relative to the nominal period T0 = 2 πa 3/2: for the analytic LC gray-box at a = 1 , N = 400 we measure 
+
+tend /T 0 = 0 .81 , 0.80 , 0.79 , 0.79 at e = 0 .915 , 0.945 , 0.975 , 0.99 — i.e. the S0 horizon covers ∼80% of a nominal period once the perturbation is present. To settle the resulting fairness question — equal nominal N gives unequal physical horizon — we run the decisive equal-horizon, equal-budget 
+
+control: choose the fictitious endpoint S∗ with t(S∗) = T0 (S∗/S 0 ≈ 1.24), divide it into exactly 
+
+N = 400 fixed-∆ s steps, and compare against 400 Cartesian steps over T0. S∗ was determined offline by a high-resolution reference solve followed by bisection on the total fictitious interval until the trapezoidally accumulated t(S∗) matched T0; the equal-budget statement refers to the final compared rollouts, each containing 400 force-gradient evaluations after initialization (the offline calibration cost is excluded, and we match evaluation count, not FLOPs or wall time). At this 7matched physical horizon and matched force-evaluation budget the LC baseline is 3 .1–3 .3 × 10 −5
+
+(Table 1, third column) — slightly larger than the nominal 2 .1 × 10 −5 because the 24% longer fictitious interval means slightly larger ∆ s, but still approximately 4 .7–8 .3 orders of magnitude below the Cartesian arm at the same budget. The LC advantage is therefore not an artifact of physical-horizon or rollout force-evaluation accounting. The learned 2 × 2 ablation (Table 2) used the full lifted oscillator period (2 S0) for its s-arms at N = 200, against the nominal period for the uniform-t arms. Because the learned rollouts carry O(1) energy error, the mapping s 7 → t(s) = R rθ ds is itself distorted, so we do not claim this corresponds to a matched or longer physical duration; the s-arms simply use a longer nominal fictitious-time horizon, and Table 2 should be read as a boundedness comparison under the stated horizons, not a controlled equal-physical-time test. Energy error is evaluated at every integrator output point in the native clock (we report the per-run maximum, not an interpolation to matched physical times); because the two clocks place output points differently, the comparison is of bound-edness and worst-case energy drift, not of pointwise trajectory agreement — the latter requires the trajectory-level metrics we defer to future work. We then removed the out-of-distribution confound by training across e ∈ [0 .90 , 0.99] and test-ing on held-out interior orbits, over 8 seeds × 5 orbits (Figure 2): the Cartesian learned integrator diverged on all 40 runs; the Levi–Civita one on none . This is the strongest, most qualitative form of the result: the tested Cartesian models failed to approximate the near-periapsis field accurately enough to integrate through a high-eccentricity close encounter at the chosen capacity, data distri-bution and training budget, whereas the regularized network survives every time. The two arms are matched on physical-time sampling (of training observations, integrator output points, and force evaluations alike), network evaluations, parameter count, normalization and training exam-ples, and both use the same explicit RK4 integrator. This is a matched uniform-time comparison: the LC arm evolves the physical-time re-expression of the lifted regularized vector field (the first-order ODE system d/dt = (1 /r ) d/ds , integrated with fourth-order RK4), and the Cartesian arm its physical-coordinate counterpart; neither is the canonical fixed-∆ s symplectic rollout of Eq. (2). The advantage is therefore of the LC formulation under a matched clock, not of the coordinate change in isolation (it still conflates the oracle E, the analytic core, the transformed target, and the state representation; Section 4, “ E-information confound”). 
+
+Survival is much stronger than accuracy. We stress that this is a statement about rollout survival , not trajectory accuracy: many surviving LC rollouts carry relative energy errors of order 1–10 (Table 2), i.e. finite but physically poor. A bounded trajectory with 700% energy error demonstrates numerical survivability, not successful learned dynamics. We therefore do not claim the regularized learned model simulates close encounters accurately; the defensible headline is that regularization converts guaranteed Cartesian divergence into bounded (if inaccurate) motion. Trajectory-level metrics — position error at matched physical times, periapsis distance and timing error, orbital-phase and angular-momentum drift — are the right way to quantify accuracy and are left to future work; without them, “survival” should not be read as “accurate simulation.” 
+
+An E-information confound. We deliberately state the result as a survival advantage under matched sampling and compute , not as a clean isolation of the coordinate change. The regularized Hamiltonian (2) uses the exact orbit energy E as its oscillator-frequency parameter (Section 2), and the Cartesian arm receives no equivalent orbit-specific scalar. Across trajectories with varying a,that exact E carries substantial global information about each orbit, so the 40 /40 vs 0 /40 outcome conflates the coordinate transform, the exact Kepler-core structure, an orbit-specific oracle energy, 8the altered target and the altered numerical flow. Disentangling these requires giving the Cartesian arm the same E (or a learned/noisy estimate), or the extended-phase-space construction E = −pt;we have not run that control and flag it as the main threat to the coordinate reading of this section. Survival, moreover, is not accuracy — with a non-symplectic rollout the regularized model’s error still grew with e (right panel), foreshadowing Section 5. 
+
+Figure 2: In-distribution ablation, matched clock. Left: Cartesian 0 /40 survival vs Levi–Civita 40 /40. Right: at fixed a = 1 .0 the surviving Levi–Civita error grows with e (grey boxes are the two off-a reference orbits, not part of the trend). 
+
+# 5 The exact-feature optimization gap is a basis-conditioning trade-off 
+
+The architecture reaches the discretization baseline with the analytic residual. Does a learned 
+
+residual? Across four neural schemes, no (Table 3, Figure 3): approach (Levi–Civita, symplectic) max |∆E/E | at e = 0 .975 analytic residual (discretization baseline, N =400) 2.1 × 10 −5
+
+learned, potential-value regression diverges learned, gradient/Sobolev matching 1.12 learned, balanced value+gradient 0.96 learned, physical potential + chain-rule force 11 .7
+
+Table 3: Every learned scheme plateaus at or above O(1) energy error, roughly five orders of magnitude short of the analytic-residual baseline (2 .1 × 10 −5). Gradient (Sobolev) training reduced force error from 5% median / 138% max to 0 .35% / 7 .4%, but this did not translate into low energy error. 
+
+Mechanism, partially characterized. Symplectic integrators do not exactly conserve the inte-grated Hamiltonian; by backward-error analysis they nearly conserve a modified (shadow) Hamil-tonian [3]. The true energy drift decomposes approximately as ∆ Htrue ≈ ∆( Htrue − Hθ) + ∆ Hnum  
+
+> θ
+
+,a model-error term plus a numerical (shadow) term. Empirically the along-trajectory variation of 9Figure 3: Four learned-residual schemes against the analytic-residual baseline. All plateau or diverge at 
+
+> O(1); the physical-potential chain-rule variant is the worst.
+
+the residual-potential error Uθ −Ures correlates with the observed energy error at ρ = 0 .94 (peak-to-peak value error ≈2.4 vs energy error ≈1.2), which is evidence — not proof of exclusive causation — that inaccurate potential differences between dynamically visited states dominate the gap. The learned force is the gradient of a scalar potential, hence curl-free by construction; the issue is not path-dependence but inaccurate potential differences. Among training variants, Sobolev/gradient matching reduced force error (median 5% → 0.35%) without fixing energy; a physical-coordinate parameterization with chain-rule force reconstruction (verified to 10 −17 ) did worse ; a uniform mul-tiplicative force bias in the analytic rollout produced only small energy error (0 .3% → 3 × 10 −4); and value re-weighting barely moved the plateau (1 .07 → 0.93). 
+
+Exact-feature control: representation vs. optimization. An exact-feature control separates representational capacity from optimization failure. In Levi–Civita coordinates the residual is 
+
+Ures = r V pert = A u6 − 3u4w2 − 3u2w4 + w6, (4) a four-monomial degree-6 polynomial (degree-2 in physical ( x, y )). A linear least-squares fit on exact degree-6 monomial features reproduces Ures to 9 × 10 −16 and its symplectic rollout reaches the discretization baseline (2 .1 × 10 −5 at e = 0 .975); a degree-2 fit in physical coordinates does the same. This control supports the internal consistency of the shell-initialization, reconstruction, force-conversion, and energy-evaluation components exercised by the experiment, while showing that the target is exactly representable. So the exact-feature gap is about optimization rather than representational capacity, and the symplectic rollout amplifies small potential-difference errors into 
+
+O(1) energy drift. 
+
+The optimization difficulty is coordinate-and-basis-induced conditioning. We separate two notions of conditioning: dynamical/numerical conditioning (smoothness and integrability of the near-encounter trajectory), which regularization improves , and regression/optimization condi-tioning (the geometry of fitting the residual in a given basis), which we now show it worsens . For 10 the same underlying physical perturbation in the two coordinate systems, the tested optimizers behave very differently (Table 4, Figure 4 right): 
+
+• Physical degree-2 basis ( κ(X) = 41): Adam and L-BFGS both reach the baseline (2 .1×10 −5), L-BFGS in 14 iterations. Iterative optimization is trivial here. 
+
+• Levi–Civita degree-6 basis ( κ(X) = 4 .7 × 10 5, κ(X⊤X) ≈ 2.2 × 10 11 ): L-BFGS runs 7813 iterations and still stalls at 1 .6 × 10 −3; raw-basis Adam (lr 10 −2, 2 × 10 4 it.) plateaus at 4.6 × 10 −3; the tanh-MLP is worst at ∼1.1. Column normalization (which only rescales columns, leaving the four monomials u6, u 4w2, u 2w4, w 6 nearly collinear) lowers κ to 1 .9 × 10 4
+
+but does not help (normalized-basis Adam plateaus at 2 .1 × 10 −2) — consistent with a highly correlated, not merely badly scaled, basis. 
+
+• Whitened Levi–Civita ( X = QR , optimize in the orthonormal Q basis): L-BFGS reaches the baseline in 2 iterations , so orthogonalization removes the raw-basis obstacle for the quasi-Newton optimizer. Adam reaches none of the baselines at any tested configuration (rollout 3.0 × 10 −3 at lr = 3 × 10 −3, 6k steps; 1 .0 × 10 −2 at lr = 10 −2, 2 × 10 4 steps), and both remain 
+
+≳100 × above the 2 .1 × 10 −5 baseline. Because matched-step gradient descent solves the whitened quadratic immediately (below), the remaining Adam behavior is optimizer-specific rather than a conditioning limitation; we do not diagnose it further. Write the whitened least-squares objective explicitly as 
+
+L(β) = 12n ∥Qβ − y∥22, ∇2L = 1 
+
+> n
+
+Q⊤Q = 1 
+
+> n
+
+I, (5) using Q⊤Q = I (∥Q⊤Q − I∥F = 9 × 10 −15 , verified) — a perfectly isotropic bowl with all Hessian eigenvalues equal to 1 /n and no ill-conditioned directions. The one-step convergence then becomes transparent rather than surprising: full-batch gradient descent from β = 0 with step η = n gives β1 = β⋆ exactly, and we verify a relative coefficient error ∥β1 − β⋆∥2/∥β⋆∥2 =9 × 10 −17 in one step. Since a single matched-step gradient-descent step already solves the whitened problem exactly, the objective is provably well-conditioned; Adam’s failure on it is therefore optimizer-specific and not a basis-conditioning effect. Tuned Adam does not reach the baseline at any tested rate ( ≳100 × above it); only L-BFGS and matched-step GD reach it exactly. We do not further diagnose the exact reason Adam fails on the well-conditioned objective. The exact-feature story thus narrows precisely: raw-basis conditioning explains the raw-vs-whitened 
+
+L-BFGS behavior; it does not explain Adam (which fails even on the provably well-conditioned whitened objective, for reasons we do not diagnose); and neither explains the MLP. Why does the transform raise conditioning? The mechanism is a degree count: a degree-d physical polynomial generically becomes a polynomial of degree at most 2 d under q = z2, and after multiplication by the Sundman factor r = |z|2 at most 2 d + 2 (cancellations can lower it). For the present quadratic perturbation ( d = 2) the resulting degree is exactly 6 (Eq. (4)), and the high-degree monomials 
+
+u6, u 4w2, u 2w4, w 6 are strongly correlated over the sampled trajectories — a mechanistic, not merely empirical, account of the trade-off. The conclusion is a trade-off , not an artifact and not a barrier: the nonlinear Levi–Civita transform that removes the collision singularity and stabilizes the high-eccentricity rollout simul-taneously raises the residual’s polynomial degree, so that under the sampled trajectories and the raw monomial basis the regression becomes severely ill-conditioned and the tested raw-basis it-erative configurations do not recover the least-squares solution; orthogonalization combined with L-BFGS or matched-step gradient descent does (exactly, to the baseline), while tuned Adam does 11 not reach it. We retract the earlier “fundamental bottleneck” claim: for the exact-feature problem the residual-learning difficulty is coordinate-and-basis-induced regression conditioning, addressable by preconditioning/whitening, not intrinsic nonrepresentability of the coordinates. 
+
+The small-MLP gap is separate and remains open. The exact-feature analysis explains the 
+
+polynomial optimizer gap; it does not establish that the O(1) tanh-MLP rollout error (Table 3) has the same cause. The MLP and the exact-feature model differ in more than conditioning: the MLP has redundant hidden-unit symmetries and a nonconvex loss, can fit values well while producing poor derivatives, and lacks two inductive biases the exact basis has for free — the correct polynomial degree and the planar-LC gauge symmetry U (−u, −w) = U (u, w ) (the map 
+
+q = z2 is 2:1). We tested whether supplying the gauge symmetry helps, using a symmetrized head 
+
+U inv  
+
+> θ
+
+(z) = 12 [fθ(z) + fθ(−z)]: across seeds it did not close the gap (median rollout O(1), comparable to the plain MLP), so the MLP failure is not explained by the missing gauge invariance alone. Whether preconditioning, a richer architecture, or derivative-space training closes the MLP gap is unresolved and is the main open question left by this study. 
+
+basis ( κ(X)) solver fit resid. rollout |∆E/E |, e=0 .975 physical deg-2 (41) lstsq 7 × 10 −17 2.1 × 10 −5
+
+physical deg-2 (41) Adam 6 × 10 −10 2.1 × 10 −5
+
+physical deg-2 (41) L-BFGS (14 it.) 9 × 10 −11 2.1 × 10 −5
+
+LC deg-6 (4 .7 × 10 5) lstsq 9 × 10 −16 2.1 × 10 −5
+
+LC deg-6 (4 .7 × 10 5) L-BFGS (7813 it.) 1.7 × 10 −5 1.6 × 10 −3
+
+LC deg-6 (4 .7 × 10 5) Adam (lr 10 −2, 2 ×10 4 it.) 3.8 × 10 −5 4.6 × 10 −3
+
+LC deg-6 (col.-normalized, 1 .9 × 10 4) Adam (lr 10 −2, 2 ×10 4 it.) 3.5 × 10 −4 2.1 × 10 −2
+
+LC deg-6 whitened ( X=QR ) L-BFGS (2 it.) 5.7 × 10 −15 2.1 × 10 −5
+
+LC deg-6 whitened ( X=QR ) GD, η=n (1 step) 6.0 × 10 −15 2.1 × 10 −5
+
+LC deg-6 whitened ( X=QR ) Adam (lr 3 ×10 −3, 6k it.) 1.8 × 10 −5 3.0 × 10 −3
+
+LC deg-6 whitened ( X=QR ) Adam (lr 10 −2, 2 ×10 4 it.) 5.9 × 10 −5 1.0 × 10 −2
+
+LC (tanh-MLP, Table 3) Adam — ∼1.1
+
+Table 4: Exact-feature control ladder (rollout at e=0 .975, nominal Kepler horizon S0, N = 400). The residual is exactly representable in both coordinate systems, so a direct least-squares solve reaches the discretization baseline 2 .1 × 10 −5 everywhere. Iterative optimizers reach the baseline in physical coordinates (κ = 41) but stall in the raw Levi–Civita basis ( κ = 4 .7 × 10 5, κ(X⊤X) ≈ 2.2 × 10 11 ); column normalization does not help, but orthogonalizing (whitening) the LC basis makes the objective isotropic ( ∥Q⊤Q − I∥ =9 × 10 −15 ). On the whitened basis, L-BFGS reaches the baseline in two iterations and full-batch gradient descent at the matched step η = n reaches it in a single step (relative coefficient error 9 × 10 −17 ); Adam does not reach the baseline at any tested rate (rollout 3 .0 × 10 −3 at lr 3 × 10 −3 and 1 .0 × 10 −2 at lr 10 −2,both ≳100 × above baseline), confirming that the residual Adam gap is optimizer-specific on an already well-conditioned objective (matched-step GD solves it in one step), not basis conditioning (which GD and L-BFGS show is fully removed by whitening); we do not diagnose the Adam failure further. The exact-feature difficulty is thus coordinate-and-basis-induced regression conditioning, not nonrepresentability; the small-MLP failure (last row) is separate and unresolved. 
+
+Whitening is train-only (no test leakage). The whitening transform is built from training 
+
+samples alone: we factor the training design matrix X = QR and define the transformed analytic feature map eϕ(z)⊤ = ϕ(z)⊤R−1, so that eX = XR −1 = Q. Because R−1 is applied to the ana-lytic feature vector, the whitened potential and its derivatives are evaluated and differentiated at arbitrary rollout states off the training grid; no test-trajectory samples enter the construction of R.12 Figure 4: Left: the ∼2 × 10 −5 value is a discretization baseline converging as O(∆ s2) (fictitious-time step), not a ceiling. Right: the conditioning trade-off — for the same physical perturbation in the two coordinate systems, iterative optimizers reach the baseline in the well-conditioned physical basis ( κ = 41) but stall in the ill-conditioned Levi–Civita basis ( κ = 4 .7 × 10 5); whitening the LC basis restores baseline-level fitting for L-BFGS (two iterations). 
+
+# 6 Related work (positioning) 
+
+The components here are individually classical or published. Regularization of the Kepler collision singularity (Levi–Civita [1]; Kustaanheimo–Stiefel [2]) and its use in N -body codes (chain regu-larization, algorithmic/AR regularization) are foundational celestial mechanics; the chain [9] and algorithmic/AR [10] regularizations extend it to N -body hierarchies. Hamiltonian and symplectic networks (HNN [4]; Hamiltonian graph networks [5]; SympNets [6]), equivariant message passing (EGNN [11]), gray-box/residual physics-informed learning, and learned coordinate transforms for HNNs are all published; the last is closest to us: [12] learns an invertible map into coordinates where Hamiltonian-style dynamics constraints are imposed, and [13] applies deep Koopman learning to perturbed two-body and restricted three-body motion. We differ in using the analytic Levi–Civita map (no learned transform) with a learned scalar residual and a close-encounter symplectic rollout. Two recent works from 2025–2026 are the closest adjacent prior art for our individual compo-nents: NNPT [14] learns residual corrections after analytically subtracting an exact solution in a gravitational three-body setting (the analytic-core-plus-learned-residual idea, but without Levi– Civita coordinates, a scalar Hamiltonian residual, or regularized close-encounter integration), and ATLAS-NN [15] learns a nonlinear temporal reparameterization for HNNs (learned time warping, in contrast to our analytic Sundman regularization). Residual learning around an analytic Ke-pler solution and learned temporal reparameterization have thus both appeared independently; we study their celestial-regularization analogue through an analytic LC lift, a scalar regularized Hamil-tonian residual, and close-encounter rollout. The recent neural-symplectic line — time-adaptive H´ enonNets [7] and related architectures — is restricted to separable Hamiltonians and adds learned 
+
+time-adaptivity, whereas nonseparable symplectic networks [8] handle nonseparable H through an augmented phase space; regularization instead supplies both a separable (harmonic) core and canon-ical adaptivity classically. To our knowledge the specific combination studied here — an analytic 
+
+Levi–Civita map, a learned smooth, nonsingular scalar residual on the regularized energy shell (bounded over the sampled compact domain), and a close-encounter symplectic rollout — has not been reported; we claim novelty for that combination, not for any component in isolation. 13 7 Limitations 
+
+(0) Scope of “close encounter.” We study high-eccentricity periapsis passage in a two-body-dominated central potential — near-collision perturbed Kepler dynamics . We do not treat com-peting pairs, binary exchange, close passage between independently moving massive bodies, or chart selection; the title’s “close-encounter” should be read in this restricted sense. (1) Two-body-dominated, single fixed regularization chart; the multi-body case requires chart selection (chain regularization) that does not compose trivially with a fixed graph and is untested here. (2) A sin-gle smooth analytic perturbation; singular perturbations (e.g. ∝ 1/r 2) are only partially softened by regularization and behaved worse in our tests. (3) No benchmark against production integra-tors; the claim is representational, not a forward-problem speed/accuracy claim. (4) We report a single conserved quantity (energy); trajectory-level metrics (position/momentum error, periap-sis distance and time, orbital-phase and angular-momentum error) would strengthen the survival claim and are left to future work. (5) The orbit energy E is supplied analytically on a fixed shell (Section 2), so the learned experiments are not fully self-contained; the extended-phase-space for-mulation ( E = −pt) is the right fix. (6) The optimization/conditioning diagnosis is established for polynomial bases; whether preconditioning or quasi-Newton optimization closes the MLP gap, and whether the conditioning story survives richer perturbations, are the immediate follow-ups. 
+
+# 8 Conclusion 
+
+In this planar perturbed-Kepler benchmark, the Levi–Civita formulation greatly improves high-eccentricity rollout survival at a fixed evaluation budget (40 /40 vs 0 /40) and allows an ana-lytic residual to attain the expected second-order discretization baseline in the fictitious-time step (O(∆ s2), ∼2 × 10 −5 at N = 400) through e = 0 .99, where the Cartesian formulation becomes numerically unstable. The transformed residual is exactly sparse and polynomial (Eq. (4)), ruling out intrinsic nonrepresentability. However, the same transformation produces a highly correlated degree-6 regression problem on the sampled trajectories ( κ(X) ≈ 4.7 × 10 5), and the tested raw-basis LC optimization configurations fail to recover the direct least-squares solution — whereas they recover it easily in physical coordinates ( κ = 41), and whitening the Levi–Civita basis restores baseline-level fitting in two iterations. These findings expose a trade-off between two distinct notions of conditioning — dynamical/numerical conditioning of the rollout, which regularization improves, and regression/optimization conditioning of the residual fit, which the transformed raw feature parameterization worsens in this benchmark — rather than a fundamental barrier or a com-plete solution to learned close-encounter dynamics. The practical implication is scoped to what we tested: for residuals represented in an explicit transformed polynomial basis, orthogonalization with a direct or quasi-Newton solver removes the severe basis-conditioning effect (it fixed L-BFGS; it did not make Adam reach the baseline under the tested configurations, and that Adam behavior is a separate optimizer-level issue on an already well-conditioned objective). Whether analogous preconditioning improves neural residual models — which remained at O(1) here — is open. 
+
+Reproducibility. All results are from self-contained numerical experiments (NumPy/JAX, dou-ble precision). The perturbed Kepler dynamics, Levi–Civita transform, canonical initial conditions, symplectic integrators, treatment of E, and all training and control schemes are as specified in Sec-tions 2–5; per-experiment training grids are stated in the Protocol paragraph of Section 2. Key settings used here: MLP residuals are two hidden layers of width 32–64 with tanh activation; training uses full-batch Adam (learning rate 3 × 10 −3, β1=0 .9, β 2=0 .999 , ϵ =10 −8) for 6000 steps; 14 training data are 300 points sampled uniformly in fictitious time over the nominal LC horizon 
+
+S0 for each training orbit on the stated ( a, e ) grid (3600 samples); multi-seed results use seeds 0–7. The analytic and exact-feature experiments use N = 400 steps over the nominal one-orbit LC horizon S0 = π/ p|E|/2; the Table 2 s-arms use N = 200 over the full lifted oscillator pe-riod 2 S0 (nominally two pure-Kepler periods), and the uniform-t arms N = 200 over the nominal Kepler period T0 = 2 πa 3/2; measured physical elapsed times tend /T 0 are reported in Section 4, under “Fictitious-time horizon.” The matched-horizon control in Table 1 uses N = 400 over the calibrated endpoint S∗ with t(S∗) = T0. Polynomial-basis controls use NumPy lstsq , SciPy L-BFGS-B, and the full-batch GD/Adam runs reported in Section 5. Because the whitened-Adam behavior is hyperparameter-sensitive, the exact optimizer schedules, stopping tolerances, batch handling, seed-level tables, and a pinned code repository will accompany submission — until then, the whitened-basis result should be read as an optimizer diagnostic rather than a tuned benchmark. 
+
+# References 
+
+[1] T. Levi-Civita. Sur la r´ egularisation du probl` eme des trois corps. Acta Mathematica , 42:99–144, 1920. [2] E. L. Stiefel and G. Scheifele. Linear and Regular Celestial Mechanics . Springer, 1971. (Kustaanheimo–Stiefel regularization.) [3] E. Hairer, C. Lubich, and G. Wanner. Geometric Numerical Integration: Structure-Preserving Algorithms for Ordinary Differential Equations . Springer, 2nd edition, 2006. (Backward-error / shadow-Hamiltonian analysis.) [4] S. Greydanus, M. Dzamba, and J. Yosinski. Hamiltonian Neural Networks. NeurIPS , 2019. [5] A. Sanchez-Gonzalez, V. Bapst, K. Cranmer, and P. Battaglia. Hamiltonian Graph Networks with ODE Integrators. arXiv:1909.12790 , 2019. [6] P. Jin, Z. Zhang, A. Zhu, Y. Tang, and G. E. Karniadakis. SympNets: Intrinsic structure-preserving symplectic networks for identifying Hamiltonian systems. Neural Networks , 132:166– 179, 2020 (arXiv:2001.03750). [7] K. Janik and P. Benner. Time-adaptive H´ enonNets for separable Hamiltonian systems. 
+
+arXiv:2509.20212 , 2025. [8] S. Xiong, Y. Tong, X. He, S. Yang, C. Yang, and B. Zhu. Nonseparable Symplectic Neural Networks. ICLR , 2021 (arXiv:2010.12636). [9] S. Mikkola and S. J. Aarseth. An implementation of N -body chain regularization. Celestial Mechanics and Dynamical Astronomy , 57:439–459, 1993. [10] S. Mikkola and D. Merritt. Implementing few-body algorithmic regularization with post-Newtonian terms. The Astronomical Journal , 135:2398–2405, 2008. [11] V. G. Satorras, E. Hoogeboom, and M. Welling. E(n) Equivariant Graph Neural Networks. 
+
+ICML , 2021. [12] Y. H. Lim and M. F. Kasim. Unifying physical systems’ inductive biases in neural ODE using dynamics constraints. arXiv:2208.02632 , 2022. 15 [13] G. Nehma, M. Tiwari, and M. Lingam. Deep Learning Based Dynamics Identification and Linearization of Orbital Problems using Koopman Theory. arXiv:2403.08965 , 2024. [14] Z. Chen, M. Shen, B. Fain, and Z. Nussinov. Neural Network Perturbation Theory (NNPT): Learning Residual Corrections from Exact Solutions. arXiv:2512.01558 (physics.comp-ph), 2025. [15] C. Mou, D. Xu, X. Zuo, K. Liu, and Y. Zhang. ATLAS-NN: Adaptive Transfer Learnable Symplectic-aware Neural Network for Long-Time Hamiltonian Dynamics. arXiv:2606.04447 (physics.comp-ph), 2026. [16] H. Rein and D. S. Spiegel. IAS15: a fast, adaptive, high-order integrator for gravitational dynamics. MNRAS , 446:1424–1437, 2015. 16
