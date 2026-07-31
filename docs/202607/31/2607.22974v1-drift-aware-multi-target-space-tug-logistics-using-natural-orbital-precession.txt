@@ -1,0 +1,857 @@
+Title: Drift-Aware Multi-Target Space Tug Logistics Using Natural Orbital Precession
+
+URL Source: https://arxiv.org/pdf/2607.22974v1
+
+Published Time: Tue, 28 Jul 2026 00:20:48 GMT
+
+Number of Pages: 16
+
+Markdown Content:
+## Drift-Aware Multi-Target Space Tug Logistics Using Natural Orbital Precession 
+
+Omer Burak Iskender 1,* , Leonard Felicetti 2, Kaan Gokturk 3, David Tellett 4, Adam Baker 41 Nanyang Technological University, Singapore. E-mail: iske0001@e.ntu.edu.sg  
+
+> 2
+
+Cranfield University, United Kingdom. E-mail: leonard.felicetti@cranfield.ac.uk  
+
+> 3
+
+Istanbul Technical University, Türkiye. E-mail: gokturkk19@itu.edu.tr  
+
+> 4
+
+Magdrive Ltd, United Kingdom. E-mail: dtellett@magdrivespace.com, adam@magdrivespace.com  
+
+> *
+
+Corresponding author 
+
+Preprint of a paper accepted for presentation at the 77th International Astronautical Congress (IAC 2026), Antalya, Türkiye, 5–9 October 2026. 
+
+Abstract 
+
+Multi-rendezvous missions for active debris removal and in-orbit servicing incur prohibitive propellant costs when their targets differ in the orientation of their orbital planes, and classical mission design treats the nodal precession induced by Earth’s oblateness as a perturbation to be cancelled. This paper presents a drift-aware trajectory optimisation framework that instead exploits that precession as a mission-design resource, benchmarked against the published winning solution to the European Space Agency’s Kessler Run trajectory-optimisation competition as a trusted reference. Three methodological contributions are made. First, an enhanced drift orbit shapes the size, shape, and inclination of an intermediate orbit to tune the differential precession rate, substantially cheaper than the altitude-only designs of prior work in the Sun-synchronous regime, where inclination is the dominant lever. Second, a global per-leg time-budget optimiser makes explicit and resolves the coupling between drift-time allocation and downstream nodal geometry that defeats greedy allocation. Third, a sequence-recovery test independently re-derives a removal order consistent with the published reference from the debris catalogue alone. Applied to the full debris campaign on the published mission partition under the competition’s transfer-time rules, the framework closely matches the published benchmark cost using only analytical transfer models and minutes of single-core computation. A cross-validation anchored to a widely used flight-dynamics tool quantifies the fidelity limits of the analytic model and bounds the cost of literal execution, and the constructive nature of the algorithm supports rapid in-orbit replanning after a missed manoeuvre. 
+
+Keywords: multi-rendezvous trajectory, debris removal, RAAN drift, 𝐽 2 precession, GTOC9, set-cover backbone, space tug, drift orbit 
+
+# Nomenclature 
+
+D Target catalog {𝑑 1, . . . , 𝑑 𝑀 }
+
+𝑛, 𝑁 𝑖 Mission count; targets visited per mission 
+
+𝐽, 𝐶 𝑖 Total / per-mission cost (MEUR) 
+
+𝑐 𝑖 , 𝛼 Launch base cost; quadratic mass penalty 
+
+𝑚 𝑑𝑟 𝑦 , 𝑚 𝑝 , 𝑚 𝑑𝑒 Dry, propellant, deorbit-kit mass (kg) 
+
+𝐼 𝑠 𝑝 , 𝑔 0 Specific impulse; standard gravity 
+
+Δ𝑉 Impulsive velocity change (m/s) 
+
+𝜿 Keplerian element set {𝑎, 𝑒, 𝑖, Ω, 𝜔, 𝑀 }
+
+𝜇, 𝐽 2, 𝑟 𝑒𝑞 Earth grav. parameter, zonal harmonic, radius 
+
+𝑛 𝑜 , 𝑝 Mean motion √︁ 𝜇 /𝑎 3; semi-latus rectum 
+
+¤Ω, ¤𝜔 RAAN and AoP precession rates 
+
+𝑻 , 𝝈 Per-leg time-budget vector; target sequence 
+
+Δ𝑡 𝑤𝑎𝑖𝑡 , 𝑡 𝑤 Drift waiting time; dwell at each target 
+
+𝑎 𝑑 , 𝑒 𝑑 , 𝑖 𝑑 Drift-orbit semi-major axis, eccentricity, inclination 
+
+Δ𝑡 𝑅 , Δ𝑡 𝑀 Per-leg time cap; per-mission gap (GTOC9) 
+
+# Abbreviations 
+
+ACO Ant Colony Optimization 
+
+ADR Active Debris Removal 
+
+DE Differential Evolution 
+
+ESA European Space Agency 
+
+GMAT General Mission Analysis Tool 
+
+GTOC Global Trajectory Optimisation Competition 
+
+IOS In-Orbit Servicing 
+
+JPL Jet Propulsion Laboratory 
+
+LEO Low Earth Orbit 
+
+MEUR Million Euro 
+
+MJD2000 Modified Julian Date (epoch 2000-01-01) 
+
+NN Nearest Neighbour 
+
+NUDT National Univ. of Defense Technology 
+
+P-ACO Population-based ACO 
+
+RAAN Right Ascension of the Ascending Node 
+
+SCP Sequential Convex Programming 
+
+SNOPT Sparse Nonlinear Optimizer 
+
+SSO Sun-Synchronous Orbit 
+
+TSP Travelling Salesman Problem 
+
+1arXiv:2607.22974v1 [eess.SY] 25 Jul 2026 1 Introduction 
+
+The accelerating growth of orbital debris threatens long-term space sustainability. With over 36 000 tracked ob-jects [1] and the cascading-collision risk identified by Kessler [2], scalable active debris removal (ADR) is re-quired, and single-target missions are economically pro-hibitive at the necessary cadence. Multi-rendezvous ar-chitectures (a single spacecraft visiting many targets se-quentially) offer a path to cost effectiveness, but couple 
+
+N P -hard combinatorial sequencing [3] with continuous trajectory optimization under 𝐽 2-perturbed orbital mechan-ics. The 9th Global Trajectory Optimisation Competition (GTOC9) [4, 5] has become the canonical benchmark dataset for this class of problem and provides a con-trolled, fully-documented environment in which alterna-tive methods can be evaluated against published reference solutions. The published JPL solution [6] removed all 123 Sun-synchronous debris in 10 missions at a submit-ted competition score of 731.28 MEUR using a ∼290-million-row database of semi-analytic six-impulse 𝐽 2-drift-exploiting transfers, branch-and-bound sequencing, ant colony optimization [7], and SNOPT-based multiple-shooting refinement with up to ten impulses per revolu-tion [8]. Additional published reference solutions from NUDT [9] (786.21 MEUR, 12 missions), Tsinghua [10] (829.58 MEUR), DLR [11] (949.85 MEUR), and Strath-clyde [12] (918.98 MEUR, 14 launches, 6th of 69 entries, via beam search and a continuous “Time Shuffler” encod-ing of the campaign timeline) share a common structural observation: optimal debris sequences exhibit monoton-ically shifting RAAN, a “RAAN walk” [3], because 𝐽 2-induced precession yields differential drift rates of 0.2– 1.2 deg/day across the catalogue. We treat these published solutions, and JPL’s in particular, as trusted reference base-lines against which the analytical drift-aware framework developed below is benchmarked for methodological vali-dation. Rather than treating 𝐽 2 as a disturbance to be can-celled, the drift-aware paradigm exploits nodal precession as a propulsive substitute: small shape-changing maneu-vers ( ∼100 m/s) modify the local RAAN drift rate by 
+
+∼0.1 deg/day, and the required RAAN change accrues pas-sively during coasting. Three gaps remain. First , exist-ing drift orbit models vary only the semi-major axis 𝑎 𝑑 ,neglecting eccentricity and inclination, even though all three orbital elements appear in the 𝐽 2 rate equation (12) and in the SSO regime inclination dominates because 
+
+| cos 𝑖 | ≈ 0.14 at 𝑖 ≈ 98 ◦. Second , the sequence–timeline coupling , whereby each leg’s drift time shifts downstream RAAN geometry through accumulated elapsed time, has so far been treated only stochastically, discretely, locally, or in a decoupled second stage: JPL allocated time over a fixed sequence via a nearly-convex QP and evolved dis-crete per-edge time codes as genes of a genetic algo-rithm [6], NUDT’s hybrid-encoding GA jointly evolved integer sequences and real per-leg durations [9], Tsinghua refined arrival epochs by PSO only after freezing the se-quence [10], DLR redistributed leg times locally under a frozen per-mission total [11], and Strathclyde’s Time Shuf-fler re-encoded the campaign as a continuous vector of de-parture times searched by a memetic algorithm [12]; none provides a deterministic, global, continuous per-leg time allocation coupled to a closed-form analytic drift model. 
+
+Third , the relationship between the GTOC9 quadratic cost function and per-mission Δ𝑉 has not been systematically exploited. This paper makes three methodological contributions. First, an enhanced three-parameter drift orbit (C +) that simultaneously optimises (𝑎 𝑑 , 𝑒 𝑑 , 𝑖 𝑑 ) and reduces per-leg transfer Δ𝑉 by up to ∼40% on favorable moderate-gap legs relative to altitude-only designs (leg-dependent, and modest at the mission-sequence total; Sec. 4). Second, explicit treatment and resolution of the sequence–timeline coupling whereby each leg’s drift time shifts downstream RAAN geometry through accumulated elapsed time, which the two-phase global time-budget optimiser closes by up to an order of magnitude (Sec. 4). Third, a full-campaign GTOC9 validation in which JPL’s published mission par-tition is adopted as a controlled benchmark: applied to all 123 debris on this partition under the framework’s GTOC9-referenced per-leg cap (30 days on the transfer segment, with the 5-day dwell added separately, a reading up to five days more permissive than the strict arrival-to-arrival 
+
+Δ𝑡 𝑅 ; Sec. 2), the framework achieves 742.65 MEUR, re-maining within about one and a half percent ( +1.55% )of the published JPL reference, and matches or beats the published reference on three of the ten missions (Sec. 6). The set-cover problem of jointly discovering a mission partition and the per-mission sequences from scratch via a Beam P-ACO backbone [13] is the natural follow-on and is left to future work; this work intentionally isolates the trajectory-optimization layer from the combinatorial mission-partitioning problem by adopting JPL’s published partition purely as a controlled benchmark reference. The objective is methodological validation rather than compet-itive replication. This paper is the technical/astrodynamics conference summary of a larger body of work. Two companion pa-pers extend the present content. The full methodological development, the GMAT-anchored propagator benchmark, and a 6-scenario investigation of the per-leg time-budget coupling appear in the journal manuscript [14]. The com-mercial / operator-facing framing of the same methodology, packaged as the Space Postman mission-design platform and the ATLAS multi-purpose tug, appears in the com-panion IAC paper [15] in the IAF Businesses and Inno-vation Symposium. The complementary close-proximity rendezvous-and-docking problem has been treated thor-2oughly, both analytically and experimentally, in the au-thors’ prior work [16, 17]; the present paper focuses on the upstream multi-rendezvous sequencing and per-leg transfer-cost optimisation rather than the close-proximity terminal phase. 
+
+# 2 Problem Formulation 
+
+Let D = {𝑑 1, . . . , 𝑑 𝑀 } denote the target catalog of 𝑀 
+
+debris objects, each defined by an osculating Keplerian state 𝜿 𝑘 = {𝑡 0,𝑘 , 𝑎 𝑘 , 𝑒 𝑘 , 𝑖 𝑘 , Ω0,𝑘 , 𝜔 0,𝑘 , 𝑀 0,𝑘 } at reference epoch 𝑡 0,𝑘 . A multi-rendezvous mission visits an ordered subset 𝝈 = (𝑑 𝜎 1 , 𝑑 𝜎 2 , . . . , 𝑑 𝜎 𝑁 ) ⊆ D of 𝑁 targets within a per-leg transfer-time budget vector 𝑻 = (𝑇 1, . . . , 𝑇 𝑁 −1).A full GTOC9 campaign partitions D into 𝑛 such missions 
+
+{𝝈 (1) , . . . , 𝝈 (𝑛 ) } covering all 123 debris exactly once. 
+
+## 2.1 Decision variables 
+
+For each mission 𝑖 ∈ {1, . . . , 𝑛 } the planner chooses: (i) the visitation sequence 𝝈 (𝑖 ) , an 𝑁 𝑖 -permutation of its target subset; (ii) the per-leg time budgets 𝑻 (𝑖 ) ∈[𝑇 min , 𝑇 max ] 𝑁 𝑖 −1, where 𝑇 min ≥ 𝑡 𝑤 + 1 d (dwell-time floor) and 𝑇 max = Δ 𝑡 𝑅 (GTOC9 per-leg cap); (iii) the per-leg transfer method 𝑚 𝑘 ∈ { 𝐴, 𝐵, 𝐶, 𝐶 + } (Sec. 4) selecting be-tween direct combined plane change, natural-wait, single-parameter drift orbit, and three-parameter drift orbit; and (iv) the global mission start epoch 𝑡 (𝑖 ) 
+
+> 0
+
+, taken from JPL’s published schedule in this work. 
+
+## 2.2 Cost function (PF1) 
+
+Following the GTOC9 specification [5] the total campaign cost is 
+
+𝐽 =
+
+> 𝑛
+
+∑︁ 
+
+> 𝑖 =1
+
+𝐶 𝑖 =
+
+> 𝑛
+
+∑︁ 
+
+> 𝑖 =1
+
+ 𝑐 𝑖 + 𝛼 (𝑚 0,𝑖 − 𝑚 𝑑𝑟 𝑦 )2  , (1) where 𝐶 𝑖 is the per-mission cost in MEUR, 𝑐 𝑖 = 55 MEUR is the launch base cost, 𝛼 = 2 × 10 −6 MEUR/kg 2 penalises heavier spacecraft, 𝑚 𝑑𝑟 𝑦 = 2000 kg is the dry mass, and the initial mass is 
+
+𝑚 0,𝑖 = 𝑚 𝑑𝑟 𝑦 + 𝑁 𝑖 𝑚 𝑑𝑒 + 𝑚 𝑝,𝑖 , (2) with 𝑚 𝑑𝑒 = 30 kg the deorbit-kit mass and 𝑚 𝑝,𝑖 the propel-lant mass obtained from the inverse Tsiolkovsky relation 
+
+𝑚 𝑝,𝑖 = 𝑚 𝑓 ,𝑖 
+
+h
+
+exp 
+
+ Δ𝑉 𝑖  
+
+> 𝐼 𝑠 𝑝 𝑔 0
+
+
+
+− 1
+
+i
+
+, 𝐼 𝑠 𝑝 = 340 s. (3) The quadratic mass penalty in (1) couples Δ𝑉 to cost non-linearly, so a sequence with lower total Δ𝑉 does not necessarily minimise 𝐽 .
+
+## 2.3 Constraints 
+
+𝑇 𝑘 ≤ 𝑇 max , 𝑘 = 1, . . . , 𝑁 𝑖 − 1 (4) 
+
+𝜏 𝑖 +1 − 𝜏 𝑖 ≥ Δ𝑡 𝑀 (5) 
+
+𝝈 (𝑖 ) ∩ 𝝈 ( 𝑗 ) = ∅, ∀ 𝑖 ≠ 𝑗 (6) 
+
+> 𝑛
+
+Ø
+
+> 𝑖 =1
+
+𝝈 (𝑖 ) = D (7) 
+
+𝑚 𝑝,𝑖 ≤ 𝑚 𝑝, max (8) 
+
+𝜏 𝑖 ∈ [ 𝑡 min , 𝑡 max ] (9) Equation (4) is the per-leg transfer-time cap, 𝜏 𝑖 in (5) is the start epoch of mission 𝑖 and the inequality enforces the mandatory inter-mission gap, 𝑡 𝑤 is the dwell at each tar-get (subsumed into the per-leg accounting), (6)–(7) make the mission partition a disjoint and complete cover of D,(8) is the single-launch propellant-tank capacity from the GTOC9 spacecraft model [5], and (9) is the benchmark mission timeline. A convention note on (4) is required for reproducibility. GTOC9 measures the per-leg cap Δ𝑡 𝑅 
+
+arrival-to-arrival : the mandatory ≥5-day dwell at the de-parted target sits inside the 30-day budget, so the effective transfer window under the strict competition reading is at most 25 days per leg [5]. The runs labelled GTOC9-compliant in this paper apply the 30-day cap to the trans-fer segment itself, with the dwell added separately in the elapsed-time propagation; this reading admits up to five more days per leg (up to 35 days arrival-to-arrival) than the strict arrival-to-arrival convention, and is therefore 
+
+more permissive than the competition rule. Conversely, JPL’s transfer database was restricted to transfers of at most 25 days by construction [6], so the ≤30-day opti-miser used here searches a slightly larger per-leg feasible set than the reference solution it is compared against. As the conservative counterpart, a strictly arrival-to-arrival compliant re-run that caps the transfer segment at 25 days raises the Mission-10 globally-optimised cost to 1 525 m/s (+7.2% against the JPL reference), which we quote as the conservative figure alongside the more permissive 30-day-transfer values reported below. Numerical values for 
+
+𝑇 max , Δ𝑡 𝑀 , 𝑡 𝑤 , 𝑚 𝑝, max , 𝑚 𝑑𝑟 𝑦 , 𝑚 𝑑𝑒 , 𝐼 𝑠 𝑝 , 𝑐 𝑖 , 𝛼 , and the epoch window [𝑡 min , 𝑡 max ] are summarised in Table 1. 
+
+## 2.4 Reduced problem and scope 
+
+Combining (1)–(9) the joint set-cover and trajectory-optimisation problem is 
+
+min       
+
+> {𝝈 (𝑖 ),𝑻 (𝑖 ),𝑚 (𝑖 )
+> 𝑘 , 𝜏 𝑖 }
+
+𝐽 [ Eq. (1) ] s.t. (4)–(9) ,
+
+transfer dynamics of Sec. 3 . (10) Problem (10) is N P -hard [5]: the disjoint set-cover sub-problem (6),(7) contains as a special case one of Karp’s 3Table 1: Problem-formulation parameters (GTOC9 speci-fication [5]).                                       
+
+> Symbol Quantity Value
+> Time constraints
+> 𝑇 max Per-leg transfer-time cap 30 d
+> Δ𝑡 𝑀 Minimum inter-mission gap 30 d
+> 𝑡 𝑤 Dwell at each target ≥5 d
+> [𝑡 min , 𝑡 max ]Epoch window (MJD2000) [23467 ,26419 ]
+> Spacecraft model
+> 𝑚 𝑑𝑟 𝑦 Dry mass 2000 kg
+> 𝑚 𝑝, max Propellant-tank capacity 5000 kg
+> 𝑚 𝑑𝑒 Per-debris de-orbit-kit mass 30 kg
+> 𝐼 𝑠 𝑝 Specific impulse 340 s
+> 𝑔 0Standard gravity 9.80665 m/s 2
+> Cost model
+> 𝑐 𝑖 Base launch cost per mission 45–55 MEUR (55 used)
+> 𝛼 Quadratic mass penalty 2×10 −6MEUR/kg 2
+> Earth / dynamics
+> 𝜇 Gravitational parameter 398 ,600 .4418 ×10 9m3/s 2
+> 𝐽 2Second zonal harmonic 1.08262668 ×10 −3
+> 𝑟 𝑒𝑞 Equatorial radius 6,378 ,137 m
+
+21 N P -complete problems [18], and the per-leg trajectory sub-problem under (4) is itself a non-convex continuous program. The present paper adopts JPL’s published parti-tion {𝝈 (𝑖 ) } as a controlled benchmark reference to isolate the trajectory-optimization contribution (decisions (ii),(iii) above) from the orthogonal combinatorial set-cover deci-sion, leaving joint set-cover discovery to the journal com-panion [14] and a Beam-P-ACO follow-on [13]. 
+
+## 2.5 Auxiliary objective (PF2) 
+
+An auxiliary Δ𝑉 -only objective decouples the trajectory optimisation from the mass model: 
+
+Δ𝑉 total =
+
+> 𝑛
+
+∑︁  
+
+> 𝑖 =1
+> 𝑁 𝑖 −1
+
+∑︁ 
+
+> 𝑘 =1
+
+Δ𝑉 ∗
+
+> 𝑘
+
+
+
+𝑑 𝜎 𝑘 , 𝑑 𝜎 𝑘 +1 , 𝑡 (𝑘 ) 
+
+> elapsed
+
+(𝑻 )
+
+
+
+, (11) where Δ𝑉 ∗ 
+
+> 𝑘
+
+is the cheapest of methods {𝐴, 𝐵, 𝐶, 𝐶 + } for leg 
+
+𝑘 at elapsed time 𝑡 (𝑘 )
+
+> elapsed
+
+. PF2 enables direct comparison with Δ𝑉 -only literature results that do not report mission cost. The framework reports results under both PF1 and PF2 in Sec. 6. 
+
+## 2.6 Role of secular precession in the cost 
+
+Both PF1 and PF2 depend on Δ𝑉 𝑖 (𝑻 , 𝒎 ), and through it on the inter-target RAAN gap at elapsed time. The 𝐽 2-induced secular precession rate ¤Ω(𝑎, 𝑒, 𝑖 ) = − 32 𝐽 2 (𝑟 𝑒𝑞 /𝑝 )2𝑛 𝑜 cos 𝑖 
+
+(derived in Sec. 3) enters the formulation in two places. First, the differential rate ¤Ω𝑡𝑔𝑡 − ¤ Ω𝑠𝑟 𝑐 of the source/target pair closes the inter-target RAAN gap passively as the elapsed time accumulates; this is what makes the wait-for-drift method B cheaper than the direct plane change A for any non-zero allowed transfer time. Second, the three-parameter drift orbit 𝐶 + chooses an intermediate orbit 
+
+(𝑎 𝑑 , 𝑒 𝑑 , 𝑖 𝑑 ) ≠ (𝑎 𝑠𝑟 𝑐 , 𝑒 𝑠𝑟 𝑐 , 𝑖 𝑠𝑟 𝑐 ) with a deliberately differ-ent ¤Ω, so the gap-closing rate is amplified , typically by a factor of three to five for a few tens of m/s of (𝑎 𝑑 , 𝑒 𝑑 , 𝑖 𝑑 ) in-sertion overhead (Sec. 4). In the SSO regime | cos 𝑖 | ≈ 0.14 
+
+at 𝑖 ≈ 98 ◦, so a 2 ◦ change in 𝑖 𝑑 alters | cos 𝑖 | by ∼25%, against ∼4% per 200 km altitude change [14]; the inclina-tion knob is therefore the dominant lever, and ¤Ω is exploited as a resource rather than cancelled as a disturbance. The argument-of-perigee rate ¤𝜔 = 
+
+> 34
+
+𝐽 2 (𝑟 𝑒𝑞 /𝑝 )2𝑛 𝑜 (5 cos 2 𝑖 − 1) is reported alongside ¤Ω
+
+in the dynamics but is not propagated through the transfer-cost model, consistent with the GTOC9 specification’s explicit waiver of the velocity contribution of ¤Ω and ¤𝜔 [5]; the consequences of that simplification are characterised against numerical 𝐽 2 truth in Sec. 6.4 and the journal companion [14]. 
+
+## 2.7 Problem class and solver 
+
+The full design problem (10) is a non-convex, non-separable mixed-integer programme: continuous time-budget vectors 𝑻 , discrete method assignments 𝒎 , dis-crete sequences 𝝈 , and integer mission counts 𝑛 enter a quadratic-mass cost through an exponential propellant relation (3). The N P -hard set-cover sub-problem (6)– (7) is fixed to JPL’s published partition in this paper, reducing the residual problem to the per-mission mixed-integer programme (decision vectors 𝑻 , 𝒎 ; the per-leg time-budget vector and the discrete method labels) of Sec. 4.3; the formal statement is in the journal com-panion [14]. The per-mission MIP is non-convex (in 
+
+𝑻 because of the gap-modulated transfer cost) and non-separable (each 𝑇 𝑗 shifts the elapsed time on every down-stream leg). It is not amenable to gradient-based or convex-relaxation solvers, so a two-phase metaheuristic is used: Differential Evolution [19] (SciPy scipy.optimize. differential_evolution , population 20, 𝐹 = 0.5,
+
+𝐶 𝑅 = 0.7, ≤100 generations, fixed seed 42) on the 
+
+{𝐴, 𝐵 } relaxation for speed, followed by a deterministic coordinate-descent refinement over a discrete 𝑇 𝑘 grid with the full method catalog {𝐴, 𝐵, 𝐶, 𝐶 + } available (Sec. 4.3). For target sequencing within a mission, a greedy nearest-neighbour construction followed by 2-opt local search is used; the Beam P-ACO sequencer [13] is invoked only when the partition is to be discovered jointly. All optimi-sation runs single-core on a laptop-class CPU: ∼27 minutes for the full 123-debris campaign, underscoring the compu-tational accessibility of the analytical formulation. 43 Orbital Dynamics and Drift Ex-ploitation 
+
+## 3.1 𝐽 2-Perturbed Secular Precession 
+
+Between maneuvers, the spacecraft and debris evolve un-der Keplerian dynamics perturbed by Earth’s 𝐽 2 harmonic. The secular precession rates of the ascending node and argument of perigee are [5]: 
+
+¤Ω = − 32 𝐽 2
+
+ 𝑟 𝑒𝑞 
+
+𝑝 
+
+2
+
+𝑛 𝑜 cos 𝑖, (12) 
+
+¤𝜔 = 34 𝐽 2
+
+ 𝑟 𝑒𝑞 
+
+𝑝 
+
+2
+
+𝑛 𝑜 (5 cos 2𝑖 − 1), (13) where 𝑛 𝑜 =√︁ 𝜇 /𝑎 3 and 𝑝 = 𝑎 (1 − 𝑒 2). The osculating elements at epoch 𝑡 are propagated linearly: Ω(𝑡 ) = Ω 0 +¤Ω Δ 𝑡 , 𝜔 (𝑡 ) = 𝜔 0 + ¤ 𝜔 Δ𝑡 , 𝑀 (𝑡 ) = 𝑀 0 + 𝑛 𝑜 Δ𝑡 .
+
+Remark 1 (Cost-model consumption of secular rates) . The trajectory cost model in this paper consumes only the sec-ular RAAN rate ¤Ω from (12) . The argument-of-perigee rate ¤𝜔 is reported alongside ¤Ω in the dynamics but is not propagated through the transfer-cost evaluation; the secu-lar evolution of 𝑀 is treated implicitly, with true-anomaly phasing at rendezvous absorbed into the transfer-time bud-get rather than enforced as an explicit equality. These choices are consistent with the GTOC9 specification, which explicitly waives the velocity contribution of ¤Ω and ¤𝜔 on the grounds that it “removes complexity from the equations without introducing any significant change on the search space landscape” [5], and they are appropriate for the tangential Hohmann-class transfers used here, since burn placement at perigee/apogee absorbs AoP rotation geo-metrically. The systematic error introduced is quantified empirically in Sec. 6.4 (GMAT-anchored FPROX propaga-tor benchmark + per-leg plane-acquisition verification of the analytic plan). 
+
+The RAAN difference between two orbits evolves lin-early with elapsed time. A spacecraft reaches a target requiring RAAN change ΔΩ by coasting on a drift orbit at 
+
+(𝑎 𝑑 , 𝑒 𝑑 , 𝑖 𝑑 ) for 
+
+𝑡 𝑑𝑟𝑖 𝑓 𝑡 = ΔΩ 
+
+¤Ω(𝑎 𝑑 , 𝑒 𝑑 , 𝑖 𝑑 ) − ¤ Ω𝑡𝑔𝑡 
+
+. (14) 
+
+## 3.2 Three-Parameter Drift Orbit (C+) 
+
+Standard GTOC9 approaches vary only 𝑎 𝑑 in (14). From (12), ¤Ω depends on three independent elements through 
+
+𝑝 = 𝑎 (1− 𝑒 2) and cos 𝑖 . For SSO ( 𝑖 ≈ 96 –102 ◦), inclination is the dominant lever: at 𝑖 = 98 ◦, | cos 𝑖 | ≈ 0.14 , so a 2◦
+
+change in 𝑖 alters | cos 𝑖 |, and hence the nodal rate, by ∼25%, while a 200-km altitude change at ∼750 km alters ¤Ω by only ∼4%. Table 2 compares the three knobs side-by-side. The enhanced method fixes 𝑡 𝑑𝑟𝑖 𝑓 𝑡 and solves for (𝑒 𝑑 , 𝑖 𝑑 )
+
+on a discrete grid ( 𝑒 𝑑 ∈ [ 0, 0.06 ], 𝑖 𝑑 ∈ [ 𝑖 𝑠𝑟 𝑐 −3◦, 𝑖 𝑠𝑟 𝑐 +3◦]), with 𝑎 𝑑 obtained from (14) by bisection for each pair. The entry and exit are each a two-impulse Hohmann-type trans-fer between a circular orbit and the elliptical drift orbit, with the combined plane change placed at whichever of perigee or apogee minimises cost; a drift-orbit leg (C/C +)therefore uses four impulses in total, versus two for a di-rect leg (A). Fig. 1 illustrates the geometry on a repre-sentative GTOC9 leg taken from JPL Mission 7 Leg 6 (D46 →D88, ΔΩ 0 = 10 .62 ◦, differential rate 0.0702 ◦/day, 
+
+𝑉 base = 95 m/s). Panel (a) shows the RAAN gap clos-ing under each strategy: the three-parameter drift orbit (C +) amplifies the natural differential rate ∼5× via inclina-tion shaping and closes the 10 .62 ◦ gap inside the GTOC9 
+
+Δ𝑡 𝑅 ≤ 30 d/leg cap, whereas the natural-wait baseline (B) needs ∼151 d to converge to its absolute minimum 
+
+𝑉 base ≈ 95 m/s. Panel (b) converts this into cost at the binding 30-d cap: the direct combined plane change (A) costs ∼1 365 m/s, natural wait (B) ∼1 096 m/s, altitude-only drift (C) ∼858 m/s, and C + only ∼136 m/s, a 90% saving over A. The framework’s full numerical result for this leg ( ∼146 m/s at ≤30 d) is marked by the magenta star. The campaign-wide generalisation across all 113 legs is reported in Section 6 (Table 3 gives the Δ𝑉 summary on this leg, parallel to the journal manuscript’s single-leg analysis on M7 L7). Fig. 2 contrasts how the single-parameter (C) and three-parameter (C +) drift orbits achieve the same ¤Ω on this leg through different elements: C lowers altitude by 129 km, whereas C + tilts inclination by +2.92 ◦ and barely changes altitude, costing 84% less Δ𝑉 (136 vs. 858 m/s). 
+
+# 4 Multi-Rendezvous Optimization Pipeline 
+
+Before the per-leg details, the algorithmic structure de-serves a high-level justification. The multi-rendezvous problem is fundamentally mixed : a discrete, N P -hard target-sequencing decision (a permutation and set-cover choice that exposes no usable gradient) sits on top of a con-tinuous per-leg time-budget and transfer-design problem. The resulting objective is multimodal and non-smooth: the 
+
+𝐽 2 RAAN geometry is periodic and wraps around, and the sequence–timeline coupling introduced below creates near-discontinuous cost “cliffs” where a downstream leg’s plane change blows up or a leg becomes infeasible. Amonolithic gradient-based or convex-relaxation solver ap-plied to such a landscape either stalls in a local trap or fails on the non-differentiable boundaries. We therefore adopt a two-phase scheme that decouples the combinato-rial and continuous parts: Phase 1 fixes the discrete se-quence (nearest-neighbour with 2-opt here; Beam P-ACO at full-catalogue scale), and Phase 2 optimises the con-5Table 2: The three knobs of the enhanced drift orbit transfer in the GTOC9 SSO regime. Inclination dominates because 
+
+| cos 𝑖 | ≈ 0.14 at 𝑖 ≈ 98 ◦, so a small change in 𝑖 produces a disproportionately large fractional change in ¤Ω.                                                                               
+
+> Knob Mechanism in ¤ΩTypical leverage Δ𝑉 cost
+> 𝑎 𝑑 – altitude changes 𝑝 and 𝑛 𝑜 =√︁ 𝜇 /𝑎 3−200 km → + 0.05 ◦/day ∼200–300 m/s
+> 𝑒 𝑑 – eccentricity reduces 𝑝 at fixed 𝑎 𝑒 =0→0.05 :−0.25% in 𝑝 ∼10–30 m/s
+> 𝑖 𝑑 – inclination modifies |cos 𝑖 |(dominant) Δ𝑖 =2◦→25% nodal-rate change ∼100 m/s
+> (𝑎 𝑑 , 𝑒 𝑑 , 𝑖 𝑑 )– C+ coupled optimisation of all three up to ∼40% per leg vs. 𝑎 𝑑 only weighted optimal 010 20 30 40 50 60
+> Transfer time (days)
+> 0
+> 2
+> 4
+> 6
+> 8
+> 10
+> 12
+> RAAN gap  ∆Ω  remaining (deg)  30-d transfer budget
+> 30 d
+> 5×rate via i-shaping
+> (a) Closing the ∆Ω 0= 10 .62 ◦gap
+> B) natural wait
+> C) altitude-only drift
+> C+) three-parameter drift
+> 0200 400 600 800 1000 1200 1400 1600
+> ∆Vat 30-d cap (m/s)
+> A) direct
+> plane change
+> B) wait-only
+> (at cap)
+> C) altitude
+> drift
+> C+) three-param
+> drift
+> framework
+> 146 m/s
+> C+vs A: −90%
+> (b) Cost of each strategy
+> Drift-orbit geometry on JPL Mission 7, Leg 6 (GTOC9 D46 →D88; differential rate 0.0702 ◦/day)
+
+Fig. 1: Three-parameter drift-orbit concept on JPL Mission 7 Leg 6 (GTOC9 D46 →D88): (a) closure of the RAAN gap and (b) the resulting Δ𝑉 at the 30-d cap for the direct (A), wait-only (B), altitude-only (C) and three-parameter drift (C +) strategies; the magenta star marks the framework’s full numerical result. The A/B/C/C + curves are drawn from an 
+
+assumed effective-rate model ( 2×/5× rate amplification with a fixed +30 /+40 m/s insertion overhead) calibrated against 
+
+the optimiser rather than produced by it; the “ ∼5× amplification” and “ ∼40 m/s insertion” are therefore model inputs, not findings. Only the magenta star is a direct optimiser output. tinuous per-leg time budget on that fixed sequence with derivative-free methods (differential evolution followed by coordinate-descent refinement) that tolerate the mul-timodality and non-smoothness. This separation keeps the problem tractable in minutes of single-core compute while remaining consistent with the cost levels reported in the published GTOC9 reference solutions. 
+
+## 4.1 Per-Leg Transfer Methods 
+
+Four transfer strategies are evaluated per leg: 
+
+A) Direct. Combined Hohmann + plane change at the higher orbit. Zero wait time; highest propellant cost for large RAAN gaps. 
+
+B) Wait-for-drift. Spacecraft coasts in the source orbit while natural 𝐽 2 precession closes the RAAN gap (1-day grid search up to 200 days), followed by a direct transfer. 
+
+C) Single-parameter drift. Three-phase maneuver (enter drift orbit / coast / exit) with altitude-only ( 𝑎 𝑑 ) optimiza-tion. 
+
+C+) Three-parameter drift. Simultaneous (𝑎 𝑑 , 𝑒 𝑑 , 𝑖 𝑑 )
+
+optimization per Sec. 3. The hybrid method selects min ( 𝐴, 𝐵, 𝐶 +) per leg; since C is the 𝑒 𝑑 = 0, 𝑖 𝑑 =𝑖 𝑠𝑟 𝑐 special case of C +, min ( 𝐴, 𝐵, 𝐶 +) =
+
+min ( 𝐴, 𝐵, 𝐶, 𝐶 +), and C is evaluated separately only for the single-knob ablation of Table 3 and Fig. 2. Propellant mass evolves via Tsiolkovsky: 𝑚 𝑓 = 𝑚 𝑖 exp (− Δ𝑉 /𝑣 𝑒 )
+
+with 𝑣 𝑒 = 𝐼 𝑠 𝑝 𝑔 0.
+
+## 4.2 Sequence–Timeline Coupling and Global Time Budget 
+
+Each leg’s drift or wait time shifts the RAAN of all down-stream targets through accumulated elapsed time. For in-stance, a 60-day drift on Leg 1 can triple a downstream RAAN gap from 12 ◦ to 36 ◦, turning a 270 m/s transfer into a 4 600 m/s plane change. This sequence–timeline coupling makes greedy per-leg time allocation catastroph-ically suboptimal when drift time is unconstrained. For brevity, the formal per-mission sub-problem (de-6Source 
+
+> (D46)
+> C drift
+> (alt only)
+> C+ drift
+> (a, e, i )
+> Target
+> (D88)
+> 600
+> 650
+> 700
+> 750
+> 800
+> 850
+> Altitude [km]
+> (a) Orbit shaping: altitude \& inclination
+> Source
+> (D46)
+> C drift
+> (alt only)
+> C+ drift
+> (a, e, i )
+> Target
+> (D88)
+> 0.000
+> 0.002
+> 0.004
+> 0.006
+> 0.008
+> 0.010
+> 0.012
+> 0.014
+> 0.016
+> Eccentricity
+> (b) Eccentricity \& transfer cost
+> 2
+> 1
+> 0
+> 1
+> 2
+> Inclination [deg]
+> +1e2
+> 0
+> 200
+> 400
+> 600
+> 800
+> Transfer  ∆V [m/s]
+
+Fig. 2: Drift-orbit element comparison for M7 L6 (D46 →D88, ≤30 d cap): altitude and inclination (a) versus eccentricity and transfer-Δ𝑉 (b) for the single-parameter (C) and three-parameter (C +) drift orbits. Table 3: Transfer strategies plotted in Fig. 1 on M7 L6 (D46 →D88, ΔΩ 0 = 10 .62 ◦, differential rate 0.0702 ◦/day, 
+
+𝑉 base = 95 m/s). Analytical Δ𝑉 values are read off an assumed effective-rate model (the same 2×/5× amplification with fixed +30 /+40 m/s insertion as Fig. 1), calibrated against (not produced by) the optimiser, at the optimum within the GTOC9 ≤30 d/leg cap. The “ ∼5× amplification” and “ ∼40 m/s insertion” are model inputs, not measured results; only the 
+
+★ row (146 m/s) is a direct optimiser output.                                                 
+
+> Curve Strategy Knobs tuned Δ𝑉 @𝑡 opt ≤30 d𝑡 opt
+> [m/s] [d] A) grey dashed line Direct combined plane change (no drift) none 1 365 0B) blue solid Wait at source orbit for natural drift wait time 𝑡 1 096 30 C) orange dashed Single-parameter drift orbit 𝑎 𝑑 only 858 30
+> C+) green solid Three-parameter drift orbit (𝑎 𝑑 , 𝑒 𝑑 , 𝑖 𝑑 )136 30
+> ★) magenta star Present framework numerical ( ≤30 d cap) all methods + global 𝑻 146 n/a
+> Saving of analytical C +over B at 30 d: −960 m/s ( −88%); over C at 30 d: −722 m/s ( −84%). Natural minimum for B (no time cap) is 𝑉 base ≈95 m/s at 𝑡 ≈151 d, outside the GTOC9 30-d cap. The framework’s numerical ∼146 m/s reflects the full method selection and global time-budget optimiser.
+
+cision vectors 𝑻 , 𝒎 ; cost (1); inverse-Tsiolkovsky pro-pellant mass; accumulated-elapsed-time recursion as the non-separability source; bounds 𝑇 𝑘 ∈ [ 𝑡 𝑤 + 1, 𝑇 max ] and 
+
+𝑚 𝑘 ∈ { 𝐴, 𝐵, 𝐶, 𝐶 + }; secular RAAN propagation) is stated as Eqs. (15)–(22) of the journal companion [14], which this paper takes as given. 
+
+Optimisation algorithm. The per-mission sub-problem is a non-convex mixed-integer program (continuous 𝑻 , dis-crete 𝒎 ) with a non-separable objective. A two-phase scheme handles it: (1) Differential Evolution [19] (SciPy implementation, population 20, 𝐹 = 0.5, 𝐶 𝑅 = 0.7, ≤100 generations, fixed seed 42) over a relaxation that drops 𝐶 +
+
+(𝒎 ∈ { 𝐴, 𝐵 }𝑁 𝑖 −1 for speed); (2) coordinate-descent refine-ment over 𝑇 𝑘 ∈ { 0.5, 1, 2, 5, 10 , 16 , 20 , 30 , 45 , 60 } ∩ [ 𝑡 𝑤 +
+
+1, Δ𝑡 𝑅 ] (up to 10 passes, 0.1 m/s threshold) with the full method catalog {𝐴, 𝐵, 𝐶, 𝐶 + } available. Total runtime: 3– 10 s per mission on a single core; approximately 27 minutes for the full 123-debris campaign of Sec. 6. 
+
+## 4.3 Sequence Generation: NN + 2-opt 
+
+For each mission, a greedy nearest-neighbour construc-tion (starting from every debris as initial node) followed by 2-opt local search refines up to 𝑁 candidate sequences. Crucially, every step uses the accumulated elapsed time including dwell to propagate RAANs via (12), so the con-struction captures the coupling effect. 
+
+## 4.4 Set-Cover Backbone (Future Work) 
+
+The GTOC9 problem in its full form is a set-cover vari-ant: the 123 debris must be partitioned into missions, and within each mission a removal sequence must be chosen. The state-of-the-art combinatorial backbone for this two-level problem is Beam Population-based Ant Colony Opti-mization (Beam P-ACO) [13], which combines pheromone learning with beam-search pruning to generate a pool of |S| ∼ 31 000 candidate missions small enough for the set-cover ILP to remain tractable for solvers such as SCIP [20]. Complementary tree-search formulations using 7Monte Carlo Tree Search [21] and parallel multi-objective optimisation frameworks such as pagmo [22] have been used in related GTOC-class problems. 
+
+Scope. This paper does not run Beam P-ACO on the full catalogue. The full-campaign result of Sec. 6 adopts the published JPL mission partition as a controlled benchmark reference and applies the NN+2-opt pipeline of Sec. 4.3 together with the per-mission global time-budget optimiser. Joint partition-and-sequence discovery via Beam P-ACO, without any prior from the published JPL solution, is the natural follow-on extension of this framework. 
+
+# 5 GTOC9 Benchmark and Con-stants 
+
+Table 4 lists the physical constants and operational parame-ters used throughout, taken from the ESA GTOC9 problem definition [5]. Table 4: GTOC9 benchmark constants and operational parameters (ESA official [5]).                                     
+
+> Parameter Value Units
+> Cost function
+> 𝛼 2.0×10 −6MEUR/kg 2
+> 𝑐 𝑚 /𝑐 𝑀 45 / 55 MEUR
+> Spacecraft
+> 𝑚 𝑑𝑟 𝑦 2 000 kg
+> 𝑚 𝑝 (max) 5 000 kg
+> 𝑚 𝑑𝑒 30 kg
+> 𝐼 𝑠 𝑝 340 s
+> 𝐾 𝑚𝑎𝑥 5impulses/leg
+> Operational
+> Δ𝑡 𝑅 30 days
+> Δ𝑡 𝑀 30 days
+> 𝑡 𝑤 ≥5days
+> [𝑡 𝑚𝑖𝑛 , 𝑡 𝑚𝑎𝑥 ][23467 ,26419 ]MJD2000
+> Physical constants
+> 𝜇 3.986004418 ×10 14 m3/s 2
+> 𝐽 21.08262668 ×10 −3–
+> 𝑟 𝑒𝑞 6 378 137 m
+> 𝑔 09.80665 m/s 2
+
+A critical observation for the validation that follows: de-bris orbital elements are catalogued at different reference epochs ( 𝑡 𝑟 𝑒 𝑓 ≈ MJD2000 22 000), while JPL’s missions begin at 𝑡 0 ≈ 26 267 MJD2000, ∼4 200 days later. Each RAAN must be propagated forward, accumulating ∼4 200 ◦
+
+of precession per debris. After correct epoch propaga-tion, the 10 objects of JPL Mission 10 cluster within a 
+
+∼34 ◦ RAAN band (257 ◦–291 ◦). A naïve analysis us-ing reference-epoch RAANs gives per-leg costs of 3 000– 15 000 m/s, orders of magnitude too high. 
+
+# 6 Results 
+
+The framework is exercised on three layers of benchmark validation. Sec. 6.1 is a single-mission deep-dive on JPL Mission 10 (10 debris), the published reference so-lution providing a controlled testbed for per-leg behaviour. Sec. 6.2 applies the same pipeline to the full 123-debris GTOC9 campaign on the published JPL 10-mission parti-tion and reports the headline benchmark-validation result. Sec. 6.3 summarises two side validations on a non-GTOC9 SSO inspection mission and a commercial space tug, in-cluded to show transferability across mission archetypes. 
+
+## 6.1 Single-Mission Deep-Dive on Published JPL Mission 10 Sequence 
+
+Table 5 compares per-leg Δ𝑉 across methods for the pub-lished JPL Mission 10 sequence, used here as a controlled single-mission benchmark. The direct baseline (A) totals 1 901 m/s. The unconstrained hybrid (which violates the GTOC9 Δ𝑡 𝑅 ≤ 30 d/leg cap and is presented for sensitivity analysis only ) achieves 1 095 m/s but requires a 442-day mission. Under the ≤16 d/leg constraint corresponding to the published JPL schedule, the per-leg table (evalu-ated at mission-start RAAN geometry) totals 1 652 m/s in 126 days; the sequence-consistent evaluation, in which each leg’s drift shifts the geometry of every later leg, gives the operative figure of 1 669 m/s in 143 days ( +17% vs. the published reference; Table 6). The per-leg breakdown in Fig. 3 shows that C + dominates legs with moderate RAAN gaps ( ∼1–1.4 ◦), while the natural-wait method B suffices for the smallest gaps. 
+
+Three-parameter drift-cost reduction. The per-leg saving of C+ over the single-parameter baseline (C, altitude-only) is strongly convention-dependent and must be quoted with its measurement recipe. Evaluated under a uniform ≤16-d/leg cap with a 16-d/leg clock (each leg costed independently at that budget), C + reduces per-leg drift cost by ∼35.8%, ∼47.1%, and ∼52.8% on the three most favourable Mission-10 legs, up to ∼53%. The higher single-leg figures reported earlier (43.5% on D6 →D7, 41.8% on D7 →D1) come from the journal companion’s fixed mission-start geometry ablation under the ≤30-d/leg cap and are retained only with that attribution [14]. Either way the gain is leg-dependent (no benefit on the hardest large-gap legs, and a mission-sequence-total change within a few percent) and is driven by the cos 𝑖 lever in (12). 
+
+Global time-budget optimization. Table 6 quantifies the impact of the global optimizer. Under unconstrained drift (sensitivity only), greedy allocation yields 10 512 m/s because early long drifts destroy downstream RAAN ge-ometry; the global optimizer recovers to 1 434 m/s. Under the GTOC9-compliant ≤30 d/leg constraint, the optimizer 8Table 5: Per-leg Δ𝑉 comparison on the published JPL Mission 10 sequence used as a controlled benchmark. Hybrid =
+
+min ( 𝐴, 𝐵, 𝐶 +). The “JPL” column lists the published reference values. The unconstrained column is a sensitivity result that violates the GTOC9 Δ𝑡 𝑅 ≤ 30 d/leg constraint and is reported only to characterise the algorithm’s behaviour absent the time cap.                                                                   
+
+> Δ𝑉 [m/s] Leg ΔΩ [◦]A: Direct Hyb. (unc.) Hyb. ( ≤16 d) JPL ref.
+> D5 →D10 +0.1203 189 189 189 D10 →D6 −1.2156 34 117 113 D6 →D7 −0.8115 45 106 110 D7 →D1 −0.5114 104 114 121 D1 →D2 −1.4183 31 130 118 D2 →D9 −2.3406 302 406 280 D9 →D8 −0.8338 307 307 300 D8 →D4 −2.4322 30 231 121 D4 →D3 −0.266 54 54 70
+> Total 1 901 1 095 ‡1 652 1 423 Mission [d] 50 †442 126 148
+> †Method A: zero transfer; mission =dwell only.
+> ‡Sensitivity only: violates GTOC9 Δ𝑡 𝑅 ≤30 d/leg cap. Per-leg values at mission-start RAAN geometry (not sequence-consistent); totals from unrounded values, columns may not sum exactly (see text).
+
+drops Δ𝑉 from 3 906 m/s (greedy) to 1 484 m/s, within 4.3% of the published JPL reference value. Under the tighter ≤16 d/leg cap reported by JPL, the constraint itself implicitly suppresses coupling and the optimizer offers no further benefit. Fig. 4 visualises the reduction across the three constraint regimes. Table 6: Global time-budget vs. greedy per-leg allocation on JPL’s Mission 10 sequence (both C+ hybrid; Δ𝑉 in m/s). “Rel. JPL” is the residual against the published JPL value; the unconstrained row is sensitivity-only. 
+
+Constraint Greedy Global Rel. JPL Save 
+
+Unconstrained ‡ 10 512 1 434 +0.8% 86% 
+
+Δ𝑡 𝑅 ≤ 30 d/leg † 3 906 1 484 +4.3% 62% 
+
+≤16 d/leg 1 669 1 682 +18% −0.8% 
+
+JPL ref. value 1 423 n/a n/a        
+
+> †GTOC9-compliant (30-d transfer segment; Sec. 2); ‡violates Δ𝑡 𝑅 ≤30 d/leg, sensitivity only. The unconstrained (1 434) and 30-d (1 484) global values are from an archived deep-dive optimiser configuration (maxiter 100, popsize 20, 10 coordinate-descent passes) and will not reproduce bit-for-bit from the current campaign pipeline (maxiter 60, popsize 15, 2 passes), which returns 1 414 m/s unconstrained and, under the strict 25-d arrival-to-arrival transfer cap, 1 525 m/s ( +7.2% ).
+
+Independent sequence-recovery validation. Given only the debris catalogue (orbital elements and ref-erence epochs, without using the published JPL sequence as a prior), the NN+2-opt pipeline with Method B (wait-for-drift) under the ≤16 d/leg con-straint independently re-derives a removal sequence D5 →D10 →D6 →D7 →D1 →D2 →D9 →D8 →D4 →D3 that is structurally consistent with the published JPL reference sequence, achieving 1 831 m/s in 141 days. This recovery serves as a validation case for the sequencing layer and confirms that the optimal sequence is driven primarily by 𝐽 2 precession geometry, not by higher-order dynamics or fine-grained trajectory phasing. 
+
+## 6.2 Full 123-Debris Campaign on the Pub-lished JPL Mission Partition 
+
+The single-mission analysis above establishes per-leg be-haviour. We now apply the same NN+2-opt + global-time-budget pipeline to the complete GTOC9 campaign (all 10 missions and all 123 debris) using the published JPL mission partition as a controlled benchmark reference. This isolates the trajectory-optimization layer from the or-thogonal combinatorial set-cover decision, which is not addressed in this study and which we adopt verbatim from the published JPL solution (Sec. 4.4). The objective is to evaluate the analytical transfer model and the global time-budget allocator against a trusted reference solution as a methodological validation exercise. For each of the 10 missions in the published JPL par-tition we extract the corresponding debris subset (9–21 objects/mission, Table 1 of [6]), propagate every debris’s RAAN from its catalogue reference epoch to the reported JPL mission start epoch via (12), and evaluate the published visit sequence with the greedy and globally-optimised pipelines under the GTOC9-compliant Δ𝑡 𝑅 ≤ 30 d/leg constraint. Per-mission propellant requirements are sized by inverse Tsiolkovsky and converted to mission cost via 
+
+𝐽 = 𝑐 𝑖 + 𝛼 (𝑚 0 − 𝑚 𝑑𝑟 𝑦 )2 with 𝑐 𝑖 = 55 MEUR and 
+
+𝛼 = 2 × 10 −6 MEUR/kg 2. Table 7 and Fig. 5 report the per-mission results. 9D5  → D10   
+
+> D10  → D6
+> D6  → D7
+> D7  → D1
+> D1  → D2
+> D2  → D9
+> D9  → D8
+> D8  → D4
+> D4  → D3
+> Transfer Leg
+> 0
+> 50
+> 100
+> 150
+> 200
+> 250
+> 300
+> 350
+> 400
+> 450
+> ∆V per leg [m/s]
+> C+
+> C+ C+
+> C+
+> B
+> C+ C+
+> B
+> B
+> Totals: A=1900 | Hybrid=1095 | JPL=1423 m/s Direct (Method A)
+> Drift orbit (C+)
+> Wait (B)
+> JPL (6-impulse SNOPT)
+
+Fig. 3: Per-leg Δ𝑉 on the published JPL Mission 10 reference sequence, with labels above each hybrid bar marking the selected sub-method (A, B, or C +). Bars are shown alongside the published JPL reference values for direct visual comparison. 10 4     
+
+> Mission ∆V(m/s, log scale)
+> Unconstrained
+> (sensitivity only)
+> ∆tR30 d/leg
+> (GTOC9-compliant)
+> 16 d/leg
+> 10,512
+> 1,434
+> 3,906
+> 1,484
+> 1,669
+> 1,682
+> JPL
+> 1,423 m/s
+> +4.3% vs JPL
+> Global vs greedy time-budget: JPL Mission #10
+> greedy per-leg
+> global time-budget opt.
+
+Fig. 4: Reduction ladder for the global time-budget op-timiser on the published JPL Mission 10 reference se-quence: greedy per-leg versus globally-optimised mission 
+
+Δ𝑉 across three constraint regimes, with the published JPL reference value of 1 423 m/s (dashed) shown for benchmark context. Three observations stand out. First , the global time-budget optimizer reduces total campaign Δ𝑉 from 51 893 m/s (greedy) to 25 965 m/s, a 50% drop driven principally by Missions 1, 2, 3, and 10, where greedy al-location funnels several legs into the costly direct-transfer regime. Second , taking the lower-𝐽 variant per mission yields 742.65 MEUR against the published JPL reference value of 731.5 MEUR (JPL’s submitted competition score of 731.28 MEUR in the published paper), a residual of 
+
++1.52% (+1.55% against the submitted 731.28 MEUR), demonstrating that the analytical framework reproduces the published benchmark’s overall cost level to within about one and a half percent. This total charges the first de-orbit package on every mission in the staged mass sizing; the earlier 739.1 MEUR figure omitted that package and is su-perseded. Third , the per-mission breakdown shows that for three missions (M4, M6, M7) the framework returns a cost below the published reference value, and three more (M8, M9, M10) lie within about one percent of the published reference; Mission 9, marginally below the reference be-fore the mass-sizing correction, now sits just above it at 
+
++0.4% and no longer beats JPL, whereas the M4/M6/M7 margins survive. The residual aggregate gap is concen-trated on Missions 1–3, the longest and most debris-dense missions where the semi-analytic multi-impulse transfers and SNOPT refinement used in the JPL solution offer fi-delity that two-impulse Hohmann transfers cannot capture. Taken together, the per-mission cost trends are broadly con-sistent with the published reference, which is the validation outcome being sought here. 
+
+Benchmark context against published GTOC9 refer-ence solutions. Table 8 situates the result against pub-lished GTOC9 reference solutions, providing benchmark context for the analytical framework’s overall cost level. Because the present study adopts the published JPL mis-sion partition, the comparison should be read as a fidelity check on the trajectory-optimization layer at a fixed par-tition rather than as an independent end-to-end compari-son of methods. Note also that 731.28 MEUR is JPL’s 
+
+submitted competition score; their paper reports post-competition ten-mission improvements to approximately 720 and 711 MEUR [6], and the submitted value is re-tained as the benchmark anchor throughout this paper. The 742.65 MEUR total remains within about one and a half percent of the published JPL reference campaign cost while using only analytical two-impulse transfers and a ∼27-minute single-core pipeline; this is the methodolog-10 Table 7: Full 123-debris campaign on the published JPL mission partition under the GTOC9-compliant Δ𝑡 𝑅 ≤ 30 d/leg constraint (30-d transfer segment; Sec. 2). Costs use the corrected staged mass model that charges the first de-orbit package (30 kg) to launch mass uniformly across the greedy, global, and best variants (per-mission increments 0.15–0.58 MEUR), matching the journal companion’s convention [14]; all Δ𝑉 /cost entries are analytic-ledger fidelity (two-impulse Hohmann accounting), for which Sec. 6.4 reports the measured executable-decomposition overhead. Bold rows mark missions where the analytical framework returns a cost lower than the published JPL reference value; the “Gap” column reports the residual relative to that published reference.                                                                                                                                    
+
+> Mis. 𝑛 𝑑𝑒𝑏 Greedy +Global opt. Best JPL ref. [6] Gap
+> Δ𝑉 𝐽 Δ𝑉 𝐽 𝐽 𝑚 0𝐽 Δ𝐽
+> [m/s] [MEUR] [m/s] [MEUR] [MEUR] [kg] [MEUR] [%] 114 12 106 114.3 3 321 88.5 †88.5 5 665 81.9 +8.1
+> 212 8 643 112.9 2 883 77.9 †77.9 4 666 69.2 +12 .5
+> 321 12 320 119.0 3 610 103.8 †103.8 6 590 97.1 +6.8
+> 411 2 597 71.0 ‡2 849 75.3 71.0 5 679 82.1 −13 .4
+> 514 2 623 72.7 ‡2 690 73.6 72.7 4 907 71.9 +1.1
+> 610 3 076 79.2 2 721 72.7 †72.7 5 063 73.8 −1.5
+> 710 1 949 63.0 ‡2 013 63.7 63.0 4 082 63.7 −1.1
+> 892 051 63.5 1 818 61.6 †61.6 3 726 61.0 +1.0
+> 912 2 624 72.8 2 581 72.1 †72.1 4 897 71.8 +0.4
+> 10 10 3 906 104.3 1 479 59.5 †59.5 3 439 59.1 +0.5
+> Tot. 123 51 893 872.7 25 965 748.7 742.65 n/a 731.5 +1.52
+> †Best picks the global-opt result; ‡best picks the greedy result. JPL paper reports 731.28 MEUR; 731.5 here is recovered from per-mission masses (0.03% rounding). Campaign best =742 .65 MEUR, +1.55% vs. 731.28. Totals from unrounded per-mission values; columns may not sum exactly. The M10 campaign global-opt Δ𝑉 (1 479 m/s) differs from the deep-dive figure (1 484 m/s, Table 6) not by any stochastic seed (both fix DE seed 42 and are deterministic) but because the campaign uses a reduced optimiser config (maxiter 60, popsize 15, 2 CD passes) vs. the deep-dive (maxiter 100, popsize 20, 10 passes).
+
+ical observation of interest, namely that a lightweight ana-lytical model exploiting 𝐽 2 as a resource captures the bulk of the cost behaviour observed in the published reference solution that relies on a ∼290-million-row precomputed semi-analytic six-impulse transfer database and SNOPT multi-impulse refinement [8]. The comparison should not be interpreted as a ranking of methods, since the parti-tion decision (a substantial part of the JPL contribution) is reused verbatim. 
+
+## 6.3 Side Validations: SSO Inspection and Commercial Tug 
+
+Two side scenarios validate transferability outside GTOC9. Both use synthetic target catalogues constructed to span the stated RAAN bands, not flight datasets, so they probe the method’s behaviour across mission archetypes rather than reproduce a specific mission. 
+
+SSO inspection. A 3 000 kg servicer with 𝐼 𝑠 𝑝 = 320 svisits 10 defunct satellites in a ∼27 ◦ RAAN band. The RAAN-sorted and greedy NN methods produce identical sequences; the entire 32.9% Δ𝑉 saving (4 146 to 2 782 m/s) comes from drift-aware timing , not sequencing. The dom-inant cost lever in this regime is Method B (wait-for-drift) on a tightly-clustered catalogue, with C+ providing no in-cremental benefit because RAAN gaps are too small. 
+
+Commercial space tug. A reusable tug (𝑚 𝑤𝑒𝑡 =
+
+5 500 kg, 𝐼 𝑠 𝑝 = 330 s) delivers 6 client satellites from a 500 km parking orbit to SSO targets spanning 10 ◦–35 ◦
+
+in RAAN. The round-trip architecture exposes the tug to long inter-delivery drift periods (970 days total). Greedy NN with drift exploitation reduces Δ𝑉 by 81.4% (10 334 to 1 921 m/s) versus the direct-transfer baseline; against the operationally relevant Method-B baseline (passive drift, 2 332 m/s), active C+ shaping adds a further 17.5% saving. 
+
+## 6.4 Numerical Validation 
+
+The model-fidelity claims above are validated in two stages. First, the in-house FPROX numerical propagator is benchmarked against NASA’s General Mission Analy-sis Tool (GMAT) R2025a [23] to establish its adequacy as a 𝐽 2-fidelity reference; then FPROX is used to verify the framework’s per-leg drift-orbit manoeuvre plan across every leg of the JPL mission partition. The validation harness is documented in the project repository under 
+
+validation/GMAT/comparison/ .
+
+FPROX ↔GMAT propagator benchmark. FPROX (DOP853, adaptive) was benchmarked against GMAT across five 90-day open-loop scenarios (Table 9) span-ning two epochs, three eccentricities, two inclinations, and a three-burn impulsive case. Initial conditions are taken directly from the GMAT Cartesian state at 𝑡 =0 so that resid-uals reflect only force-model and integrator divergence; the 11 0
+
+> 20
+> 40
+> 60
+> 80
+> 100
+> 120
+> Per-mission cost  J [MEUR]
+
+* * *
+
+* * *
+
+* * *
+
+*    
+
+> MultiRVD greedy
+> MultiRVD + global opt.
+> JPL (1st place)
+> M1
+> (14 deb.)
+> M2
+> (12 deb.)
+> M3
+> (21 deb.)
+> M4
+> (11 deb.)
+> M5
+> (14 deb.)
+> M6
+> (10 deb.)
+> M7
+> (10 deb.)
+> M8
+> (9 deb.)
+> M9
+> (12 deb.)
+> M10
+> (10 deb.)
+> Mission number
+> 0
+> 2000
+> 4000
+> 6000
+> 8000
+> 10000
+> 12000
+> Per-mission  V [m/s]
+> MultiRVD greedy
+> MultiRVD + global opt.
+> 123-debris campaign on JPL's 10-mission partition (GTOC9-compliant tR30 d/leg)
+> Total J: greedy 869, global 745, best-per-mission 739, JPL 732 MEUR (gap +1.04%)
+
+Fig. 5: Full 123-debris campaign benchmark context: per-mission cost 𝐽 (top) and per-mission Δ𝑉 (bottom) for the present framework’s greedy and global-optimised variants under the GTOC9-compliant Δ𝑡 𝑅 ≤ 30 d/leg constraint, shown alongside the published JPL per-mission reference values for comparison. two propagators are compared on a uniform 6-hour cubic-spline grid (361 points per scenario). The 3D position RMS stays below 1 km for the four ballistic cases and 1.6 km for the impulsive-burn case where along-track drift after the cross-track burn dominates. Per-channel agreement is further measured via the Pearson correlation coefficient 𝑟 ;the cumulative deviation 1−𝑟 (𝑡 ) (Fig. 6) stays below 10 −4
+
+in every channel through Day 90, confirming that FPROX is a quantitatively faithful surrogate for GMAT under the 
+
+𝐽 2 force model on time scales comparable to a GTOC9 leg (30 d) or mission (273 d). 
+
+Spot-check: secular RAAN rate. For the GTOC9 set-ting specifically, GMAT was run as a direct osculat-ing reference for one representative debris orbit (#5: 
+
+𝑎 = 7228 .5 km, 𝑒 = 1.6 × 10 −3, 𝑖 = 99 .84 ◦), propa-gated 30 days under a 𝐽 2-only force model. The secu-lar RAAN rate derived from the GMAT Brouwer-mean time series is ¤ΩGMAT = 1.140 ◦/day versus the closed-form value ¤Ωanalytic = 1.099 ◦/day from (12), a +3.8% offset. The gap is shown empirically to be independent of higher zonals ( 𝐽 3–𝐽 8 contribute < 0.2% ), short-period oscillation (Brouwer-mean and osculating drifts agree to 5 m ◦), and constants (JGM-2 matches GTOC9’s 𝜇 , 𝑟 𝑒𝑞 , 𝐽 2 to eight digits). Having ruled those out, the residual is attributed to a reference-frame effect between the epoch at which the debris elements are defined and the epoch at which GMAT evaluates the geopotential. Over the multi-decade gap between the J2000 geopotential frame (in which the catalogue elements are given) and the propagation epoch (about whose true equator GMAT evaluates the field), IAU precession tilts Earth’s symmetry axis by a fraction of a degree; because ¤Ω ∝ cos 𝑖 and | tan 𝑖 | is large in the near-polar Sun-synchronous regime, a first-order estimate of that frame tilt accounts for the observed ∼3.8% change in 
+
+| ¤ Ω|. The offset is therefore a first-order reference-frame effect, not a deficiency of the analytic 𝐽 2 model and not an additional Δ𝑉 cost: it is a small, bounded difference in the nodal-regression rate that does not enter the transfer-cost 12 Table 8: Final 10-mission campaign cost in the context of published GTOC9 reference solutions. The “Rel. JPL ref.” column reports the residual relative to the published JPL reference campaign cost (adopted as the trusted benchmark anchor in this study). Both present-framework rows adopt JPL’s partition and identical per-leg analytic transfers, differing only in time allocation: greedy per-leg vs. global time-budget optimization. Entries other than the present framework’s are quoted directly from the corresponding publications. 
+
+Study / variant Missions Approach 𝐽 [MEUR] Rel. JPL ref. 
+
+Published JPL ref. [6] 10 Semi-analytic 6-impulse database + B&B/ACO + SNOPT 731.28 n/a 
+
+Present framework 10 Analytic Hohmann, min ( 𝐴, 𝐵, 𝐶 + ), global time opt. 742.65 +1.55 %
+
+Published NUDT [9] 12 3-level decomp. + DCB-ACO 786.21 +7.5% 
+
+Published Tsinghua [10] 12 PSO impulsive + beam search 829.58 +13 .4% 
+
+Present framework (greedy only) 10 Analytic Hohmann, min ( 𝐴, 𝐵, 𝐶 + ), greedy time alloc. 872.70 +19 .3% 
+
+Published Strathclyde [12] 14 Beam search + Time Shuffler (MACS) 918.98 +25 .7% 
+
+Published DLR [11] 14 Time-dependent TSP + beam search 949.85 +29 .9% 
+
+Table 9: FPROX-Python (DOP853) vs. GMAT R2025a benchmark across five 90-day open-loop scenarios. IC mismatch is identically zero; residuals reflect independent force-model and integrator implementations. Comparison grid: 6-hour cubic spline (361 points). 
+
+Sc Configuration 3D RMS [km] 3D Max [km] Inc RMS [deg] worst 1−𝑟 
+
+1 JAN2024 ballistic, 𝑒 =10 −4, 𝑖 =0.05 ◦ 0.898 2.07 8.0×10 −4 1.1×10 −4
+
+2 JUN2019 ballistic, 𝑒 =10 −4, 𝑖 =0.05 ◦ 0.680 1.53 7.0×10 −4 4.5×10 −5
+
+3 JUN2019 ballistic, 𝑒 =3×10 −4, 𝑖 =0.05 ◦ 0.680 1.53 7.0×10 −4 4.5×10 −5
+
+4 JUN2019 ballistic, 𝑒 =3×10 −4, 𝑖 =5◦ 0.904 1.78 5.6×10 −4 1.3×10 −10 
+
+5 JUN2019 + 3 impulsive burns, 𝑖 =5◦ 1.640 2.91 5.4×10 −4 6.8×10 −10 0 10 20 30 40 50 60 70 80 90            
+
+> Elapsed time [days]
+> 10 9
+> 10 8
+> 10 7
+> 10 6
+> 10 5
+> 10 4
+> 1 r(t) [log scale]
+> Day 1 Day 30 Day 90
+> Cumulative correlation deviation 1r(t)vs elapsed time
+> (GMAT vs Python FPROX, 90-day open-loop GEO)
+> Longitude
+> Latitude
+> Inclination
+> Eccentricity
+> ECI X [km]
+> ECI Y [km]
+> ECI Z [km]
+
+Fig. 6: Cumulative correlation deviation 1−𝑟 (𝑡 ) vs. elapsed time for the seven state channels (3 position, 3 velocity, longitude), FPROX vs. GMAT. Vertical dotted lines mark the Day 1, Day 30, and Day 90 checkpoints. All channels stay below 10 −4 throughout the 90-day propagation. ledger, and the realised-cost driver is instead the measured four-burn executable overhead quantified below. 
+
+Campaign-wide per-leg plane-acquisition verifica-tion (FPROX). FPROX is the framework’s own self-contained numerical-𝐽 2 propagator, here cross-checked against a single-leg GMAT run rather than treated as a GMAT surrogate; it is used to verify the framework’s 3-knob C + manoeuvre plan on every leg of the JPL mission partition (113 legs across 10 missions). For each leg the framework’s analytically-prescribed four impulsive burns (entry Hohmann pair with plane change at the orbital line of nodes, drift coast, exit Hohmann pair) are applied verba-tim in 𝐽 2-only numerical propagation; the post-manoeuvre chaser state is then compared in Brouwer-mean elements against the target debris. The verification closes the orbit plane and altitude (𝑎, 𝑖, Ω) only: the GTOC9 catalogue dis-cards mean anomaly at load, so the in-track phase/anomaly is never scored, and a terminal along-track phasing ma-noeuvre (standard, low-Δ𝑉 , and time-consuming) is as-sumed but not simulated here. Across the 89 legs where the C + planner returns a feasible drift orbit (24 legs fall back to method B and are excluded), the realised RAAN-miss distribution has median 0.136 ◦ and 83% of legs acquire the target plane to better than 1 ◦; relative to an ideal-impulse upper bound on the same propagator, the median ratio is 1.15 ×, i.e. the analytic plan is within 15% of the ideal plane-acquisition floor on the typical leg: the plane and altitude are acquired, with along-track phasing deferred to the unsimulated terminal manoeuvre. 
+
+Executable-decomposition overhead. The headline Δ𝑉 
+
+and cost of Secs. 6.1–6.2 are stated at analytic-ledger fi-delity, the two-/four-impulse Hohmann accounting. De-composing each leg into its physically-executable four-burn plan and re-summing over the 89 verified legs raises the total from 33 626 to 36 222 m/s, a measured +7.7% 
+
+campaign-wide executable overhead ( +8.9% on the me-dian leg) above that ledger. This is a validation result, not an assumed penalty. 13 Wide-gap tail. The 15 wide-gap legs that miss by more than 1 ◦ are 17% of the 89 verified legs but carry 23.6% of the verified-leg Δ𝑉 ; they miss by a median 5.7◦ (max 
+
+10 .55 ◦) in RAAN and up to 1.78 ◦ in inclination. Closing them requires a dedicated plane-targeting burn whose cost is not quantified here and reaches of order 1 km/s on the worst leg, the regime where the analytic small-angle lin-earisation breaks down and where multi-impulse numerical refinement, as in the published JPL solution, retains a clear advantage. 
+
+Implications. Two fidelity gaps separate the analytic-ledger headline from a literal high-fidelity flight, and round-2 replaces the earlier loose extrapolation with re-producible, artifact-backed bounds. First, the physically-executable four-burn decomposition adds a measured 
+
++7.7% to the campaign Δ𝑉 (above); applied to the mass model this scales the analytic 742.65 MEUR ledger only modestly and reproducibly, and must not be read as “within the spread of published solutions”; it is a sensitivity com-puted inside the present pipeline, not an ESA-verified score. Second, the larger uncertainty is the wide-gap tail: on the 15 outlier legs a dedicated plane-targeting burn (un-quantified here, of order 1 km/s on the worst leg) would be required, and on the debris-dense Missions 1–3 the associated propellant growth can push a literal execution against the 5 000-kg GTOC9 tank capacity, at which point the plan must be re-optimised (per-leg time budgets, and potentially the partition) rather than merely re-costed. The 
+
++3.8% nodal-rate offset is, as discussed above, a first-order reference-frame effect between the catalogue epoch and the propagation epoch, not a deficiency of the analytic model and not an additional Δ𝑉 cost; it is a small, bounded rate error rather than a missing force, and the realised execution cost is instead driven by the measured +7.7% 
+
+four-burn overhead. All of these are extrapolations within the present pipeline, not end-to-end high-fidelity propaga-tions, and they must not be read against the ESA-verified published GTOC9 team costs. 
+
+# 7 Discussion 
+
+Model fidelity gap. Under identical constraints (the pub-lished JPL Mission 10 reference sequence, ≤16 d/leg trans-fer time), the proposed hybrid achieves 1 669 m/s, approx-imately 17% above the published JPL reference value of 1 423 m/s. This residual arises from three sources: (i) two-impulse analytic Hohmann transfers (four impulses on drift legs) vs. the semi-analytic six-impulse database transfers of the published JPL solution, SNOPT-refined with up to ten impulses per revolution [8]; (ii) discrete (𝑒 𝑑 , 𝑖 𝑑 ) grid search with 𝑎 𝑑 by bisection vs. continuous nonlinear op-timization; and (iii) the circular-orbit assumption ignoring debris eccentricities up to 𝑒 = 0.02 . When the global time-budget optimizer is applied under the GTOC9-compliant 
+
+≤30 d/leg cap, the residual narrows to 4.3% (1 484 m/s); the relaxed-time variant (1 434 m/s, +0.8% ) is not a GTOC9-legal solution and is reported solely for sensitivity analysis. Either way, the primary source of the 17% residual under greedy allocation is suboptimal per-leg time budgeting, not transfer-model fidelity per se, an engineering finding that motivates the global time-budget allocator developed in Sec. 4. 
+
+Where the analytical model matches the published ref-erence well. The three missions on which the framework returns a cost below the published JPL reference value (M4, M6, M7) share a common feature: their per-leg RAAN gaps are small enough that drift exploitation closes them passively, so the analytic Hohmann ledger captures essen-tially the same physics as the semi-analytic multi-impulse transfers used in the published JPL reference. The residual aggregate gap on M1–M3 is driven by one to three outlier legs per mission with ΔΩ > 2◦ that the 30-day per-leg cap cannot close passively; the regime where multi-impulse SNOPT refinement, as deployed in the published JPL solu-tion, retains a clear modelling advantage and where future hybrid analytic–numerical workflows should focus. Inter-preted as an engineering observation, this maps cleanly to where multi-impulse refinement matters and where it does not. 
+
+Computational efficiency. Method A evaluates in mi-croseconds; Method B requires ∼0.1 ms per day of wait time; Method C+ performs 2D grid search with bisection at 
+
+∼50–500 ms per leg. The full 10-mission greedy campaign completes in 87 s on a single CPU core; adding the global time-budget optimizer per mission raises the wall-clock to approximately 27 minutes for the full 123-debris campaign. For context, the published JPL solution reports precom-putation of a ∼290-million-row semi-analytic six-impulse transfer database; the analytical formulation here therefore operates at a fundamentally different computational scale. These evaluation speeds support interactive trade-space exploration and in-flight replanning, capabilities that are impractical with precomputed transfer databases and that the analytical pipeline is naturally suited to deliver. 
+
+Limitations. The impulsive maneuver model precludes application to low-thrust electric propulsion. Atmospheric drag, solar radiation pressure, and third-body perturba-tions are neglected (secondary effects at GTOC9 altitudes 620–920 km). Target tumbling, capture dynamics, and ren-dezvous proximity operations are not modelled. Naviga-tion and execution errors are also neglected; incorporating 
+
+Δ𝑉 margins and stochastic analysis would provide more conservative estimates. The circular-orbit assumption in-troduces small errors for the GTOC9 catalogue ( 𝑒 ≤ 0.02 ). The journal companion [14] carries the extended per-leg 14 numerical verification that quantifies how these ideali-sations translate into realised rendezvous miss residuals and execution-cost overhead. The complementary close-proximity rendezvous-and-docking problem (the terminal phase that converts the residual miss into a docked config-uration) has been treated thoroughly and experimentally in the authors’ prior work [16, 17] and is outside the multi-rendezvous scope of the present paper. 
+
+# 8 Conclusion 
+
+This paper presented a drift-aware multi-rendezvous tra-jectory optimization framework that systematically ex-ploits 𝐽 2-induced RAAN precession as a mission-design resource, validated using GTOC9 as a controlled bench-mark environment and the published JPL solution as a trusted reference baseline. Three principal methodolog-ical results are reported. The three-parameter drift orbit (C+) reduces per-leg transfer cost by up to ∼40% on favor-able legs versus altitude-only manipulation for SSO orbits, with inclination as the dominant lever at near-polar in-clinations. The sequence–timeline coupling (per-leg drift time shifting downstream RAAN geometry through accu-mulated elapsed time) is made explicit and resolved by a two-phase global time-budget optimizer. The full 123-debris GTOC9 benchmark on the published JPL mission partition under the GTOC9-compliant Δ𝑡 𝑅 ≤ 30 d/leg con-straint yields 742.65 MEUR against the published JPL ref-erence value of 731.28 MEUR ( +1.55% ; JPL’s submitted competition score, retained as the anchor even though their paper reports post-competition improvements near 720 and 711 MEUR; the cost charges the first de-orbit package on every mission), demonstrating that a lightweight analytical pipeline reproduces the cost level of the published refer-ence to within about one and a half percent while running in 
+
+∼27 minutes on a single CPU core. On three of the ten mis-sions (M4, M6, M7) the framework’s per-mission cost lies below the published reference value, consistent with the structural cost profile of the published JPL benchmark on those missions. An independent sequence-recovery valida-tion reproduces a Mission 10 removal sequence consistent with the published JPL reference from the debris catalogue alone, and the analytic plan is numerically verified leg-by-leg with the framework’s own numerical-𝐽 2 propagator (cross-checked against a single-leg GMAT run): 83% of the 89 verified legs acquire the target orbit plane to bet-ter than 1 ◦ in RAAN (median 0.136 ◦), within 15% of the ideal plane-acquisition floor, with a terminal along-track phasing manoeuvre assumed but not simulated. A 17% tail of wide-gap legs still needs a dedicated plane-targeting burn, and the physically-executable four-burn decomposi-tion adds a measured +7.7% to the campaign Δ𝑉 above the analytic ledger, the principal realised-cost driver; the documented +3.8% nodal-rate offset is a small, bounded first-order reference-frame effect, not a model deficiency and not an added Δ𝑉 cost. Future work addresses four directions: (i) joint partition-and-sequence discovery via the Beam P-ACO backbone of Sec. 4.4, in which the mission partition itself is constructed alongside the per-mission sequences rather than adopted as a benchmark reference; (ii) extension to low-thrust electric propulsion, where the continuous-thrust arc replaces im-pulsive maneuvers and drift exploitation requires reformu-lation as an optimal-control problem; (iii) multi-agent fleet coordination, where multiple spacecraft partition the cata-logue and must avoid temporal conflicts; and (iv) hybrid-fidelity refinement, where analytical drift-orbit solutions seed full-dynamics numerical optimization in GMAT or equivalent, potentially closing the residual relative to the published JPL reference. 
+
+# Acknowledgments 
+
+The authors acknowledge ESA for organizing the GTOC9 Kessler Run competition and making the problem data publicly available. The first author acknowledges Nanyang Technological University for research support. The authors thank Final Proximity Space Systems for their support. 
+
+# References 
+
+[1] European Space Agency. DISCOSweb – Space debris statistics. https://sdup.esoc.esa.int/ discosweb/statistics/ , 2026. accessed 2026. [2] D. J. Kessler and B. G. Cour-Palais. Collision frequency of artificial satellites: The creation of a debris belt. Journal of Geophysical Research ,83(A6):2637–2646, 1978. [3] Dario Izzo, Ingmar Getzner, Daniel Hennes, and Luís F. Simões. Evolving solutions to TSP variants for active space debris removal. In Proceedings of the Genetic and Evolutionary Computation Conference ,pages 1207–1214. ACM, 2015. [4] European Space Agency. GTOC9: The Kessler Run. https://kelvins.esa.int/ gtoc9-kessler-run/ , 2017. [5] D. Izzo and M. Märtens. The Kessler Run: On the design of the GTOC9 challenge. Acta Futura , 11:11– 24, 2018. [6] A. Petropoulos, D. Grebow, D. Jones, G. Lantoine, A. Nicholas, J. Roa, J. Senent, J. Stuart, N. Arora, T. Pavlak, T. Lam, T. McElrath, R. Roncoli, D. Garza, N. Bradley, D. Landau, Z. Tarzi, F. Laipert, E. Bon-figlio, M. Wallace, and J. Sims. GTOC9: Methods and results from the Jet Propulsion Laboratory team. 
+
+Acta Futura , 11, 2018. 15 [7] M. Dorigo and L. M. Gambardella. Ant colony sys-tem: A cooperative learning approach to the traveling salesman problem. IEEE Transactions on Evolution-ary Computation , 1(1):53–66, 1997. [8] P. E. Gill, W. Murray, and M. A. Saunders. SNOPT: An SQP algorithm for large-scale constrained opti-mization. SIAM Journal on Optimization , 12:979– 1006, 2002. [9] Y. Luo, Y. Zhu, H. Zhu, Z. Yang, S. Mou, J. Zhang, Z. Sun, and J. Liang. GTOC9: Results from the National University of Defense Technology. Acta Futura , 11, 2018. [10] H. Li, S. Chen, H. Yang, Z. Chi, G. Tang, F. Jiang, and H. Baoyin. GTOC9: Results and methods of team 2 – Tsinghua University. Acta Futura , 11, 2018. [11] M. Hallmann, M. Schlotterer, A. Heidecker, M. Sagliano, F. Fumenti, V. Maiwald, and R. Schwarz. GTOC 9, multiple space debris ren-dezvous trajectory design in the J2 environment. Technical report, Institute of Space Systems, DLR, Bremen, Germany, 2017. [12] C. O. Absil, L. A. Ricciardi, M. Di Carlo, C. Greco, R. Serra, M. Polnik, A. Vroom, A. Riccardi, E. Minisci, and M. Vasile. GTOC 9: Results from the University of Strathclyde (team Strath++). Acta Futura , 11:57–70, 2018. [13] L. F. Simões, D. Izzo, E. Haasdijk, and A. E. Eiben. Multi-rendezvous spacecraft trajectory op-timization with beam P-ACO. In Evolutionary Com-putation in Combinatorial Optimization , pages 141– 156. Springer, 2017. [14] O. B. Iskender, K. Gokturk, D. Tellett, and A. Baker. Turning perturbations into propellant: Drift-aware multi-rendezvous trajectory optimization for in-orbit servicing. Acta Astronautica , 2026. [15] Iskender, Omer Burak. Space postman and ATLAS: Enabling startup participation in the orbital logistics economy. In Proc. 77th Int. Astronautical Congr. Int. Astronautical Federation , Antalya, Türkiye, 2026. Paper IAC-26,E6,1,10,x115070, IAF Businesses and Innovation Symposium. [16] Omer Burak Iskender, Keck-Voon Ling, Luca Si-monini, Markus Schlotterer, David Seelbinder, Stephan Theil, and Jan Marian Maciejowski. Dual quaternion based autonomous rendezvous and dock-ing via model predictive control. In Proc. 70th Int. Astronautical Congr. Int. Astronautical Federation ,pages 1–16, 2019. [17] Omer Burak Iskender. Model predictive control for spacecraft rendezvous and docking with uncooper-ative targets . PhD thesis, Nanyang Technological University, Singapore, 2020. [18] R. M. Karp. Reducibility among combinatorial prob-lems. In Complexity of Computer Computations ,pages 85–103. Springer, 1972. [19] R. Storn and K. Price. Differential evolution—a sim-ple and efficient heuristic for global optimization over continuous spaces. Journal of Global Optimization ,11(4):341–359, 1997. [20] G. Gamrath et al. The SCIP optimization suite 3.2. Technical Report Technical Report 15-60, ZIB, 2016. [21] D. Hennes and D. Izzo. Interplanetary trajectory plan-ning with Monte Carlo tree search. In Proceedings of the Twenty-Fourth International Joint Conference on Artificial Intelligence (IJCAI) , pages 769–775, 2015. [22] F. Biscani and D. Izzo. A parallel global multiobjec-tive framework for optimization: pagmo. Journal of Open Source Software , 5(53):2338, 2020. [23] NASA Goddard Space Flight Center. General Mis-sion Analysis Tool (GMAT) R2025a , 2025. Soft-ware, available at https://software.nasa.gov/ software/GSC-17177-1 .16
