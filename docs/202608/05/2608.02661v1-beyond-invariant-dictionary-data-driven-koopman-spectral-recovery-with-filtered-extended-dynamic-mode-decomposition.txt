@@ -1,0 +1,2058 @@
+Title: Beyond Invariant Dictionary: Data-Driven Koopman Spectral Recovery with Filtered Extended Dynamic Mode Decomposition
+
+URL Source: https://arxiv.org/pdf/2608.02661v1
+
+Published Time: Wed, 05 Aug 2026 00:05:40 GMT
+
+Number of Pages: 29
+
+Markdown Content:
+# Beyond Invariant Dictionary: Data-Driven Koopman Spectral Recovery with Filtered Extended Dynamic Mode Decomposition 
+
+Siji Chen 1, Igor Mezi´ c2,3 , and Sui Tang 31Program in Applied & Computational Mathematics, Princeton University (siji@princeton.edu )
+
+2Department of Mechanical Engineering, University of California, Santa Barbara (mezic@ucsb.edu )
+
+3Department of Mathematics, University of California, Santa Barbara ( suitang@ucsb.edu )
+
+Abstract 
+
+The Koopman operator provides a linear framework for analyzing nonlinear dynamical systems through their spectral properties. Extended Dynamic Mode Decomposition (EDMD) approximates this operator from snapshot data, but non-invariant dictionaries can introduce spurious eigenvalues. We introduce the Projected Koopman Operator Approximation framework for constructing Filtered EDMD operators. The framework projects the Koopman action onto admissible dictionary subspaces that need not themselves be invariant, while exactly preserving every represented Koopman eigenpair with nonzero eigenvalue. For range selection, the forward–intersection chain provides a canonical hierarchy of compatible subspaces. When the Koopman action is injective on the dictionary space, this hierarchy connects the full dictionary to its maximal invariant core while retaining useful intermediate models. For projection geometry, we analyze two canonical choices: a coordinate-orthogonal projector de-fined by the fixed dictionary coordinates, which requires no function-space Gram-matrix estimate but is basis-dependent, and a function-space orthogonal projector, which yields population EDMD at the unfiltered level. We characterize when these choices coincide and clarify their relations to EDMD and existing subspace-selection methods that apply EDMD on a reduced dictionary space. Algorithmically, we develop SVD-based procedures that construct the sampled forward–intersection chain and implement the coordinate projector. Under independent noiseless sampling and exact-rank identifiability, we prove that the resulting empirical operators converge almost surely to their population counterparts. Experiments on a Kronecker flow, a polynomial system, and the Van der Pol oscillator demonstrate reduced spectral pollution on informative dictionaries. For Van der Pol, an intermediate finite-tolerance level identifies candidates aligned with the local equilibrium reference lattice, even though the dictionary is not constructed from the corresponding exact eigenfunctions. The projection geometry further sepa-rates the two objects on the same certified subspace: the measure-free coordinate projector certifies the equilibrium spectrum independently of the sampling measure, while the L2(μ) projector approximates the limit-cycle spectrum. 
+
+# 1 Introduction 
+
+Analyzing nonlinear dynamical systems is a central yet challenging task in science and engineering, as such systems rarely admit closed-form solutions. The Koopman operator [15, 16] provides a systematic route to their analysis: acting on observables via composition with the flow, it replaces the study of nonlinear state-space trajectories with spectral analysis of a linear, albeit infinite-dimensional, operator [1]. Its spectral decomposition, the Koopman Mode Decomposition (KMD) [22], resolves system behavior into intrinsic oscil-lation frequencies, growth and decay rates, and coordinate representations such as eigenfunctions, providing a coordinate-free framework for analysis, prediction, and control of nonlinear dynamical systems [23, 30]. Since the Koopman operator K acts on an infinite-dimensional function space, any computational ap-proach must approximate it on a finite-dimensional subspace. Extended Dynamic Mode Decomposition 1arXiv:2608.02661v1 [math.NA] 1 Aug 2026 (EDMD) [31] is one of the most widely used data-driven algorithms for this purpose: it projects K onto the span G of a user-chosen dictionary of observables g = ( g1, . . . , g n)⊤ and estimates the corresponding matrix from snapshot pairs [17, 31]. If G is Koopman-invariant, the projection is exact in the sense that every eigenvalue of the finite-dimensional EDMD matrix is a genuine Koopman eigenvalue and the correspond-ing eigenfunction is faithfully represented in G. In practice, however, dictionaries are selected heuristically, typically monomials, radial basis functions, or delay coordinates, and there is generally no guarantee that their span is even approximately invariant. For such generic dictionaries the projection introduces spurious eigenvalues, spectral pollution , that carry no dynamical meaning yet are indistinguishable, within the EDMD output alone, from genuine Koopman eigenvalues [3, 6]. A common strategy for mitigating spectral pollution is to identify, exactly or approximately, Koopman-invariant subspaces contained in G. Symmetric Subspace Decomposition (SSD) [10] is a representative algebraic approach: it iteratively intersects forward- and backward-time EDMD range spaces, provably converging to the maximal Koopman-invariant subspace inside G. Its tunable variant T-SSD [11] relaxes exact invariance by pruning directions to achieve a prescribed accuracy–expressiveness trade-off. Recursive Forward–Backward EDMD (RFB-EDMD) [12] builds a nested hierarchy by recursively removing directions with large forward–backward inconsistency, with finite-iteration convergence guarantees for the subspace sequence. Koopman–Schur decomposition [9] replaces potentially ill-conditioned eigenvector-based modal decompositions by orthonormal Schur bases associated with ordered flags of Koopman-invariant subspaces. Principal angle decomposition [7] quantifies the failure of G to be Koopman-invariant by principal angles between G and its Koopman image KG. Across these approaches, exact or approximate invariance is the central organizing principle. Exact subspace methods may become spectrally uninformative when the maximal invariant core is trivial, whereas tolerance-based variants trade invariance for a larger retained space. This raises a broader question for mitigating spectral pollution: must the selected range itself be invariant to preserve the Koopman spectral content already represented in the dictionary? To answer this question, we introduce the Projected Koopman Operator Approximation (PKOA) frame-work, which separates range selection from projection geometry. An admissible projection has a range S ⊆ G 
+
+that contains the invariant content represented in G. Neither S need be invariant nor need the projection be orthogonal in the function-space inner product associated with the data measure. Nevertheless, every represented Koopman eigenpair with nonzero eigenvalue is preserved (Proposition 2). Filtered EDMD realizes this principle by projecting the Koopman action into a selected compatible range before computing its spectrum. Thus, filtering occurs during operator construction, rather than by screening computed eigenvalues afterward. A canonical multilevel choice of compatible ranges is the forward–intersection chain 
+
+S0 := G, Sj+1 := Sj ∩ KSj . (1) Here S0 = G is the unfiltered endpoint, while S1 = G ∩ KG is the first filtered range, retaining observables represented both in the dictionary and as Koopman images of dictionary observables. Because the spaces are nested, increasing the level imposes progressively stronger image-compatibility requirements and produces a hierarchy of increasingly selective filters. Every filtered level contains the maximal invariant core VG
+
+> max
+
+,so the preservation guarantee holds throughout the hierarchy even though the intermediate spaces need not be invariant and may be substantially larger than the core. For any selected level j ≥ 1, projecting the Koopman action onto Sj defines the corresponding Filtered EDMD operator. If K|G is injective, the chain stabilizes after finitely many steps at VG
+
+> max
+
+.
+
+Contributions. The main results of this paper are as follows. (i) Operator-theoretic framework and canonical projectors. We formalize the PKOA admissibility conditions and prove the resulting preservation guarantee for represented nonzero Koopman eigenpairs. For a fixed admissible range, we analyze two canonical choices: orthogonal projection in the fixed dictionary-coordinate geometry and orthogonal projection in the function-space geometry underlying population EDMD. We characterize when these choices coincide and clarify their population-level relations to EDMD and the reduced EDMD step used by SSD and T-SSD (Section 3). (ii) Data-driven coordinate projection. We design SVD-based algorithms that construct the sampled forward–intersection chain and its coordinate-orthogonal projector at any selected level directly from 2snapshot data (Algorithms 1 and 2). The coordinate-filtering step uses Euclidean geometry on coeffi-cient vectors and therefore requires no estimate of a function-space Gram matrix, although it depends on the chosen dictionary coordinates. Algorithm 2 recovers the maximal coefficient subspace com-patible with the selected intersection (Proposition 5), and a least-squares step assembles the filtered matrix. Under independent noiseless sampling and exact-rank identifiability, we prove almost-sure con-vergence of the empirical coordinate-projected Filtered EDMD operator to its population counterpart (Theorem 1) and extend the result to the full chain (Remark 7). (iii) Numerical validation. Comparisons with EDMD and existing subspace- and residual-based methods on three systems demonstrate the benefit of retaining intermediate filtered levels (Section 5). On the Kronecker and polynomial examples, these levels remove detected spurious eigenvalues while retaining the represented spectral content. For Van der Pol, where the terminal invariant model is uninfor-mative, an intermediate finite-tolerance level identifies candidates aligned with the local equilibrium reference lattice. The projection geometry further distinguishes equilibrium from limit-cycle content on the same certified subspace: the measure-free coordinate projector certifies the equilibrium spec-trum independently of the sampling measure, while the L2(μ) projector approximates the limit-cycle spectrum (Section 5.3.2). 
+
+Other related work. Residual DMD (ResDMD) [4, 6] takes a complementary output-certification ap-proach. In the eigenpair-screening implementation used here, it retains EDMD candidates whose computable residuals meet a prescribed threshold. Filtered EDMD instead changes the projection before the eigende-composition. Beyond eigenvalue screening and subspace extraction, several other lines of work address spec-tral pollution. For measure-preserving systems, moment-based spectral methods [18] establish convergence guarantees for Koopman spectral measures from trajectory moments, while delay-coordinate methods [8] approximate Koopman eigenvalues and eigenfunctions with the same guarantees. mpEDMD [2] enforces the unitary structure directly at the matrix level, yielding pollution-free spectral convergence for measure-preserving dynamics. Rigged DMD [5] treats spectra beyond the pure-point setting by passing to a rigged Hilbert space, where discrete and continuous spectral components can be represented in a unified spectral decomposition. On the dictionary-design side, analytic EDMD [21] exploits RKHS structure near hyper-bolic equilibria to avoid spectral pollution for analytically conjugate dynamics, kernel EDMD [32] works in reproducing kernel Hilbert spaces with quantitative error bounds [14, 29], and neural approaches [19, 28] learn dictionaries end-to-end. These methods enrich the dictionary or constrain the approximation, whereas PKOA changes the projection for a fixed dictionary. 
+
+Outline. Section 2 fixes notation and collects preliminaries on Koopman operator theory. Section 3 devel-ops the operator-theoretic framework. Section 4 presents the algorithms and convergence theory. Section 5 contains numerical experiments. Section 6 concludes. 
+
+# 2 Preliminaries 
+
+Notation. Bold lowercase (e.g. x, v) denote vectors and bold uppercase (e.g. X, A) denote matrices. In
+
+is the n × n identity, A∗ the conjugate transpose, and A† the Moore–Penrose pseudoinverse. For functions 
+
+f, g on the state space M with measure μ,
+
+⟨f, g ⟩μ := 
+
+Z
+
+> M
+
+f (v) g(v) dμ (v), L2(μ) := {f : M → C | ∥ f ∥2 
+
+> μ
+
+= ⟨f, f ⟩μ < ∞} .
+
+Calligraphic letters (e.g. G, V) denote subspaces of functions. When a finite collection g = ( g1, . . . , g n)⊤
+
+is fixed, we also write ⟨g(·), c⟩ for the finite-dimensional inner product Pnj=1 cj gj (·); context will always distinguish this from the L2(μ) inner product ⟨· , ·⟩ μ.For a linear operator T : U → U and a subspace V ⊆ U , T |V : V → T (V) denotes its restriction. For an operator T (or matrix T), σ(T ) (resp. σ(T)) denotes its spectrum. We take N = {0, 1, 2, . . . }.32.1 Koopman Operator and Eigenfunctions 
+
+Consider a discrete-time dynamical system 
+
+vj+1 = F (vj ), j = 0 , 1, 2, . . . , 
+
+with flow map F : M → M . The associated Koopman operator K : L2(μ) → L2(μ) is defined by (Kg )( v) = g(F (v)) .
+
+A nonzero ψ ∈ L2(μ) is a Koopman eigenfunction with eigenvalue λ ∈ C if Kψ = λψ . Eigenvalues encode temporal growth, decay, or oscillations, while eigenfunctions yield intrinsic coordinates for the dynamics. 
+
+Koopman Mode Decomposition. If an observable g admits an expansion g = P 
+
+> i
+
+bi ψi in Koopman eigenfunctions {ψi} with eigenvalues {λi}, then the coefficients {bi} are the associated Koopman modes and the time evolution takes the form 
+
+g(vt) = Ktg(v0) = X
+
+> i
+
+bi λti ψi(v0).
+
+This Koopman Mode Decomposition (KMD) [22] links spectral properties to temporal dynamics. 
+
+2.2 Extended Dynamic Mode Decomposition 
+
+The Koopman operator acts on an infinite-dimensional function space, so practical computation requires a finite-dimensional surrogate built from data. Extended Dynamic Mode Decomposition (EDMD) [31] provides the standard construction: one selects a dictionary of observables g = ( g1, . . . , g n)⊤ spanning a subspace 
+
+G := span {g1, . . . , g n} ⊂ L2(μ), and approximates K on G via least squares. Given samples {xi}mi=1 ∼ μ, define data matrices 
+
+X = g(x1) · · · g(xm), Y = Kg(x1) · · · Kg(xm).
+
+The EDMD matrix is the least-squares solution 
+
+AE,m := arg min 
+
+> A∈Cn×n
+
+∥Y − AX ∥2 
+
+> F
+
+= YX †.
+
+Let AE,m : G → G denote the operator induced by this matrix, 
+
+AE,m ⟨g, c⟩ := ⟨AE,m g, c⟩.
+
+This has a variational interpretation: AE,m minimizes 
+
+> n
+
+X
+
+> j=1
+
+P ˆμm 
+
+> G
+
+(Kg j − Ag j ) 2ˆμm ,
+
+where Ag j := Pnk=1 Ajk gk ∈ G (so A represents a linear operator G → G ), ˆ μm is the empirical measure, and 
+
+P ˆμm 
+
+> G
+
+is the L2(ˆ μm)-orthogonal projection onto G. Under μ-independence of the dictionary (i.e., no nontrivial linear combination of the gj vanishes μ-a.e.), the associated operator converges as m → ∞ to 
+
+AE = P μ 
+
+> G
+
+◦ (K|G ), (2) the L2(μ)-orthogonal projection of K onto G [17]. The pair ( g, AE,m ) serves as a data-driven approximate linear representation of the dynamics—a concept we formalize next. 42.3 Finite-Dimensional Representations and Invariant Subspaces 
+
+The quality of EDMD hinges on the relationship between the dictionary G and the Koopman operator. In the ideal case, G is Koopman-invariant : KG ⊆ G . When this holds, K|G admits an exact matrix representation. 
+
+Definition 1 (Linear representation) . If KG ⊆ G , there exists a unique A ∈ Cn×n such that 
+
+Kg(·) = A g (·).
+
+We call (g, A) a linear representation of K on G. When G is not invariant, the data-driven pair (g, AE,m )
+
+is called an approximate linear representation .
+
+The spectral content of A directly encodes Koopman spectral objects. The following spectral correspon-dence is well established [25]. 
+
+Proposition 1 (Spectral correspondence) . Let (g, A) be a linear representation with A diagonalizable, having eigenvalues {λi}, left eigenvectors {li}, and right eigenvectors {ri}, chosen such that ⟨rj , li⟩ = δij .
+
+Then: 
+
+(i) The eigenvalues {λi} of A are Koopman eigenvalues. 
+
+(ii) The functions ψi(·) := ⟨g(·), li⟩ are Koopman eigenfunctions with Kψ i = λiψi.
+
+(iii) The right eigenvectors {ri} are Koopman modes, giving the expansion g(·) = P 
+
+> i
+
+riψi(·).When A is not diagonalizable, an analogous correspondence holds with generalized eigenfunctions (see Ap-pendix A). 
+
+While any finite-dimensional Koopman-invariant subspace admits such a spectral correspondence, some invariant subspaces are more informative than others. Subspaces that contain directions mapped to zero by 
+
+K (e.g., observables supported on wandering sets) contribute degenerate spectral content with no dynamical meaning. This issue is absent for invertible dynamics, since the Koopman operator is then injective. To exclude such redundancies, we restrict attention to subspaces on which K acts invertibly. 
+
+Definition 2 (Strong Koopman invariance) . A subspace V ⊂ L2(μ) is strongly Koopman-invariant if KV =
+
+V and K|V is invertible. 
+
+When K|V has a nontrivial kernel, its elements are observables annihilated in one time step and therefore do not contribute nonzero Koopman spectral components. Requiring invertibility ensures that the invari-ant subspace captures only dynamically meaningful spectral content. Throughout this paper, “Koopman-invariant” means strongly Koopman-invariant unless otherwise stated. 
+
+The spectral pollution problem. The invariance discussion above pinpoints precisely why EDMD strug-gles. In formula (2), the operator AE = P μ 
+
+> G
+
+◦ (K|G ) uses the L2(μ)-orthogonal projection onto G. When 
+
+G is invariant, P μ 
+
+> G
+
+acts as the identity on KG and AE recovers K|G exactly. When G is not invariant, KG
+
+extends beyond G, and the orthogonal projection can mix invariant components with transient directions that lie outside G. This mixing can produce spurious eigenvalues, spectral pollution , whose relation to the true Koopman spectrum is not guaranteed. The spectral pollution considered here is a finite-dimensional compression effect and should be distinguished from the intrinsic limitations of the ordinary L2(μ) point spectrum. Systems with continuous spectra can instead be studied using spectral measures [18], pseudospec-tral methods [6], or formulations in a rigged Hilbert space [5]. Our focus is different: we address spurious eigenvalues created by the L2(μ)-orthogonal compression P μ 
+
+> G
+
+◦ (K|G ) when G is not Koopman-invariant. 
+
+# 3 A Projected Koopman Approximation Framework 
+
+3.1 The Projected Koopman Operator Approximation (PKOA) 
+
+As observed in Section 2.2, the EDMD operator AE = P μ 
+
+> G
+
+◦ (K|G ) is built from the L2(μ)-orthogonal projection onto the full dictionary G. When G is not Koopman-invariant, this projection can pollute the 5spectrum by mixing genuine invariant content with transient directions. But it is invariant subspaces, not 
+
+L2(μ)-orthogonality, that anchor the Koopman spectrum. This motivates replacing the orthogonal projection with a more general one that retains the invariant structure within G.
+
+Generalized projections. Let DP ⊆ L2(μ) be a linear subspace, and consider a map 
+
+P : DP → D P .
+
+We call P an admissible generalized projection relative to G if it satisfies the following conditions: (C1) Linearity and idempotence: P is linear and P 2 = P .(C2) Range condition: 
+
+ran( P ) = GP ⊆ G .
+
+(C3) Domain condition: 
+
+KG ⊆ D P .
+
+(C4) Invariant-content condition: every Koopman-invariant subspace of G is contained in GP .Conditions (C1) and (C2) make P an algebraic projection onto GP ; no orthogonality is required. Condi-tion (C3) ensures that the associated projected Koopman approximation 
+
+AP := P ◦ (K|G ) : G −→ G P
+
+is well defined, while condition (C4) ensures that the projection range retains all Koopman-invariant content represented in the dictionary. In particular, every admissible range satisfies 
+
+VG 
+
+> max
+
+⊆ G P ⊆ G ,
+
+so these ranges interpolate between the maximal invariant core and the full dictionary. At the full-dictionary endpoint, choosing the function-space orthogonal projector gives population EDMD. At the invariant-core endpoint, the restriction of AP to VG 
+
+> max
+
+is the exact Koopman restriction. Different admissible projections, even those with the same range, may still act differently away from the invariant core. When discussing its spectrum, we regard AP as an endomorphism of G through the natural inclusion 
+
+GP ,→ G .
+
+Spectral preservation. Admissible generalized projections preserve every Koopman eigenpair in G with nonzero eigenvalue, as the following proposition makes precise. 
+
+Proposition 2 (Preservation of Koopman eigenpairs with nonzero eigenvalue) . Suppose P satisfies (C1)– (C4) . If f ∈ G \ { 0} and 
+
+Kf = λf, λ̸ = 0 ,
+
+then f ∈ ran( P ) and 
+
+AP f = λf. 
+
+Consequently, 
+
+{λ ∈ C \ { 0} : ∃f ∈ G \ { 0}, Kf = λf } ⊆ σ(AP ).
+
+Proof. Since λ̸ = 0, the space span {f } is Koopman-invariant and is therefore contained in ran( P ) by (C4). By (C1), P f = f , and hence 
+
+AP f = P (Kf ) = P (λf ) = λf. 
+
+6Remark 1 (Compatibility of the factorization) . Suppose K|G is injective and a linear map A : G → G is prescribed. The relation eP (Kf ) := Af defines a linear map from KG into ran( A). It extends to a projection onto ran( A) if and only if 
+
+eP y = y for every y ∈ KG ∩ ran( A),
+
+or equivalently, Af = Kf whenever Kf ∈ ran( A). If K|G is not injective, one additionally needs A|ker( K|G ) =0 for eP to be well defined. Thus, factorization through a projection imposes a genuine compatibility condition; (C4) further ensures preservation of the invariant content. 
+
+3.2 Filtered EDMD Operators via Forward Intersections 
+
+We now turn to the specific projection used throughout the paper. The construction proceeds in two stages: we first identify a natural family of subspaces compatible with the Koopman action, then define the Filtered EDMD operator by projecting onto a member of that family. 
+
+3.2.1 The forward–intersection chain 
+
+Any K-invariant subspace of G must be stable under one Koopman step, hence 
+
+V ⊆ G ∩ KG
+
+for every K-invariant V ⊆ G . This observation suggests constructing admissible projection ranges by en-forcing multi-step persistence under the Koopman action. Starting from G, we iteratively intersect with its forward image: 
+
+S0 := G, Sj+1 := Sj ∩ KSj (j ≥ 0) . (3) This generates a nested chain 
+
+G = S0 ⊇ S 1 ⊇ S 2 ⊇ · · · 
+
+that progressively filters out directions failing to persist under repeated Koopman actions. The chain con-verges to the largest invariant subspace: 
+
+Definition 3 (Largest K-invariant subspace) . Let G ⊆ L2(μ) be finite-dimensional. The largest K-invariant subspace of G, denoted VG
+
+> max
+
+, is the unique K-invariant subspace of G that contains every other K-invariant subspace of G.
+
+Proposition 3 (Fixed point of the forward–intersection chain) . Let K : H → H be linear on a Hilbert space 
+
+H, and let S0 ⊂ H be finite-dimensional. Define the chain {S j } by (3) . Then: 1. Finite-step stabilization. The chain stabilizes in at most dim S0 steps: there exists i ≤ dim S0 such that Si+1 = Si =: S∗, and S∗ is K-invariant. 2. Maximality. If K|S0 is injective, then S∗ = VS0
+
+> max
+
+.Proof. (1) The sequence ( Sj ) is nested. If Si+1 = Si, then Si ⊆ KSi; since dim( KSi) ≤ dim( Si), equality holds, so KSi = Si. If no stabilization occurs, each step strictly decreases the dimension, which can happen at most dim S0 times. (2) Let U ⊆ S 0 be K-invariant. Injectivity implies dim( KU ) = dim( U ), so KU = U . In particular 
+
+U ⊆ KS0, hence U ⊆ S 0 ∩ KS0 = S1. By induction, U ⊆ S j for all j, so U ⊆ S ∗.The chain {S j } has two key properties that make it the natural choice of projection ranges: (i) Spectral faithfulness —each Sj removes directions that fail to persist for j Koopman steps, suppressing transient contamination in a controlled manner; and (ii) Maximality —for a given persistence level j, the space Sj is the largest subspace consistent with j-step persistence, so filtering is never more restrictive than necessary. Maximality is structural, not spectral: VG 
+
+> max
+
+is the largest Koopman-invariant subspace inside G, but its richness is fixed by the dynamics, not the dictionary. If K has no nontrivial L2(μ) eigenfunctions, none can be created by enlarging G, so VG 
+
+> max
+
+collapses to the constants. This is the case for mixing dynamics (see [26]), whose spectrum is continuous; recovering it then requires leaving L2(μ) [5]. 73.2.2 The Filtered EDMD operator 
+
+With the chain in hand, we define the Filtered EDMD operator by projecting the Koopman action onto its members. 
+
+Definition 4 (Admissible subspace and Filtered EDMD operator) . We call a subspace S admissible if 
+
+VG 
+
+> max
+
+⊆ S ⊆ G ∩ KG, (4) 
+
+that is, S contains the maximal Koopman-invariant subspace of G and lies in the one-step compatible space 
+
+G ∩ KG. An admissible subspace is in particular an admissible projection range in the sense of (C1)–(C4) ,with the additional property S ⊆ KG; this inclusion makes the coordinate-orthogonal projector of Section 3.2.3 well defined. For an admissible S, let PS : KG → S be a projection (not necessarily L2(μ)-orthogonal). The 
+
+Filtered EDMD operator associated with S is 
+
+AS := PS ◦ (K|G ) : G −→ S . (5) This construction specializes the PKOA framework by restricting the projection range to subspaces that are compatible with the Koopman action: S always contains VG 
+
+> max
+
+while excluding directions outside G ∩ KG
+
+that cannot carry genuine spectral content. The projection PS need not be orthogonal, consistent with developments in nonlinear reduced-order modeling, where oblique projections align reduced representations with dynamically relevant directions [27]. 
+
+Remark 2 (Role of the projection) . Definition 4 leaves the projection PS unspecified because the spectral guarantee in Proposition 2 depends only on its range. Any two projections onto the same admissible S
+
+yield Filtered EDMD operators that agree with K on VG 
+
+> max
+
+and hence preserve the same Koopman eigenpairs with nonzero eigenvalues, although they may differ on complementary directions in G. Thus, S determines the retained range, while PS determines the action away from the invariant core. Section 3.2.3 compares the coordinate-orthogonal and L2(μ)-orthogonal choices and their relations to EDMD and the comparison methods; Section 4 constructs the coordinate-orthogonal choice from data. 
+
+Each filtered level Sj , j ≥ 1, is an admissible projection range because VG 
+
+> max
+
+⊆ S ∗ ⊆ S j ⊆ S 1 = G ∩ KG.Choosing any projection PSj : KG → S j then gives an admissible PKOA, so ASj inherits the spectral preservation guarantee of Proposition 2. 
+
+3.2.3 Canonical projection choices and their relation to EDMD 
+
+For this population-level comparison, assume that {gj }nj=1 is linearly independent in L2(μ) and that K|G is injective. Then Kg = ( Kg 1, . . . , Kg n)⊤ is a basis of KG. Following the coefficient convention of Section 2.2, define the conjugate-linear bijection ΨK : Cn → KG, ΨK c := ⟨Kg, c⟩ =
+
+> n
+
+X
+
+> j=1
+
+cj Kg j .
+
+For an admissible S, set WS := Ψ −1 
+
+> K
+
+(S). This gives two natural choices for the projector in Definition 4. (i) Coordinate-orthogonal projection. Let r = dim S and let Q ∈ Cn×r have Euclidean-orthonormal columns spanning WS . Define 
+
+Πc 
+
+> S
+
+:= QQ ∗, P c 
+
+> S
+
+ΨK c := Ψ K Πc 
+
+> S
+
+c, Ac 
+
+> S
+
+:= P c 
+
+> S
+
+◦ (K|G ).
+
+The coefficient projector Πc 
+
+> S
+
+is Euclidean-orthogonal, whereas the induced function-space projector 
+
+P c 
+
+> S
+
+is generally oblique in L2(μ). Once WS is fixed, this construction requires no L2(μ) inner products or Gram-matrix estimate; its geometry is instead determined by the chosen Kg coordinates, hence basis-dependent. 8(ii) L2(μ)-orthogonal projection. Let P μ 
+
+> S
+
+: L2(μ) → S be the orthogonal projector and define 
+
+Aμ 
+
+> S
+
+:= P μ 
+
+> S
+
+◦ (K|G ).
+
+This choice depends on μ through the intrinsic function-space geometry. It also extends to any finite-dimensional target contained in G, admissible or not. In particular, at S0 = G, Aμ 
+
+> G
+
+= AE . The coordinate choice includes S0 only when KG = G; otherwise it begins at S1 ⊆ KG.Injectivity is used only to identify Kg as a basis and to make the Gram matrix below positive definite. Without injectivity, set er := dim Ψ −1 
+
+> K
+
+(S) = dim S + dim ker Ψ K and choose Q ∈ Cn×er with Euclidean-orthonormal columns spanning Ψ −1 
+
+> K
+
+(S). Since ker Ψ K ⊆ Ψ−1 
+
+> K
+
+(S), the projector fixes ker Ψ K , so P c 
+
+> S
+
+ΨK c is independent of the coefficient representative. Using this Q in the same formulas gives the coefficient-space extension used by the algorithms below. 
+
+Proposition 4 (Canonical projectors and EDMD) . Let HK be the positive-definite Gram matrix satisfying 
+
+⟨ΨK a, ΨK b⟩μ = a∗HK b.
+
+For each admissible S,
+
+P c 
+
+> S
+
+= P μ 
+
+> S
+
+|KG ⇐⇒ HK Πc 
+
+> S
+
+= Πc 
+
+> S
+
+HK . (6) 
+
+Consequently, when these equivalent conditions hold, Ac 
+
+> S
+
+= Aμ 
+
+> S
+
+. In particular, the two operators coincide for every admissible S when Kg is L2(μ)-orthonormal. Mutually orthogonal elements with a common norm are also sufficient; orthogonality with unequal norms is not sufficient for an arbitrary S.For any finite-dimensional U ⊆ L2(μ), define AU 
+
+> E
+
+:= P μ 
+
+> U
+
+◦ (K|U ). Then every finite-dimensional S ⊆ G 
+
+satisfies 
+
+Aμ 
+
+> S
+
+= P μ 
+
+> S
+
+◦ AG 
+
+> E
+
+, Aμ 
+
+> S
+
+|S = AS 
+
+> E
+
+, AG 
+
+> E
+
+= AE . (7) 
+
+Proof. Transporting the L2(μ) inner product to Cn gives the metric HK . The Euclidean projector Πc 
+
+> S
+
+is orthogonal in this metric exactly when WS reduces HK , which is equivalent to (6). Transporting this identity back through Ψ K gives the asserted projector equality. For (7), the inclusion S ⊆ G implies P μ 
+
+> S
+
+◦ P μ 
+
+> G
+
+= P μ 
+
+> S
+
+.Composing with K|G gives the first identity, and restricting to S gives the second. 
+
+Example 1 (The two projections and EDMD) . Let F (x) = x2 on [0 , 1] , let μ be Lebesgue measure, and let 
+
+Kf = f ◦ F . Take G = span {1, x }. Then KG = span {1, x 2} and S = G ∩ KG = span {1}. On KG,
+
+P c 
+
+> S
+
+(a + bx 2) = a, P μ 
+
+> S
+
+(a + bx 2) = a + b
+
+3 .
+
+Therefore 
+
+Ac 
+
+> S
+
+1 = Aμ 
+
+> S
+
+1 = AE 1 = 1 , Ac 
+
+> S
+
+x = 0 , Aμ 
+
+> S
+
+x = 13 , AE x = x − 16 .
+
+Thus the three operators agree on the invariant constant function but differ on the non-invariant direction 
+
+x.
+
+Remark 3 (Relation to comparison methods) . At the population level, exact SSD [10] targets the terminal invariant space VG
+
+> max
+
+, whereas T-SSD [11] selects a tolerance-dependent subspace. Both then fit EDMD on the selected space. Thus, if either method selects U ⊆ G , its reduced population operator is 
+
+AU 
+
+> E
+
+= Aμ 
+
+> U
+
+|U .
+
+If an admissible S is Koopman-invariant, no orthogonality assumption on Kg is needed and 
+
+Ac 
+
+> S
+
+|S = Aμ 
+
+> S
+
+|S = AS 
+
+> E
+
+= K|S ;
+
+the reduced SSD or T-SSD operator also equals K|S whenever that method selects S. In particular, if KG ⊆ G ,injectivity gives KG = G and exact SSD selects G. If instead S1 = G ∩ KG is invariant, Proposition 3 gives 
+
+S1 = VG 
+
+> max
+
+and exact SSD selects S1. In either case, the reduced T-SSD operator equals the corresponding Koopman restriction whenever T-SSD selects that space. 
+
+9ResDMD and RFB-EDMD do not enter these population identities; Section 5 compares their finite-data outputs. These identities concern restrictions to S: Filtered EDMD acts from G into S, whereas SSD and T-SSD act on S. For any such invariant S and a decomposition G = S ⊕ T , the zero extension of the reduced operator equals A⋄S on G if and only if 
+
+P ⋄S KT = {0}, ⋄ ∈ { c, μ }.
+
+Below, P c 
+
+> S
+
+and Ac 
+
+> S
+
+denote the population function-space projector and operator. At finite sample size, 
+
+bSj,m denotes a sample-value space, WSj ,m its compatible coefficient preimage, Πc  
+
+> Sj,m
+
+the corresponding coefficient projector, Ac  
+
+> Sj,m
+
+the empirical matrix, and Ac  
+
+> Sj,m
+
+its induced operator on G.
+
+# 4 Algorithms and Convergence 
+
+For each filtered level j ≥ 1, the population construction first selects a target Sj along the forward– intersection chain and then projects KG onto it. The finite-data construction mirrors these steps. From the snapshot matrices X and Y, we first construct the sampled intersections bSj,m . For a selected level, we then recover WSj ,m , form the coordinate-orthogonal coefficient projector Πc 
+
+> Sj,m
+
+, and assemble Ac 
+
+> Sj,m
+
+. Section 4.2 relates these finite-data objects to their population counterparts. 
+
+4.1 Data-driven algorithms 
+
+Finite-data pipeline. Recall the data matrices X, Y ∈ Cn×m from Section 2.2, recording evaluations of the dictionary g and its Koopman images at m sample points. Once a sampled target has been selected, let Πc 
+
+> S,m
+
+∈ Cn×n be its coordinate-orthogonal projector in the Kg coefficient space. The empirical Filtered EDMD matrix is 
+
+Ac 
+
+> S,m
+
+:=  Πc
+
+> S,m
+
+YX†. (8) It induces an operator Ac 
+
+> S,m
+
+: G → G by 
+
+Ac
+
+> S,m
+
+⟨g, c⟩ := ⟨Ac
+
+> S,m
+
+g, c⟩. (9) The matrix YX † is the usual EDMD least-squares regression. Left multiplication by Πc 
+
+> S,m
+
+enforces the coordinate-filtering step. The pair ( g, Ac
+
+> S,m
+
+) is an approximate linear representation in the sense of Definition 1. 
+
+Sampled forward–intersection chain. Define the sampling operator 
+
+Emf := ( f (x1), . . . , f (xm)) ∈ C1×m, X = Em(g), Y = Em(Kg). (10) In the last two identities, Em is applied componentwise. The row spaces row( X) and row( Y) are the sampled counterparts of G and KG. The first sample-value intersection is 
+
+bS1,m := row( X) ∩ row( Y) ⊆ C1×m, (11) which can be represented via a coefficient matrix C1 satisfying row( C1X) = bS1,m . More generally, Cj encodes a sample-value space through row( Cj X), while row( Cj Y) contains the samples of its forward image. The recursion is bSj+1 ,m := row( Cj X) ∩ row( Cj Y), row( Cj+1 X) = bSj+1 ,m , (12) with bS0,m := row( X). This produces the nested chain of sample-value spaces 
+
+bS0,m ⊇ bS1,m ⊇ bS2,m ⊇ · · · ,
+
+the finite-data analogue of the operator-theoretic chain G ⊇ S 1 ⊇ S 2 ⊇ · · · ⊇ V G
+
+> max
+
+. Under sampling identifiability, Proposition 6 makes this correspondence exact. Algorithm 1 computes the coefficient matrices 
+
+{Cj } via SVD, providing a numerically stable realization of these intersections. 10 Algorithm 1 Iterative Row-Space Intersections (Coefficient Form) 
+
+Input: X , Y ∈ Cn×m with rank( X) = n
+
+Output: Coefficient matrices {Cj }Jj=1 s.t. row( Cj X) = bSj,m  
+
+> 1:
+
+Initialize. Set C0 ← In and r0 ← n. 
+
+> 2:
+
+for j = 0 , 1, 2, . . . do  
+
+> 3:
+
+Form stacked matrix. Z j := 
+
+Cj XCj Y
+
+
+
+∈ C2rj ×m. 
+
+> 4:
+
+SVD and rank. Compute a full SVD Zj = Uj Σj V∗ 
+
+> j
+
+and set r′ 
+
+> j
+
+:= rank( Zj ).  
+
+> 5:
+
+Left nullspace block. Partition Uj conformally as 
+
+Uj =
+
+"U(11)  
+
+> j
+
+U(12) 
+
+> j
+
+U(21)  
+
+> j
+
+U(22) 
+
+> j
+
+#
+
+,
+
+where U(12)  
+
+> j
+
+∈ Crj ×(2 rj −r′  
+
+> j)
+
+satisfies row  (U(12)  
+
+> j
+
+)∗ Cj X = row( Cj Y) ∩ row( Cj X). 
+
+> 6:
+
+Intersection coefficients. Compute a rank-revealing QR factorization (or economy SVD), and let 
+
+Qj ∈ Crj ×kj+1 have orthonormal columns spanning col( U(12)  
+
+> j
+
+), where kj+1 = rank( U(12)  
+
+> j
+
+).  
+
+> 7:
+
+Update coefficients. C j+1 ← Q∗ 
+
+> j
+
+Cj ∈ Ckj+1 ×n. 
+
+> 8:
+
+Stopping rule. If kj+1 = 0 (zero intersection) or kj+1 = rj (no rank drop), set J := j + 1 and 
+
+break ; otherwise set rj+1 ← kj+1 . 
+
+> 9:
+
+end for  
+
+> 10:
+
+return {Cj }Jj=1 .
+
+Remark 4 (Numerical rank) . In finite precision, we implement these intersections using numerical rank. For the stacked matrix Zj , let {σk} be its singular values. With tolerance ε ∈ (0 , 1) , set 
+
+r′ 
+
+> j
+
+:= # { σk : σk > τ (ε) }, τ (ε) = 
+
+(
+
+ε, absolute cutoff ,ε · σmax , relative cutoff .
+
+Truncation at rank r′ 
+
+> j
+
+filters small singular directions; whether a dynamically relevant direction is retained depends on the tolerance relative to the corresponding singular-value gap. 
+
+Assembling the Filtered EDMD matrix. Given a coefficient matrix C encoding a selected sample-value target bSm := row( CX ), define its compatible preimage in the Kg coefficient space by 
+
+WS,m := c ∈ Cn : c∗Y ∈ bSm . (13) Algorithm 2 recovers this space as col( U(12) ), orthonormalizes it to obtain Q, and forms 
+
+Πc 
+
+> S,m
+
+:= QQ ∗.
+
+In summary, the finite-data construction follows the pipeline 
+
+bSm −→ WS,m −→ Πc 
+
+> S,m
+
+−→ Ac
+
+> S,m
+
+.
+
+Algorithm 2 realizes the coordinate-orthogonal choice introduced in Section 3.2.3. The following propo-sition shows that col( Q) is the full compatible coefficient preimage of the selected sample-value target; its maximality is a property of the recovered range, independent of the projection geometry placed on it. 
+
+Proposition 5 (Maximality of the recovered coefficient subspace) . Let C ∈ Cr×n encode a sampled subspace 
+
+bSm = row( CX ) ⊆ row( Y), and let U(12) ∈ Cn×(n+r−r′) be the block extracted in Step 2 of Algorithm 2. Then 
+
+col( U(12) ) = WS,m =  v ∈ Cn : v∗Y ∈ row( CX ) .
+
+11 Algorithm 2 Coordinate-Projected Filtered EDMD Matrix 
+
+Input: Data matrices X, Y ∈ Cn×m with rank( X) = n; coefficient matrix C ∈ Cr×n with bSm := row( CX ) ⊆ row( Y), as holds for every filtered level returned by Algorithm 1. 
+
+Output: Coefficient projector Πc 
+
+> S,m
+
+∈ Cn×n and Filtered EDMD matrix Ac 
+
+> S,m
+
+∈ Cn×n. 
+
+> 1:
+
+Stack and factorize. Form Z := 
+
+ YCX 
+
+
+
+∈ C(n+r)×m, compute its full SVD Z = UΣV ∗, and set 
+
+r′ := rank( Z).  
+
+> 2:
+
+Extract intersection coefficients. Partition U conformally as U =  U(11) U(12)  
+
+> U(21) U(22)
+
+; the block U(12) ∈
+
+Cn×(n+r−r′) satisfies col( U(12) ) = WS,m , row  (U(12) )∗Y = bSm. 
+
+> 3:
+
+Orthogonalize. Compute a rank-revealing QR factorization (or economy SVD), and let Q ∈ Cn×k
+
+have orthonormal columns spanning col( U(12) ), where k = dim( WS,m ) = rank( U(12) ).  
+
+> 4:
+
+Projector. Set Πc 
+
+> S,m
+
+:= QQ ∗. 
+
+> 5:
+
+Assemble. A c 
+
+> S,m
+
+:= ( Πc
+
+> S,m
+
+Y)X†. 
+
+> 6:
+
+return Π c 
+
+> S,m
+
+and Ac
+
+> S,m
+
+.
+
+That is, a coefficient direction v is compatible with bSm if and only if v ∈ col( U(12) ). Consequently, WS,m =col( Q) is the unique maximal coefficient subspace whose directions remain in bSm after application to Y: if 
+
+W ⊆ Cn and v∗Y ∈ bSm for every v ∈ W , then W ⊆ WS,m .Proof. Write Z =  YCX 
+
+ ∈ C(n+r)×m, and let U =  U(11) U(12)  
+
+> U(21) U(22)
+
+ be the full unitary matrix from the SVD 
+
+Z = UΣV ∗, partitioned so that the first n rows correspond to Y and the last r rows to CX . The columns of  U(12) 
+
+> U(22)
+
+ form an orthonormal basis for the left null space of Z.
+
+(⊆). If v ∈ col( U(12) ), there exists w ∈ Cr such that [ v; w] lies in the left null space of Z, i.e. v∗Y+w∗CX =
+
+0. Hence v∗Y = −w∗CX ∈ row( CX ). 
+
+(⊇). Conversely, suppose v ∈ Cn satisfies v∗Y ∈ row( CX ). Then there exists w ∈ Cr with v∗Y = −w∗CX ,so [ v; w]∗Z = 0. Since the left null space of Z is spanned by the columns of  U(12) 
+
+> U(22)
+
+, there exists a coefficient vector α such that v = U(12) α, giving v ∈ col( U(12) ). Since col( Q) = col( U(12) ), the space col( Q) is precisely the set of compatible directions. The matrix 
+
+Πc 
+
+> S,m
+
+= QQ ∗ is the Euclidean-orthogonal projector onto this maximal recovered range. This range identification, together with computational simplicity (a single SVD followed by a rank-revealing orthogonalization), motivates our use of the coordinate-orthogonal projector. 
+
+Remark 5 (Projection geometry) . By Proposition 4, the induced function-space projector P c 
+
+> S
+
+is generally oblique in L2(μ) and agrees with P μ 
+
+> S
+
+|KG exactly under the stated Gram-compatibility condition. The algo-rithms and convergence results below concern the coordinate choice; implementing the L2(μ) choice would additionally require estimating the Gram matrix of Kg.
+
+Remark 6. Unlike SSD, which retains only the terminal invariant space, Algorithms 1–2 retain the sampled chain and construct a coefficient projector at each filtered level; see Remark 3. 
+
+4.2 Convergence theory 
+
+We now establish that the empirical Filtered EDMD operator converges to its population counterpart as the sample size grows. The analysis proceeds in three stages: convergence at the first intersection, extension to intermediate levels, and passage to the terminal invariant subspace. Throughout, the convergence results concern the empirical coefficient projector Πc  
+
+> Sj,m
+
+constructed by Algorithm 2 and the induced Filtered EDMD operator Ac 
+
+> Sj,m
+
+; by Remark 2, the spectral preservation guarantee holds independently of this choice. To certify that sampled intersections faithfully reproduce their operator-theoretic counterparts, we impose a mild identifiability condition. 12 Assumption 1 (Sampling identifiability) . The sampling operator Em is injective on G + KG, i.e., 
+
+ker( Em) ∩ (G + KG) = {0}.
+
+Equivalently, in the noiseless setting with m ≥ dim( G + KG),
+
+rank 
+
+YX
+
+
+
+= dim( G + KG). (14) 
+
+Proposition 6 (Intersections commute with sampling) . Under Assumption 1, for any U, V ⊂ G + KG,
+
+Em(U ∩ V ) = Em(U) ∩ E m(V).
+
+In particular, bS1,m = row( X) ∩ row( Y) = Em(G ∩ KG), and inductively the sampled chain { bSj,m } mirrors the operator-theoretic chain {S j }.Proof. The inclusion Em(U ∩ V ) ⊆ E m(U) ∩ E m(V) is immediate. For the reverse, let y ∈ E m(U) ∩ E m(V). Then y = Em(u) = Em(v) with u ∈ U , v ∈ V , so Em(u − v) = 0 and u − v ∈ G + KG. By Assumption 1, 
+
+u = v ∈ U ∩ V , hence y ∈ E m(U ∩ V ). The following theorem establishes convergence at the first nontrivial intersection ( j = 1). 
+
+Theorem 1 (Convergence of the empirical Filtered EDMD operator) . At the first filtered level, set 
+
+WS1,m := c ∈ Cn : c∗Y ∈ bS1,m , Πc 
+
+> S1,m
+
+:= proj WS1,m , (15) 
+
+where proj denotes Euclidean-orthogonal projection in Cn, and define 
+
+Ac 
+
+> S1,m
+
+:=  Πc
+
+> S1,m
+
+YX†. (16) 
+
+Let Ac 
+
+> S1,m
+
+be the induced operator from (9) . For i.i.d. samples xi ∼ μ, suppose that {gj }nj=1 is L2(μ)-linearly independent, namely 
+
+∥⟨ g, c⟩∥ μ > 0 for every c̸ = 0.
+
+Then, almost surely, 
+
+Ac 
+
+> S1,m
+
+− Ac  
+
+> S1L(G)
+
+−→ 0, Ac 
+
+> S1
+
+= P c 
+
+> S1
+
+◦ (K|G ),
+
+where the operator norm is induced by the L2(μ) norm on the finite-dimensional space G.Proof. Let 
+
+Gij := ⟨gi, g j ⟩μ, Bij := ⟨Kg i, g j ⟩μ.
+
+The strong law of large numbers and the assumed linear independence give, almost surely, 1
+
+m XX ∗ −→ G ≻ 0, 1
+
+m YX ∗ −→ B.
+
+Thus X has full row rank for all sufficiently large m, and 
+
+Ac 
+
+> S1,m
+
+= Πc
+
+> S1,m
+
+ 1
+
+m YX ∗ 1
+
+m XX ∗−1
+
+.
+
+By Proposition 7, Πc 
+
+> S1,m
+
+converges almost surely to Πc 
+
+> S1
+
+, the Euclidean projector onto WS1 = Ψ −1 
+
+> K
+
+(S1). Consequently, 
+
+Ac 
+
+> S1,m
+
+−→ Πc 
+
+> S1
+
+BG −1.
+
+The limiting matrix represents P c 
+
+> S1
+
+K|G in the dictionary g: applying P c 
+
+> S1
+
+componentwise gives P c 
+
+> S1
+
+(Kg) = 
+
+Πc 
+
+> S1
+
+Kg, whose entries lie in S1 ⊆ G , and its coefficient matrix in g is Πc 
+
+> S1
+
+BG −1. Matrix convergence and operator convergence are equivalent on the finite-dimensional space G, which proves the claim. Theorem 1 treats j = 1; the same population–sample correspondence extends along the chain as follows. 13 Remark 7 (Convergence along the full chain) . For a nested i.i.d. sample sequence, suppose that Assump-tion 1 holds almost surely for all sufficiently large m. Then for each j ≥ 1 the empirical coordinate-orthogonal Filtered EDMD operator Ac  
+
+> Sj,m
+
+converges almost surely to Ac 
+
+> Sj
+
+as m → ∞ . Indeed, Proposition 6 gives 
+
+bSj,m = Em(Sj ), and injectivity of Em on G + KG then gives 
+
+WSj ,m = Ψ −1 
+
+> K
+
+(Sj ) = WSj .
+
+Thus the empirical and population coefficient projectors agree eventually, and the matrix argument in The-orem 1 applies at every fixed filtered level, including the terminal space S∗ = VG
+
+> max
+
+. The unfiltered level is ordinary EDMD and is treated separately: AE,m → AE . Collecting these, the consistent empirical family is 
+
+{AE,m } ∪ { Ac  
+
+> Sj,m
+
+: j ≥ 1},
+
+from unfiltered EDMD through the intermediate coordinate-orthogonal levels to the maximal-invariant re-striction. 
+
+# 5 Numerical experiments 
+
+We evaluate Filtered EDMD on three dynamical systems, chosen to illustrate the main challenges practi-tioners face when selecting observable dictionaries heuristically. 1
+
+System Dictionary type Challenge Kronecker flow on T2 Eigenfunctions + redundant terms Redundant observables Polynomial nonlinear system Truncated polynomial basis Insufficient observables Van der Pol oscillator Polynomial–trigonometric basis Uninformative observables Table 1: Test systems and the dictionary challenges they illustrate. The examples are ordered by increasing difficulty, matching the two structural regimes of our theory. In the first two—the Kronecker flow (Section 5.1) and the polynomial system (Section 5.2)—the dictionary G is not Koopman-invariant, yet the one-step intersection G ∩ KG is invariant and equals the maximal invariant subspace VG
+
+> max
+
+: the Kronecker dictionary contains all relevant eigenfunctions and the task is to separate them from redundant terms, while the polynomial dictionary captures only some and the task is stability under limited data. By Proposition 4 and Remark 3, coordinate- and L2(μ)-Filtered EDMD, EDMD on the reduced dictionary, and SSD/T-SSD then coincide at the population level on this block (= K|S ); all methods retain the genuine eigenvalues, so the comparison isolates finite-sample behavior—matrix structure and stability under resampling—where they differ only through their subspace-selection criteria (intersection, invariance, forward–backward consistency, or residual thresholding) and their sensitivity to sampling error and tolerance. In the third and most demanding example—the Van der Pol oscillator (Section 5.3)—the dictionary contains no nontrivial Koopman eigenfunctions and the maximal invariant subspace is trivial, so the invariance-and residual-based methods have nothing to recover; yet the coordinate-projected Filtered EDMD identifies candidates aligned with the unstable-equilibrium Koopman lattice, whereas the other algorithms do not reveal a clear lattice structure. The benchmarks include EDMD, T-SSD, RFB-EDMD, ResDMD, and Filtered EDMD (F-EDMD in tables). Exact SSD is not plotted separately; its population relation to the terminal invariant space is given in Remark 3. For matrix heatmaps, reduced T-SSD and RFB-EDMD operators are lifted to the original dictionary coordinates, while the ResDMD panel is reconstructed from the retained EDMD eigenpairs. 
+
+5.1 Kronecker flow on the torus: redundant observables 
+
+This example tests operator matrix structure when the dictionary contains all relevant Koopman eigenfunc-tions alongside redundant, non-invariant terms. Since every method retains the 10 genuine eigenvalues in     
+
+> 1We have chosen low-dimensional examples so that eigenvalues, eigenfunctions, and matrix structures can be inspected directly. The method itself has no inherent dimensional restriction: Algorithm 1 operates on the n×mdata matrices and scales as described in Remark 8.
+
+14 this setting, the comparison turns on whether spurious content remains and how faithfully the resulting matrix reproduces the Koopman block structure. 
+
+Setup. Consider the Kronecker flow on T2 defined by ( ˙θ1, ˙θ2) = (1 , α ), embedded in C via z(θ) = eiθ 1 +eiθ 2 .When α ∈ Q the trajectory is periodic; when α / ∈ Q it fills the torus densely (Fig. 1). In the experiments below, we fix α = √2 and generate discrete-time data by sampling the continuous-time flow with step size ∆t = 0 .2. The Koopman eigenfunctions are Fourier modes ψk,ℓ (θ) = ei(kθ 1+ℓθ 2) with discrete-time eigenvalues 
+
+μk,ℓ = ei(k+ℓα )∆ t. We construct a dictionary g of n = 18 observables: 10 Koopman eigenfunctions {ψj }10 
+
+> j=1
+
+and 8 additional non-invariant terms {rk}8
+
+> k=1
+
+. The maximal Koopman-invariant subspace in span( g) is the 10-dimensional eigenfunction span VG
+
+> max
+
+. By the standard Fourier-basis representation of the Koopman operator for rotations, as illustrated for circle rotations in [26], the restriction of K to VG 
+
+> max
+
+is exactly represented by a diagonal matrix whose diagonal entries are the selected Koopman eigenvalues. We collect 
+
+m = 50 snapshot pairs with initial conditions drawn uniformly on T2.
+
+Figure 1: Kronecker flow trajectories in C via z(θ) = eiθ + eiαθ : (a) rational α (periodic); (b)–(d) irrational 
+
+α with increasing time (trajectory fills the curve densely). 
+
+Spectral recovery and matrix structure. The EDMD matrix is 18 × 18 with full rank; its spectrum contains the 10 correct Koopman eigenvalues plus 8 spurious ones (Fig. 2). Filtered EDMD produces a rank-10 matrix recovering the 10 eigenvalues to numerical precision; the forward–intersection chain terminates after one step since G ∩ KG already coincides with VG
+
+> max
+
+. T-SSD, RFB-EDMD, and ResDMD also retain the 10 genuine eigenvalues but differ in their reconstructed matrix structure. -0.6 -0.4 -0.2 0 0.2 0.4 0.6 0.8 1 1.2 -0.6 -0.4 -0.2 00.2 0.4 0.6 -0.6 -0.4 -0.2 0 0.2 0.4 0.6 0.8 1 1.2 -0.6 -0.4 -0.2 00.2 0.4 0.6 
+
+Figure 2: Spectra of EDMD (left) and Filtered EDMD (right) on the Kronecker flow. EDMD produces 8 spurious eigenvalues (red); Filtered EDMD recovers the 10 correct eigenvalues to numerical precision. Figure 3 shows heatmaps of the absolute values of the matrix representations described above. All five data-driven representations capture the dominant 10 × 10 diagonal block corresponding to the 10-15 dimensional eigenfunction span VG
+
+max . However, EDMD, ResDMD, and T-SSD exhibit substantial leakage into the complementary directions, whereas Filtered EDMD and RFB-EDMD produce clean block-diagonal matrices matching the theoretical Koopman representation. Koopman     
+
+> 246810
+> column index
+> 12345678910
+> row index
+> 00.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1
+
+EDMD   
+
+> 510 15
+> column index
+> 246810 12 14 16 18
+> row index
+> 00.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1
+
+ResDMD   
+
+> 510 15
+> column index
+> 246810 12 14 16 18
+> row index
+> 00.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1
+
+T-SSD   
+
+> 510 15
+> column index
+> 246810 12 14 16 18
+> row index
+> 00.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1
+
+RFB-EDMD   
+
+> 510 15
+> column index
+> 246810 12 14 16 18
+> row index
+> 00.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1
+
+Filtered EDMD   
+
+> 510 15
+> column index
+> 246810 12 14 16 18
+> row index
+> 00.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1
+
+Figure 3: Matrix heatmaps (absolute value) for the reference Koopman matrix with respect to {ψj }10 
+
+j=1 and the five data-driven methods on the Kronecker flow ( n = 18, m = 50). Among the data-driven methods, only Filtered EDMD and RFB-EDMD reproduce the clean block-diagonal structure of the Koopman operator. 
+
+Tolerance sensitivity. Figure 4 shows the reported matrix rank as a function of the tolerance parameter 
+
+ε (cf. Remark 4) for the four methods that admit one. Over the tested tolerance ranges, every method attains rank 10. T-SSD reaches rank 10 at a larger tolerance than RFB-EDMD, consistent with [12]. Filtered EDMD exhibits a sharp transition, stabilizing at rank 10 once ε passes below a critical threshold. Figure 5 illustrates three intermediate stages (ranks 13, 11, 10), showing the progressive removal of spurious off-diagonal couplings. 10 -2 10 -1 10 0
+
+tol (log)      
+
+> 10 11 12 13 14 15 16 17 18
+> rank
+> Filtered-EDMD ResDMD
+> 00.2 0.4 0.6 0.8 1
+
+tol 
+
+> 10 11 12 13 14 15 16 17 18
+> rank
+> Tunable-SSD RFB-EDMD
+
+Figure 4: Reported matrix rank versus tolerance ε for the four parameterized methods (Kronecker flow). 16 rank = 13         
+
+> 510 15
+> Column
+> 246810 12 14 16 18
+> Row
+> 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1rank = 11
+> 510 15
+> Column
+> 246810 12 14 16 18
+> Row
+> 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1rank = 10
+> 510 15
+> Column
+> 246810 12 14 16 18
+> Row
+> 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1
+
+Figure 5: Filtered EDMD matrices at three tolerance levels, showing progressive removal of spurious couplings until the clean rank-10 structure is recovered. 
+
+5.2 Polynomial nonlinear system: insufficient observables 
+
+This example tests spectral recovery and algorithmic stability when the dictionary captures only a subset of the Koopman eigenfunctions—a common situation when the dictionary is chosen by truncating a general basis. 
+
+Setup. We consider a 4-dimensional polynomial ODE admitting an exact finite-dimensional Koopman representation [13]: ˙x1 = a1x1, ˙x2 = a2x2 + α1x31,
+
+˙x3 = a3x3 + α2x1x2 + α3x22, ˙x4 = a4x4 + α4x1x2x3.
+
+Throughout this subsection, we fix ( a1, a 2, a 3, a 4) = 0 .1(log 17 , log 15 , log 3 , i log 2) and αj = −0.2, ∀j.A minimal faithful linear representation uses 19 monomial observables and an upper-triangular matrix whose diagonal entries are the Koopman eigenvalues {λi}19  
+
+> i=1
+
+(see [13] for details). Some dictionary elements (e.g., x1, x31) are already eigenfunctions; others (e.g., x2, x3) become eigenfunctions only when combined with upstream monomials that cancel coupling terms. We deliberately restrict to the first 15 of the 19 observables, so that G = span {g1, . . . , g 15 } is not Koopman-invariant. The truncated span still contains 9 eigenfunctions (those whose construction requires only monomials within the first 15), but the eigenfunction associated with λ4 lies outside G since it requires higher-order monomials. The resulting representation is therefore semiconjugate to the full faithful repre-sentation: it captures part of the spectrum and can reconstruct x1, x 2, x 3 but not x4. We generate m = 25 snapshot pairs from initial states sampled uniformly in [ −1, 1] 4 with discretization step ∆ t = 0 .1. 
+
+Spectral recovery. The EDMD spectrum (Fig. 6) recovers the 9 true eigenvalues but is contaminated by 6 spurious ones, including two that lie deceptively close to the exact spectrum. Filtered EDMD eliminates all detected spurious eigenvalues and matches the 9 Koopman eigenvalues to numerical precision; the chain terminates after one step. With the selected parameters, T-SSD and ResDMD also retain the 9 eigenvalues on this dataset. RFB-EDMD does not remove all spurious eigenvalues at m = 25, but succeeds once the sample size reaches m = 100. Figure 7 visualizes the matrix representations: the Koopman matrix is 19 × 19 (full dictionary), and all computed matrices are 15 × 15. Filtered EDMD recovers, to numerical precision, the block corresponding to the 9 eigenfunctions in G—the upper-left 10 × 10 block with the fourth row and column removed—while T-SSD displays a similar pattern with noticeable numerical residues. 
+
+5.2.1 Stability under resampling 
+
+To assess robustness beyond a single dataset, we perform a Monte Carlo experiment with q = 1000 in-dependent trials. Each trial generates fresh data matrices ( X, Y) ∈ C15 ×25 from newly sampled initial conditions. Tolerance parameters are pre-tuned once on a separate dataset and held fixed across all trials, so the comparison reflects intrinsic algorithmic stability rather than per-trial re-optimization. 17 0.95 1 1.05 1.1 1.15 1.2 1.25 1.3 1.35 -0.01 00.01 0.02 0.03 0.04 0.05 0.06 0.07 0.08 0.09 
+
+Truth vs EDMD 
+
+> Truth EDMD
+
+0.95 1 1.05 1.1 1.15 1.2 1.25 1.3 1.35 -0.01 00.01 0.02 0.03 0.04 0.05 0.06 0.07 0.08 0.09 
+
+Truth vs Filtered-EDMD 
+
+> Truth Filtered-EDMD
+
+Figure 6: Spectra of EDMD and Filtered EDMD on the polynomial system ( n = 15, m = 25). EDMD retains 6 spurious eigenvalues (red); Filtered EDMD recovers the 9 true eigenvalues to numerical precision. Koopman 
+
+5 10 15 
+
+column index 
+
+246810 12 14 16 18 
+
+> row index
+
+00.2 0.4 0.6 0.8 11.2 
+
+EDMD 
+
+2 4 6 8 10 12 14 
+
+column index 
+
+246810 12 14 
+
+> row index
+
+00.2 0.4 0.6 0.8 11.2 
+
+ResDMD 
+
+2 4 6 8 10 12 14 
+
+column index 
+
+246810 12 14 
+
+> row index
+
+00.2 0.4 0.6 0.8 11.2 
+
+T-SSD 
+
+2 4 6 8 10 12 14 
+
+column index 
+
+246810 12 14 
+
+> row index
+
+00.2 0.4 0.6 0.8 11.2 
+
+RFB-EDMD 
+
+2 4 6 8 10 12 14 
+
+column index 
+
+246810 12 14 
+
+> row index
+
+00.2 0.4 0.6 0.8 11.2 
+
+Filtered EDMD 
+
+2 4 6 8 10 12 14 
+
+column index 
+
+246810 12 14 
+
+> row index
+
+00.2 0.4 0.6 0.8 11.2 
+
+Figure 7: Matrix heatmaps (absolute value) for the polynomial system. The reference Koopman matrix is 19 × 19; all others are 15 × 15. 18 We measure spectral error by the average modulus of spurious eigenvalues, 
+
+dspec (bΛ, Λgt ) := 
+
+( 1
+
+> |E|
+
+P 
+
+> λ∈E
+
+|λ|, E̸ = ∅,
+
+0, E = ∅, E := 
+
+n
+
+λ ∈ bΛ : min 
+
+> μ∈Λgt
+
+|λ − μ| > 10 −10 o
+
+,
+
+where, as in the implementation, bΛ contains only finite computed eigenvalues with |λ| > 10 −10 . The same threshold serves as a stringent matching tolerance, safely above floating-point roundoff. Trajectory error at step k is the relative deviation etraj (k) := ∥bx(k) − x(k)∥2/∥x(k)∥2 × 100%. Table 2 summarizes spectral error statistics. Filtered EDMD has no detected spurious eigenvalues in any of the 1000 trials; ResDMD and T-SSD have none in 897 and 839 trials, respectively, whereas EDMD and RFB-EDMD retain at least one in every trial. This statistic measures false-positive eigenvalues only and does not penalize missing genuine ones. Figure 8 shows the mean trajectory errors. EDMD performs best initially due to its least-squares formulation, but error accumulates in the fourth component (which it attempts to predict despite missing the required eigenfunction). Filtered EDMD remains the most stable over time. These errors reflect algorithmic stability under fixed parameters and repeated resampling, not optimized prediction performance. Algorithm Mean Median No-spurious EDMD 1.099 1.099 0
+
+F-EDMD 0 0 1000 
+
+T-SSD 0.175 0 839 RFB-EDMD 1.061 1.060 0ResDMD 0.119 0 897 Table 2: Spectral error dspec over 1000 Monte Carlo trials. “No-spurious” counts trials with no unmatched nonzero estimate; it does not measure spectral recall. 0 1 2 3 4 5 6 7 
+
+> Time
+> 0100 200 300 400 500 600 700
+> Relative error (%)
+> EDMD F-EDMD T-SSD RFB-EDMD Res-DMD
+
+Figure 8: Mean relative trajectory error (%) over 1000 trials ( n = 15, m = 25). Filtered EDMD is the most stable; EDMD has low initial error but accumulates drift. 
+
+5.3 Van der Pol oscillator: spectrally uninformative observables 
+
+This is the most demanding test: the dictionary contains no nontrivial Koopman eigenfunctions , so its ter-minal invariant space is spectrally uninformative. The question is whether Filtered EDMD—which requires only one-step compatibility ( G ∩ KG) rather than exact invariance—can still recover the underlying Koopman spectral structure. 
+
+Setup. We consider the Van der Pol oscillator in the weakly nonlinear regime, ˙x1 = x2, ˙x2 = μ(1 − x21)x2 − x1,
+
+with μ = 0 .3 and state x = ( x1, x 2)⊤.The system has a globally attracting limit cycle and a locally unstable equilibrium (Fig. 9a). These invariant objects induce different Koopman point spectra for the same Van der Pol flow, depending on the chosen domain and observable space; see Appendix B. The limit-cycle spectrum is generated by the phase eigenvalue iω and the dominant transverse Floquet exponent σ < 0: 
+
+ω(μ) = 1 − μ2
+
+16 + O(μ4), σ(μ) = −μ − μ3
+
+16 + O(μ5), Λlc = ikω + ℓσ : k ∈ Z, ℓ ∈ N .
+
+19 The equilibrium spectrum is generated by the Jacobian eigenvalues at the unstable equilibrium: 
+
+α± = μ ± pμ2 − 42 , Λeq = pα + + qα − : p, q ∈ N .
+
+Both lattices are used as reference spectra in the numerical comparisons below. The observable dictionary consists of all monomials xp
+
+> 1
+
+xq 
+
+> 2
+
+with p+q ≤ 15 and the trigonometric observables cos( kθ 0), sin( kθ 0), k = 1 , . . . , 15 , θ0 = atan2( x2, x 1),
+
+giving n = 166 observables. Apart from the constant function, the Koopman eigenfunctions of interest are intricate functions of state, and none lies in span( g). We sample m = 3320 initial conditions uniformly from [−2, 2] 2 and advance each by ∆ t = 0 .01 to form snapshot pairs. 
+
+(a) Vector field. -0.2 -0.15 -0.1 -0.05 0 0.05 0.1 0.15 0.2  
+
+> Im( 6)
+> 0.88 0.9 0.92 0.94 0.96 0.98 11.02
+> Re( 6)
+> Unit circle Ground truth EDMD
+
+(b) Discrete-time eigenvalues. -20 -15 -10 -5 0 5 10 15 20  
+
+> Im(log( 6)="t)
+> -14 -12 -10 -8 -6 -4 -2 02
+> Re(log( 6)="t)
+> Imaginary axis Ground truth EDMD
+
+(c) Continuous-time eigenvalues. 
+
+Figure 9: Van der Pol oscillator ( μ = 0 .3). Left: vector field with the limit cycle (blue), the unstable equilibrium at the origin (red), and streamlines colored by flow speed. Middle and right: EDMD eigenvalues (purple) versus the limit-cycle lattice Λ lc (green circles) in discrete and continuous time, respectively. 
+
+Spectral comparison across methods. EDMD does not resolve the limit-cycle lattice Λ lc : its 166 eigenvalues bear little resemblance to that reference spectrum (Figs. 9b and 9c). For this diagnostic, we select the comparison methods’ tolerances to maximize lattice agreement over the tested values: for T-SSD, the invariance tolerance; for RFB-EDMD, the forward–backward consistency threshold; and for ResDMD, the residual cutoff. Filtered EDMD uses the default numerical-rank cutoff throughout. Figure 10 shows the outputs obtained under this protocol: 
+
+• T-SSD and RFB-EDMD retain subspaces of dimensions 24 and 31, respectively, and partially reveal Λlc .
+
+• ResDMD retains 3 EDMD eigenvalues, each matching a corresponding element of Λ lc to numerical precision at the selected residual cutoff. 
+
+• Filtered EDMD (Ac
+
+> S1,m
+
+, one-step filtering) retains 84 directions and reveals a clear portion of the equilibrium lattice Λ eq .Thus the panels expose different spectral content rather than a common reduced operator. Exact SSD terminates at the uninformative invariant core; T-SSD and RFB-EDMD retain partial limit-cycle structure, while the one-step intersection retains polynomial directions aligned with the equilibrium spectrum. The projection-geometry results in Section 5.3.2 make this distinction explicit: on the same S1, the measure-free coordinate projector approximates Λ eq while the L2(μ) projector tends to approximate Λ lc .20 -0.1 -0.05 0 0.05 0.1 
+
+Im( 6)    
+
+> 0.97 0.98 0.99 1
+> Re( 6)
+> -0.1 -0.05 00.05 0.1
+
+Im( 6)    
+
+> 0.97 0.98 0.99 1
+> Re( 6)
+> -0.1 -0.05 00.05 0.1
+
+Im( 6)    
+
+> 0.97 0.98 0.99 1
+> Re( 6)
+> -0.1 -0.05 00.05 0.1
+
+Im( 6)
+
+> 11.005 1.01 1.015 1.02 1.025 1.03
+> Re( 6)
+
+(a) (b) (c) (d) Figure 10: Spectral outputs for the Van der Pol oscillator. Panels (a)–(c) compare T-SSD (dim = 24), RFB-EDMD (dim = 31), and ResDMD (3 eigenvalues) with Λ lc ; panel (d) compares Filtered EDMD ( S1,dim = 84) with Λ eq . Green circles denote the corresponding reference lattice. -0.1 -0.05 0 0.05 0.1 
+
+Im( 6)    
+
+> 0.995 11.005 1.01 1.015
+> Re( 6)
+> -0.1 -0.05 00.05 0.1
+
+Im( 6)    
+
+> 0.995 11.005 1.01 1.015
+> Re( 6)
+> -0.1 -0.05 00.05 0.1
+
+Im( 6)    
+
+> 0.995 11.005 1.01 1.015
+> Re( 6)
+> -0.1 -0.05 00.05 0.1
+
+Im( 6)
+
+> 0.995 11.005 1.01 1.015
+> Re( 6)
+
+(a) (b) (c) (d) 
+
+Figure 11: Filtered EDMD eigenvalues along the forward–intersection chain bSj,m , j = 1 , 2, 3, 4. Rank decreases monotonically while equilibrium-lattice structure remains visible. 21 The filtration chain. For this dataset, the sampled construction produces four nontrivial levels { bSj,m }4
+
+> j=1
+
+,yielding a family of Filtered EDMD matrices {Ac 
+
+> Sj,m
+
+}4
+
+> j=1
+
+. As shown in Fig. 11, the rank decreases along the chain while equilibrium-lattice structure remains visible. 
+
+5.3.1 Local eigenfunction approximation 
+
+Beyond eigenvalues, Filtered EDMD yields an approximation to the principal local Koopman eigenfunction associated with the unstable equilibrium. We extract this approximation from Ac
+
+> S1,m
+
+, selecting the computed discrete-time eigenvalue λ+ = 1 .001452 + 0 .009902 i, which approximates the analytic eα+∆t = 1 .0015 + 0.0099 i, and using the corresponding left eigenvector to form bφλ+ . Figure 12(a) shows its logarithmic magnitude, and Fig. 12(b) displays the associated phase- and amplitude-like level sets. Near the unstable equilibrium, these structures resemble the local isochron–isostable geometry reported in [20]. -2 0 2       
+
+> x1
+> -3 -2 -1 0123
+> x2
+> -1 01234
+> -3 -2 -1 0123
+> x1
+> -3 -2 -1 0123
+> x2
+> (a) (b)
+
+Figure 12: Local Koopman-eigenfunction approximation from Filtered EDMD for the Van der Pol oscillator (μ = 0 .3). (a) Log-magnitude of bφλ+ . (b) Phase-like (red, level sets of arg bφλ+ ) and amplitude-like (black, level sets of | bφλ+ |); limit cycle in blue. 
+
+5.3.2 Projection geometry: coordinate versus L2(μ), and sampling invariance 
+
+We vary the projection geometry and sampling measure to compare EDMD with the two canonical projectors from Section 3.2.3. We use the polynomial observable dictionary G = span {xp
+
+> 1
+
+xq 
+
+> 2
+
+: p, q ≥ 0, p + q ≤ 10 } and the first forward-intersection space S1 = G ∩ KG. We compare the empirical matrices AE,m , Ac
+
+> S1,m
+
+, and 
+
+Aμ
+
+> S1,m
+
+, whose respective population targets are 
+
+AE = Aμ 
+
+> G
+
+= P μ 
+
+> G
+
+◦ (K|G ), Ac 
+
+> S1
+
+= P c 
+
+> S1
+
+◦ (K|G ), Aμ 
+
+> S1
+
+= P μ 
+
+> S1
+
+◦ (K|G ).
+
+The corresponding empirical matrices provide finite-sample approximations of these population operators in the dictionary coordinates. At the population level, AE and Aμ 
+
+> S1
+
+depend on μ through their L2(μ)-orthogonal projectors. The coordinate representation of Kg instead determines the geometry of Ac 
+
+> S1
+
+independently of 
+
+μ for a given g and S1.
+
+The L2(μ)-based spectra vary across sampling measures. Figure 13 shows that the finite-sample eigenvalues of the EDMD matrix AE,m and the L2(μ) Filtered EDMD matrix Aμ 
+
+> S1,m
+
+change across the three sampling measures. For both matrices, the computed eigenvalues tend to lie near the reference Koopman lattice associated with the region where the sampling measure concentrates its mass. This observed sensitivity is consistent with the μ-dependence of their population targets AE and Aμ 
+
+> S1
+
+.22 Sampling pattern                                                  
+
+> -2 -1 012-2 -1.5 -1 -0.5 00.5 11.5 2
+> near equilibrium EDMD
+> -0.1 -0.05 00.05 0.1 0.9 0.92 0.94 0.96 0.98 11.02 1.04
+> F-EDMD (coord.)
+> -0.1 -0.05 00.05 0.1 0.96 0.97 0.98 0.99 11.01 1.02 1.03 1.04
+> L2F-EDMD
+> -0.1 -0.05 00.05 0.1 0.96 0.97 0.98 0.99 11.01 1.02 1.03 1.04 -2 -1 012-2 -1.5 -1 -0.5 00.5 11.5 2
+> uniform square [-2,2] 2
+> -0.1 -0.05 00.05 0.1 0.94 0.96 0.98 11.02 1.04 -0.1 -0.05 00.05 0.1 0.96 0.97 0.98 0.99 11.01 1.02 1.03 1.04 -0.1 -0.05 00.05 0.1 0.96 0.97 0.98 0.99 11.01 1.02 1.03 1.04 -2 -1 012-2 -1.5 -1 -0.5 00.5 11.5 2
+> near cycle
+> -0.1 -0.05 00.05 0.1 0.92 0.94 0.96 0.98 11.02 1.04 -0.1 -0.05 00.05 0.1 0.96 0.97 0.98 0.99 11.01 1.02 1.03 1.04 -0.1 -0.05 00.05 0.1 0.96 0.97 0.98 0.99 11.01 1.02 1.03 1.04
+
+Figure 13: Spectra under three sampling measures for the Van der Pol oscillator with a polynomial dictionary of total degree 10 (∆ t = 0 .01). Rows correspond to three sampling measures: a measure concentrated near the unstable equilibrium, the uniform measure on the square [ −2, 2] 2, and a measure concentrated near the limit cycle. Columns show the sampling pattern and the eigenvalues of EDMD, coordinate Filtered EDMD 
+
+Ac
+
+S1,m , and L2(μ) Filtered EDMD Aμ
+
+S1,m . Green circles mark the reference lattices Λ eq and Λ lc . The EDMD and L2(μ) Filtered EDMD spectra change across sampling measures, whereas the coordinate Filtered EDMD spectrum remains visually aligned with Λ eq .
+
+Sampling-measure invariance of the coordinate F-EDMD target Ac
+
+S1 . Across the three sampling measures in Fig. 13, the computed eigenvalues of Ac
+
+S1,m tend to remain aligned with the equilibrium reference lattice Λ eq , although their exact locations vary. This common tendency is consistent with the fact that each empirical matrix approximates the same population operator Ac
+
+S1 = P c
+
+S1 ◦ (K|G ). For fixed G and 
+
+S1, the coordinate representation of Kg determines the projection geometry of this operator independently of μ. Thus, sampling-measure invariance pertains to the population target Ac
+
+S1 , whereas its finite-sample approximation Ac
+
+S1,m and the corresponding computed eigenvalues can vary across samples. 
+
+No fabricated spectrum. Finally, Filtered EDMD does not hallucinate structure when none is compat-23 ible: on the pure angular dictionary {cos( kθ 0), sin( kθ 0)}15  
+
+> k=1
+
+the sampled one-step intersection is empty and 
+
+Ac 
+
+> S1,m
+
+= 0, whereas EDMD reports 30 unit-circle eigenvalues that are not global Koopman eigenpairs. 
+
+5.4 Computational cost 
+
+Table 3 reports wall-clock times for all methods on the three test problems. 2
+
+Kronecker Polynomial Van der Pol (n = 18 , m = 50) (n = 15 , m = 25) (n = 166 , m = 3320) EDMD 1–2 × 10 −3 1–2 × 10 −4 2 × 10 −2
+
+F-EDMD 2–3 × 10 −3 8–9 × 10 −4 2–3 × 10 −1
+
+T-SSD 5–6 × 10 −3 5–8 × 10 −3 8–10 × 10 −1
+
+RFB-EDMD 4–5 × 10 −3 8 × 10 −4 1.3–1 .5 × 10 0
+
+ResDMD 2 × 10 −3 1–2 × 10 −3 2–3 × 10 −1
+
+Table 3: Wall-clock times (seconds) for each method on the three test problems. 
+
+Remark 8 (Complexity) . The dominant cost of Filtered EDMD is the SVD of the 2rj × m stacked matrix in Algorithm 1, requiring O(min(2 rj , m ) · 2rj · m) operations at level j. Hence the total intersection cost is 
+
+O
+
+P 
+
+> j
+
+min(2 rj , m ) · 2rj · m
+
+
+
+; in the worst case, this can exceed the cost of a single EDMD solve. In our examples, the chain terminates in 1–4 steps, and the reported Filtered EDMD runtime is at most 0.3 seconds, although it is several times slower than EDMD on the polynomial and Van der Pol tests. 
+
+# 6 Conclusion and future work 
+
+We introduced the Projected Koopman Operator Approximation (PKOA) framework for constructing Fil-tered EDMD operators, together with SVD-based algorithms that realize the coordinate-orthogonal pro-jection and compute the forward–intersection chain from data. At the population level, every admissible projection preserves the nonzero Koopman eigenpairs contained in the dictionary. The experiments show that the intermediate filtered levels can remove spurious content while retaining useful structure that is absent from the terminal invariant space. Together, ordinary EDMD, the intermediate filtered levels, and the terminal invariant range form a hierarchy of projection ranges. On the Van der Pol example, the spectral content recovered at an intermediate level depends on how the dictionary aligns with the equilibrium and limit-cycle eigenfunctions. Several directions remain open. First, while the PKOA framework admits any admissible projection, the present algorithms implement only the coordinate-orthogonal choice; characterizing the optimal projection within this family—e.g., one that minimizes spectral pollution or maximizes spectral recovery for a given dictionary—is a natural theoretical and computational question. Second, understanding the robustness of Filtered EDMD under observation noise and finite-sample effects would strengthen its practical applicability; preliminary experiments suggest that the filtering step has a regularizing effect, but a quantitative analysis remains to be developed. Finally, applying Filtered EDMD to prediction, control, and stability analysis could clarify how the one-step compatibility criterion complements invariance-based methods in practical workflows. 
+
+# Acknowledgments 
+
+S. Tang was supported by NSF DMS Career Grant No.2340631. 
+
+> 2All experiments were performed in MATLAB R2023b on a single machine with 18 GB of RAM. Timings are indicative; ranges report observed run-to-run variation.
+
+24 Appendix A Generalized Eigenfunctions 
+
+A function ψ ∈ L2(μ) is called a generalized eigenfunction of order k if it satisfies (K − λI )kψ = 0 for some Koopman eigenvalue λ and some integer k ≥ 1. Ordinary Koopman eigenfunctions correspond to the case k = 1. Any finite-dimensional invariant subspace of the Koopman operator is spanned by a set of generalized eigenfunctions (this follows from the Jordan normal form of K restricted to the subspace). When the matrix A in Proposition 1 is not diagonalizable, the spectral correspondence extends as follows: the eigenvalues of A are still Koopman eigenvalues, and the generalized left eigenvectors of A (i.e., vectors 
+
+l satisfying ( A∗ − ¯λI )kl = 0 for some k ≥ 1) yield generalized Koopman eigenfunctions via ψ(·) = ⟨g(·), l⟩.
+
+# Appendix B Koopman spectra associated with the Van der Pol limit cycle and equilibrium 
+
+Let Φt denote the Van der Pol flow and let Ktf = f ◦ Φt be the associated Koopman operator. The same flow has two relevant invariant objects: the attracting limit cycle Γ μ and the unstable equilibrium x∗ = 0. Different choices of domain and observable space lead to different Koopman point spectra. First consider the basin B(Γ μ) of the limit cycle. Following the limit-cycle construction in [24, Sec. 7], we use phase-amplitude coordinates θ : B(Γ μ) → S1 and r : B(Γ μ) → R, satisfying 
+
+θ(Φtx) = θ(x) + ωt, r(Φtx) = eσt r(x), σ < 0.
+
+Thus ϕiω = eiθ and ϕσ = r are Koopman eigenfunctions: 
+
+Ktϕiω = eiωt ϕiω , Ktϕσ = eσt ϕσ .
+
+The limit-cycle observable space is 
+
+Hlc =
+
+f (x) = X
+
+> ℓ≥0
+
+X
+
+> k∈Z
+
+aℓk ϕσ (x)ℓϕiω (x)k : X
+
+> ℓ,k
+
+|aℓk |2wℓk < ∞
+
+ ,
+
+where the weights wℓk > 0 are chosen so that the expansion is analytic in the transverse coordinate ϕσ and square-integrable in the phase coordinate. On Hlc ,
+
+Kt ϕℓσ ϕkiω 
+
+ = e(ℓσ +ikω )tϕℓσ ϕkiω , Λlc = {ikω + ℓσ : k ∈ Z, ℓ ∈ N} .
+
+We take N = {0, 1, 2, . . . }. The corresponding isochrons and isostables are 
+
+{x : arg ϕiω (x) = const }, {x : ϕσ (x) = const }.
+
+We now consider the unstable equilibrium x∗ = 0. Its Jacobian is 
+
+ 0 1
+
+−1 μ
+
+
+
+, α± = μ ± pμ2 − 42 .
+
+For 0 < μ < 2, α± are a complex conjugate pair. In a linearization neighborhood Deq , Poincare linearization yields local analytic Koopman eigen-coordinates s+, s − : Deq → C, satisfying 
+
+s±(Φtx) = eα±ts±(x), Kts± = eα±ts±,
+
+for all times for which the trajectory remains in Deq . The local equilibrium observable space is 
+
+Heq =
+
+f (x) = X
+
+> p,q ≥0
+
+bpq s+(x)ps−(x)q : X
+
+> p,q
+
+|bpq |2 ewpq < ∞
+
+ ,
+
+25 where the weights ewpq > 0 are chosen so that the power series has a positive radius of convergence in both local eigen-coordinates. This is in the spirit of the equilibrium spectral expansion in [24, Sec. 5]. On this space, 
+
+Kt(sp
+
+> +
+
+sq
+
+> −
+
+) = e(pα ++qα −)tsp
+
+> +
+
+sq
+
+> −
+
+, Λeq = {pα + + qα − : p, q ∈ N} .
+
+Writing s+(x) = ρeq (x)eiϑ eq (x), the phase-like and amplitude-like foliations near the unstable equilibrium are 
+
+{x : arg s+(x) = const }, {x : |s+(x)| = const }.
+
+They are not the global isochrons or isostables of the attracting limit cycle, but they are locally analogous to the isochron/isostable structure associated with Koopman eigenfunction level sets. Hence Λ lc and Λ eq are spectra of the same Koopman family Kt, but on different domains and observable spaces: Hlc is adapted to the attracting limit cycle, while Heq is adapted to the unstable equilibrium. 
+
+# Appendix C Auxiliary Result 
+
+Proposition 7 (Convergence of the sampled coefficient projectors) . Let {gj }nj=1 ⊂ L2(μ) be L2(μ)-linearly independent, set G = span {g1, . . . , g n} and g = ( g1, . . . , g n)⊤. Let K be the Koopman operator on L2(μ) and let P μ 
+
+> G
+
+be the L2(μ)-orthogonal projector onto G. For i.i.d. samples {xi}mi=1 ∼ μ define 
+
+X = g(x1) · · · g(xm) ∈ Cn×m, Y = (Kg)( x1) · · · (Kg)( xm) ∈ Cn×m.
+
+Let 
+
+WS1,m := c ∈ Cn : c∗Y ∈ bS1,m , Πc 
+
+> S1,m
+
+:= proj WS1,m ,
+
+where bS1,m = row( X) ∩ row( Y) and proj is the Euclidean-orthogonal projector in Cn, and define the Gram matrices 
+
+Gij := ⟨gi, g j ⟩μ, Bij := ⟨Kg i, g j ⟩μ, (HK )ij := ⟨Kg i, Kg j ⟩μ, R := HK − B G −1B∗ ⪰ 0. (17) 
+
+Set 
+
+WS1 := c ∈ Cn : ΨK c ∈ G = Ψ −1 
+
+> K
+
+(S1), Πc 
+
+> S1
+
+:= proj WS1 . (18) 
+
+Then, almost surely as m → ∞ :
+
+(a) (Population identification) ker( R) = WS1 .
+
+(b) (Sample identification) There is an almost surely finite m0 such that, for every m ≥ m0,
+
+WS1,m = WS1 , Πc 
+
+> S1,m
+
+= Πc 
+
+> S1
+
+.
+
+In particular, ∥Πc 
+
+> S1,m
+
+− Πc 
+
+> S1
+
+∥ → 0.Proof. Step 1 (Row/column reduction and PSD form). For any matrix M, w ∈ row( M) ⇐⇒ w∗ ∈
+
+range( M∗) = (ker M)⊥. Thus 
+
+c∗Y ∈ row( X) ⇐⇒ Π⊥
+
+> X
+
+Y∗c = 0 ⇐⇒ c ∈ ker  YΠ ⊥
+
+> X
+
+Y∗,
+
+where Π⊥ 
+
+> X
+
+:= Im − X†X is the sample-space projector onto ker X. The last equivalence uses the fact that 
+
+Rm := YΠ ⊥
+
+> X
+
+Y∗ ⪰ 0, so Rmc = 0 iff ∥Π⊥
+
+> X
+
+Y∗c∥2 = c∗Rmc = 0. Since c∗Y is always a row of Y (being a linear combination of the rows of Y), the condition c∗Y ∈ row( Y) is automatically satisfied. Hence 
+
+WS1,m = ker( Rm), Πc 
+
+> S1,m
+
+= proj ker( Rm) .
+
+Step 2 (LLN limit of Rm/m ). Using Π⊥ 
+
+> X
+
+= Im − X∗(XX ∗)†X and the Strong Law of Large Numbers entrywise, 1
+
+m XX ∗ → G ≻ 0, 1
+
+m YX ∗ → B, 1
+
+m YY ∗ → HK a.s. 26 Since G is invertible (by the L2(μ)-linear independence of the dictionary),   1 
+
+> m
+
+XX ∗−1 → G−1 a.s., and 1
+
+m Rm = 1
+
+m YY ∗ −
+
+ 1
+
+m YX ∗ 1
+
+m XX ∗−1 1
+
+m XY ∗ a.s. 
+
+−−→ R := HK − BG −1B∗ ⪰ 0.
+
+Step 3 (Characterize ker R). Let Ψ G : Cn → G be given by Ψ G c = ⟨g, c⟩ = P 
+
+> j
+
+cj gj , and set v = Ψ G c.Expanding the orthogonal decomposition Kv = P μ 
+
+> G
+
+(Kv ) + ( I − P μ 
+
+> G
+
+)Kv and using the Gram matrices gives 
+
+∥Kv ∥2 
+
+> L2(μ)
+
+= c∗HK c, ∥P μ 
+
+> G
+
+(Kv )∥2 
+
+> L2(μ)
+
+= c∗B G −1B∗c.
+
+Indeed, the second identity follows from the normal equations for the best approximation: writing P μ 
+
+> G
+
+(Kv ) = ΨG a = P 
+
+> i
+
+aigi with coefficient vector a, the optimality conditions ⟨Kv −P μ 
+
+> G
+
+(Kv ), g i⟩μ = 0 yield G a = B∗c,so a = G−1B∗c and ∥P μ 
+
+> G
+
+(Kv )∥2 = a∗G a = c∗B G −1B∗c. By the Pythagorean theorem, 
+
+∥(I − P μ 
+
+> G
+
+)Kv ∥2 
+
+> L2(μ)
+
+= c∗HK c − c∗B G −1B∗c = c∗R c .
+
+Therefore c ∈ ker R ⇐⇒ c∗R c = 0 ⇐⇒ (I − P μ 
+
+> G
+
+)Ψ K c = 0 ⇐⇒ ΨK c ∈ G , i.e. ker R = WS1 . This proves (a). 
+
+Step 4 (Eventual sample identification). Choose a basis {c1, . . . , cd} of WS1 . For each ℓ there is an 
+
+aℓ ∈ Cn such that Ψ K cℓ = Ψ G aℓ in L2(μ). With probability one, all sampled points avoid the union of the corresponding finite collection of null sets. On this event, c∗ 
+
+> ℓ
+
+Y = a∗ 
+
+> ℓ
+
+X for every m and every ℓ, so 
+
+WS1 ⊆ WS1,m = ker Rm for every m. 
+
+If R = 0, then WS1 = Cn, and equality follows immediately. Otherwise, let γ > 0 be the smallest eigenvalue of R on W ⊥S1 . By Step 2, almost surely ∥Rm/m − R∥ < γ/ 2 for all sufficiently large m. Hence, for every 
+
+z ∈ W ⊥S1 ,
+
+z∗ Rm
+
+m z ≥ γ
+
+2 ∥z∥22.
+
+Since Rm annihilates WS1 , this inequality rules out any additional kernel direction. Thus ker Rm = WS1 for all sufficiently large m, proving the two identities and the convergence in (b). 
+
+# References 
+
+[1] M. Budiˇ si´ c, R. Mohr, and I. Mezi´ c, Applied Koopmanism , Chaos, 22 (2012), p. 047510. [2] M. J. Colbrook , The mpEDMD algorithm for data-driven computations of measure-preserving dy-namical systems , SIAM Journal on Numerical Analysis, 61 (2023), pp. 1585–1608. [3] , The multiverse of dynamic mode decomposition algorithms , in Handbook of Numerical Analysis, vol. 25, Elsevier, 2024, pp. 127–230. [4] M. J. Colbrook, L. J. Ayton, and M. Sz˝ oke , Residual dynamic mode decomposition: Robust and verified Koopmanism , Journal of Fluid Mechanics, 955 (2023), p. A21. [5] M. J. Colbrook, C. Drysdale, and A. Horning , Rigged dynamic mode decomposition: Data-driven generalized eigenfunction decompositions for Koopman operators , SIAM Journal on Applied Dynamical Systems, 24 (2025), pp. 1150–1190. [6] M. J. Colbrook and A. Townsend , Rigorous data-driven computation of spectral properties of Koopman operators for dynamical systems , Communications on Pure and Applied Mathematics, 77 (2024), pp. 221–283. [7] G. Conradie, N. Boull´ e, J.-C. Loiseau, S. L. Brunton, and M. J. Colbrook , Trustworthy Koopman operator learning: Invariance diagnostics and error bounds , arXiv preprint arXiv:2603.15091, (2026). 27 [8] S. Das and D. Giannakis , Delay-coordinate maps and the spectra of Koopman operators , Journal of Statistical Physics, 175 (2019), pp. 1107–1145. [9] Z. Drmaˇ c and I. Mezi´ c, A data driven Koopman–Schur decomposition for computational analysis of nonlinear dynamics , arXiv preprint arXiv:2312.15837, (2024). [10] M. Haseli and J. Cort´ es , Learning Koopman eigenfunctions and invariant subspaces from data: Symmetric subspace decomposition , IEEE Transactions on Automatic Control, 67 (2022), pp. 3442– 3457. [11] , Generalizing dynamic mode decomposition: Balancing accuracy and expressiveness in Koopman approximations , Automatica, 153 (2023), p. 111001. [12] , Recursive forward-backward EDMD: Guaranteed algebraic search for Koopman invariant sub-spaces , IEEE Access, 13 (2025), pp. 61 006–61 025. [13] L. C. Iacob, M. Schoukens, and R. T´ oth , Finite dimensional Koopman form of polynomial non-linear systems , IFAC-PapersOnLine, 56 (2023), pp. 6423–6428. 22nd IFAC World Congress. [14] F. K¨ ohne, F. M. Philipp, M. Schaller, A. Schiela, and K. Worthmann , L∞-error bounds for approximations of the Koopman operator by kernel extended dynamic mode decomposition , SIAM Journal on Applied Dynamical Systems, 24 (2025), pp. 501–529. [15] B. O. Koopman , Hamiltonian systems and transformation in Hilbert space , Proceedings of the National Academy of Sciences, 17 (1931), pp. 315–318. [16] B. O. Koopman and J. v. Neumann , Dynamical systems of continuous spectra , Proceedings of the National Academy of Sciences, 18 (1932), pp. 255–263. [17] M. Korda and I. Mezi´ c, On convergence of extended dynamic mode decomposition to the Koopman operator , Journal of Nonlinear Science, 28 (2018), pp. 687–710. [18] M. Korda, M. Putinar, and I. Mezi´ c, Data-driven spectral analysis of the Koopman operator ,Applied and Computational Harmonic Analysis, 48 (2020), pp. 599–629. [19] B. Lusch, J. N. Kutz, and S. L. Brunton , Deep learning for universal linear embeddings of non-linear dynamics , Nature Communications, 9 (2018), p. 4950. [20] A. Mauroy and I. Mezi´ c, Global computation of phase–amplitude reduction for limit-cycle dynamics ,Chaos, 28 (2018), p. 073108. [21] , Analytic extended dynamic mode decomposition , 2024. Preprint, arXiv:2405.15945. [22] I. Mezi´ c, Spectral properties of dynamical systems, model reduction and decompositions , Nonlinear Dynamics, 41 (2005), pp. 309–325. [23] , Analysis of fluid flows via spectral properties of the Koopman operator , Annual Review of Fluid Mechanics, 45 (2013), pp. 357–378. [24] , Spectrum of the Koopman operator, spectral expansions in functional spaces, and state-space geometry , Journal of NonLinear Science, 30 (2020), pp. 2091–2145. [25] , Koopman operator, geometry, and learning of dynamical systems , Notices of the American Math-ematical Society, 68 (2021), pp. 1087–1105. [26] , On numerical approximations of the Koopman operator , Mathematics, 10 (2022), p. 1180. [27] S. E. Otto, G. R. Macchio, and C. W. Rowley , Learning nonlinear projections for reduced-order modeling of dynamical systems using constrained autoencoders , Chaos: An Interdisciplinary Journal of Nonlinear Science, 33 (2023), p. 113130. 28 [28] S. E. Otto and C. W. Rowley , Linearly-recurrent autoencoder networks for learning dynamics ,SIAM Journal on Applied Dynamical Systems, 18 (2019), pp. 558–593. [29] F. M. Philipp, M. Schaller, K. Worthmann, S. Peitz, and F. N¨ uske , Error analysis of kernel EDMD for prediction and control in the Koopman framework , Journal of Nonlinear Science, 35 (2025), p. 92. [30] C. W. Rowley, I. Mezi´ c, S. Bagheri, P. Schlatter, and D. S. Henningson , Spectral analysis of nonlinear flows , Journal of Fluid Mechanics, 641 (2009), pp. 115–127. [31] M. O. Williams, I. G. Kevrekidis, and C. W. Rowley , A data–driven approximation of the Koopman operator: Extending dynamic mode decomposition , Journal of Nonlinear Science, 25 (2015), pp. 1307–1346. [32] M. O. Williams, C. W. Rowley, and I. G. Kevrekidis , A kernel-based method for data-driven Koopman spectral analysis , Journal of Computational Dynamics, 2 (2015), pp. 247–265. 29
