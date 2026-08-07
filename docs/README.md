@@ -6,68 +6,62 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-05
-- 运行时间：2026-08-05 21:27:40 UTC
+- 最新运行日期：2026-08-07
+- 运行时间：2026-08-07 02:12:52 UTC
 - 运行状态：成功
-- 本次总论文数：16
-- 精读区：5
+- 本次总论文数：14
+- 精读区：3
 - 速读区：11
 
 ### 今日简报（AI）
-今日共处理16篇论文，精读5篇、速读11篇，最高分10.0由《Cislunar交会与近距操作的无源安全凸制导》摘得。最值得看的是地月空间交会制导（10分）与机会约束非线性协方差控制（8分），速读中多无人机深度强化学习导航和STL感知自适应滤波也具参考价值。下一步建议普通读者优先精读上述高分论文，再延伸关注多无人机协同与非线性滤波的工程应用。
-- 详情：[/202608/05/README](/202608/05/README)
+今日14篇论文聚焦航天制导与通信，精读2篇高分研究。最值得看地月空间交会安全制导（9分）及自主网络知识通信（8分）。建议普通读者优先关注距离测量追踪与非线性滤波方向。
+- 详情：[/202608/07/README](/202608/07/README)
 
 ### 精读区论文标签
-1. [Passively Safe Convex Guidance for Cislunar Rendezvous and Proximity Operations](/202608/05/2608.03060v1-passively-safe-convex-guidance-for-cislunar-rendezvous-and-proximity-operations)  
-   标签：评分：10.0/10、query:cislunar-dyn-nav
-   evidence：面向地月空间近直线晕轨道的交会与近距离操作凸优化制导，直接匹配地月系统轨迹优化与近月自主任务需求
-2. [Chance-Constrained Nonlinear Covariance Control via Robust Linearization Remainder Bounds](/202608/05/2607.27742v1-chance-constrained-nonlinear-covariance-control-via-robust-linearization-remainder-bounds)  
+1. [Passively Safe Convex Guidance for Cislunar Rendezvous and Proximity Operations](/202608/07/2608.03060v1-passively-safe-convex-guidance-for-cislunar-rendezvous-and-proximity-operations)  
+   标签：评分：9.0/10、query:cislunar-dyn-nav
+   evidence：明确针对近直线晕轨道与地月空间交会接近操作
+2. [A Knowledge-Centric Communication For Autonomous Cislunar Networks](/202608/07/2608.04817v1-a-knowledge-centric-communication-for-autonomous-cislunar-networks)  
    标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：随机约束非线性协方差控制，可直接用于地月系统不确定性轨迹优化
-3. [The International Lunar Reference System](/202608/05/2607.27762v1-the-international-lunar-reference-system)  
+   evidence：面向自主地月空间网络的知识中心通信框架
+3. [GBOT: ground based optical tracking of the Gaia satellite](/202608/07/2608.04861v1-gbot-ground-based-optical-tracking-of-the-gaia-satellite)  
    标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：为航天器定位导航授时建立月球参考框架，直接支撑地月空间定位与授时
-4. [Physical Characterization of Moon Impactor 2025-010D](/202608/05/2608.00360v1-physical-characterization-of-moon-impactor-2025-010d)  
-   标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：近地月空间目标跟踪与轨道反演，涉及地月空间动力学分析
-5. [TANGO-VIO: Triangulation-Aware Navigation with Guaranteed Feature-Observability for Visual-Inertial Odometry](/202608/05/2608.02079v1-tango-vio-triangulation-aware-navigation-with-guaranteed-feature-observability-for-visual-inertial-odometry)  
-   标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：视觉惯性导航结合可观测性感知规划，与自主导航算法要求高度契合。
+   evidence：直接涉及对拉格朗日点轨道航天器的地面光学跟踪，与拉格朗日点运行和定轨相关
 
 ### 速读区论文标签
-1. [Cooperative Multi-UAV Navigation in Complex Environments via Systematic Multi-Agent Deep Reinforcement Learning](/202608/05/2607.25754v1-cooperative-multi-uav-navigation-in-complex-environments-via-systematic-multi-agent-deep-reinforcement-learning)  
-   标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：多智能体强化学习协同导航，可迁移至月球近距自主操作
-2. [Online Monitoring and Risk Assessment of Non-Cooperative UAVs via STL-Aware Adaptive Fusion Kalman Filtering](/202608/05/2607.26527v1-online-monitoring-and-risk-assessment-of-non-cooperative-uavs-via-stl-aware-adaptive-fusion-kalman-filtering)  
-   标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：自适应融合卡尔曼滤波用于多传感器状态估计与风险评估
-3. [Two-Filter Adaptive Gaussian Mixture Smoothing for Nonlinear Systems](/202608/05/2607.27151v1-two-filter-adaptive-gaussian-mixture-smoothing-for-nonlinear-systems)  
-   标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：自适应高斯混合平滑算法，可用于空间目标跟踪与地月近距导航
-4. [Neural operator learning for collision-aware trajectory planning of spacecraft swarms](/202608/05/2608.00320v1-neural-operator-learning-for-collision-aware-trajectory-planning-of-spacecraft-swarms)  
-   标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：航天器集群碰撞感知轨迹规划的神经算子，可迁移至地月空间轨迹优化
-5. [Beyond Invariant Dictionary: Data-Driven Koopman Spectral Recovery with Filtered Extended Dynamic Mode Decomposition](/202608/05/2608.02661v1-beyond-invariant-dictionary-data-driven-koopman-spectral-recovery-with-filtered-extended-dynamic-mode-decomposition)  
-   标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：Koopman谱方法用于非线性动力学，适用于地月轨迹稳定性分析
-6. [POMDPs for Autonomous Science Exploration](/202608/05/2608.03155v1-pomdps-for-autonomous-science-exploration)  
-   标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：面向传感不确定下的自主探索决策，直接支撑月球临近操作自主导航算法。
-7. [Estimated-State Adaptive Sliding Mode Control and Disturbance Observation Using Second-Order Surfaces for Spacecraft Formation Reconfiguration](/202608/05/2607.27524v1-estimated-state-adaptive-sliding-mode-control-and-disturbance-observation-using-second-order-surfaces-for-spacecraft-formation-reconfiguration)  
+1. [Two-Filter Adaptive Gaussian Mixture Smoothing for Nonlinear Systems](/202608/07/2607.27151v1-two-filter-adaptive-gaussian-mixture-smoothing-for-nonlinear-systems)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：航天器编队重构中的轨迹优化与鲁棒稳定性控制
-8. [A Unified Discrete Gradient-SAV Framework for Structure-Preserving Integration](/202608/05/2607.27795v1-a-unified-discrete-gradient-sav-framework-for-structure-preserving-integration)  
+   evidence：用于空间目标跟踪与自主导航的非线性高斯混合平滑方法
+2. [A Unified Discrete Gradient-SAV Framework for Structure-Preserving Integration](/202608/07/2607.27795v1-a-unified-discrete-gradient-sav-framework-for-structure-preserving-integration)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：保结构积分器可支持地月系统长期轨迹传播与稳定性分析。
-9. [Multi-sensor fusion for fine-guidance and milliarcsecond-level attitude estimation of balloon-borne telescope](/202608/05/2607.28816v1-multi-sensor-fusion-for-fine-guidance-and-milliarcsecond-level-attitude-estimation-of-balloon-borne-telescope)  
+   evidence：面向保守系统的保结构积分器，可迁移至CR3BP轨道传播
+3. [Localization and Pursuit of a Mobile Target using Distance-only Measurements](/202608/07/2607.27812v1-localization-and-pursuit-of-a-mobile-target-using-distance-only-measurements)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：用于空间平台精细导引姿态估计的多传感器融合
-10. [Homotopy-Aware Corridor Generation without Predefined Reference Paths](/202608/05/2607.29513v1-homotopy-aware-corridor-generation-without-predefined-reference-paths)  
+   evidence：仅利用距离测量的自主定位与追踪，适用于无GPS的地月空间近距导航。
+4. [ABC methods for IoT Emitter Geolocalisation using LEO Satellite Doppler Measurements](/202608/07/2607.28585v1-abc-methods-for-iot-emitter-geolocalisation-using-leo-satellite-doppler-measurements)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：面向机器人运动规划的走廊生成方法，可迁移至月球近距离自主导航
-11. [Learning Smooth SE(3) Trajectories under Left-Invariant Riemannian Metrics](/202608/05/2608.01562v1-learning-smooth-se3-trajectories-under-left-invariant-riemannian-metrics)  
+   evidence：基于多普勒的被动定位与ABC方法，可迁移至利用卫星信号的月地空间定位
+5. [Multi-sensor fusion for fine-guidance and milliarcsecond-level attitude estimation of balloon-borne telescope](/202608/07/2607.28816v1-multi-sensor-fusion-for-fine-guidance-and-milliarcsecond-level-attitude-estimation-of-balloon-borne-telescope)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：在左不变黎曼度量下学习光滑SE(3)轨迹，可普遍应用于航天器轨迹优化
+   evidence：多传感器融合用于精细制导与毫角秒级姿态估计，可迁移至地月空间定位授时
+6. [Neural operator learning for collision-aware trajectory planning of spacecraft swarms](/202608/07/2608.00320v1-neural-operator-learning-for-collision-aware-trajectory-planning-of-spacecraft-swarms)  
+   标签：评分：6.0/10、query:cislunar-dyn-nav
+   evidence：神经算子用于航天器碰撞感知轨迹规划并强制执行轨道动力学，可迁移至地月系统轨迹优化
+7. [Physical Characterization of Moon Impactor 2025-010D](/202608/07/2608.00360v1-physical-characterization-of-moon-impactor-2025-010d)  
+   标签：评分：6.0/10、query:cislunar-dyn-nav
+   evidence：对地月空间目标轨道及月球撞击的研究，涉及地月空间动力学
+8. [RIT*: Riemannian Informed Trees for Cost-Adaptive Optimal Motion Planning](/202608/07/2608.00822v1-rit-riemannian-informed-trees-for-cost-adaptive-optimal-motion-planning)  
+   标签：评分：6.0/10、query:cislunar-dyn-nav
+   evidence：黎曼流形上的最优运动规划框架，可应用于包含空间导航的非欧几里得代价场轨迹优化
+9. [Learning Smooth SE(3) Trajectories under Left-Invariant Riemannian Metrics](/202608/07/2608.01562v1-learning-smooth-se3-trajectories-under-left-invariant-riemannian-metrics)  
+   标签：评分：6.0/10、query:cislunar-dyn-nav
+   evidence：基于学习的SE(3)平滑轨迹生成方法，可应用于航天器轨迹优化。
+10. [Control Barrier Functions via Minkowski Operations for Safe Navigation among Polytopes](/202608/07/2608.02886v1-control-barrier-functions-via-minkowski-operations-for-safe-navigation-among-polytopes)  
+   标签：评分：6.0/10、query:cislunar-dyn-nav
+   evidence：基于Minkowski运算的非光滑控制屏障函数与精确符号距离，适用于安全关键的自主抵近操作
+11. [POMDPs for Autonomous Science Exploration](/202608/07/2608.03155v1-pomdps-for-autonomous-science-exploration)  
+   标签：评分：6.0/10、query:cislunar-dyn-nav
+   evidence：基于POMDP的自主科学探索规划方法，可应用于月球近距操作的自主导航。
 
 
 <div class="dpr-home-promo-card">
