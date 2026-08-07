@@ -1,0 +1,1217 @@
+Title: Adaptive Attitude Estimation for Multiple-Surface Object Using Light Curve Glints
+
+URL Source: https://arxiv.org/pdf/2607.28912v1
+
+Published Time: Mon, 03 Aug 2026 00:17:03 GMT
+
+Number of Pages: 19
+
+Markdown Content:
+# Adaptive Attitude Estimation for Multiple-Surface Object Using Light Curve Glints 
+
+## Yasuhiro Yoshimura a,∗, Toshiya Hanada a
+
+> a
+
+Department of Aeronautics and Astronautics, Kyushu University, 744 Motooka, Nishi-ku, Fukuoka, 819-0395, Japan 
+
+A R T I C L E I N F O 
+
+Keywords :Attitude Estimation Interacting Multiple Model Light Curves Space Situational Awareness 
+
+A B S T R A C T 
+
+Light curve inversion enables the estimation of orbit, attitude, optical properties, and shape of space objects. Because a light curve is the temporal evolution of a scalar apparent magnitude, the estimation problem can be ill-posed owing to the non-uniqueness of the attitude that reproduces a given light curve. The initial estimate in Kalman filtering can therefore be sensitive, and, depending on the object properties, observation geometry, and number of estimated parameters, an inaccurate initial estimate may lead to divergence of the filter. A previous study uses a sudden change of light curves, called glint, to constrain the range of attitude estimate. The current paper extends the attitude estimation method using glint for multiple-surface objects. Such objects have multiple attitudes to yield glint, and the attitude estimate is not uniquely determined. To address this issue, this paper employs the interacting multiple model (IMM) algorithm that runs multiple parallel filters with model interaction in the estimation sequence. Each filter assumes that the glint occurs on the corresponding surface. The mode probability is updated by the likelihood of each filter, determining the correctness of the hypotheses. Furthermore, the mixing step in the IMM allows interaction among the filters through a transition probability matrix, enabling adaptation to the time-varying glint source. Numerical simulations are conducted for a box satellite in a geosynchronous orbit. Monte Carlo trials with initial attitude errors of up to 80 deg show that the proposed method improves the convergence rate from 10% for a single surface filter to 73%, and the mixing step is shown to be essential, since the convergence rate drops to 40% when it is removed. 
+
+## 1. Introduction 
+
+Space situational awareness (SSA) is essential for maintaining the safety and sustainability of space operations. With the increasing number of active satellites and space debris (Liou, 2022), obtaining accurate information about the states of space objects, including shape, attitude, and surface properties, has become important. Attitude estimation is particularly important for operational satellite monitoring and for preparation of active debris removal missions. In addition, attitude information enables precise orbit propagation under attitude-dependent perturbation forces such as solar radiation pressure and atmospheric drag. Light curve inversion is a cost-effective approach for estimating states of space objects, such as the attitude, optical properties, and shape, using photometric observations from ground-based telescopes (Clark, Fu, Dave and S K Lee, 2022; Burton, Robinson and Frueh, 2024; Isoletta, Opromolla and Fasano, 2025). A light curve is the temporal evolution of the apparent magnitude, which is a scalar quantity at each epoch, and the inversion can be ill-posed because different states may reproduce nearly the same light curve. The present paper focuses on attitude estimation, assuming the shape and optical properties to be known. The accuracy of the attitude estimate can be sensitive to the initial estimate supplied to the filter. Depending on the object properties, observation geometry, and number of estimated parameters, an inaccurate initial estimate may lead to divergence of the estimation filter. To mitigate this sensitivity, recent research has focused on obtaining a sufficiently accurate initial estimate of the attitude. A particle swarm optimizer is used to estimate the initial attitude and angular velocity (Burton et al., 2024). Gagnon and Crassidis (2025) also use a multiplicative particle swarm optimization based on quaternion multiplication to estimate the initial attitude. A variety of estimation and optimization methods have been applied to light curve inversion. Early work used extended and unscented Kalman filters (UKF) to estimate the attitude from light curves (Wetterer and Jah, 2009), 
+
+> ∗
+
+Corresponding author 
+
+y.yoshimura.a64@m.kyushu-u.ac.jp (Y. Yoshimura); (T. Hanada) 
+
+> ORCID
+
+(s): 
+
+Yoshimura and Hanada: Preprint submitted to Elsevier Page 1 of 13 arXiv:2607.28912v1 [eess.SY] 31 Jul 2026 Adaptive Attitude Estimation Using Light Curve Glints 
+
+and multiple-model filters have been used to jointly estimate the attitude, shape, and surface properties (Linares, Jah, Crassidis and Nebelecky, 2014; Dianetti and Crassidis, 2023). Batch and direct-inversion schemes have been studied to cope with measurement noise and to analyze the observability of the inversion (Fan and Frueh, 2020; Friedman and Frueh, 2022). More recently, machine learning has been applied to classify objects and their motion from light curves (Linares, Furfaro and Reddy, 2020; Isoletta et al., 2025), and light curve inversion has been demonstrated on real measurements of spinnig debris (Kucharski, Kirchner, Bennett, Lachut, Sośnica, Koshkin, Shakun, Koidl, Steindorfer and Wang, 2021). A previous study (Matsushita, Yoshimura, Nagasaki and Hanada, 2024) proposes an attitude estimation method that exploits glint, a rapid change in light intensity caused by specular reflection. When a glint occurs, the geometric relationship among the Sun, the observer, and the surface normal of a space object is constrained within a specific range (Matsushita, Arakawa, Yoshimura and Hanada, 2019), providing a clue for the attitude estimate. Specular glints occur only under specific Sun–object–observer geometries, and their observability depends on the orbital regime. For objects in geosynchronous orbit (GEO), the slowly varying observation geometry yields repeatable glint opportunities during an observation pass, whereas for low Earth orbit (LEO) objects the rapidly changing geometry restricts glints to brief and less frequent events. Specular flashes have nonetheless been observed for both operational satellites and rotating debris (Maley and Pizzicaroli, 2003; Šilha, Pittet, Hamara and Schildknecht, 2018; Žilková, Šilha, Matlovič and Tóth, 2023), and the duration of a glint has been used to bound the angular velocity of an object (Hinks and Crassidis, 2016). By using an interval unscented Kalman filter, which projects the sigma points onto the glint constraint boundary, the previous method achieves fast convergence of the attitude estimate even with a large initial error. This state projection indicates that the glint constraint is applicable to determine the initial attitude estimate. However, the previous method assumes a flat plate as the target object, which has only a single reflecting surface. For realistic space objects with multiple surfaces, such as box-wing satellites consisting of a bus body and solar panels, glint can originate from any of the multiple surfaces. When a glint is observed, the surface responsible for the glint is unknown, and this ambiguity prevents the direct application of the single-surface glint constraint (Matsushita et al., 2024). To address this challenge, this paper proposes an adaptive attitude estimation method using the interacting multiple model (IMM) algorithm (Blom and Bar-Shalom, 1988). The IMM framework runs multiple estimation filters in parallel, where each filter assumes that the observed glint originates from a different surface. Although the multiple model adaptive estimation (MMAE) (Dianetti and Crassidis, 2023) also uses multiple models, the IMM incorporates a mixing step that allows interaction among the filters through a transition probability matrix. This interaction enables the IMM to adapt to the time-varying glint source, as the surface causing the glint changes over time with the rotational motion of the space object. The likelihood of each filter provides a measure of the correctness of each hypothesis, and the combined estimate is computed as a weighted average. This approach naturally handles the ambiguity in the glint source without requiring prior knowledge of which surface causes the glint. The paper is organized as follows. Section 2 presents the formulations of the BRDF, light curves, and attitude kinematics and dynamics. Section 3 describes the IMM-based attitude estimation method. Section 4 presents numerical simulations for a box satellite in a geosynchronous orbit to verify the effectiveness of the proposed method. Section 5 summarizes the conclusions. 
+
+## 2. Formulations 
+
+2.1. Light curves 
+
+A light curve is the time series of the apparent brightness of a space object observed by a ground-based telescope, and it is synthesized by modeling the sunlight reflected from each surface of the object toward the observer (Wetterer and Jah, 2009; Linares et al., 2014). The reflectance of each surface is described by a bidirectional reflectance distribution function (BRDF). A BRDF 𝑓 𝑟 characterizes how a surface reflects incident light into a given reflection direction. It is defined as the ratio of the radiance 𝐿 𝑟 reflected toward the observer to the irradiance 𝐸 𝑖 incident on the surface, 
+
+𝑓 𝑟 = 𝐿 𝑟 
+
+𝐸 𝑖 
+
+(1) which has units of sr −1 . The geometry of light reflection on a facet of a space object is illustrated in Fig. 1, where the normal vector of the facet 𝒏 is assumed to be along the 𝑧 axis. The Sun directional vector 𝒔 and the observer directional   
+
+> Yoshimura and Hanada: Preprint submitted to Elsevier Page 2 of 13 Adaptive Attitude Estimation Using Light Curve Glints
+
+vector 𝒗 are unit vectors, defined by the sets of azimuth and polar angles ( 𝜙 𝑖 , 𝜃 𝑖 ) and ( 𝜙 𝑟 , 𝜃 𝑟 ), respectively. The half vector between 𝒔 and 𝒗 is defined as 
+
+𝒉 = 𝒔 + 𝒗 
+
+‖𝒔 + 𝒗 ‖ (2) The azimuth and polar angles of 𝒉 are also denoted as 𝜙 ℎ and 𝜃 ℎ, respectively. A BRDF contains two components, the diffuse term 𝑐 𝑑 and the specular term 𝑐 𝑠 as 
+
+𝑓 𝑟 = 𝑐 𝑑 + 𝑐 𝑠 (3) The diffuse term gives a broad, nearly view-independent contribution to the light curve, whereas the specular term gives a sharp, strongly direction-dependent contribution that is responsible for glints. This paper uses the Ashikhmin– Shirley model (Ashikhmin and Shirley, 2000) for the BRDF, which is an anisotropic Phong model and is often used for light curves of space objects (Gagnon and Crassidis, 2025; Jiang, Hu, Du, Chen, Cao, Liu and Feng, 2023; Hara, Yoshimura and Hanada, 2025). It is a physically based microfacet model that satisfies energy conservation and Helmholtz reciprocity, and it assumes that each surface is an optically homogeneous flat facet with a possibly anisotropic specular lobe. The space object is represented as a collection of such flat facets;. The self-shadowing among facets is accounted for in the light curve computation, whereas secondary inter-facet reflections are neglected. The diffuse and specular terms are written as 
+
+𝑐 𝑑 = 28 𝜌 𝑑 
+
+23 𝜋 
+
+(1 − 𝐹 0
+
+) [
+
+1 − 
+
+(
+
+1 − 𝒏 𝑇 𝒔 
+
+2
+
+)5] [ 
+
+1 − 
+
+(
+
+1 − 𝒏 𝑇 𝒗 
+
+2
+
+)5]
+
+(4) 
+
+𝑐 𝑠 =
+
+√(𝑛 𝑢 + 1 ) ( 𝑛 𝑣 + 1 )
+
+8𝜋 𝐷 (𝒉 )𝐹 
+
+(𝒗 𝑇 𝒉 ) max( 𝒏 𝑇 𝒔 , 𝒏 𝑇 𝒗 ) (5) where 𝜌 𝑑 ∈ [0 , 1] is the diffuse reflectance and is the fraction of incident light reflected diffusely. Also, 𝐹 0 is the Fresnel reflectance at normal incidence and 𝐹 is the Fresnel term, which increases the specular reflectance toward grazing angles. 𝐷 (𝒉 ) is the microfacet normal distribution function, which determines the width and shape of the specular lobe. These are written as 
+
+𝐹 = 𝐹 0 + (1 − 𝐹 0)(1 − 𝒗 𝑇 𝒉 )5 (6) 
+
+𝐷 (𝒉 ) = ( 𝒏 𝑇 𝒉 )𝑛 𝑢 cos 2 𝜙 ℎ+𝑛 𝑣 sin 2 𝜙 ℎ (7) where 𝑛 𝑢 and 𝑛 𝑣 are the specular exponents that control the sharpness of the specular lobe along two orthogonal in-plane directions. Larger values yield a narrower, more mirror-like lobe, and 𝑛 𝑢 = 𝑛 𝑣 corresponds to an isotropic specular lobe. The reflected sunlight reaching the observer is obtained by summing the contributions of all visible facets (Wetterer and Jah, 2009; Linares et al., 2014). Given the direction of the Sun 𝒔 and the normal vector of the 𝑗 th facet 𝒏 𝑗 , the power per unit square area of sunlight 𝐸 sun ,𝑗 reflected from the 𝑗 th facet is described as 
+
+𝐸 sun ,𝑗 = 𝐶 sun (𝒏 𝑇 𝑗 𝒔 )𝑓 𝑟,𝑗 (8) where 𝐶 sun is the solar irradiance and 𝑓 𝑟,𝑗 is the BRDF of the 𝑗 th facet. The power per unit square area of reflected sunlight received by the observer 𝐸 obs ,𝑗 is written as 
+
+𝐸 obs ,𝑗 = 𝐸 sun ,𝑗 𝐴 𝑗 (𝒏 𝑇 𝑗 𝒗 )
+
+𝑑 2 (9) where 𝐴 𝑗 is the area of the 𝑗 th facet and 𝑑 is the distance between the space object and the observer. Note that 𝐸 obs ,𝑗 
+
+has a nonzero value only when conditions 𝒏 𝑇 𝑗 𝒔 > 0 and 𝒏 𝑇 𝑗 𝒗 > 0 are satisfied. The apparent magnitude of the space object is 
+
+𝑚 app = ℎ(𝒙 ) + 𝜀 (10)   
+
+> Yoshimura and Hanada: Preprint submitted to Elsevier Page 3 of 13 Adaptive Attitude Estimation Using Light Curve Glints
+
+= 𝑚 sun − 2 .5 log 10 
+
+||||||
+
+> 𝑁 𝑓
+
+∑
+
+> 𝑗 =1
+
+𝐸 obs ,𝑗 
+
+𝐶 sun 
+
+||||||
+
++ 𝜀 
+
+where ℎ(𝒙 ) is the observation function with the state vector 𝒙 , 𝜀 is the observation noise assumed to follow a Gaussian distribution with zero mean and variance 𝑅 true , 𝑚 sun = −26 .7 is the apparent magnitude of the Sun, and 𝑁 𝑓 is the number of facets. The apparent magnitude is a logarithmic measure of the observed brightness of an object on the standard astronomical scale (Bessell, 2005; Fankhauser, Tyson and Askari, 2023), on which a smaller value corresponds to a brighter object. In this paper, the state vector 𝒙 consists of the attitude only, as detailed in Section 3.3. 
+
+2.2. Attitude kinematics and dynamics 
+
+The rotational motion of a space object is defined with respect to the body-fixed frame relative to an inertial frame. The body-fixed frame has the origin at the object’s center of mass and each axis corresponds to the principal axes of inertia. The 𝑋, 𝑌 , and 𝑍 axes of the inertial frame are defined as follows: the 𝑋 axis is along the vernal equinox, the 
+
+𝑍 axis points to the rotational axis of the Earth, and the 𝑌 axis completes the right-handed system. The kinematic equation of object attitude using quaternions is written as (Markley and Crassidis, 2014) ̇
+
+𝒒 = 𝒇 (𝝎 , 𝒒 )= 12
+
+⎡⎢⎢⎢⎣
+
+0 𝜔 𝑧 −𝜔 𝑦 𝜔 𝑥 
+
+−𝜔 𝑧 0 𝜔 𝑥 𝜔 𝑦 
+
+𝜔 𝑦 −𝜔 𝑥 0 𝜔 𝑧 
+
+−𝜔 𝑥 −𝜔 𝑦 −𝜔 𝑧 0
+
+⎤⎥⎥⎥⎦⎡⎢⎢⎢⎣
+
+𝑞 1
+
+𝑞 2
+
+𝑞 3
+
+𝑞 4
+
+⎤⎥⎥⎥⎦
+
+(11) where 𝒒 = [ 𝑞 1, 𝑞 2, 𝑞 3, 𝑞 4]𝑇 is the quaternion with scalar part 𝑞 4, 𝝎 = [ 𝜔 𝑥 , 𝜔 𝑦 , 𝜔 𝑧 ]𝑇 is the angular velocity of the body-fixed frame with respect to the inertial frame, and 𝒇 (𝝎 , 𝒒 ) is the state propagation function. The dynamics of rotational motion is described by Euler’s equation as (Markley and Crassidis, 2014) 
+
+𝐽̇ 𝝎 + 𝝎 × ( 𝐽 𝝎 ) = 𝝉 (12) where 𝐽 is the inertia tensor and 𝝉 is the disturbance torque in the body-fixed frame. For simplicity, the disturbance torques are ignored in this paper. This torque-free assumption is appropriate for the short observation span considered in this paper. For an object in GEO, the dominant environmental torques are typically of order 10 −6 to 10 −4 Nm (Markley and Crassidis, 2014; Wertz, 1978), and the angular-velocity change they induce over a single pass is small relative to the initial rotational motion. The residual effect of these unmodeled torques is accounted for by the process noise 
+
+𝑄 introduced in Section 4. Thus 𝑄 is kept small in the present scenario and would need to be increased for longer observation spans or for objects subject to stronger perturbations, such as those with a high area-to-mass ratio, to preserve filter consistency. 
+
+## 3. Method 
+
+3.1. Glint constraint for multiple facets 
+
+A glint occurs when the specular component of reflected light becomes dominant. For a single facet with normal vector 𝒏 𝑗 , the glint condition depends on the angle 𝜃 ℎ,𝑗 between 𝒏 𝑗 and the half vector 𝒉 (Matsushita et al., 2019, 2024). That is, a glint occurs when 
+
+cos 𝜃 ′ 
+
+> ℎ
+
+< cos 𝜃 ℎ,𝑗 = 𝒏 𝑇 𝑗 𝒉 (13) where 𝜃 ′ 
+
+> ℎ
+
+is the threshold angle for glint occurrence, and it depends on the specular parameters 𝑛 𝑢 and 𝑛 𝑣 for the Ashikhmin–Shirley BRDF model. This constraint defines a range of attitude angles for which a glint can occur on the 𝑗 th facet. Figure 2 illustrates the projection of the estimated attitude onto the glint constraint boundary, where 
+
+𝒆 = 𝒉 𝑏 × 𝒏 𝑗 is the rotation axis of projection and 𝒉 𝑏 is the half vector expressed in the body frame. The possible attitudes satisfying Eq. (13) are expressed as a cone centered on 𝒏 𝑗 with half-angle 𝜃 ′
+
+> ℎ
+
+. Although there is still ambiguity in the projection direction, the attitude projection can reduce the estimation error. This projection is performed when the estimated attitude violates the glint constraint.   
+
+> Yoshimura and Hanada: Preprint submitted to Elsevier Page 4 of 13 Adaptive Attitude Estimation Using Light Curve Glints
+
+For a single-surface object, the glint constraint in Eq. (13) can be directly applied to project the attitude estimate (Matsushita et al., 2024) because the surface responsible for the glint is unambiguous. However, for a more complex object with 𝑁 𝑓 facets, any of the 𝑁 𝑓 facets may cause the glint. Thus, the surface responsible for the glint is not known a priori, and applying the wrong constraint would lead to incorrect estimation. This ambiguity necessitates a method that can simultaneously consider all possible glint sources. 
+
+3.2. Unscented Kalman filter with glint constraint 
+
+The attitude estimation uses the unscented Kalman filter (UKF) (Julier and Uhlmann, 1997) due to its applicability to nonlinear systems. The state variable is a quaternion, and the angular rate is assumed known. Modified Rodrigues parameters are used for calculating sigma points to satisfy the quaternion norm constraint (Crassidis and Markley, 2003). Throughout this paper, the estimated state is the attitude quaternion only. The angular velocity, the inertia tensor, the facet geometry, the BRDF optical parameters, and the orbital position are assumed known and held fixed during estimation. When a glint is observed, the estimated attitude that violates the glint constraint in Eq. (13) can be projected onto the constraint boundary. Following the previous work (Matsushita et al., 2024), the estimated state ̂ 𝒙 is projected as ̂
+
+𝒙 (𝑘 ) ←  [𝑔 𝑗 (̂ 𝒙 (𝑘 )) ] (14) where  represents the projection operator, 𝑘 is the time instant, and 𝑔 𝑗 (̂ 𝒙 (𝑘 )) is the constraint function for the 𝑗 th facet obtained from Eq. (13): 
+
+𝑔 𝑗 (̂ 𝒙 ) = ̂ 𝒏 𝑇 𝑗 𝒉 − cos 𝜃 ′ 
+
+> ℎ
+
+(15) where ̂ 𝒏 𝑗 is the normal vector of the 𝑗 th facet expressed in the inertial frame using the estimated attitude. Geometrically, the projection rotates the estimated quaternion minimally so that the angle 𝜃 ℎ,𝑗 between the half vector and the 𝑗 th surface normal equals 𝜃 ′
+
+> ℎ
+
+. When the estimated state already satisfies the constraint, i.e., 𝜃 ℎ,𝑗 ≤ 𝜃 ′
+
+> ℎ
+
+, no projection is performed. In addition to the mean state, the covariance is contracted along the projection direction to reflect the reduced attitude uncertainty implied by the glint constraint. Using the projection axis 𝒆 = 𝒉 𝑏 × 𝒏 𝑗 defined in Section 3.1, the variance along this direction, 𝜎 2 
+
+> 𝑒
+
+= 𝒆 𝑇 𝑃 𝒆 , is limited to the squared angular tolerance 𝜃 ′2  
+
+> ℎ
+
+permitted by the constraint through the rank-one update 
+
+𝑃 ← 𝑃 − 𝛾 (𝜎 2 
+
+> 𝑒
+
+− 𝜃 ′2 
+
+> ℎ
+
+) 𝒆𝒆 𝑇 𝜎 2 
+
+> 𝑒
+
+> 𝜃 ′2  
+
+> ℎ
+
+(16) where 0 < 𝛾 ≤ 1 controls the strength of the contraction. Directions orthogonal to 𝒆 are left unchanged, so the constraint reduces the uncertainty only along the projection direction. This combined projection of the mean and covariance is consistent with constrained Kalman filtering, in which the estimate is projected onto the constraint surface and the covariance is reduced accordingly (Simon and Chia, 2002; Simon, 2010). The choice of 𝛾 in the IMM context is described in Section 3.3. 
+
+3.3. Interacting multiple model (IMM) estimation 
+
+The interacting multiple model (IMM) algorithm runs multiple estimation filters in parallel, each corresponding to a different hypothesis (Blom and Bar-Shalom, 1988; Zhang and Li, 1998). This paper uses the IMM to address the ambiguity in the glint source by assigning a dedicated filter to each surface hypothesis. Each filter assumes that the observed glint originates from a specific surface and projects the estimated state onto the corresponding glint constraint boundary. Although the MMAE algorithm also employs multiple filters, they operate independently of each other. In contrast, the IMM algorithm incorporates a mixing step that allows the filters to interact through a transition probability matrix. This interaction is essential because the surface responsible for the glint changes over time as the object rotates. Figure 3 shows the structure of the proposed estimator. Dividing the object into small facets enables accurate calculation of light curves. However, many facets may have similar normal directions. For example, a box-wing satellite as shown in Fig. 4 can be grouped into six surfaces whose normal directions are along each axis of the body-fixed frame. Let 𝑀 𝑗 denote the hypothesis that the glint originates from the 𝑗 th surface. The 𝑗 th filter uses the constraint 𝑔 𝑗 in Eq. (15) for the mean state projection. All filters share the same observation and the same state propagation model, but differ in the glint constraint applied during the observation update.   
+
+> Yoshimura and Hanada: Preprint submitted to Elsevier Page 5 of 13
+
+Adaptive Attitude Estimation Using Light Curve Glints 
+
+3.3.1. IMM algorithm 
+
+The IMM algorithm consists of the following four steps at each time step 𝑘 , summarized in Algorithm 1. Step 1 is the mixing step, which computes a mixed initial condition for each filter using the transition probability matrix 
+
+𝑃 = [ 𝑝 𝑖𝑗 ], where the components 𝑝 𝑖𝑗 represent the probability of switching from model 𝑀 𝑖 to model 𝑀 𝑗 . The mixing probability 𝑤 𝑖𝑗,𝑘 is computed as 
+
+𝑤 𝑖𝑗,𝑘 = 𝑝 𝑖𝑗 𝑤 𝑖,𝑘 
+
+𝑐 𝑗,𝑘 
+
+(17) where 𝑤 𝑖,𝑘 is the mode probability from the previous step. It is noted that if 𝑝 𝑗𝑗 = 1 for all 𝑗 , the IMM reduces to the MMAE algorithm. The normalization constant 𝑐 𝑗,𝑘 is defined as 
+
+𝑐 𝑗,𝑘 =
+
+> 𝑀
+
+∑
+
+> 𝑖 =1
+
+𝑤 𝑖,𝑘 𝑝 𝑖𝑗 (18) The mixed initial state ̂ 𝒙 0𝑗,𝑘 and covariance 𝑃 0𝑗,𝑘 for the 𝑗 th filter are computed as ̂
+
+𝒙 0𝑗,𝑘 =
+
+> 𝑀
+
+∑
+
+> 𝑖 =1
+
+𝑤 𝑖𝑗,𝑘 ̂ 𝒙 𝑖,𝑘 (19) 
+
+𝑃 0𝑗,𝑘 =
+
+> 𝑀
+
+∑
+
+> 𝑖 =1
+
+𝑤 𝑖𝑗,𝑘 
+
+[𝑃 𝑖,𝑘 + ( ̂ 𝒙 𝑖,𝑘 −̂ 𝒙 0𝑗,𝑘 )( ̂𝒙 𝑖,𝑘 −̂ 𝒙 0𝑗,𝑘 )𝑇 ] (20) This mixing step is the key difference from the MMAE and enables the filters to exchange information, preventing any single filter from diverging due to an incorrect hypothesis. In Step 2, each filter performs state propagation and update of conventional UKF starting from the mixed initial condition ̂ 𝒙 0𝑗,𝑘 and covariance 𝑃 0𝑗,𝑘 . When a glint is observed, the 𝑗 th filter projects its estimated mean state using the constraint 𝑔 𝑗 in Eq. (15). When no glint is observed, each filter performs a measurement update of conventional UKF without projection. This step yields the filtered state ̂ 𝒙 𝑗,𝑘 , the covariance 𝑃 𝑗,𝑘 , and the innovation 𝒆 𝑗,𝑘 = 𝒚 (𝑘 ) − ̂ 𝒚 − 
+
+> 𝑗,𝑘
+
+for each filter. In Step 3, the likelihood is computed from the innovation as 
+
+𝑝 (𝒚 𝑘 |̂𝒙 𝑘,𝑗 ) = 1
+
+√det(2 𝜋𝐸 𝑗,𝑘 ) exp 
+
+(
+
+− 12 𝒆 𝑇 𝑗,𝑘 𝐸 −1 
+
+> 𝑗,𝑘
+
+𝒆 𝑗,𝑘 
+
+)
+
+(21) where 𝐸 𝑗,𝑘 = 𝑃 − 
+
+> 𝑦𝑦,𝑗,𝑘
+
++ 𝑅 is the innovation covariance with the observation noise covariance 𝑅 . The mode probability 
+
+𝑤 𝑗,𝑘 is updated using the likelihood of each filter and the predicted mode probability 𝑐 𝑗,𝑘 in Eq. (18) as 
+
+𝑤 𝑗,𝑘 = 𝑐 𝑗,𝑘 𝑝 (𝒚 𝑘 |̂𝒙 𝑘,𝑗 ) (22) 
+
+𝑤 𝑗,𝑘 ← 𝑤 𝑗,𝑘 
+
+∑𝑀 𝑙 =1 𝑤 𝑙,𝑘 
+
+(23) where Eq. (23) means the normalization of the mode probabilities. The initial probability is set to a uniform distribution, i.e., 𝑤 𝑗, 0 = 1∕ 𝑀 for all filters, indicating no prior preference for any surface. In Step 4, the combined state estimate ̂ 𝒙 𝑘 and covariance 𝑃 𝑘 are computed as a weighted average: ̂
+
+𝒙 𝑘 =
+
+> 𝑀
+
+∑
+
+> 𝑗 =1
+
+𝑤 𝑗,𝑘 ̂ 𝒙 𝑗,𝑘 (24) 
+
+𝑃 𝑘 =
+
+> 𝑀
+
+∑
+
+> 𝑗 =1
+
+𝑤 𝑗,𝑘 
+
+[𝑃 𝑗,𝑘 + ( ̂ 𝒙 𝑗,𝑘 −̂ 𝒙 𝑘 )( ̂ 𝒙 𝑗,𝑘 −̂ 𝒙 𝑘 )𝑇 ] (25) These steps are repeated for each time step until the end of the estimation period. 
+
+Yoshimura and Hanada: Preprint submitted to Elsevier Page 6 of 13 Adaptive Attitude Estimation Using Light Curve Glints 
+
+Algorithm 1 IMM attitude estimation at time step 𝑘 
+
+Require: mode probabilities 𝑤 𝑖,𝑘 , estimates ̂ 𝒙 𝑖,𝑘 and covariances 𝑃 𝑖,𝑘 (𝑖 = 1 , … , 𝑀 ), transition probability matrix 
+
+[𝑝 𝑖𝑗 ], measurement 𝒚 (𝑘 )
+
+Step 1: Interaction (mixing)  
+
+> 1:
+
+for 𝑗 = 1 to 𝑀 do  
+
+> 2:
+
+compute mixing probabilities 𝑤 𝑖𝑗,𝑘 and 𝑐 𝑗,𝑘 ⊳ Eqs. (17), (18)  
+
+> 3:
+
+form mixed initial condition ̂ 𝒙 0𝑗,𝑘 , 𝑃 0𝑗,𝑘 ⊳ Eqs. (19), (20)  
+
+> 4:
+
+end for 
+
+Step 2: Model-conditional filtering  
+
+> 5:
+
+for 𝑗 = 1 to 𝑀 do  
+
+> 6:
+
+run the UKF prediction and update from ̂ 𝒙 0𝑗,𝑘 , 𝑃 0𝑗,𝑘  
+
+> 7:
+
+if a glint is observed then  
+
+> 8:
+
+project the mean and covariance onto the surface-𝑗 constraint ⊳ Eqs. (14), (16)  
+
+> 9:
+
+end if  
+
+> 10:
+
+store ̂ 𝒙 𝑗,𝑘 , 𝑃 𝑗,𝑘 and the innovation 𝒆 𝑗,𝑘  
+
+> 11:
+
+end for 
+
+Step 3: Mode-probability update  
+
+> 12:
+
+for 𝑗 = 1 to 𝑀 do  
+
+> 13:
+
+compute the likelihood 𝑝 (𝒚 𝑘 |̂ 𝒙 𝑘,𝑗 ) ⊳ Eq. (21)  
+
+> 14:
+
+update 𝑤 𝑗,𝑘 = 𝑐 𝑗,𝑘 𝑝 (𝒚 𝑘 |̂ 𝒙 𝑘,𝑗 ) ⊳ Eq. (22)  
+
+> 15:
+
+end for  
+
+> 16:
+
+normalize the mode probabilities 𝑤 𝑗,𝑘 ⊳ Eq. (23) 
+
+Step 4: Estimate combination  
+
+> 17:
+
+combine ̂ 𝒙 𝑘 , 𝑃 𝑘 as the weighted average ⊳ Eqs. (24), (25)  
+
+> 18:
+
+return ̂ 𝒙 𝑘 , 𝑃 𝑘 , 𝑤 𝑗,𝑘 
+
+3.3.2. Transition probability matrix 
+
+The transition probability matrix 𝑃 governs the interaction between the filters. In this study, the diagonal components are set to a large value 𝑝 𝑗𝑗 = 𝑝 same , reflecting the assumption that glint from the same surface is likely to persist over consecutive time steps. The off-diagonal components are set uniformly as 𝑝 𝑖𝑗 = (1 − 𝑝 same )∕( 𝑀 − 1) 
+
+for 𝑖 ≠ 𝑗 . This structure allows the IMM to smoothly transition between hypotheses as the glint source changes. Such a transition probability matrix, with a dominant self-transition probability and uniformly distributed switching probabilities, is a common choice in IMM design when no prior information favors a particular mode transition (Bar-Shalom, Li and Kirubarajan, 2001; Mazor, Averbuch, Bar-Shalom and Dayan, 1998). The sensitivity of the estimation performance to 𝑝 same is examined in Section 4. The mixing step provides the mixed initial conditions to each filter, and the 𝑀 parallel UKF filters perform updates. During a glint event, each filter projects its estimated mean state onto its respective constraint boundary. The mode probability update and estimate combination yield the final output, which also provides the mixed initial conditions to the next time step. It is noted that the IMM does not require identification of the glint source surface. Instead, the likelihood mechanism automatically assigns higher mode probabilities to the filter with the correct hypothesis. The mixing step further enhances robustness by preventing filters with incorrect hypotheses from diverging, as they continuously receive corrected information from the other filters. 
+
+## 4. Numerical Simulation 
+
+4.1. Simulation setup 
+
+The target object is modeled as a box satellite with 1996 facets and 6 surfaces corresponding to the ±𝑥 𝑏 , ±𝑦 𝑏 , and 
+
+±𝑧 𝑏 surfaces. The shape and surface parameters are summarized in Table 1. The specular lobe exponents are set to 
+
+(𝑛 𝑢 , 𝑛 𝑣 ) = (1000 , 1000) for all facets, representing isotropic specular reflectance. These optical parameters are held fixed and assumed known during estimation. In practice, the optical properties of spacecraft materials degrade over time through space weathering, such as ultraviolet exposure, atomic-oxygen erosion, and surface contamination, which alters the diffuse reflectance 𝜌 𝑑 , the normal-incidence reflectance 𝐹 0, and the specular exponents (Sharma and Sridhara,                   
+
+> Yoshimura and Hanada: Preprint submitted to Elsevier Page 7 of 13 Adaptive Attitude Estimation Using Light Curve Glints
+> Table 1
+> Shape and surface parameters.
+> Shape
+> Bus size 1.0 × 1 .0 × 1 .0 m
+> SAP size (each) 5.0 × 1 .0 × 0 .02 m
+> Total span (with SAPs) 11 .0 m (𝑥 𝑏 direction)
+> Surface
+> Specular lobe exponents (𝑛 𝑢 , 𝑛 𝑣 )(1000 ,1000)
+> Fresnel reflectance 𝐹 00.5 Diffuse reflectance 𝜌 𝑑 0.5
+> Inertia
+> Moment of inertia (𝐽 𝑥 , 𝐽 𝑦 , 𝐽 𝑧 )(450 ,500 ,800) kgm 2
+
+2012; Goto, Yukumatsu, Tsuchiya, Miyazaki and Kimoto, 2023). A drift in these parameters would bias the synthesized light curve and therefore the attitude estimate. For long-term tracking, the filter would need to account for such changes. A quantitative analysis of the estimator’s sensitivity to BRDF parameter uncertainty is left for future work. Table 2 summarizes the simulation conditions. The true orbit is obtained by propagating a geosynchronous (GEO) satellite and its orbital elements are listed in Table 2. The true initial attitude and angular rate are set so that glint events occur on multiple surfaces during the simulation period. To verify the convergence capability of the proposed method under a poor initialization, the initial attitude estimate supplied to the filter is perturbed from the truth by an error whose magnitude is drawn from a uniform distribution 𝑈 [0 , 80] deg about a uniformly distributed random axis. The representative trials in Cases 1 and 2 use the same draw of about 56 deg from this distribution. The observation noise in the filter is inflated relative to the truth as 𝑅 = (3 √𝑅 true )2, and the system noise 𝑄 is kept small, consistent with the torque-free dynamics assumed in Section 2.2. The initial hypothesis probabilities are set uniformly as 𝑤 𝑗, 0 = 1∕ 𝑀 
+
+for all filters. The parameter values in Table 2 are chosen as follows. The specular lobe exponents (𝑛 𝑢 , 𝑛 𝑣 ) = (1000 , 1000) 
+
+represent the near-mirror-like specular reflection of typical satellite surfaces and lie within the range used in previous light curve studies (Gagnon and Crassidis, 2025; Jiang et al., 2023; Hara et al., 2025). The glint occurrence threshold 
+
+𝜃 ′ 
+
+> ℎ
+
+= 7 deg follows the value adopted in the previous paper (Matsushita et al., 2024). The UKF scaling parameters 
+
+(𝛼, 𝛽, 𝜅 ) = (10 −3 , 2, 0) are the standard values recommended for a Gaussian state distribution (Julier and Uhlmann, 1997; Crassidis and Markley, 2003). The small system noise 𝑄 = 10 −12 reflects the assumed torque-free rotational dynamics, as discussed in Section 2.2. The transition probability 𝑝 same = 0 .99 corresponds to a strong persistence of the glint source between consecutive steps. The estimation performance is shown to be insensitive to this value in Section 4. The following examines two cases: in Case 1, most glints occur on the +𝑧 surface, while in Case 2, glints occur on multiple surfaces. A sensitivity analysis of the transition probability 𝑝 same is then performed using 100 Monte Carlo runs. 
+
+4.2. Case 1: Most of the glints occur on the +𝑧 surface 
+
+Figure 5 shows the simulated light curve of the box satellite. Several glint events appear as sharp peaks in the light curve, occurring when the half vector aligns with a surface normal. Figure 6 shows the inner product between each normal vector and the half vector, and glints occur when its value becomes one. In this case, most of the glints occur on the +𝑧 surface because the +𝑧 panel in Fig. 6 reaches one periodically. Thus, even if the single surface UKF method is used, it may be able to estimate the attitude accurately. Figure 7 shows the attitude estimation errors for the previously proposed single surface UKF (Matsushita et al., 2024) and the proposed multi surface IMM method. The upper threee figures shows the error in the 3-2-1 Euler angle sequence (𝜙 → 𝜃 → 𝜓 ), and the bottom figure shows the total attitude error Φ, i.e., the principal rotation angle of the error quaternion. The large ±180 ◦ swings in the individual Euler angles arise from the wrapping near singular orientations and do not represent the actual attitude error, which is captured by Φ. The detected glint timings are marked with red circles in Figure 5. Since the glints occur on the +𝑧 surface in this case, both methods can have similar estimation results in the early phase. However, the glint after 50 min, which occurs on the −𝑦 surface, causes the single surface UKF to suffer from an estimation error and fail to converge as shown by the blue lines in Fig. 7. On the other hand, the multiple surface IMM provides better estimation accuracy. This result clearly indicates that the   
+
+> Yoshimura and Hanada: Preprint submitted to Elsevier Page 8 of 13
+
+Adaptive Attitude Estimation Using Light Curve Glints 
+
+Table 2 
+
+Simulation conditions.                                                    
+
+> Orbit and observation
+> Semi-major axis 𝑎 4.2165 × 10 4km
+> Eccentricity 𝑒 2.16 × 10 −4
+> Inclination 𝑖 0.054 deg Observer longitude, latitude (𝜆 lon , 𝜆 lat )(130.2165, 33.5946) deg Sampling interval Δ𝑡 5 s
+> Initial attitude state (truth)
+> Initial attitude (3-2-1) (𝜓, 𝜃, 𝜙 )(90 ,−60 ,30) deg Initial quaternion 𝒒 0[0 .5,−0 .1830 ,0.6830 ,0.5] 𝑇
+> Initial angular rate 𝝎 0[0 .5,−0 .5,0.3] 𝑇 deg/s
+> Filter and scenario
+> Initial estimate error angle ∼𝑈 [0 ,80] deg (random axis) Glint occurrence threshold 𝜃 ′
+> ℎ7 deg Number of surfaces 𝑀 6UKF parameters (𝛼, 𝛽, 𝜅 )(10 −3 ,2,0)
+> Initial covariance 𝑃 010 −2 𝑰 3×3
+> Observation noise variance (truth) 𝑅 true 0.1 mag 2
+> Filter observation noise 𝑅 (3 √𝑅 true )2= 0 .9 mag 2
+> System noise 𝑄 10 −12
+> Transition probability 𝑝 same 0.99
+
+Table 3 
+
+Converged residual errors for Cases 1 and 2: mean absolute Euler angle error and total attitude error Φ (mean ± standard deviation over the last 5 min of the simulation). Case Method |𝜙 | [deg] |𝜃 | [deg] |𝜓 | [deg] Φ [deg] Case 1 IMM 2.1 ± 2 .5 3.7 ± 3 .7 5.3 ± 5 .0 6.4 ± 0 .3
+
+Single UKF 152 ± 6 13 ± 13 15 ± 15 148 ± 0 .2
+
+Case 2 IMM 6.9 ± 5 .5 7.1 ± 5 .4 10 .3 ± 11 .0 11 .6 ± 0 .2
+
+Single UKF 167 ± 164 52 ± 53 51 ± 46 164 ± 0 .1
+
+wrong hypothesis of the single surface UKF leads to a large estimation error. Figure 8 shows the time history of the mode probabilities 𝑤 𝑗 for the multiple surface IMM method. Initially, all probabilities are equal. During glint events, the mode probabilities spike because the likelihood of each filter fluctuates. The mixing step of the IMM ensures that no filter is permanently discarded, allowing adaptation when the glint source transitions between surfaces. 
+
+4.3. Case 2: Glints occur on multiple surfaces 
+
+Figures 9 and 10 show the simulated light curve and the inner product between each normal vector and the half vector for Case 2, respectively. This is a more challenging case because several glints occur and the glint source surface changes over time as shown in Fig. 10. Figure 11 shows the attitude estimation errors for the single surface UKF and the multi surface IMM method, including the total attitude error Φ in the bottom. Figure 12 shows the time history of the mode probabilities 𝑤 𝑗 for the multiple surface IMM method, where the mode probabilities at the first glint are not uniquely determined. As the estimation sequence proceeds, the mode probabilities adapt to the changing glint source, and the total attitude error of the IMM decreases as shown in Fig. 11. On the other hand, the single surface UKF suffers from a large error and fails to converge, which is expected given the incorrect surface assumption. The converged residual errors for both cases are summarized in Table 3. The multiple surface IMM attains a total attitude error of 6.4◦ in Case 1 and 11 .6◦ in Case 2, whereas the single surface UKF remains above 140 ◦ in both cases. The computational cost of the methods was measured in our MATLAB implementation (MATLAB R2025a) on a desktop computer with an Apple Silicon CPU. For the present scenario, the multiple surface IMM with six parallel filters requires approximately 5 ms per time step, whereas the single surface UKF requires approximately 1 ms per 
+
+Yoshimura and Hanada: Preprint submitted to Elsevier Page 9 of 13 Adaptive Attitude Estimation Using Light Curve Glints                                 
+
+> Table 4
+> Total attitude error and convergence rate over 100 Monte Carlo trials for the single surface UKF and the proposed IMM method with different values of 𝑝 same .Method 𝑝 same Median Φ[deg] Conv. rate [%] Single surface UKF —86.1 10 0.30 5.2 72 IMM 0.50 4.9 70 0.99 4.2 73 MMAE 1.00 13.3 40
+> Table 5
+> Convergence rate of the proposed IMM method ( 𝑝 same = 0 .99 ) as a function of the initial attitude error magnitude, over the 100 Monte Carlo trials. Initial error [deg] [0 ,30) [30 ,60) [60 ,80)
+> Number of trials 39 33 28 Convergence rate [%] 97 73 39
+
+time step; the cost of the IMM scales with the number of parallel filters. Both are well within the 5 s sampling interval, and the additional cost of the IMM does not hinder its application at the considered observation cadence. 
+
+4.4. Sensitivity analysis 
+
+The transition probability 𝑝 same is the only tuning parameter introduced by the IMM formulation, and an appropriate value is generally not known a priori. The following sensitivity analysis is thus performed to assess how strongly the estimation performance depends on 𝑝 same and, in particular, whether the proposed method requires careful tuning of this parameter for the considered scenario. For the 100 Monte Carlo runs, the initial attitude error magnitude is drawn from 𝑈 [0 , 80] deg about a uniformly distributed random axis, and the final estimation accuracy is evaluated by the total attitude error Φ averaged over the last 10 time steps. Because the filter either converges to within a few degrees or settles on an incorrect solution near 150 deg, the outcome is bimodal and the mean is dominated by the divergent tail. The median total attitude error and the convergence rate, defined as the fraction of trials with a final Φ below 10 deg, are reported. Table 4 summarizes the Monte Carlo results. The single surface UKF converges in only 10% of the trials, with a median total error of 86 deg, because it cannot resolve which surface causes each glint. In contrast, the proposed IMM converges in 70–73% of the trials with a median total error of about 4–5 deg for 𝑝 same between 0.30 and 0.99. When the IMM converges, its mean total error is 3.4 deg, consistent with the representative trials of Cases 1 and 2. The estimation performance is thus insensitive to 𝑝 same over a wide range, which is a favorable property because it eliminates the need for precise tuning of the transition probability matrix. When 𝑝 same = 1 .00 , however, the IMM reduces to the MMAE and the convergence rate drops to 40%, which demonstrates the importance of the mixing step. That is, without the interaction among filters, an incorrect surface hypothesis is more likely to cause divergence. Figure 13 shows the time history of the mode probabilities 𝑤 𝑗 for different values of 𝑝 same . Between glint events, the innovation-based likelihood update at each time step drives the mode probabilities toward a uniform distribution regardless of 𝑝 same , so that the mode probabilities are effectively identical at each glint event, which explains the insensitivity to 𝑝 same . Figure 14 shows the distribution of the final total attitude error for the single surface UKF and the proposed IMM method with 𝑝 same = 0 .99 . The errors of the single surface UKF are concentrated at large values, whereas those of the IMM are concentrated near zero. Table 5 reports the convergence rate of the IMM ( 𝑝 same = 0 .99 ) as a function of the initial attitude error magnitude, over the deliberately demanding test in which the error is as large as 80 deg. For initial errors below 30 deg, the IMM converges in 97% of the trials, and even for very large errors of 60–80 deg it still recovers the attitude in 39% of the trials, whereas the single surface UKF converges in at most 14% of the trials in any error range. The proposed method thus enlarges the range of initial errors from which the attitude can be recovered.   
+
+> Yoshimura and Hanada: Preprint submitted to Elsevier Page 10 of 13
+
+Adaptive Attitude Estimation Using Light Curve Glints 
+
+4.5. Resilience to a false glint 
+
+In an operational setting, a glint may be detected falsely owing to a sensor anomaly or external noise. Because the detection relies on a sudden change in the apparent magnitude, a spurious brightness change is registered as a glint at an epoch where no surface satisfies the glint geometry, which triggers an erroneous likelihood update and a projection onto an incorrect constraint. To assess the resilience of the proposed method, a false glint is injected into the Case 1 scenario by introducing a spurious 5 mag brightness change at 𝑡 = 31 .9 min, a quiet epoch at which no surface is aligned with the half vector. The initial estimate error is set to 3 deg so that the response is examined from a well-tracked state. Figure 15 shows the simulation result. At the false glint, the mode probability of the +𝑥 filter spikes. However, because no surface is geometrically consistent with a glint, the corresponding likelihood remains small, and the mixing step prevents the incorrect hypothesis from dominating. Consequently, the total attitude error of the IMM remains bounded and is gradually reduced as subsequent genuine glints re-inform the filter. In contrast, the single surface UKF, which has only the +𝑧 hypothesis, applies the spurious projection directly and is immediately corrupted, diverging to more than 90 deg. This result demonstrates that the interaction among the filters makes the IMM robust to anomalous observations, whereas a single-hypothesis filter is not. 
+
+## 5. Conclusions 
+
+This paper proposes an adaptive attitude estimation method for space objects with multiple surfaces using light curves and glint constraints. When a glint is observed from a multiple-surface object, the surface causing the glint is ambiguous, which prevents attitude estimation using the glint constraint. To resolve this ambiguity, this paper employs the interacting multiple model (IMM) algorithm, where each filter assumes a different surface as the glint source. The mixing step allows the filters to interact with each other, enabling adaptation to the time-varying glint source as the object rotates. The likelihood-based mode probability update identifies the correct surface that causes glint and computes the combined attitude estimate as a weighted average. Numerical simulations for a box satellite in a geosynchronous orbit demonstrate that the proposed IMM method improves the attitude estimation. Over 100 Monte Carlo runs with initial errors of up to 80 deg, the IMM converges in 73% of the trials with a median total attitude error of 4.2 deg, compared with 10% for the single surface UKF, and the mixing step is shown to be essential, as the convergence rate drops to 40% when it is removed (the MMAE). The convergence rate depends on the initial error magnitude, remaining at 97% for errors below 30 deg and at 39% even for errors as large as 60–80 deg, where the single surface UKF converges in at most 14%. The IMM thus enlarges the range of initial errors from which the attitude can be recovered. The mode probabilities correctly shift toward the filter corresponding to the true glint-causing surface, validating the effectiveness of the likelihood-based selection and the model interaction. The method is also shown to be resilient to a falsely detected glint. That is, the mixing step keeps the impact of the anomalous observation bounded, whereas a single-hypothesis filter diverges. 
+
+## Declaration of generative AI and AI-assisted technologies in the manuscript preparation process 
+
+During the preparation of this work the authors used chatGPT in order to correct typos and improve English grammar. After using this tool, the authors reviewed and edited the content as needed and take full responsibility for the content of the published article. 
+
+## References     
+
+> Ashikhmin, M., Shirley, P., 2000. An Anisotropic Phong BRDF Model. Journal of Graphics Tools 5, 25–32. doi: 10.1080/10867651.2000. 10487522 .Bar-Shalom, Y., Li, X.R., Kirubarajan, T., 2001. Estimation with Applications to Tracking and Navigation. John Wiley & Sons. Bessell, M.S., 2005. Standard photometric systems. Annual Review of Astronomy and Astrophysics 43, 293–336. doi: 10.1146/annurev.astro. 41.082801.100251 .Blom, H., Bar-Shalom, Y., 1988. The interacting multiple model algorithm for systems with Markovian switching coefficients. IEEE Transactions on Automatic Control 33, 780–783. URL: http://ieeexplore.ieee.org/document/1299/ , doi: 10.1109/9.1299 .Burton, A., Robinson, L., Frueh, C., 2024. Light curve attitude estimation using particle swarm optimizers. Advances in Space Research 74, 5619–5638. URL: https://linkinghub.elsevier.com/retrieve/pii/S0273117724009281 , doi: 10.1016/j.asr.2024.09.008 .
+
+Yoshimura and Hanada: Preprint submitted to Elsevier Page 11 of 13 Adaptive Attitude Estimation Using Light Curve Glints 
+
+Clark, R., Fu, Y., Dave, S., S K Lee, R., 2022. Resident space object (RSO) attitude and optical property estimation from space-based light curves. Advances in Space Research 70, 3271–3280. URL: https://linkinghub.elsevier.com/retrieve/pii/S0273117722008043 ,doi: 10.1016/j.asr.2022.08.068 .Crassidis, J.L., Markley, F.L., 2003. Unscented filtering for spacecraft attitude estimation. Journal of Guidance, Control, and Dynamics 26, 536–542. Dianetti, A.D., Crassidis, J.L., 2023. Resident Space Object Characterization Using Polarized Light Curves. Journal of Guidance, Control, and Dynamics 46, 246–263. URL: https://arc.aiaa.org/doi/10.2514/1.G006847 , doi: 10.2514/1.G006847 .Fan, S., Frueh, C., 2020. A direct light curve inversion scheme in the presence of measurement noise. The Journal of the Astronautical Sciences 67, 740–761. doi: 10.1007/s40295-019-00190-3 .Fankhauser, F., Tyson, J.A., Askari, J., 2023. Satellite optical brightness. The Astronomical Journal 166, 59. doi: 10.3847/1538-3881/ace047 .Friedman, A.M., Frueh, C., 2022. Observability of light curve inversion for shape and feature determination exemplified by a case analysis. The Journal of the Astronautical Sciences 69, 537–569. doi: 10.1007/s40295-021-00293-w .Gagnon, S., Crassidis, J.L., 2025. Particle Swarm Optimization on the Space of Quaternions with Applications to Attitude Estimation from Light Curves. The Journal of the Astronautical Sciences 72, 8. URL: https://link.springer.com/10.1007/s40295-025-00486-7 ,doi: 10.1007/s40295-025-00486-7 .Goto, A., Yukumatsu, K., Tsuchiya, Y., Miyazaki, E., Kimoto, Y., 2023. Changes in optical properties of polymeric materials due to atomic oxygen in very low earth orbit. Acta Astronautica 212, 70–83. doi: 10.1016/j.actaastro.2023.07.036 .Hara, R., Yoshimura, Y., Hanada, T., 2025. Attitude estimation from photometric data using Gaussian process regression. Journal of Space Safety Engineering 12, 227–238. URL: https://linkinghub.elsevier.com/retrieve/pii/S2468896725000102 , doi: 10.1016/j. jsse.2025.02.008 .Hinks, J.C., Crassidis, J.L., 2016. Angular velocity bounds via light curve glint duration, in: AIAA Guidance, Navigation, and Control Conference, AIAA SciTech Forum, American Institute of Aeronautics and Astronautics, San Diego, California. doi: 10.2514/6.2016-0627 . aIAA Paper 2016-0627. Isoletta, G., Opromolla, R., Fasano, G., 2025. Attitude motion classification of resident space objects using light curve spectral analysis. Advances in Space Research 75, 1077–1095. URL: https://linkinghub.elsevier.com/retrieve/pii/S0273117724010640 , doi: 10.1016/j. asr.2024.10.034 .Jiang, Y., Hu, S., Du, J., Chen, X., Cao, H., Liu, S., Feng, S., 2023. Inversion of Space Debris Material by Synthetic Light Curves. Aerospace 10, 41. URL: https://www.mdpi.com/2226-4310/10/1/41 , doi: 10.3390/aerospace10010041 .Julier, S.J., Uhlmann, J.K., 1997. A new extension of the kalman filter to nonlinear systems, in: Signal Processing, Sensor Fusion, and Target Recognition VI, pp. 182–193. Kucharski, D., Kirchner, G., Bennett, J.C., Lachut, M., Sośnica, K., Koshkin, N., Shakun, L., Koidl, F., Steindorfer, M., Wang, P., 2021. Full attitude state reconstruction of tumbling space debris TOPEX/Poseidon via light-curve inversion with quanta photogrammetry. Acta Astronautica 187, 115–122. doi: 10.1016/j.actaastro.2021.06.032 .Linares, R., Furfaro, R., Reddy, V., 2020. Space objects classification via light-curve measurements using deep convolutional neural networks. The Journal of the Astronautical Sciences 67, 1063–1091. doi: 10.1007/s40295-019-00208-w .Linares, R., Jah, M.K., Crassidis, J.L., Nebelecky, C.K., 2014. Space object shape characterization and tracking using light curve and angles data. Journal of Guidance, Control, and Dynamics 37, 13–25. doi: 10.2514/1.62986 .Liou, J.C., 2022. Highlights of recent NASA orbital debris program office (ODPO) activities, in: The 10th JAXA space debris workshop. Maley, P.D., Pizzicaroli, J.C., 2003. The visual appearance of the Iridium satellites. Acta Astronautica 52, 629–639. doi: 10.1016/ S0094-5765(02)00127-3 .Markley, F.L., Crassidis, J.L., 2014. Fundamentals of Spacecraft Attitude Determination and Control. volume 33 of Space Technology Library .Springer, New York, NY. doi: 10.1007/978-1-4939-0802-8 .Matsushita, Y., Arakawa, R., Yoshimura, Y., Hanada, T., 2019. Light curve analysis and attitude estimation of space objects focusing on glint, in: Proceedings of First International Orbital Debris Conference. Matsushita, Y., Yoshimura, Y., Nagasaki, S., Hanada, T., 2024. Conceptual Study of Improved Photometric Attitude Estimation Using Glint. TRANSACTIONS OF THE JAPAN SOCIETY FOR AERONAUTICAL AND SPACE SCIENCES, AEROSPACE TECHNOLOGY JAPAN 22, 59–65. URL: https://www.jstage.jst.go.jp/article/tastj/22/0/22_22.59/_article , doi: 10.2322/tastj.22.59 .Mazor, E., Averbuch, A., Bar-Shalom, Y., Dayan, J., 1998. Interacting multiple model methods in target tracking: a survey. IEEE Transactions on Aerospace and Electronic Systems 34, 103–123. doi: 10.1109/7.640267 .Sharma, A.K., Sridhara, N., 2012. Degradation of thermal control materials under a simulated radiative space environment. Advances in Space Research 50, 1411–1424. Šilha, J., Pittet, J.N., Hamara, M., Schildknecht, T., 2018. Apparent rotation properties of space debris extracted from photometric measurements. Advances in Space Research 61, 844–861. doi: 10.1016/j.asr.2017.10.048 .Simon, D., 2010. Kalman filtering with state constraints: a survey of linear and nonlinear algorithms. IET Control Theory & Applications 4, 1303–1318. doi: 10.1049/iet-cta.2009.0032 .Simon, D., Chia, T.L., 2002. Kalman filtering with state equality constraints. IEEE Transactions on Aerospace and Electronic Systems 38, 128–136. doi: 10.1109/7.993234 .Wertz, J.R. (Ed.), 1978. Spacecraft Attitude Determination and Control. volume 73 of Astrophysics and Space Science Library . D. Reidel Publishing Company, Dordrecht. doi: 10.1007/978-94-009-9907-7 .Wetterer, C.J., Jah, M., 2009. Attitude estimation from light curves. Journal of Guidance, Control, and Dynamics 32, 1648–1651. doi: 10.2514/ 1.44254 .Zhang, Y., Li, X., 1998. Detection and diagnosis of sensor and actuator failures using IMM estimator. IEEE Transactions on Aerospace and Electronic Systems 34, 1293–1313. URL: http://ieeexplore.ieee.org/document/722715/ , doi: 10.1109/7.722715 .
+
+Yoshimura and Hanada: Preprint submitted to Elsevier Page 12 of 13 Adaptive Attitude Estimation Using Light Curve Glints 
+
+Žilková, D., Šilha, J., Matlovič, P., Tóth, J., 2023. Space debris spectroscopy: Specular reflections at LEO regime. Advances in Space Research 71, 3249–3261. doi: 10.1016/j.asr.2022.12.001 .
+
+Yoshimura and Hanada: Preprint submitted to Elsevier Page 13 of 13 Adaptive Attitude Estimation Using Light Curve Glints chief (servicer) 
+
+## deputy (debris) 
+
+Figure 1: Geometry of light reflection on a facet of a space object. DF 
+
+# 完全鏡面反射 
+
+1 m 
+
+1 m 
+
+Figure 2: Projection of the estimated attitude onto the glint constraint boundary. Step 1: Interaction (mixing) Step 4: Estimate combination 
+
+Step 2: Model-conditional filtering 
+
+Step 3: Model-probability update 
+
+mix the filters with the transition 
+
+probability matrix (absent in the 
+
+MMAE) 
+
+> ...
+> ...
+> ...
+> ...
+> ...
+
+UKF 1
+
+UKF 2
+
+UKF M
+
+update weights 
+
+from the likelihood 
+
+weighted average 
+
+Figure 3: IMM attitude estimation sequence at each time step. Yoshimura and Hanada: Preprint submitted to Elsevier Page 14 of 13 Adaptive Attitude Estimation Using Light Curve Glints 1 m 
+
+1 m 
+
+1.3 m
+
+2 m 
+
+1 m 1 m 
+
+> 0.5
+> -1
+> y
+> -1.5
+> 0
+> -0.5
+> 0
+> -1
+> -0.5
+> 0.5
+> 1
+> -0.5
+> 0
+> z
+> 0.5
+> 1
+> 1.5
+
+1.3 m
+
+2 m 
+
+1 m 1 m 1 m 
+
+Figure 4: Box-wing satellite Time [min] 
+
+0 10 20 30 40 50 60 70 
+
+> Apparent magnitude
+
+5
+
+10 
+
+15 
+
+Light curve 
+
+Detected glint 
+
+Figure 5: Light curve of the box satellite (Case 1). 0 20 40 60 
+
+> n " h
+
+0
+
+0.5 
+
+1
+
++x 
+
+0 20 40 60 
+
+0
+
+0.5 
+
+1
+
+-x 
+
+0 20 40 60 
+
+> n " h
+
+0
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1
+
++y 
+
+0 20 40 60 
+
+0
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1
+
+-y 
+
+Time [min] 
+
+0 20 40 60 
+
+> n " h
+
+0
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1
+
++z 
+
+Time [min] 
+
+0 20 40 60 
+
+0
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1
+
+-z 
+
+Figure 6: The inner product between each normal vector and the half vector (Case 1). Yoshimura and Hanada: Preprint submitted to Elsevier Page 15 of 13 Adaptive Attitude Estimation Using Light Curve Glints 0 10 20 30 40 50 60 70 
+
+> ? error [deg]
+
+-100 
+
+0
+
+100 
+
+> Single surface UKF
+> Multiple surface IMM
+
+0 10 20 30 40 50 60 70 
+
+> 3 error [deg]
+
+-100 
+
+0
+
+100 
+
+0 10 20 30 40 50 60 70 
+
+> A error [deg]
+
+-100 
+
+0
+
+100 
+
+Time [min] 
+
+0 10 20 30 40 50 60 70 
+
+> total angular error [deg]
+
+0
+
+50 
+
+100 
+
+150 
+
+Figure 7: Euler angle error using multi surface IMM and single surface IMM (Case 1). Time [min] 
+
+0 20 40 60 
+
+> Mode probability w j
+
+0
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1
+
+> +x
+> -x
+> +y
+> -y
+> +z
+> -z
+
+Figure 8: Time history of mode probabilities 𝑤 𝑗 for the multiple surface IMM method (Case 1). Time [min] 
+
+0 10 20 30 40 50 60 70 
+
+> Apparent magnitude
+
+5
+
+10 
+
+15 
+
+> Light curve
+> Detected glint
+
+Figure 9: Light curve of the box satellite (Case 2). Yoshimura and Hanada: Preprint submitted to Elsevier Page 16 of 13 Adaptive Attitude Estimation Using Light Curve Glints 0 20 40 60 
+
+> n " h
+> 0
+> 0.5
+> 1
+
++x    
+
+> 020 40 60
+> 0
+> 0.5
+> 1
+
+-x    
+
+> 020 40 60
+> n " h
+> 0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1
+
++y    
+
+> 020 40 60
+> 0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1
+
+-y    
+
+> Time [min]
+> 020 40 60
+> n " h
+> 0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1
+
++z    
+
+> Time [min]
+> 020 40 60
+> 0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1
+
+-z 
+
+Figure 10: The inner product between each normal vector and the half vector (Case 2). 0 10 20 30 40 50 60 70 
+
+> ? error [deg]
+
+-100 
+
+0
+
+100 Single surface UKF 
+
+> Multiple surface IMM
+
+0 10 20 30 40 50 60 70 
+
+> 3 error [deg]
+
+-100 
+
+0
+
+100 
+
+0 10 20 30 40 50 60 70 
+
+> A error [deg]
+
+-100 
+
+0
+
+100 
+
+Time [min] 
+
+0 10 20 30 40 50 60 70 
+
+> total angular error [deg]
+
+0
+
+50 
+
+100 
+
+150 
+
+Figure 11: Euler angle error using multi surface IMM and single surface IMM (Case 2). Yoshimura and Hanada: Preprint submitted to Elsevier Page 17 of 13 Adaptive Attitude Estimation Using Light Curve Glints Time [min] 
+
+0 20 40 60 
+
+> Mode probability w j
+
+0
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1
+
++x 
+
+-x 
+
++y 
+
+-y 
+
++z 
+
+-z 
+
+Figure 12: Time history of mode probabilities 𝑤 𝑗 for the multiple surface IMM method (Case 2). Time, orbits Time, orbits 
+
+Time, orbits 
+
+Time, orbits                                                                                 
+
+> 00.5 11.5 22.5 3
+> -1000
+> -500
+> 0
+> 500
+> 1000
+> 00.5 11.5 22.5 3
+> -2
+> -1
+> 0
+> 1
+> 2×10 4
+> 00.5 11.5 22.5 3
+> -1000
+> -500
+> 0
+> 500
+> 1000
+> 00.5 11.5 22.5 3
+> -1000
+> -500
+> 0
+> 500
+> 1000
+> 00.5 11.5 22.5 3
+> -1000
+> -500
+> 0
+> 500
+> 1000
+> 00.5 11.5 22.5 3
+> -1000
+> -500
+> 0
+> 500
+> 1000
+> 00.5 11.5 22.5 3
+> -1000
+> 0
+> 1000
+> 00.5 11.5 22.5 3
+> -2
+> 0
+> 2×10 4
+> 00.5 11.5 22.5 3
+> -1000
+> 0
+> 1000
+> 00.5 11.5 22.5 3
+> -1000
+> 0
+> 1000
+> 00.5 11.5 22.5 3
+> -1000
+> 0
+> 1000
+> 00.5 11.5 22.5 3
+> -1000
+> 0
+> 1000
+> 00.5 11.5 22.5 3
+> -1
+> 0
+> 1
+> Mode Probability Mode Probability Mode Probability Mode Probability
+
+0 10 20 30 40 
+
+0
+
+0.5 
+
+1
+
+0 10 20 30 40 
+
+0
+
+0.5 
+
+1
+
+0 10 20 30 40 
+
+0
+
+0.5 
+
+1
+
+Time [min] 
+
+0 10 20 30 40 
+
+0
+
+0.5 
+
+1
+
+IMM Weight History -- Multiple Surface IMM 
+
+0 10 20 30 40 50 60 70 
+
+0
+
+0.5 
+
+1 + x 
+
+-x 
+
++ y 
+
+-y 
+
++ z 
+
+-z 
+
+0 10 20 30 40 50 60 70 
+
+0
+
+0.5 
+
+1
+
+0 10 20 30 40 50 60 70 
+
+0
+
+0.5 
+
+1
+
+Time [min] 
+
+0 10 20 30 40 50 60 70 
+
+0
+
+0.5 
+
+1
+
+Figure 13: Time history of mode probabilities 𝑤 𝑗 for different values of 𝑝 same .Single surface UKF 
+
+Final total angular error ) [deg] 
+
+0 50 100 150 
+
+> Number of trials
+
+0
+
+5
+
+10 
+
+15 
+
+20 
+
+25 
+
+30 
+
+Proposed IMM (p same =0.99) 
+
+Final total angular error ) [deg] 
+
+0 50 100 150 
+
+> Number of trials
+
+0
+
+20 
+
+40 
+
+60 
+
+80 
+
+Figure 14: Distribution of the final total attitude error Φ for the single surface UKF and the proposed IMM method (𝑝 same = 0 .99 ) over the 100 Monte Carlo trials. Yoshimura and Hanada: Preprint submitted to Elsevier Page 18 of 13 Adaptive Attitude Estimation Using Light Curve Glints 0 10 20 30 40 50 60 70 
+
+> total angular error [deg]
+
+0
+
+50 
+
+100 
+
+150 
+
+200 IMM (no anomaly) 
+
+> IMM (false glint)
+> single UKF (false glint)
+> false glint
+
+Time [min] 
+
+0 20 40 60 
+
+> mode probability w j
+
+0
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1
+
+> +x
+> -x
+> +y
+> -y
+> +z
+> -z
+
+Figure 15: Resilience to a false glint injected at 𝑡 = 31 .9 min (gray vertical line). Yoshimura and Hanada: Preprint submitted to Elsevier Page 19 of 13

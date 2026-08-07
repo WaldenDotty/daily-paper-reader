@@ -1,0 +1,1899 @@
+Title: Intrinsic Stochastic Successive Convexification on SE(3) for Chance Constrained 6-DOF Rendezvous
+
+URL Source: https://arxiv.org/pdf/2608.04114v1
+
+Published Time: Thu, 06 Aug 2026 00:04:11 GMT
+
+Number of Pages: 39
+
+Markdown Content:
+# Intrinsic Stochastic Successive Convexification on SE(3) for Chance Constrained 6-DOF Rendezvous 
+
+Fabio D’Onofrio ∗ and Renato Zanetti †
+
+The University of Texas at Austin, Austin, Texas, 78712 
+
+This work presents an intrinsic stochastic successive convexification method formulated on the Special Euclidean group SE(3) for six degrees of freedom spacecraft rendezvous trajectory optimization. The proposed approach extends stochastic successive convexification, originally developed for Euclidean state spaces, to the nonlinear manifold of SE(3), thereby enabling a consistent covariance steering and chance constrained optimization of rigid body pose trajectories. While conventional trajectory optimization methods often treat position and attitude separately, or account for stochastic dispersion only after a deterministic reference trajectory has been generated, the proposed SE(3)-based formulation captures the intrinsic coupling between translational and rotational motion uncertainty. This coupling is especially important for rendezvous problems with safety constraints that depend on the full relative pose, including collision avoidance, docking corridor, camera field of view, and probabilistic force and torque bounds. Numerical simulations show that jointly optimizing the nominal trajectory, covariance, and feedback law shapes the closed loop dispersion and improves probabilistic constraint satisfaction relative to tracking a deterministic reference with a feedback linearization controller. 
+
+## Nomenclature 
+
+6 − 𝐷𝑂𝐹 = six degrees of freedom 
+
+𝐷𝐶 𝑀 = direction cosine matrix 
+
+𝑍𝑂𝐻 = zero order hold 
+
+𝐹𝑂𝑉 = field of view 
+
+𝐹𝑂𝐻 = first order hold 
+
+𝐼𝐶𝑆 = iterative covariance steering 
+
+𝑀 𝐿𝐺 = Matrix Lie Group 
+
+𝑀 𝑅𝑃 = modified Rodrigues parameters 
+
+> ∗Corresponding author, fabiod@utexas.edu. Ph.D. candidate, Aerospace Engineering and Engineering Mechanics.
+> †Associate Professor, Aerospace Engineering and Engineering Mechanics. AIAA Associate Fellow. arXiv:2608.04114v1 [eess.SY] 4 Aug 2026
+
+𝑆𝑂𝐶𝑃 = stochastic optimal control problem 
+
+𝑆𝐶𝑃 = sequential convex programming 
+
+𝑆𝐶𝑣𝑥 = successive convexification 
+
+𝐿𝑀 𝐼 = linear matrix inequality 
+
+𝑆𝐷𝑃 = semidefinite program SO(3) = special orthogonal group in three dimensions SE(3) = special Euclidean group in three dimensions 
+
+## I. Introduction 
+
+# Autonomous spacecraft operations, such as rendezvous, docking, proximity operations, and landing, require guidance algorithms that can rapidly generate translational and rotational maneuvers while satisfying safety critical constraints. Among the most challenging constraints from an algorithmic and implementation standpoint are those that inherently couple position and attitude, such as line of sight constraints between the controlled vehicle and a target. Whether the target is another spacecraft to be approached or a landing site, onboard sensors must remain properly pointed, while the thrust direction must remain within prescribed pointing constraints; otherwise, the vehicle may lose the information needed to update its trajectory in real time or violate sensor, actuator, or collision constraints [1, 2]. The Special Euclidean group SE(3) is the natural state space for rigid body pose: rather than treating position and attitude as unrelated variables, the Matrix Lie Group (MLG) SE(3) provides a fully coupled pose representation [ 3]. The same coupling carries over to guidance and control through the constraints and feedback laws that the optimizer must enforce. Field of view, line of sight, docking corridor, and sensor pointing requirements are functions of the relative pose, so their satisfaction depends jointly on translational and rotational states. This paper carries this pose level description into stochastic trajectory optimization: rigid body composition, relative pose errors, frame transformations, and coupled position attitude uncertainty and constraints are expressed directly on SE(3), while the control algorithm is built around perturbations of that pose. In addition to satisfying geometric and operational constraints, the vehicle must operate reliably in the presence of navigation errors, actuation uncertainty, and unmodeled disturbances. Achieving further improvements in proximity operations and landing accuracy will therefore require guidance and control architectures that are robust to uncertainty, which can degrade estimation accuracy and tracking performance [4]. One approach is to combine deterministic trajectory generation with robust feedback control. In this architecture, a nominal trajectory is first generated using a simplified guidance model, and a feedback controller is then designed to track that trajectory despite modeling error, parameter uncertainty, sensor noise, and external disturbances. For powered descent, this separation has been used to combine convex propellant optimal guidance with multivariable robust control, 2thereby providing robustness at the tracking level rather than by explicitly optimizing the dispersion of the trajectory distribution [5]. However, a deterministic trajectory that remains close to a constraint boundary may still be unacceptable in practice. Even with a stabilizing tracking controller, stochastic dispersion may cause the realized trajectory to violate collision avoidance, field of view, plume impingement, pointing, or actuator constraints. Robust trajectory optimization addresses this issue by assuming that disturbances lie in a bounded set and enforcing constraint satisfaction for the worst case realization [ 6 ]. This approach is attractive when reliable uncertainty bounds are available, but it can become overly conservative when the uncertainty set must cover navigation error, actuation error, and unmodeled dynamics simultaneously. Moreover, if uncertainty is considered only after a nominal trajectory has been generated, the planner cannot account for how the feedback law will shape the dispersion near safety critical boundaries. Stochastic trajectory optimization provides an alternative by modeling uncertainty probabilistically and replacing hard path/control constraints with chance constraints [ 7]. In this setting, the optimizer plans not only a nominal trajectory, but also the evolution of the state distribution, typically through its first two moments, so that constraint violation probabilities remain below prescribed risk levels. Chance constrained sequential convex programming follows this idea by repeatedly linearizing nonlinear dynamics and constraints about a reference trajectory, propagating covariance through the resulting local model, and solving a convex subproblem in which probabilistic constraints are transcribed into deterministic convex constraints [8]. Within this class of stochastic sequential convex programming methods, covariance steering incorporates feedback design directly into the optimization [ 9 , 10 ]. Rather than treating covariance as the byproduct of a prescribed controller, covariance steering optimizes an affine feedback policy together with the nominal trajectory so that the first two moments of the stochastic system satisfy prescribed boundary and/or path requirements. For nonlinear dynamics and constraints, this gives rise to Iterative Covariance Steering (ICS), in which the stochastic optimal control problem is repeatedly approximated by a convex program in the mean, covariance, and feedback variables [ 11 ]. This approach has been used for chance constrained stochastic trajectory optimization in Euclidean coordinates, including 6-DOF spacecraft rendezvous applications in which attitude is represented by modified Rodrigues parameters (MRP) [ 12 ]. Takubo and D’Amico extended this idea to stochastic attitude control on SO(3) through a mixed extrinsic/intrinsic approach: the mean attitude evolves in the unit quaternion space (i.e. the extrinsic space), while the covariance is propagated in a local error modified Rodrigues parameters space (i.e. the intrinsic space). This avoids assigning covariance directly to the constrained quaternion coordinates or relying on directional statistics on SO(3), while enabling joint optimization of the mean attitude, local error covariance, and affine feedback gain within an iterative covariance steering framework [13]. These developments build on the broader literature on Sequential Convex Programming (SCP) for trajectory optimization. SCP denotes a broad class of methods that solve nonlinear optimal control problems through a sequence of convex approximations. Specific optimization algorithms in this class include SCvx and GuSTO [ 14 ]. In SCvx, 3the nonconvex dynamics and constraints are linearized about a reference trajectory, virtual controls (i.e. additional optimization variables, often called slack variables) are introduced to prevent artificial infeasibility (i.e. when the convexified problem is unfeasible while the original nonconvex one was feasible), and trust region and penalty mechanisms are used to promote convergence and avoid artificial unboundedness , which is when linearization renders the solution unbounded from below [ 15 ]. For deterministic 6-DOF powered descent, this framework has been combined with state triggered constraints and with dual quaternions as a unified representation of position and attitude [ 16 , 17 ]. Recent work on intrinsic SCP further emphasizes that, when the state evolves on a smooth manifold, the local correction solved by the convex subproblem should be expressed in the tangent space of the manifold rather than in redundant embedding coordinates [ 18 ]. Thus, two ingredients have been developed in parallel: stochastic sequential convex programming methods that steer mean and covariance subject to chance constraints, and geometric sequential convex programming methods that account for the non Euclidean structure of rigid body pose. The geometric machinery needed to combine these ingredients is summarized in Sec. II. There, the exponential and logarithm maps are used to move between a Matrix Lie Group and its Lie algebra, and the boxed plus (retraction) and boxed minus (inverse retraction) operators are introduced to apply and measure perturbations on the group. The nominal trajectory evolves on SE(3), while the mean corrections, covariance propagation, affine feedback law, and chance constraint transcription are all expressed in compatible tangent coordinates. This provides the control counterpart of the same geometric uncertainty modeling idea: the uncertainty model remains local and vector space valued, but the accepted pose trajectory remains on the manifold. To the authors’ knowledge, no existing work applies stochastic sequential convex programming, in the form of iterative covariance steering with chance constraints, to 6-DOF rigid body pose trajectory optimization or control using either unit dual quaternions or homogeneous transformation matrices on SE(3). The contribution of this work is therefore a geometrically consistent stochastic optimal control formulation in which the nominal pose update, uncertainty model, feedback policy, and probabilistic constraints are all expressed in the Lie algebra of the SE(3) pose manifold. At each iteration, pose perturbations are represented with the left invariant inverse retraction ⊖𝐺,𝑙 , the nonlinear dynamics are linearized in the resulting tangent coordinates, and the discretized model is embedded in a convex subproblem that optimizes the nominal trajectory, covariance sequence, and affine feedback gains. Gaussian chance constraints are transcribed using tangent space covariance projections, and the accepted mean update is mapped back to SE(3) through the left retraction ⊕𝐺,𝑙 .Although this work ultimately implements the method using homogeneous matrices, the same derivation can be carried out with dual quaternions by using the corresponding dual quaternion retraction and inverse retraction. Both representations describe the same pose group and share the same 6 dimensional tangent space se(3). The homogeneous matrix formulation is therefore one computational realization of a stochastic sequential convex programming framework for pose trajectories on SE(3). 4The remainder of the paper is organized as follows. Sections II and III summarize the Matrix Lie Group and the 
+
+concentrated probability distribution used by the proposed formulation, respectively. Section IV states the original nonlinear chance constrained rendezvous problem. Section V presents the proposed intrinsic stochastic SCP solution method. Section VI presents simulation results and Section VII concludes the paper. 
+
+## II. Matrix Lie Groups 
+
+This section briefly introduces only the Matrix Lie Group concepts used by the proposed formulation. More complete treatments can be found in [3, 19, 20]. A real Matrix Lie Group 𝐺 is a subgroup of 𝐺 𝐿 𝑛 (R) that is also an embedded smooth manifold. Its tangent space at the identity, denoted by G = 𝑇 𝐼 𝐺 , is the Lie algebra of 𝐺 and is isomorphic to R𝑁 , where 𝑁 = dim 𝐺 . The maps 
+
+[·] ∧ 
+
+> 𝐺
+
+: R𝑁 → G and [·] 𝑉 𝐺 : G → R𝑁 denote the ”wedge” and ”vee” maps between vector coordinates and algebra elements. The Special Euclidean group SE(3) is: 
+
+𝑆𝐸 (3) =
+
+
+
+𝑇 ∈ R4×4 | 𝑇 =
+
+
+
+𝑅 𝒕 
+
+01×3 1
+
+
+
+, 𝑅 ∈ 𝑆𝑂 (3), 𝒕 ∈ R3
+
+
+
+(1) where SO(3) is the MLG containing all rotation matrices, i.e. 𝑆𝑂 (3) = {𝑅 ∈ R3×3 | 𝑅 ⊤ 𝑅 = 𝐼, det (𝑅 ) = 1}.The corresponding Lie algebra se(3) has dimension six, as the number of degrees of freedom for a rigid body in 3D space. The matrix exponential exp 𝐺 : G → 𝐺 and logarithm log 𝐺 : 𝐺 → G maps define a local correspondence between the Lie algebra and the group. The capitalized exponential and logarithm maps used throughout the paper are defined as [20]: 
+
+Exp 𝐺 (𝝉 ) = exp 𝐺 
+
+ [𝝉 ]∧
+
+> 𝐺
+
+ : R𝑁 → 𝐺, Log 𝐺 (𝑋 ) = log 𝐺 (𝑋 )𝑉 𝐺 : 𝐺 → R𝑁 (2) where Exp 𝐺 (·) takes a tangent vector 𝝉 ∈ R𝑁 into the corresponding SE(3) homogeneous matrix, whereas Log 𝐺 (·) 
+
+takes an SE(3) matrix and outputs the corresponding Lie algebra tangent vector 𝝉 .Given a reference element 𝑋 ∈ 𝐺 and a vector perturbation 𝝉 ∈ R𝑁 , the left boxed plus (retraction) and boxed minus (inverse retraction) are: 
+
+𝑌 = 𝝉 ⊕𝐺,𝑙 𝑋 = Exp 𝐺 (𝝉 ) 𝑋 ∈ 𝐺 (3) 
+
+𝝉 = 𝑌 ⊖𝐺,𝑙 𝑋 = Log 𝐺 (𝑌 𝑋 −1) ∈ R𝑁 (4) 5For SE(3), the maps used in the pose update are: 
+
+𝝃 =
+
+
+
+𝜔 𝑥 
+
+𝜔 𝑦 
+
+𝜔 𝑧 
+
+𝑣 𝑥 
+
+𝑣 𝑦 
+
+𝑣 𝑧 
+
+
+
+=
+
+
+
+𝝎 𝒗 
+
+
+
+∈ R6 [·] ∧ 
+
+> 𝑆𝐸 (3)
+
+−−−−−−→ X = [𝝃 ]∧  
+
+> 𝑆𝐸 (3)
+
+=
+
+
+
+0 −𝜔 𝑧 𝜔 𝑦 𝑣 𝑥 
+
+𝜔 𝑧 0 −𝜔 𝑥 𝑣 𝑦 
+
+−𝜔 𝑦 𝜔 𝑥 0 𝑣 𝑧 
+
+0 0 0 0
+
+
+
+∈ 𝑠𝑒 (3) (5) 
+
+X ∈ 𝑠𝑒 (3) [·] 𝑉 𝑆𝐸 (3)
+
+−−−−−−→ 𝝃 = [X] 𝑉 𝑆𝐸 (3) =
+
+
+
+𝜔 𝑥 
+
+𝜔 𝑦 
+
+𝜔 𝑧 
+
+𝑣 𝑥 
+
+𝑣 𝑦 
+
+𝑣 𝑧 
+
+
+
+=
+
+
+
+𝝎 𝒗 
+
+
+
+∈ R6 (6) 
+
+[𝝃 ]∧  
+
+> 𝑆𝐸 (3)
+
+∈ 𝑠𝑒 (3) exp 𝑆𝐸 (3)
+
+−−−−−−→ 𝑇 =
+
+
+
+exp 𝑆𝑂 (3) ([ 𝝎 ]∧  
+
+> 𝑆𝑂 (3)
+
+) 𝐽 𝑆𝑂 (3),𝑙 (𝝎 )𝒗 
+
+0𝑇 1
+
+
+
+∈ 𝑆𝐸 (3) (7) 
+
+𝑇 ∈ 𝑆𝐸 (3) log 𝑆𝐸 (3)
+
+−−−−−−→ [ 𝝃 ]∧  
+
+> 𝑆𝐸 (3)
+
+=
+
+
+
+log 𝑆𝑂 (3) (𝑅 ) 𝐽 −1  
+
+> 𝑆𝑂 (3),𝑙
+
+(Log 𝑆𝑂 (3) (𝑅 )) 𝒕 
+
+0𝑇 0
+
+
+
+∈ 𝑠𝑒 (3) (8) where 𝐽 𝑆𝑂 (3),𝑙 is the standard left Jacobian of SO(3), and its expression, along with the SO(3) exponential exp 𝑆𝑂 (3)
+
+and logarithm log 𝑆𝑂 (3) expressions, can be found in [3]. The full state used in the rendezvous problem combines the pose with Euclidean velocity variables. This is represented as the product group 𝑆𝐸 (3) × R𝑛 𝑐 : on the Euclidean component, the group operation is vector addition and the exponential, logarithm, wedge, and vee maps reduce to the identity. 
+
+## III. Probability Distributions on Matrix Lie Groups 
+
+Since MLGs are nonlinear spaces, Euclidean probability distributions cannot be assigned to group elements by simply treating their matrix entries as independent coordinates. Several alternatives are available. Directional statistics distributions, such as wrapped normal, von Mises, and 6Bingham distributions, account for the global structure of the nonlinear manifold [ 21 ]. Projected Gaussian constructions instead define local Gaussian coordinates and map them to the manifold by projection. A third approach, used in this work and referred to as concentrated probability distribution, is to assume that the probability mass is concentrated in a neighborhood where the logarithm map is well defined and to represent uncertainty in the Lie algebra [22, 23]. This concentrated distribution viewpoint is natural for trajectory optimization because the optimizer works with local perturbations around a nominal pose trajectory. The group element remains on 𝐺 , while the uncertainty is represented by a vector in the tangent space. For unimodular MLGs, including SO( 𝑛 ) and SE( 𝑛 ) (i.e. the generic Special Orthogonal and Special Euclidean groups of dimension 𝑛 ), integration can be defined with respect to a bi-invariant Haar measure, which is locally expressed through exponential coordinates and the determinant of the group Jacobian [ 24 ]. Under the concentrated assumption, this Jacobian is close to the identity over the region carrying most of the probability mass, so the local distribution can be manipulated using the same covariance algebra used in Euclidean space. This paper uses the left concentrated convention. For a probability density 𝑝 (𝑋 ) on 𝐺 , the left group theoretic mean 
+
+𝜇 𝑙 is defined by: 
+
+∫
+
+> 𝐺 ′
+
+ 𝑋 ⊖𝐺,𝑙 𝜇 𝑙 
+
+ 𝑝 (𝑋 )𝑑𝑋 =
+
+∫
+
+> 𝐺 ′
+
+Log 𝐺 
+
+
+
+𝑋 𝜇 −1
+
+> 𝑙
+
+
+
+𝑝 (𝑋 )𝑑𝑋 = 0 (9) where 𝐺 ′ ⊆ 𝐺 is a neighborhood of 𝜇 𝑙 which contains the support of 𝑝 and is such that Log 𝐺 (𝑋 𝜇 −1 
+
+> 𝑙
+
+) is well defined for all 𝑋 ∈ 𝐺 ′. This is a group theoretic mean, distinct in general from the Fréchet mean obtained by minimizing squared geodesic distance [25, 26]. The corresponding left covariance is: 
+
+𝑃 =
+
+∫
+
+> 𝐺 ′
+
+𝑋 ⊖𝐺,𝑙 𝜇 𝑙 
+
+  𝑋 ⊖𝐺,𝑙 𝜇 𝑙 
+
+⊤ 𝑝 (𝑋 )𝑑𝑋 ∈ R𝑁 × 𝑁 (10) If 𝝉 ∼ N ( 0, 𝑃 ) in R𝑁 and: 
+
+𝑋 = 𝝉 ⊕𝐺,𝑙 𝜇 𝑙 = Exp 𝐺 (𝝉 )𝜇 𝑙 (11) then 𝑋 is denoted 𝑋 ∼ N 𝑙 (𝜇 𝑙 , 𝑃 ), a left concentrated Gaussian distribution on 𝐺 . Its local density can be written as: 
+
+𝑝 (𝑋 ) = 𝑐 exp 
+
+
+
+− 12 Log 𝐺 (𝑋 𝜇 −1 
+
+> 𝑙
+
+)⊤ 𝑃 −1Log 𝐺 (𝑋 𝜇 −1 
+
+> 𝑙
+
+)
+
+
+
+(12) with 𝑐 ≈  (2𝜋 )𝑁 det 𝑃  −1/2 when the support is sufficiently concentrated. 7IV. Problem Statement 
+
+The rendezvous example considers a chaser spacecraft approaching a passive target spacecraft on a circular orbit. The scenario is the same as the one in [ 12 ]. A Hill frame {𝐻 } is attached to the target, with the 𝑥 𝐻 axis pointing radially outward, the 𝑦 𝐻 axis aligned with the target orbital velocity, and the 𝑧 𝐻 axis completing the right-handed triad. The chaser body frame is denoted by {𝐶 }. The relative pose of {𝐶 } with respect to {𝐻 } is represented by the homogeneous transformation: 
+
+𝑇 𝐶 𝐻 =
+
+
+
+𝑅 𝐶 𝐻 𝝆 𝐻 
+
+0⊤ 1
+
+
+
+∈ SE (3) (13) where 𝝆 𝐻 ∈ R3 is the relative position expressed in the Hill frame and 𝑅 𝐶 𝐻 ∈ 𝑆𝑂 (3) is the rotation matrix from the chaser body frame to the Hill frame. The embedded state is: 
+
+𝒙 =
+
+
+
+vec (𝑇 𝐶 𝐻 )
+
+𝝎 𝐶 𝐶 𝐼 
+
+𝒗 𝐻 
+
+
+
+∈ R22 (14) where vec (𝑇 𝐶 𝐻 ) ∈ R16 , 𝝎 𝐶 𝐶 𝐼 ∈ R3 is the chaser angular velocity in the inertial frame {𝐼 } and expressed in {𝐶 } and 
+
+𝒗 𝐻 ∈ R3 is the chaser velocity w.r.t. the target and expressed in {𝐻 }.The translational motion follows the Hill–Clohessy–Wiltshire (HCW) equations [27]: 
+
+¤𝝆 𝐻 = 𝒗 𝐻 , ¤𝒗 𝐻 = 𝐴 𝑝 𝝆 𝐻 + 𝐴 𝑣 𝒗 𝐻 + 𝑭 𝐻 
+
+𝑚 (15) with: 
+
+𝐴 𝑝 =
+
+
+
+3𝑛 2 0 00 0 00 0 −𝑛 2
+
+
+
+, 𝐴 𝑣 =
+
+
+
+0 2𝑛 0
+
+−2𝑛 0 00 0 0
+
+
+
+(16) where 𝑭 𝐻 ∈ R3 is the commanded thrust expressed in the Hill frame, 𝑚 is the chaser mass and 𝑛 is the target mean motion, so that the angular velocity of the Hill frame w.r.t. the inertial frame {𝐼 } in {𝐻 } coordinates is 𝝎 𝐻 𝐻 𝐼 = [0, 0, 𝑛 ]⊤.The relative angular velocity entering the pose kinematics can be obtained as: 
+
+𝝎 𝐶 𝐶 𝐻 = 𝝎 𝐶 𝐶 𝐼 − 𝐶 𝐶 𝐻 𝝎 𝐻 𝐻 𝐼 (17) 8where 𝐶 𝐶 𝐻 = 𝑅 𝑇 𝐶 𝐻 .The pose kinematics are therefore driven by 𝝎 𝐶 𝐶 𝐻 and 𝒗 𝐶 = 𝐶 𝐶 𝐻 𝒗 𝐻 :
+
+¤𝑇 𝐶 𝐻 = 𝑇 𝐶 𝐻 
+
+
+
+[𝝎 𝐶 𝐶 𝐻 ]× 𝒗 𝐶 
+
+0⊤ 0
+
+
+
+(18) while the rotational dynamics are: 
+
+¤𝝎 𝐶 𝐶 𝐼 = 𝐽 −1 
+
+−[ 𝝎 𝐶 𝐶 𝐼 ]× 𝐽 𝝎 𝐶 𝐶 𝐼 + 𝝉 𝐶 
+
+(19) where 𝐽 ∈ R3×3 is the chaser inertia matrix expressed in the chaser body frame and 𝝉 𝐶 ∈ R3 is the chaser torque input. The control vector is then: 
+
+𝒖 =
+
+
+
+𝝉 𝐶 
+
+𝑭 𝐻 
+
+
+
+∈ R6 (20) Although the general stochastic optimal control formulation allows objectives based on expected cost or cost quantiles [ 28 ], the rendezvous problem considered here follows the common chance constrained trajectory optimization approach of minimizing nominal control effort subject to probability bounds on the path and control constraints. Thus, uncertainty enters the optimization through the covariance dynamics, feedback gains, and chance constraints, whereas the trajectory cost measures the effort associated with the mean or feedforward maneuver. This choice separates performance from risk: fuel like control usage is optimized on the nominal trajectory, while robustness is imposed through explicit probability bounds on constraint satisfaction. The original trajectory cost minimized in the rendezvous problem is then the cumulative control magnitude. Since force and torque have different units and numerical ranges, the torque contribution is converted to a force equivalent scale using the characteristic length ℓ𝑢 = 𝜏 max /𝐹 max :
+
+𝐽 traj =
+
+∫ 10
+
+
+
+𝑭 𝐻 (𝜏 ) 2 + 1
+
+ℓ𝑢 
+
+𝝉 𝐶 (𝜏 ) 2
+
+
+
+𝑑𝜏 (21) where normalized time 𝜏 ∈ [ 0, 1] is used. The rendezvous path constraints describe collision avoidance, docking corridor entry, and sensor pointing. They are written as nonlinear scalar inequalities 𝑔 𝑗 (𝒙 ) ≤ 0 in the original stochastic problem. Let 𝐶 𝑇 𝐻 denote the DCM from the Hill frame to the target frame, obtained from the known target attitude. The collision model uses the Hill frame relative position 𝝆 𝐻 and the target frame position 𝝆 𝑇 = 𝐶 𝑇 𝐻 𝝆 𝐻 .9The collision model follows the state triggered construction used by Zhang et al. [ 12 ]. The first collision zone is a spherical keep out region centered at the target. This constraint represents the coarse safety sphere around the target spacecraft. The second collision zone models the solar panel envelope with an ellipsoid in the target frame. These two keep out constraints are enforced only while the chaser is outside the docking corridor: once the chaser is inside the prescribed docking cone, the protected neighborhood can be entered for terminal approach. The spherical keep out zone inequality constraint is: 
+
+𝑔 sph = 𝑟 2KOZ −
+
+
+
+𝝆 𝐻 ⊤
+
+𝝆 𝐻 ≤ 0 (22) The solar panel ellipsoid keep out zone inequality constraint is: 
+
+𝑔 pan = 1 −
+
+
+
+𝝆 𝑇 ⊤
+
+𝐻 pan 𝝆 𝑇 ≤ 0, 𝐻 pan ≻ 0 (23) where 𝐻 pan = 𝐶 ⊤ 
+
+> 𝑇 𝐻
+
+diag (1/𝑟 2 
+
+> 𝑥
+
+, 1/𝑟 2 
+
+> 𝑦
+
+, 1/𝑟 2 
+
+> 𝑧
+
+) 𝐶 𝑇 𝐻 , with 𝑟 𝑥 , 𝑟 𝑦 , 𝑟 𝑧 the semi-major axes of the ellipsoid. The docking corridor is the trigger condition. The cone has vertex 𝒑 𝑇 
+
+> dock
+
+, axis 𝒆 𝑇 
+
+> dock
+
+, and half angle 𝛽 dock . Defining: 
+
+𝒓 𝑇  
+
+> dock
+
+= 𝐶 𝑇 𝐻 𝝆 𝐻 − 𝒑 𝑇  
+
+> dock
+
+(24) the docking corridor inequality constraint is: 
+
+𝑔 dock = cos 𝛽 dock −
+
+
+
+𝒆 𝑇 
+
+> dock
+
+⊤ 𝒓 𝑇 
+
+> dock
+
+𝒓 𝑇 
+
+> dock
+
+≤ 0 (25) Thus, 𝑔 dock > 0 means that the chaser is outside the docking cone, while 𝑔 dock ≤ 0 means that it is inside the approach corridor. The phase-dependent collision logic is: 
+
+𝑔 dock ≥ 0 ⇒ 𝑔 sph ≤ 0 and 𝑔 pan ≤ 0 (26) This implication is embedded into the continuous optimization problem through state triggered functions: 
+
+ℎsph = − min {− 𝑔 dock , 0}𝑔 sph , ℎpan = − min {− 𝑔 dock , 0}𝑔 pan (27) When 𝑔 dock > 0, the multiplier is positive and ℎsph ≤ 0, ℎpan ≤ 0 reduce to the sphere and panel keep out constraints. When 𝑔 dock ≤ 0, both triggered constraints are inactive, allowing the chaser to enter the protected region through the docking corridor. In the stochastic discrete transcription, the trigger is evaluated on the reference mean state. Thus, at node 𝑘 , the chance constraint associated with each keep out function 𝑔 𝑗 , 𝑗 ∈ { sph , pan }, is implemented as: 10 ˜ℎ 𝑗,𝑘 =
+
+
+
+Pr 𝑔 𝑗 (𝒙 𝑘 ) ≤ 0 ≥ 1 − 𝜖 path 𝑔 dock ( ¯𝒙 𝑘 ) ≥ 0Pr [𝑔 dock (𝒙 𝑘 ) ≤ 0] ≥ 1 − 𝜖 path 𝑔 dock ( ¯𝒙 𝑘 ) < 0
+
+(28) where 𝜖 path ∈ ( 0, 1) is the allocated probability of violation for each active path constraint. When the reference mean is outside the docking cone, the random trajectory is constrained to remain outside the sphere and panel keep out regions. Once the reference mean is inside the cone, the random trajectory is instead constrained to satisfy the docking cone inequality. The camera field of view constraint is expressed in the chaser frame. The camera is located at 𝒑 𝐶  
+
+> cam
+
+and points along 
+
+𝒆 𝐶 
+
+> cam
+
+. With: 
+
+𝒓 𝐶  
+
+> cam
+
+= −𝐶 𝐶 𝐻 𝝆 𝐻 − 𝒑 𝐶  
+
+> cam
+
+(29) the sensor pointing inequality constraint is then: 
+
+𝑔 FOV = cos 𝛽 FOV −
+
+
+
+𝒆 𝐶 
+
+> cam
+
+⊤ 𝒓 𝐶 
+
+> cam
+
+𝒓 𝐶 
+
+> cam
+
+≤ 0 (30) This constraint couples translation and attitude because the line of sight vector depends on both 𝝆 𝐻 and 𝐶 𝐶 𝐻 .For the stochastic problem, the FOV constraint is then: 
+
+Pr [𝑔 FOV (𝒙 𝑘 ) ≤ 0] ≥ 1 − 𝜖 path (31) The control constraints are also enforced as chance constraints. For each physical control block 𝒖 𝑐,𝑘 ∈ { 𝝉 𝐶 𝑘 , 𝑭 𝐻 𝑘 }
+
+with limit 𝑢 𝑐, max ∈ { 𝜏 max , 𝐹 max }, the desired probabilistic constraint is: 
+
+Pr  𝒖 𝑐,𝑘 2 ≤ 𝑢 𝑐, max 
+
+ ≥ 1 − 𝜖 ctrl (32) where 𝜖 ctrl ∈ ( 0, 1) is the allocated probability of violation for each control magnitude constraint. The values 𝜖 path and 𝜖 ctrl are individual risk allocations. If a joint chance constraint with total risk 𝜖 is desired over a collection of scalar constraints, a conservative transcription can be obtained with Boole’s inequality by assigning individual risks 𝜖 𝑖 such that: 
+
+> 𝑛 𝑔
+
+∑︁ 
+
+> 𝑖 =1
+
+𝜖 𝑖 ≤ 𝜖 (33) and enforcing each scalar chance constraint separately at level 1 − 𝜖 𝑖 . A common simple choice is uniform allocation, 
+
+𝜖 𝑖 = 𝜖 /𝑛 𝑔 , although optimized or problem dependent risk allocation can reduce conservatism [ 29 ]. In this work, the risk 11 levels are prescribed rather than optimized. The numerical values used in the simulation are reported in Sec. VI. The full nonlinear chance constrainted rendezvous stochastic optimal control problem is summarized below. 
+
+Problem 1 (Original nonlinear chance constrained rendezvous SOCP). Find the nominal trajectory, feedforward control, covariance trajectory, and affine feedback policy that solve 
+
+min      
+
+> 𝒙 (·) ,𝒖 (·) , 𝑃 (·) , 𝐾 (·)
+
+𝐽 traj Eq. (21) 
+
+subject to : nonlinear SE (3) rendezvous dynamics, Eqs. (15), (18), and (19) 
+
+𝒙 (0) = 𝒙 0, 𝒙 (1) = 𝒙 𝑓 ,𝑃 (0) = 𝑃 0, 𝑃 (1) ⪯ 𝑃 𝑓 ,
+
+
+
+Pr 𝑔 sph (𝒙 (𝜏 )) ≤ 0 ≥ 1 − 𝜖 path , Pr 𝑔 pan (𝒙 (𝜏 )) ≤ 0 ≥ 1 − 𝜖 path , 𝑔 dock ( ¯𝒙 (𝜏 )) ≥ 0,
+
+Pr [𝑔 dock (𝒙 (𝜏 )) ≤ 0] ≥ 1 − 𝜖 path , 𝑔 dock ( ¯𝒙 (𝜏 )) < 0,𝜏 ∈ [ 0, 1],
+
+Pr [𝑔 FOV (𝒙 (𝜏 )) ≤ 0] ≥ 1 − 𝜖 path , 𝜏 ∈ [ 0, 1],
+
+Pr ∥𝝉 𝐶 (𝜏 )∥ 2 ≤ 𝜏 max 
+
+ ≥ 1 − 𝜖 ctrl , 𝜏 ∈ [ 0, 1],
+
+Pr ∥𝑭 𝐻 (𝜏 )∥ 2 ≤ 𝐹 max 
+
+ ≥ 1 − 𝜖 ctrl , 𝜏 ∈ [ 0, 1]
+
+(34) where the collision chance constraints are enforced through the continuous-time state-triggered formulation above, whose discrete implementation is given in Eq. (28); 𝑔 FOV is defined in Eq. (30), and 𝑃 0, 𝑃 𝑓 are prescribed initial and terminal covariances. 
+
+## V. Intrinsic stochastic successive convexification 
+
+This section presents the proposed intrinsic stochastic successive convexification (isSCvx) algorithm. The method extends the SCvx algorithm to the stochastic case and to non Euclidean state spaces: the continuous-time problem is discretized, the nonlinear dynamics and constraints are approximated about a reference trajectory, and a sequence of convex subproblems is solved with trust region and virtual control safeguards [ 14 , 30 ]. Chance constraints are handled through deterministic sufficient conditions involving means, covariances, and risk allocation, following standard chance constrained SCP and covariance steering constructions [8, 31]. Let the state space be: 
+
+𝐺 = 𝑆𝐸 (3) × R𝑛 𝑐 = {( 𝑇, 𝒙 𝑐 ) | 𝑇 ∈ 𝑆𝐸 (3) , 𝒙 𝑐 ∈ R𝑛 𝑐 } (35) where the cartesian part of the state 𝒙 𝑐 collects the Euclidean states. For a reference state ¯𝒙 ∈ 𝐺 , the convex 12 subproblem optimizes a tangent mean correction 𝛿 ¯𝒙 𝑘 ∈ R𝑛 𝑡 , with 𝑛 𝑡 = 6 + 𝑛 𝑐 , rather than the embedded state coordinates. The random tangent perturbation about this mean correction is denoted 𝛿 𝒙 𝑘 ∈ R𝑛 𝑡 .For the rendezvous problem, local uncertainty and optimization corrections are represented in the 12-dimensional tangent state: 
+
+𝛿 𝒙 =
+
+
+
+𝝃 𝜃 
+
+𝝃 𝜌 
+
+𝛿 𝝎 
+
+𝛿 𝒗 
+
+
+
+∈ R12 (36) where 𝝃 𝜃 and 𝝃 𝜌 are the attitude and translational components of the intrinsic pose perturbation induced by the left inverse retraction, while 𝛿 𝝎 and 𝛿 𝒗 are the chaser absolute angular velocity and relative velocity perturbations, respectively. The manifold valued state is reconstructed through the left retraction: 
+
+𝒙 = 𝛿 𝒙 ⊕𝐺,𝑙 ¯𝒙 = Exp 𝐺 (𝛿 𝒙 ) ◦ 𝐺 ¯𝒙 =
+
+
+
+vec (Exp 𝑆𝐸 (3) (𝛿 𝒙 (1 : 6 )) ¯𝑇 )
+
+¯𝒙 𝑐 + 𝛿 𝒙 (7 : 12 )
+
+
+
+∈ R22 (37) The corresponding inverse retraction is: 
+
+𝛿 𝒙 = 𝒙 ⊖𝐺,𝑙 ¯𝒙 = Log 𝐺 (𝒙 ◦𝐺 ¯𝒙 −1) =
+
+
+
+Log 𝑆𝐸 (3) (𝑇 ¯𝑇 −1)
+
+𝒙 𝑐 − ¯𝒙 𝑐 
+
+
+
+∈ R12 (38) In the stochastic convex subproblem, the optimized tangent variable is the mean correction. The random tangent perturbation is decomposed as: 
+
+𝛿 𝒙 𝑘 = 𝛿 ¯𝒙 𝑘 + ˜𝒙 𝑘 , ˜𝒙 𝑘 ∼ N ( 0, 𝑃 𝑘 ) (39) where 𝛿 ¯𝒙 𝑘 is the deterministic mean correction optimized by the convex subproblem and ˜𝒙 𝑘 is the zero-mean stochastic tangent perturbation. The corresponding candidate mean state is: 
+
+¯𝒙 + 
+
+> 𝑘
+
+= 𝛿 ¯𝒙 𝑘 ⊕𝐺,𝑙 ¯𝒙 𝑘 (40) and stochastic states are modeled with the left concentrated Gaussian distribution introduced in Sec. III: 13 𝒙 𝑘 = ˜𝒙 𝑘 ⊕𝐺,𝑙 ¯𝒙 + 
+
+> 𝑘
+
+, 𝒙 𝑘 ∼ N 𝑙 ( ¯𝒙 + 
+
+> 𝑘
+
+, 𝑃 𝑘 ) (41) Equivalently, the zero-mean group perturbation satisfies Exp 𝐺 ( ˜𝒙 𝑘 ) ∼ N 𝑙 (I, 𝑃 𝑘 ). Thus, covariance matrices are defined in the same tangent coordinates as the optimized mean corrections. 
+
+A. Algorithm overview 
+
+At outer iteration 𝑖 , the algorithm starts from a reference sequence over a mesh of 𝑁 − 1 intervals, {( ¯𝒙 (𝑖 ) 
+
+> 𝑘
+
+, ¯𝒖 (𝑖 ) 
+
+> 𝑘
+
+)} 𝑁 𝑘 =1
+
+and a trust region radius 𝜂 (𝑖 ) whose role and use will be explained in the later section. Time dilation is the positive scale factor that maps normalized time 𝜏 ∈ [ 0, 1] to physical time 𝑡 :
+
+𝑑𝑡 = 𝑠 (𝜏 )𝑑𝜏 𝑠 (𝜏 ) > 0 (42) For fixed final time problems, 𝑠 (𝜏 ) = 𝑡 𝑓 is prescribed. For free final time problems, 𝑠 (𝜏 ) may be included as a decision variable so that the optimizer adjusts the physical duration of each normalized time interval. In this work, final time is fixed. The algorithm proceeds through five steps: 1) First, the nonlinear tangent space dynamics linearization matrices are computed, and the manifold propagation defect is measured; 2) Second, tangent, control, covariance, feedback, virtual control, and other slack variables are scaled for numerical conditioning; 3) Third, a convex subproblem is solved in the tangent mean corrections, feedforward controls, covariance matrices, feedback gains, virtual controls, and other slack variables; 4) Fourth, the candidate mean trajectory is reconstructed on the manifold and the physical covariance and feedback gains are recovered; 5) Finally, the candidate is accepted or rejected according to the predicted improvement, actual improvement, and feasibility decrease. Each one of these steps will be detailed in the following sections. 
+
+B. Dynamics linearization and discretization 
+
+The normalized time interval is discretized at nodes: 
+
+𝜏 𝑘 = 𝑘 − 1
+
+𝑁 − 1 , 𝑘 = 1, . . . , 𝑁 (43) The reference control is interpolated with first order hold (FOH): 14 ¯𝒖 (𝜏 ) = 𝛼 (𝜏 ) ¯𝒖 𝑘 +  1 − 𝛼 (𝜏 ) ¯𝒖 𝑘 +1, 𝛼 (𝜏 ) = 𝜏 𝑘 +1 − 𝜏 𝜏 𝑘 +1 − 𝜏 𝑘 
+
+(44) although the same construction can be specialized to zero order hold (ZOH) by setting the second interpolation weight to zero. The stochastic tangent perturbation dynamics are written as: 
+
+𝑑𝛿 𝒙 = 𝑓 𝛿 𝑥 (𝒙 , 𝒖 , 𝜏 )𝑑𝜏 + 𝐺 𝑐 𝑑 𝒘 (45) where 𝑓 𝛿 𝑥 : R𝑛 𝑡 × R𝑛 𝑢 × R𝑛 → R𝑛 𝑡 is the tangent drift, 𝒙 ∈ 𝐺 and the random tangent perturbation 𝛿 𝒙 ∈ R𝑛 𝑡 were defined as functions of the reference state ¯𝒙 in Eq. (37) and Eq. (38), respectively, 𝐺 𝑐 ∈ R𝑛 𝑡 ×𝑛 𝑤 is the continuous-time diffusion matrix, and 𝒘 is a standard unit strength 𝑛 𝑤 -dimensional Wiener process. Linearizing the continuous-time tangent stochastic dynamics about the reference trajectory gives: 
+
+𝑑𝛿 𝒙 = ( 𝐴 𝛿 𝑥 (𝜏 )𝛿 𝒙 + 𝐵 𝛿𝑢 (𝜏 )𝛿 𝒖 + 𝒄 𝛿 𝑥 (𝜏 )) 𝑑𝜏 + 𝐺 𝑐 𝑑 𝒘 (46) with drift Jacobians: 
+
+𝐴 𝛿 𝑥 (𝜏 ) = 𝜕 𝜕 𝜼 𝑓 𝛿 𝑥 
+
+ 𝜼 ⊕𝐺,𝑙 ¯𝒙 (𝜏 ), ¯𝒖 (𝜏 ), 𝜏 
+
+> 𝜼 =0
+
+,𝐵 𝛿𝑢 (𝜏 ) = 𝜕 𝜕𝛿 𝒖 𝑓 𝛿 𝑥 ( ¯𝒙 (𝜏 ), ¯𝒖 (𝜏 ) + 𝛿 𝒖 , 𝜏 ) 𝛿 𝒖 =0
+
+(47) and affine residual: 
+
+𝒄 𝛿 𝑥 (𝜏 ) = 𝑓 𝛿 𝑥 ( ¯𝒙 (𝜏 ), ¯𝒖 (𝜏 ), 𝜏 ) (48) The state derivative is therefore taken with respect to a tangent perturbation applied through the left retraction. Over each interval, the method integrates the state transition matrix Φ𝛿 𝑥 , the FOH input integrals, and the process noise contribution induced by the diffusion term. Let: 
+
+𝑄 𝛿 𝑥 (𝜏 ) =
+
+
+
+𝑠 (𝜏 )𝐺 𝑐 𝐺 ⊤ 
+
+> 𝑐
+
+, if normalized time dilation is used ,𝐺 𝑐 𝐺 ⊤ 
+
+> 𝑐
+
+, otherwise ,
+
+(49) The additive covariance accumulated over the interval is then given by: 
+
+Σ𝑤,𝑘 =
+
+∫ 𝜏 𝑘 +1
+
+> 𝜏 𝑘
+
+Φ𝛿 𝑥 (𝜏 𝑘 +1, 𝜎 )𝑄 𝛿 𝑥 (𝜎 )Φ⊤ 
+
+> 𝛿 𝑥
+
+(𝜏 𝑘 +1, 𝜎 )𝑑𝜎 (50) 15 Instead of forming this integral directly, the noise Gramian 𝑊 (𝜏, 𝜏 𝑘 ) is integrated together with the state transition matrix, so the propagated quantities satisfy: 
+
+𝑑 𝑑𝜏 Φ𝛿 𝑥 (𝜏, 𝜏 𝑘 ) = 𝐴 𝛿 𝑥 (𝜏 )Φ𝛿 𝑥 (𝜏, 𝜏 𝑘 ), Φ𝛿 𝑥 (𝜏 𝑘 , 𝜏 𝑘 ) = 𝐼 𝑛 𝑡 ×𝑛 𝑡 
+
+𝑑 𝑑𝜏 𝑊 (𝜏, 𝜏 𝑘 ) = Φ 𝛿 𝑥 (𝜏, 𝜏 𝑘 )−1𝑄 𝛿 𝑥 (𝜏 )Φ𝛿 𝑥 (𝜏, 𝜏 𝑘 )−⊤ , 𝑊 (𝜏 𝑘 , 𝜏 𝑘 ) = 𝑂 𝑛 𝑡 ×𝑛 𝑡 (51) The linearized discrete-time matrices are then: 
+
+𝐴 𝑘 = Φ 𝛿 𝑥 (𝜏 𝑘 +1, 𝜏 𝑘 )
+
+𝐵 − 
+
+> 𝑘
+
+= 𝐴 𝑘 
+
+∫ 𝜏 𝑘 +1
+
+> 𝜏 𝑘
+
+Φ−1 
+
+> 𝛿 𝑥
+
+(𝜏, 𝜏 𝑘 )𝛼 (𝜏 )𝐵 𝛿𝑢 (𝜏 ) 𝑑𝜏 𝐵 + 
+
+> 𝑘
+
+= 𝐴 𝑘 
+
+∫ 𝜏 𝑘 +1
+
+> 𝜏 𝑘
+
+Φ−1 
+
+> 𝛿 𝑥
+
+(𝜏, 𝜏 𝑘 )  1 − 𝛼 (𝜏 ) 𝐵 𝛿𝑢 (𝜏 ) 𝑑𝜏 
+
+Σ𝑤,𝑘 = 𝐴 𝑘 𝑊 𝑘 𝐴 ⊤ 
+
+> 𝑘
+
+ 𝐺 𝑘 𝐺 ⊤ 
+
+> 𝑘
+
+(52) where 𝑊 𝑘 = 𝑊 (𝜏 𝑘 +1, 𝜏 𝑘 ) and 𝐺 𝑘 ∈ R𝑛 𝑡 ×𝑛 𝑡 is the square root of Σ𝑘 .The nonlinear propagation defect is measured intrinsically as: 
+
+𝒅 𝑘 = 𝒙 prop  
+
+> 𝑘 +1
+
+⊖𝐺,𝑙 ¯𝒙 𝑘 +1 (53) where 𝒙 prop  
+
+> 𝑘 +1
+
+is obtained by propagating the nonlinear dynamics from ¯𝒙 𝑘 over [𝜏 𝑘 , 𝜏 𝑘 +1] under the interpolated reference control. The linearized tangent mean-correction dynamics are then written for 𝛿 ¯𝒙 𝑘 :
+
+𝛿 ¯𝒙 𝑘 +1 = 𝐴 𝑘 𝛿 ¯𝒙 𝑘 + 𝐵 − 
+
+> 𝑘
+
+𝛿 𝒖 ff ,𝑘 + 𝐵 + 
+
+> 𝑘
+
+𝛿 𝒖 ff ,𝑘 +1 + 𝒅 𝑘 (54) where 𝛿 𝒖 ff ,𝑘 = 𝒖 ff ,𝑘 − ¯𝒖 𝑘 is the feedforward control perturbation. In successive convexification, the linearized dynamics equality can make an intermediate convex subproblem infeasible when the reference trajectory is far from dynamically consistent or when the local approximation is too restrictive. A virtual control is therefore introduced as an artificial additive input in the convexified dynamics [ 14 ]. This term is not a physical control, it is a slack variable for the dynamics defect. It is heavily penalized in the objective so that it restores feasibility during early iterations while being driven to zero as the reference trajectory becomes dynamically consistent. In the present formulation, the virtual control is defined in tangent coordinates as 𝝂 𝑘 ∈ R𝑛 𝑡 and so the linearized tangent mean-correction dynamics constraints for each convex subproblem become: 16 𝛿 ¯𝒙 𝑘 +1 = 𝐴 𝑘 𝛿 ¯𝒙 𝑘 + 𝐵 − 
+
+> 𝑘
+
+𝛿 𝒖 ff ,𝑘 + 𝐵 + 
+
+> 𝑘
+
+𝛿 𝒖 ff ,𝑘 +1 + 𝒅 𝑘 + 𝝂 𝑘 (55) The feedback law used for covariance propagation and chance constraint evaluation must be written in the same tangent coordinates. Thus, instead of using the Euclidean difference 𝒙 𝑘 − ¯𝒙 + 
+
+> 𝑘
+
+, the zero-mean state error entering the controller is defined by the inverse retraction about the candidate mean. The applied control is: 
+
+𝒖 𝑘 = 𝒖 ff ,𝑘 + 𝐾 𝑘 ˜𝒙 𝑘 , ˜𝒙 𝑘 = 𝒙 𝑘 ⊖𝐺,𝑙 ¯𝒙 + 
+
+> 𝑘
+
+∈ R𝑛 𝑡 (56) where 𝒖 ff ,𝑘 is the feedforward control optimized by the convex subproblem and 𝐾 𝑘 ∈ R𝑛 𝑢 ×𝑛 𝑡 is the optimal feedback gain mapping the zero-mean tangent state error to the control correction. This is the non Euclidean counterpart of the standard Euclidean affine feedback policy. Next, the covariance recursion constraints are described. Let the full discretized control matrix be 𝐵 𝑘 = 𝐵 − 
+
+> 𝑘
+
++ 𝐵 + 
+
+> 𝑘
+
+. With the tangent feedback law in Eq. (56), the closed loop covariance recursion is: 
+
+𝑃 𝑘 +1 = ( 𝐴 𝑘 + 𝐵 𝑘 𝐾 𝑘 ) 𝑃 𝑘 ( 𝐴 𝑘 + 𝐵 𝑘 𝐾 𝑘 )⊤ + Σ𝑤,𝑘 (57) Eq. (57) is not convex in the decision variables 𝐾 𝑘 and 𝑃 𝑘 because of the products 𝐾 𝑘 𝑃 𝑘 and 𝐾 𝑘 𝑃 𝑘 𝐾 ⊤ 
+
+> 𝑘
+
+. Therefore, the auxiliary variable 𝑌 𝑘 = 𝐾 𝑘 𝑃 𝑘 is introduced so that the cross term becomes affine in (𝑃 𝑘 , 𝑌 𝑘 ) [ 32 ]. The remaining quadratic covariance update is then enforced through the Schur complement relaxation: 
+
+
+
+𝑃 𝑘 +1 − Σ𝑤,𝑘 𝐹 𝑘 
+
+𝐹 ⊤ 
+
+> 𝑘
+
+𝑃 𝑘 
+
+
+
+⪰ 0, 𝐹 𝑘  𝐴 𝑘 𝑃 𝑘 + 𝐵 𝑘 𝑌 𝑘 (58) For 𝑃 𝑘 ≻ 0, the Schur complement of the lower right block gives 𝑃 𝑘 +1 − Σ𝑤,𝑘 ⪰ 𝐹 𝑘 𝑃 −1 
+
+> 𝑘
+
+𝐹 ⊤ 
+
+> 𝑘
+
+, which is the relaxed form of Eq. (57) expressed in the tangent covariance coordinates used by the optimizer. 
+
+C. Parameter update and scaling 
+
+In order to avoid numerical problems for each convex subproblem solve, all variables are scaled/normalized. Let 
+
+𝑆 𝑡 be the diagonal tangent state scaling matrix and let 𝑆 𝑢 and 𝒄 𝑢 define the affine control scaling. The subproblem variables are: 
+
+𝛿 ¯𝒙 𝑘 = 𝑆 𝑡 𝛿 ˆ¯𝒙 𝑘 , 𝒖 ff ,𝑘 = 𝑆 𝑢 ˆ𝒖 𝑘 + 𝒄 𝑢 (59) 17 The reference control in scaled coordinates is: 
+
+¯ˆ𝒖 𝑘 = 𝑆 −1 
+
+> 𝑢
+
+( ¯𝒖 𝑘 − 𝒄 𝑢 ) (60) The dynamics constraint is also row scaled using the local magnitudes of the scaled dynamics matrices so that the equality residuals have comparable numerical weights. Covariance variables are normalized using a square root of the initial covariance. Let 𝑆 𝑃 satisfy 𝑃 0 = 𝑆 𝑃 𝑆 ⊤ 
+
+> 𝑃
+
+. The normalized covariance and covariance steering variables are: 
+
+ˆ𝑃 𝑘 = 𝑆 −1 
+
+> 𝑃
+
+𝑃 𝑘 𝑆 −⊤  
+
+> 𝑃
+
+, ˆ𝑌 𝑘 = 𝑌 𝑘 𝑆 −⊤  
+
+> 𝑃
+
+(61) With this normalization, ˆ𝑃 0 = 𝐼 𝑛 𝑡 ×𝑛 𝑡 .
+
+D. Solve step 
+
+At each outer iteration, the convex subproblem optimizes the scaled tangent mean corrections 𝛿 ˆ¯𝒙 𝑘 , scaled feedforward controls ˆ𝒖 𝑘 , scaled virtual controls ˆ𝝂 𝑘 , normalized covariances ˆ𝑃 𝑘 , normalized feedback variables ˆ𝑌 𝑘 , and any problem dependent additional slack variables. The candidate mean state is reconstructed after the solve as: 
+
+¯𝒙 + 
+
+> 𝑘
+
+= 𝛿 ¯𝒙 ★𝑘 ⊕𝐺,𝑙 ¯𝒙 𝑘 (62) and the physical covariance and feedback variables are recovered by: 
+
+𝑃 ★𝑘 = 𝑆 𝑃 ˆ𝑃 ★𝑘 𝑆 ⊤ 
+
+> 𝑃
+
+, 𝑌 ★𝑘 = ˆ𝑌 ★𝑘 𝑆 ⊤ 
+
+> 𝑃
+
+, 𝐾 ★𝑘 = 𝑌 ★𝑘 
+
+ 𝑃 ★𝑘 
+
+ −1 (63) In scaled notation, the tangent dynamics constraint is imposed as: 
+
+𝛿 ˆ¯𝒙 𝑘 +1 = ˆ𝐴 𝑘 𝛿 ˆ¯𝒙 𝑘 + ˆ𝐵 −
+
+> 𝑘
+
+  ˆ𝒖 𝑘 − ¯ˆ𝒖 𝑘 
+
+ + ˆ𝐵 +
+
+> 𝑘
+
+  ˆ𝒖 𝑘 +1 − ¯ˆ𝒖 𝑘 +1
+
+ + ˆ𝒅 𝑘 + ˆ𝝂 𝑘 (64) where ˆ𝐴 𝑘 = 𝑆 −1 
+
+> 𝑡
+
+𝐴 𝑘 𝑆 𝑡 , ˆ𝐵 ± 
+
+> 𝑘
+
+= 𝑆 −1 
+
+> 𝑡
+
+𝐵 ± 
+
+> 𝑘
+
+𝑆 𝑢 , ˆ𝒅 𝑘 = 𝑆 −1 
+
+> 𝑡
+
+𝒅 𝑘 , and ˆ𝝂 𝑘 = 𝑆 −1 
+
+> 𝑡
+
+𝝂 𝑘 .Because the dynamics, covariance recursion, and chance constraints are all local approximations about the current reference trajectory, the convex subproblem is not allowed to choose an arbitrarily large correction in one iteration. The trust region limits the scaled tangent state correction and, when enabled, the scaled change in feedforward control. This keeps the candidate trajectory inside the neighborhood where the linearized model is expected to be accurate and prevents artificial unboundedness of the convexified subproblem. At node 𝑘 , this restriction is imposed as: 18 𝛿 ˆ¯𝒙 𝑘 𝑞 tr + ˆ𝒖 𝑘 − ¯ˆ𝒖 𝑘 𝑞 tr ≤ 𝜂 (65) where 𝜂 > 0 is the current trust region radius and 𝑞 tr selects the norm used to measure the step, typically 1, 2, or ∞.The first term bounds the manifold update in scaled tangent coordinates, while the second term bounds the deviation of the feedforward control from the reference control. The control term can be omitted when only the state update is trusted. The radius 𝜂 is updated by the outer loop according to the agreement between the predicted and actual merit improvement, as it will be described in Sec. V.G. The objective minimized by the convex solver has the generic form: 
+
+𝐽 sub = 1
+
+𝑐 𝐽 
+
+𝐽 cvx traj + 𝐽 vc + 𝐽 slack (66) Here 𝐽 cvx traj is the problem dependent convex trajectory cost, 𝑐 𝐽 ≥ 1 is a cost normalization, 𝐽 vc penalizes the tangent virtual control, and 𝐽 slack penalizes relaxation variables 𝒔 𝑘 introduced by any nonconvex constraint that required linearization. A representative virtual control penalty is: 
+
+𝐽 vc = 𝑤 vc  
+
+> 𝑁 −1
+
+∑︁ 
+
+> 𝑘 =1
+
+∥ ˆ𝝂 𝑘 ∥1 (67) The boundary conditions, path constraints, control constraints, and cost are kept problem dependent. In the rendezvous example, these generic functions are specialized to the corresponding safety, pointing and actuator requirements. Optional covariance size constraints can also be imposed along the trajectory, either as full matrix inequalities 
+
+ˆ𝑃 𝑘 ⪯ ˆ𝑃 max or as componentwise variance bounds. 
+
+E. Chance constraints 
+
+Consider an original nonlinear scalar chance constraint at node 𝑘 :
+
+Pr 𝑔 𝑗 (𝒙 𝑘 ) ≤ 0 ≥ 1 − 𝜖 𝑗 (68) This constraint cannot be inserted directly into the convex subproblem, since the random variable 𝑔 𝑗 (𝒙 𝑘 ) is generally a nonlinear function of the stochastic trajectory. The first step is therefore to replace the nonlinear constraint by its local tangent approximation about the reference state. For a scalar path constraint 𝑔 𝑗 (𝒙 𝑘 ) ≤ 0, the tangent linearization gives: 
+
+𝑔 𝑗 (𝒙 𝑘 ) ≈ 𝑔 𝑗 ( ¯𝒙 𝑘 ) + 𝐺 𝑗,𝑘 𝛿 𝒙 𝑘 (69) 19 where 𝐺 𝑗,𝑘 ∈ R1×𝑛 𝑡 is the tangent Jacobian: 
+
+𝐺 𝑗,𝑘 = 𝜕 𝜕𝛿 𝒙 𝑔 𝑗 
+
+ 𝛿 𝒙 ⊕𝐺,𝑙 ¯𝒙 𝑘 
+
+ 
+
+> 𝛿 𝒙 =0
+
+(70) The random tangent perturbation is represented by its mean correction and covariance. Thus, under the Gaussian tangent approximation, the linearized scalar constraint is a Gaussian random variable with mean: 
+
+𝜇 𝑔, 𝑗,𝑘 = 𝑔 𝑗 ( ¯𝒙 𝑘 ) + 𝐺 𝑗,𝑘 𝛿 ¯𝒙 𝑘 (71) and variance: 
+
+𝜎 2 
+
+> 𝑔, 𝑗,𝑘
+
+= 𝐺 𝑗,𝑘 𝑃 𝑘 𝐺 ⊤ 
+
+> 𝑗,𝑘
+
+= 𝐺 𝑗,𝑘 𝑆 𝑃 ˆ𝑃 𝑘 𝑆 ⊤ 
+
+> 𝑃
+
+𝐺 ⊤ 
+
+> 𝑗,𝑘
+
+(72) For a scalar Gaussian variable, the probability statement in Eq. (68) is equivalent to: 
+
+𝑔 𝑗 ( ¯𝒙 𝑘 ) + 𝐺 𝑗,𝑘 𝛿 ¯𝒙 𝑘 + Φ−1N (1 − 𝜖 𝑗 )√︃ 𝐺 𝑗,𝑘 𝑆 𝑃 ˆ𝑃 𝑘 𝑆 ⊤ 
+
+> 𝑃
+
+𝐺 ⊤ 
+
+> 𝑗,𝑘
+
+≤ 0 (73) where Φ−1N is the inverse cumulative distribution function of the standard normal distribution. Eq. (73) is deterministic, but it is not yet in the form used by the convex subproblem because of the square root covariance margin. The implementation introduces an auxiliary slack variable 𝜉 𝑗,𝑘 so that the covariance projection is bounded by 𝜉 2 
+
+> 𝑗,𝑘
+
+, and it allows a nonnegative slack 𝑠 𝑗,𝑘 to avoid artificial infeasibility. The resulting deterministic convex constraints are: 
+
+𝐺 𝑗,𝑘 𝑆 𝑃 ˆ𝑃 𝑘 𝑆 ⊤ 
+
+> 𝑃
+
+𝐺 ⊤ 
+
+> 𝑗,𝑘
+
+≤ 2 ¯ 𝜉 𝑗,𝑘 𝜉 𝑗,𝑘 − ¯𝜉 2 
+
+> 𝑗,𝑘
+
++ 𝜒 𝑗,𝑘 
+
+𝑔 𝑗 ( ¯𝒙 𝑘 ) + 𝐺 𝑗,𝑘 𝛿 ¯𝒙 𝑘 + Φ−1N (1 − 𝜖 𝑗 )𝜉 𝑗,𝑘 ≤ 𝑠 𝑗,𝑘 (74) where ¯𝜉 𝑗,𝑘 is the value from the previous accepted iterate. The first inequality in Eq. (74) replaces the nonconvex bound 𝐺 𝑗,𝑘 𝑆 𝑃 ˆ𝑃 𝑘 𝑆 ⊤ 
+
+> 𝑃
+
+𝐺 ⊤ 
+
+> 𝑗,𝑘
+
+≤ 𝜉 2 
+
+> 𝑗,𝑘
+
+with the affine tangent approximation of 𝜉 2 
+
+> 𝑗,𝑘
+
+about ¯𝜉 𝑗,𝑘 , plus the slack 𝜒 𝑗,𝑘 ≥ 0. Since the tangent line is a global underestimator of the convex function 𝜉 2 
+
+> 𝑗,𝑘
+
+, this replacement is conservative when 𝜒 𝑗,𝑘 = 0.The second inequality in Eq. (74) is the tightened nominal constraint. Inactive path constraints are assigned zero chance constraint relaxation at the corresponding node. Control chance constraints follow the same idea, but the random quantity is now the norm of the closed loop control produced by the affine feedback law. For a control block 𝒖 𝑐,𝑘 with maximum allowable magnitude 𝑢 max , the original probabilistic requirement is Pr [∥ 𝒖 𝑐,𝑘 ∥2 ≤ 𝑢 max ] ≥ 1 − 𝜖 . Because 𝒖 𝑐,𝑘 depends on the zero-mean tangent perturbation through feedback, its covariance depends on both the feedback gain and the state covariance. With the covariance 20 steering change of variables, this feedback-induced stochastic spread is bounded by an auxiliary slack variable 𝜁 𝑐,𝑘 
+
+through: 
+
+
+
+𝜁 𝑐,𝑘 𝐼 ˆ𝑌 𝑐,𝑘 
+
+ˆ𝑌 ⊤ 
+
+> 𝑐,𝑘
+
+ˆ𝑃 𝑘 
+
+
+
+⪰ 0 (75) where ˆ𝑌 𝑐,𝑘 contains the rows of ˆ𝑌 𝑘 associated with the control block. This LMI implies an upper bound on the largest eigenvalue of the control covariance, so the stochastic control magnitude can be conservatively limited by tightening the deterministic norm with a risk-dependent margin. The square root term in that margin is then replaced by its affine approximation about the previous iterate: 
+
+∥𝒖 ff ,𝑐,𝑘 ∥2 + 𝜓 𝜖  √︃ ¯𝜁 𝑐,𝑘 + 𝜁 𝑐,𝑘 − ¯𝜁 𝑐,𝑘 
+
+2√︁ ¯𝜁 𝑐,𝑘 
+
+!
+
+≤ 𝑢 max + 𝑠 𝑢,𝑐,𝑘 (76) where 𝒖 ff ,𝑐,𝑘 is the feedforward component of the selected control block, ¯𝜁 𝑐,𝑘 is taken from the previous iterate, 
+
+𝑠 𝑢,𝑐,𝑘 ≥ 0 is a relaxation variable, and 𝜓 𝜖 is a risk dependent concentration factor. Thus, the deterministic nominal magnitude is tightened by a feedback-induced uncertainty margin before being compared directly with the physical control limit. For the three dimensional force and torque blocks used in the numerical study, 𝜓 𝜖 =√︁ 8 log (1/𝜖 ) + 3.
+
+F. Convex subproblem statement 
+
+Collect all decision variables in: 
+
+Z = 𝛿 ˆ¯𝒙 𝑘 , ˆ𝒖 𝑘 , ˆ𝝂 𝑘 , ˆ𝑃 𝑘 , ˆ𝑌 𝑘 , 𝒔 𝑘  
+
+> 𝑁 𝑘 =1
+
+(77) Here, 𝒔 𝑘 collects the auxiliary variables introduced to obtain convex deterministic transcriptions of nonconvex constraints, including epigraph variables such as 𝜉 𝑗,𝑘 , covariance margin variables such as 𝜁 𝑐,𝑘 , and nonnegative convexification or constraint relaxation slacks such as 𝜒 𝑗,𝑘 and 𝑠 𝑗,𝑘 .For the rendezvous problem, the convex subproblem is obtained by inserting the problem specific cost, tangent dynamics, boundary conditions, and active path and control chance constraints into the decision set above. In the discretized convex subproblem, the trajectory cost integral is evaluated with trapezoidal quadrature: 
+
+𝐽 cvx traj =
+
+> 𝑁
+
+∑︁ 
+
+> 𝑘 =1
+
+𝑤 𝑘 
+
+
+
+¯𝑭 𝐻 𝑘 2 + 1
+
+ℓ𝑢 
+
+¯𝝉 𝐶 𝑘 2
+
+
+
+, 𝑤 1 = 𝑤 𝑁 = 12(𝑁 − 1) , 𝑤 𝑘 = 1
+
+𝑁 − 1 (78) where ¯𝑭 𝐻 𝑘 and ¯𝝉 𝐶 𝑘 denote the mean, or feedforward, control values optimized by the convex subproblem. The physical trajectory cost in Eq. (78) penalizes only the mean control effort. In the stochastic implementation, the augmented convex objective also includes the trapezoidal sum of the control spread epigraph variables 𝜁 𝑐,𝑘 used in 21 the control chance constraint transcription, together with the virtual control and constraint relaxation penalties. These additional terms regularize control dispersion and support convergence of the SCvx iteration. For implementation of the tangent space dynamics constraints, the continuous-time drift used by the intrinsic discretization in normalized time is: 
+
+𝒇 𝛿 𝑥 = 𝑡 𝑓 
+
+
+
+𝝎 𝐶 𝐶 𝐻 
+
+𝐶 𝐶 𝐻 𝒗 𝐻 
+
+𝐽 −1
+
+
+
+−[ 𝝎 𝐶 𝐶 𝐼 ]× 𝐽 𝝎 𝐶 𝐶 𝐼 + 𝝉 𝐶 
+
+
+
+𝐴 𝑝 𝝆 𝐻 + 𝐴 𝑣 𝒗 𝐻 + 𝑭 𝐻 /𝑚 
+
+
+
+(79) Linearizing Eq. (79) in the tangent state ordering of Eq. (36) gives: 
+
+¤𝛿 𝒙 = 𝐴 𝛿 𝑥 𝛿 𝒙 + 𝐵 𝛿𝑢 𝛿 𝒖 + 𝒄 𝛿 𝑥 , 𝛿 𝒖 =
+
+ 𝛿 𝝉 𝐶 ⊤  𝛿 𝑭 𝐻 ⊤
+
+⊤
+
+(80) The affine residual is: 
+
+𝒄 𝛿 𝑥 = 𝒇 𝛿 𝑥 ( ¯𝒙 , ¯𝒖 , 𝜏 ) (81) The Jacobians are: 
+
+𝐴 𝛿 𝑥 = 𝑡 𝑓 
+
+
+
+−[ 𝝎 𝐶 𝐶 𝐼 ]× 03×3 𝐼 3 03×3
+
+03×3 −[ 𝝎 𝐶 𝐶 𝐻 ]× 03×3 𝐶 𝐶 𝐻 
+
+03×3 03×3 𝐽 −1
+
+
+
+[𝐽 𝝎 𝐶 𝐶 𝐼 ]× − [ 𝝎 𝐶 𝐶 𝐼 ]× 𝐽 
+
+
+
+03×3
+
+03×3 𝐴 𝑝 𝐶 ⊤ 
+
+> 𝐶 𝐻
+
+03×3 𝐴 𝑣 
+
+
+
+(82) 
+
+𝐵 𝛿𝑢 = 𝑡 𝑓 
+
+
+
+03×3 03×3
+
+03×3 03×3
+
+𝐽 −1 03×3
+
+03×3 1 
+
+> 𝑚
+
+𝐼 3
+
+
+
+(83) Combining these components, the rendezvous convex subproblem solved at each SCP iteration is: 
+
+Problem 2 (Rendezvous convex subproblem). Find the nominal trajectory, feedforward control, covariance trajectory, 22 and affine feedback policy that solve 
+
+min 
+
+> Zren
+
+1
+
+𝑐 𝐽 
+
+𝐽 cvx traj + 𝑤 vc  
+
+> 𝑁 −1
+
+∑︁ 
+
+> 𝑘 =1
+
+∥ ˆ𝝂 𝑘 ∥1 + 𝐽 ren ,slack 
+
+s.t. tangent mean-correction dynamics Eq. (64) 𝑘 = 1, . . . , 𝑁 − 1
+
+mean and covariance boundary constraints closed loop covariance recursion Eq. (58) 𝑘 = 1, . . . , 𝑁 − 1
+
+active collision and FOV chance constraints Eq. (74) force and torque chance constraints Eq. (75) and Eq. (76) trust region constraints Eq. (65) (84) Here, Zren is the decision set in Eq. (77) specialized to the rendezvous state and control dimensions. The active collision constraints are selected using the docking cone trigger described in Eq. (28), and the FOV constraint is always included. The path and control chance constraints use the deterministic convex transcriptions derived in Sec. V.E. The rendezvous slack penalty is: 
+
+𝐽 ren ,slack = 𝑤 nc 
+
+> 𝑁
+
+∑︁ 
+
+> 𝑘 =1
+
+©«∑︁ 𝑗 ∈ A 𝑘 
+
+ 𝑠 𝑗,𝑘 + 𝜒 𝑗,𝑘 
+
+ +∑︁   
+
+> 𝑐 ∈ { 𝜏,𝐹 }
+
+𝜒 𝑐,𝑘 ª®¬
+
+(85) where A𝑘 is the set of active path chance constraints at node 𝑘 . The control spread epigraph variables 𝜁 𝑐,𝑘 enter the augmented convex objective through the control chance constraint transcription as described in Sec. V.E. Each convex subproblem is a semi-definite program (SDP) which can be efficiently solved with the interior point method. 
+
+G. Outer loop update and convergence 
+
+After each solve step, the candidate trajectory is repropagated through the nonlinear dynamics and assigned an augmented merit value: 
+
+𝐽 aug = 𝐽 cvx traj 
+
+𝑐 𝐽 
+
++ 𝐽 dyn + 𝐽 nc (86) Here 𝐽 cvx traj is the original problem dependent trajectory cost evaluated without relaxation penalties, 𝐽 dyn penalizes the nonlinear tangent defects, and 𝐽 nc penalizes nonconvex or probabilistic constraint violations evaluated on the candidate solution with weight 𝑤 nc . The dynamics penalty is: 23 𝐽 dyn = 𝑤 𝑣𝑐 𝑁 −1∑︁ 
+
+> 𝑘 =1
+
+𝑆 −1 
+
+> 𝑡
+
+𝒅 𝑘 1 (87) where 𝑤 𝑣𝑐 > 0 is the same weight used to penalize virtual control in the convex subproblem (Eq. (67)) and 𝒅 𝑘 was defined in Eq. (53). To evaluate the feasibility of the candidate solution, four residuals are used. The dynamics residual is: 
+
+𝜒 dyn = max   
+
+> 𝑘 =1,..., 𝑁 −1
+
+𝑆 −1 
+
+> 𝑡
+
+𝒅 𝑘 ∞ (88) The constraint residual 𝜒 cc is the largest normalized positive violation among the deterministic path, boundary, control, and chance constraints evaluated on the candidate trajectory. Thus, constraints that are satisfied contribute zero, while violated constraints contribute their positive residual after the same scaling used in the convex subproblem. The pathwise covariance residual 𝜒 cov measures violation of any covariance size constraints imposed along the trajectory, such as 𝑃 𝑘 ⪯ 𝑃 max or componentwise variance bounds. The terminal covariance residual 𝜒 cov , 𝑓 similarly measures violation of the terminal covariance requirement 
+
+𝑃 𝑁 ⪯ 𝑃 𝑓 .These quantities are combined into a single feasibility metric: 
+
+𝜒 = max 𝜒 dyn , 𝜒 cc , 𝜒 cov , 𝜒 cov , 𝑓 (89) A candidate is considered feasible by the algorithm when: 
+
+𝜒 < 𝜖 feas (90) where 𝜖 feas is the feasibility tolerance. This test is intentionally based on the maximum residual: the candidate is feasible only when the dynamics defect, deterministic and chance constraint residuals, pathwise covariance residuals, and terminal covariance residual are all below tolerance. The predicted and actual merit improvements are then defined as: 
+
+Δ𝐽 pred = 𝐽 aug − 𝐽 ★
+
+> sub
+
+, Δ𝐽 act = 𝐽 aug − 𝐽 ★ 
+
+> aug
+
+(91) The trust region ratio is introduced: 
+
+𝜌 = Δ𝐽 act 
+
+Δ𝐽 pred 
+
+(92) The candidate is accepted and the trust region radius 𝜂 is grown of a factor 𝛽 𝑔𝑟 𝑜𝑤 > 1 if 𝜌 ≥ 𝜌 2, accepted and kept 24 if 𝜌 1 ≤ 𝜌 < 𝜌 2, accepted and shrunk with a factor 𝛽 𝑠ℎ𝑟𝑖𝑛𝑘 < 1 if 𝜌 0 ≤ 𝜌 < 𝜌 1, and rejected otherwise. Convergence is declared only after an accepted step. The candidate must satisfy 𝜒 < 𝜖 feas and at least one of the following two conditions must hold. The first is a small relative predicted improvement: 
+
+Δ𝐽 pred 
+
+𝐽 aug 
+
+≤ 𝜖 rel (93) The second is a small accepted step: 
+
+𝛿 = max 
+
+
+
+max  
+
+> 𝑘
+
+𝑆 −1
+
+> 𝑡
+
+  ¯𝒙 + 
+
+> 𝑘
+
+⊖𝐺,𝑙 ¯𝒙 𝑘 
+
+ 
+
+> 𝑞 exit
+
+, max  
+
+> 𝑘
+
+ˆ𝒖 ★𝑘 − ¯ˆ𝒖 𝑘 𝑞 exit 
+
+
+
+≤ 𝜖 abs (94) where 𝑞 exit is the norm used to measure the accepted step for convergence. The algorithm terminates without a convergence claim if the maximum iteration count is reached, or the trust region radius reaches its minimum value before a feasible accepted reference is obtained. The final output is a nominal trajectory on the manifold, a tangent covariance sequence, and an affine feedback policy. The complete algorithm is given in Algorithm 1. 
+
+## VI. Results 
+
+The numerical study uses the rendezvous scenario from [ 12 ]. Table 1 summarizes the boundary conditions and physical parameters whereas Table 2 gives the algorithm parameters used for both the deterministic initialization and the stochastic problem. The initial and final poses are listed in the equivalent MRP/position form for readability. The final time is fixed at 𝑡 𝑓 = 200 s . The algorithm is implemented in MATLAB using YALMIP [ 33 ], and each convex subproblem is solved with MOSEK [34]. 25 Algorithm 1 Intrinsic stochastic SCvx on 𝐺 = 𝑆𝐸 (3) × R𝑛 𝑐  
+
+> 1:
+
+Input: { ¯𝒙 𝑘 , ¯𝒖 𝑘 }𝑁 𝑘 =1, 𝝁 0, 𝝁 𝑓 , 𝑃 0, 𝑃 𝑓 , 𝜂 , 𝜂 𝑚𝑖𝑛 , 𝛽 𝑔𝑟 𝑜𝑤 , 𝛽 𝑠ℎ𝑟𝑖𝑛𝑘 , 𝜌 0, 𝜌 1, 𝜌 2, 𝑤 𝑣𝑐 , 𝑤 𝑛𝑐 , 𝜖 𝑓 𝑒𝑎𝑠 , 𝜖 𝑟 𝑒𝑙 , 𝑁 it  
+
+> 2:
+
+Output: { ¯𝒙 𝑘 , 𝒖 ff ,𝑘 , 𝑃 𝑘 , 𝐾 𝑘 }𝑁 𝑘 =1
+
+⊲ Initialization  
+
+> 3:
+
+Evaluate 𝐽 aug and 𝜒 on the initial reference using Eq. (86) and Eq. (89)  
+
+> 4:
+
+for 𝑖 = 1 to 𝑁 it do 
+
+⊲ Linearization and discretization  
+
+> 5:
+
+for 𝑘 = 1 to 𝑁 − 1 do  
+
+> 6:
+
+𝒅 𝑘 , 𝐴 𝑘 , 𝐵 − 
+
+> 𝑘
+
+, 𝐵 + 
+
+> 𝑘
+
+, Σ𝑤,𝑘 ← discretize about ( ¯𝒙 𝑘 , ¯𝒖 𝑘 ) using Eq. (53) and Eq. (52)  
+
+> 7:
+
+end for 
+
+⊲ Convex subproblem  
+
+> 8:
+
+Solve Eq. (84) in 𝛿 ˆ¯𝒙 , ˆ𝒖 , ˆ𝝂 , ˆ𝑃, ˆ𝑌 , 𝒔 
+
+⊲ Candidate solution  
+
+> 9:
+
+for 𝑘 = 1 to 𝑁 do  
+
+> 10:
+
+¯𝒙 + 
+
+> 𝑘
+
+= 𝛿 ¯𝒙 ★𝑘 ⊕𝐺,𝑙 ¯𝒙 𝑘 using Eq. (62)  
+
+> 11:
+
+𝑃 𝑘 = 𝑆 𝑃 ˆ𝑃 ★𝑘 𝑆 ⊤ 
+
+> 𝑃
+
+, 𝑌 𝑘 = ˆ𝑌 ★𝑘 𝑆 ⊤ 
+
+> 𝑃
+
+, 𝐾 𝑘 = 𝑌 𝑘 𝑃 −1 
+
+> 𝑘
+
+using Eq. (63)  
+
+> 12:
+
+end for  
+
+> 13:
+
+Evaluate 𝐽 ★
+
+> aug
+
+, 𝜒 ★, Δ𝐽 pred , Δ𝐽 act , 𝜌 using Eq. (86), Eq. (89), Eq. (91), and Eq. (92) 
+
+⊲ Trust region update  
+
+> 14:
+
+if 𝜌 ≥ 𝜌 0 then  
+
+> 15:
+
+¯𝒙 𝑘 ← ¯𝒙 + 
+
+> 𝑘
+
+, ¯𝒖 𝑘 ← 𝒖 ★ 
+
+> ff ,𝑘
+> 16:
+
+𝐽 aug ← 𝐽 ★
+
+> aug
+
+, 𝜒 ← 𝜒 ★ 
+
+> 17:
+
+Update 𝜂 using 𝜌 1, 𝜌 2 
+
+> 18:
+
+else  
+
+> 19:
+
+Shrink 𝜂  
+
+> 20:
+
+end if  
+
+> 21:
+
+if Eq. (90) and either Eq. (93) or Eq. (94) holds then  
+
+> 22:
+
+break  
+
+> 23:
+
+end if  
+
+> 24:
+
+end for 
+
+26 Table 1 Rendezvous boundary conditions and physical parameters. Parameter Value Description 
+
+𝜽 0 [0.34 , 0.41 , 0.37 ]⊤ Initial MRP attitude 
+
+𝝆 0 [10 , −40 , 2]⊤ m Initial relative position 
+
+𝝎 0, 𝒗 0 0 Initial angular velocity and relative velocity 
+
+𝝈 𝑓 [0, 0, −0.4142 ]⊤ Final MRP attitude 
+
+𝝆 𝑓 [0, 3.7, 0]⊤ m Final relative position 
+
+𝝎 𝑓 [0, 0, 0.001 ]⊤ rad /s Final angular velocity 
+
+𝒗 𝑓 0 Final relative velocity 
+
+𝑚 961 kg Chaser mass 
+
+𝐽 diag (2015 , 1897 , 1357 ) kg m 2 Chaser inertia 
+
+𝑛 0.001 rad /s Target mean motion 
+
+𝜏 max 8.0 N m Maximum torque magnitude 
+
+𝐹 max 14 .0 N Maximum force magnitude 27 Table 2 SCvx algorithm parameters used for deterministic initialization and stochastic optimization. Parameter Deterministic initialization Stochastic problem 
+
+𝜂 3.0×10 −2 2.5×10 −1
+
+𝜂 min 1.0×10 −10 1.0×10 −10 
+
+𝜂 max 2.0 1.0
+
+𝛽 grow 1.5 1.5
+
+𝛽 shrink 0.5 0.5
+
+𝜌 0 0.0 0.0
+
+𝜌 1 0.05 0.25 
+
+𝜌 2 0.35 0.70 
+
+𝜖 rel 1.0×10 −4 1.0×10 −3
+
+𝜖 feas 1.0×10 −3 1.0×10 −3
+
+𝑤 vc 1.0×10 4 1.0×10 4
+
+Constraint slack weights 10 3 path, 10 5 FOV 10 5 path/chance, 10 3 control The target attitude (assumed constant) used to construct 𝐶 𝑇 𝐻 is 𝜽 𝑇 𝐻 = −[ 1/3, 1/3, 1/3]⊤. The collision and sensor geometry are: 
+
+𝑟 KOZ = 8 m , 𝑟 𝑥 = 3 m , 𝑟 𝑦 = 22 m , 𝑟 𝑧 = 3 m (95) 
+
+𝒑 𝑇  
+
+> dock
+
+= [0, 0, 2.5]⊤, 𝒆 𝑇  
+
+> dock
+
+= [0, 0, 1]⊤, 𝛽 dock = 45 ◦ (96) 
+
+𝒑 𝐶  
+
+> cam
+
+= [1, 0, 0]⊤, 𝒆 𝐶  
+
+> cam
+
+= [1, 0, 0]⊤, 𝛽 FOV = 25 ◦ (97) The prescribed risk level is 0.05 for both path and control chance constraints. The initial and terminal covariance matrices are specified in the tangent state ordering of Eq. (36): 
+
+𝑃 0 = blkdiag 
+
+©«
+
+4×10 −6 𝐼 3
+
+| {z }
+
+> rad 2
+
+, 4×10 −4 𝐼 3
+
+| {z }
+
+> m2
+
+, 4×10 −8 𝐼 3
+
+| {z }
+
+> rad 2s−2
+
+, 4×10 −6 𝐼 3
+
+| {z }
+
+> m2s−2
+
+ª®®®¬
+
+(98) 28 𝑃 𝑓 = 12 𝑃 0 = blkdiag 
+
+©«
+
+2×10 −6 𝐼 3
+
+| {z }
+
+> rad 2
+
+, 2×10 −4 𝐼 3
+
+| {z }
+
+> m2
+
+, 2×10 −8 𝐼 3
+
+| {z }
+
+> rad 2s−2
+
+, 2×10 −6 𝐼 3
+
+| {z }
+
+> m2s−2
+
+ª®®®¬
+
+(99) The continuous-time diffusion matrix is diagonal in the same tangent coordinates, with units per square root normalized time: 
+
+𝐺 𝑐 = diag 
+
+©«
+
+2×10 −41⊤
+
+> 3
+
+| {z }
+
+> rad /√𝜏
+
+, 5×10 −41⊤
+
+> 3
+
+| {z }
+
+> m/√𝜏
+
+, 2×10 −51⊤
+
+> 3
+
+| {z }
+
+> rad s −1/√𝜏
+
+, 5×10 −41⊤
+
+> 3
+
+| {z }
+
+> m s −1/√𝜏
+
+ª®®®®¬
+
+(100) The initial reference for the stochastic solve is generated by running the same intrinsic SCvx loop summarized in Algorithm 1, but with the probabilistic components disabled: no covariance recursion is optimized, no feedback gains are synthesized, and no chance constraints are imposed. The resulting deterministic trajectory is then used to initialize the full intrinsic stochastic SCvx method with 𝑁 = 60 nodes. Monte Carlo validation uses 200 nonlinear stochastic trajectories sampled from the initial covariance and propagated on a finer grid. Two closed loop cases are compared: the covariance steering controller produced by the stochastic optimization, from here on referred to as 
+
+isSCvx , and a feedback linearization baseline tracking the deterministic reference trajectory, referred to as feedbacklin 
+
+and implemented as in [12]. Figure 1 shows the open loop propagated trajectories. All Monte Carlo samples are initialized from the prescribed initial covariance and then propagated with the same optimized feedforward input, so the spread visible in the plot is the direct consequence of the initial dispersion and process noise acting through the nonlinear SE(3) dynamics. The nominal trajectory reaches the docking region, but the samples are not actively corrected as they deviate from the reference. This makes the open loop plot useful as a baseline: it shows that nominal feasibility of the deterministic trajectory is not enough to characterize the behavior of the stochastic trajectory distribution. 29 Fig. 1 Open loop Monte Carlo rendezvous trajectories obtained by propagating the optimized feedforward trajectory through the nonlinear stochastic dynamics without feedback correction. 
+
+Figure 2 compares the two closed loop alternatives. Both controllers use feedback to keep the samples close to the reference approach, but they are designed with different objectives. The feedbacklin controller tracks the deterministic trajectory after it has been generated, whereas the isSCvx controller is synthesized together with the nominal trajectory and covariance sequence. Therefore, the 3D trajectories should be interpreted as a qualitative first indication of closed loop behavior: the important distinction is not only whether the samples remain visually close to the reference, but whether their dispersion is shaped consistently with the terminal covariance requirement and the chance constrained collision and sensor pointing metrics examined in the following plots. 30 (a) Intrinsic stochastic SCvx. (b) Feedback linearization. 
+
+Fig. 2 Closed loop Monte Carlo rendezvous trajectories for the intrinsic stochastic SCvx feedback policy and the feedback linearization controller. 
+
+Figure 3 shows the open loop propagated states (Fig. 3a), the collision constraints (Fig. 3b), and FOV constraint (Fig. 3c) of the optimized feedforward trajectory through the nonlinear stochastic dynamics. In the state-history plots, the SE(3) pose is displayed as equivalent MRP attitude 𝝈 and Hill-frame position 𝝆 𝐻 for readability; these plotted attitude components are not the tangent covariance coordinates. The feedforward solution reaches the desired docking corridor, but the Monte Carlo envelope spreads around the nominal path. This open loop behavior is a key reason for optimizing the covariance and feedback gain together with the nominal trajectory: constraint satisfaction must be achieved for the controlled distribution, not merely for the deterministic reference. The red dashed line in the collision and FOV constraint plots corresponds to the deterministic solution, which remains very close to the constraint boundaries. 31 0 100 
+
+00.5 1
+
+0 100 
+
+012
+
+0 100 
+
+-2 02
+
+0 100 
+
+0510 
+
+0 100 
+
+-40 -20 0
+
+0 100 
+
+0510 
+
+0 100 
+
+010 20 10 -3 
+
+0 100 
+
+-0.02 -0.01 0
+
+0 100 
+
+-0.02 -0.01 00.01 
+
+0 100 
+
+-0.1 -0.05 0
+
+0 100 
+
+00.2 0.4 
+
+0 100 
+
+-0.2 00.2 (a) State histories. -10 -5 0 5 10 15 20 25 30 35 
+
+Distance to Keep-Out Zone [m]     
+
+> -20 020 40 60 80 100 120 140 160 180
+> Angle to Docking Corridor [deg]
+> KOZ limit
+> Cone limit
+> reference
+> deterministic -2 02
+> 050 100
+> -5 05
+> 35 40 45 50 55
+
+(b) Collision avoidance constraints. 0 50 100 150 200 
+
+Time [s]  
+
+> 010 20 30 40 50 60 70
+> Line-of-sight angle [deg]
+> FOV limit
+> reference
+> deterministic
+
+(c) Camera field of view constraint. 
+
+Fig. 3 Open loop Monte Carlo propagation of the optimized feedforward trajectory. 
+
+Figure 4 reports the closed loop state histories (Fig. 4a) and the terminal covariance comparison (Fig. 4b) for the 
+
+isSCvx controller. As in Fig. 3a, the state histories display the pose using equivalent MRP attitude 𝝈 and Hill-frame position 𝝆 𝐻 , together with angular and translational velocity components. By contrast, the terminal covariance focus plot 32 is expressed in the local tangent error coordinates used by the optimizer: the attitude entries are principal rotation-vector errors 𝛿 𝜽 obtained from the SO(3) logarithm of the attitude error, not absolute MRP states. The state histories show the Monte Carlo samples and their mean, while the terminal covariance focus plot shows that the final dispersions are successfully steered to the desired values. 0 100             
+
+> 00.5 1
+> 0100
+> 012
+> 0100
+> -2 02
+> 0100
+> 0510
+> 0100
+> -40 -20 0
+> 0100
+> 0510
+> 0100
+> 010 20 10 -3
+> 0100
+> -0.02 -0.01 0
+> 0100
+> -20 -10 0
+> 10 -3
+> 0100
+> -0.1 -0.05 0
+> 0100
+> 00.2 0.4
+> 0100
+> -0.2 00.2
+
+(a) State histories. 170 175 180 185 190 195                                                         
+
+> t [s]
+> -0.3 -0.25 -0.2 -0.15 -0.1 -0.05 00.05
+> 170 175 180 185 190 195
+> t [s]
+> 00.1 0.2 0.3 0.4
+> 170 175 180 185 190 195
+> t [s]
+> -0.15 -0.1 -0.05 00.05
+> 170 175 180 185 190 195
+> t [s]
+> -3 -2.5 -2 -1.5 -1 -0.5 0
+> 170 175 180 185 190 195
+> t [s]
+> 00.2 0.4 0.6 0.8
+> 170 175 180 185 190 195
+> t [s]
+> 00.5 11.5
+> 170 175 180 185 190 195
+> t [s]
+> -0.05 00.05
+> 170 175 180 185 190 195
+> t [s]
+> -0.05 00.05
+> 170 175 180 185 190 195
+> t [s]
+> -0.05 00.05
+> 170 175 180 185 190 195
+> t [s]
+> -0.1 -0.05 00.05
+> 170 175 180 185 190 195
+> t [s]
+> -0.2 -0.15 -0.1 -0.05 00.05
+> 170 175 180 185 190 195
+> t [s]
+> -0.2 -0.15 -0.1 -0.05 00.05
+
+(b) Terminal covariance. 
+
+Fig. 4 Closed loop rendezvous state histories and terminal covariance comparison for the intrinsic stochastic SCvx feedback policy. 
+
+Figure 5 compares the control histories. The stochastic optimization includes chance constraints on both force and torque magnitudes, so the commanded feedback effort is regularized by the same risk allocation used in the trajectory design. The baseline controller uses the same physical actuator limits for evaluation, but applies them after the tracking command is computed rather than optimizing the feedback law with respect to probabilistic control bounds, resulting in the thrust magnitude being very close to the maximum value at the beginning and end of the rendezvous. 0 20 40 60 80 100 120 140 160 180 
+
+02468
+
+> ||  || [N m]
+
+MC mean 
+
+feed-forward 
+
+limit 
+
+0 20 40 60 80 100 120 140 160 180 
+
+Time [s] 
+
+0510 15 
+
+> ||F|| [N]
+
+MC mean 
+
+feed-forward 
+
+limit 
+
+(a) Intrinsic stochastic SCvx. 0 20 40 60 80 100 120 140 160 180 200 
+
+02468
+
+> ||  || [N m]
+
+MC mean 
+
+feed-forward 
+
+limit 
+
+0 20 40 60 80 100 120 140 160 180 200 
+
+Time [s] 
+
+0510 15 
+
+> ||F|| [N]
+
+MC mean 
+
+feed-forward 
+
+limit (b) Feedback linearization baseline. 
+
+Fig. 5 Closed loop control histories over the Monte Carlo trials. Force and torque magnitudes are shown against their admissible bounds. 
+
+33 Figures 6 and 7 show the coupled position attitude constraints that motivate a pose based stochastic formulation. Collision avoidance depends on the relative position with respect to the target geometry, while the field of view constraint depends simultaneously on relative position and chaser attitude. The intrinsic stochastic SCvx solution plans the nominal pose, tangent covariance, and feedback response jointly, so the Monte Carlo dispersion is shaped with respect to these nonlinear safety metrics. The comparison with feedback linearization illustrates that tracking a deterministic trajectory is not equivalent to solving the chance constrained trajectory design problem: even when the nominal path is feasible, the closed loop distribution can interact with the nonlinear constraints in a qualitatively different way. -5 0 5 10 15 20 25 30 35       
+
+> Distance to Keep-Out Zone [m]
+> -20 020 40 60 80 100 120 140 160 180
+> Angle to Docking Corridor [deg]
+> KOZ limit
+> Cone limit
+> mean
+> deterministic -2 02
+> 050 100
+> -4 -2 024
+> 35 40 45 50 55
+
+(a) Intrinsic stochastic SCvx. -5 0 5 10 15 20 25 30 35    
+
+> Distance to Keep-Out Zone [m]
+> -20 020 40 60 80 100 120 140 160 180
+> Angle to Docking Corridor [deg]
+> KOZ limit
+> Cone limit
+> deterministic
+> -2 02
+> 35 40 45 50 55
+
+(b) Feedback linearization baseline. 
+
+Fig. 6 Closed loop collision avoidance metrics. The plots show Monte Carlo clearance relative to the keep out and solar panel constraints during the approach. 0 50 100 150 200 
+
+> Time [s]
+> 0510 15 20 25 30
+> Line-of-sight angle [deg]  FOV limit
+> mean
+> deterministic
+
+(a) Intrinsic stochastic SCvx. 0 50 100 150 200  
+
+> Time [s]
+> 0510 15 20 25 30
+> Line-of-sight angle [deg]
+> FOV limit
+> deterministic
+
+(b) Feedback linearization baseline. 
+
+Fig. 7 Closed loop camera field of view angle over the Monte Carlo trials. The horizontal limit corresponds to the prescribed field of view half angle. 
+
+34 Finally, Figures 8 and 9 further compare the intrinsic SE(3) formulation with a stochastic trajectory optimization solution that represents attitude with modified Rodrigues parameters and position in Euclidean coordinates as in [12 ]. The two formulations use the same physical rendezvous scenario and safety constraints, but differ in how pose perturbations, covariance propagation, and feedback corrections are modeled. In both the collision avoidance and field of view metrics, the MRP-position solution remains noticeably closer to the constraint boundaries than the intrinsic SE(3) solution. This behavior is consistent with the fact that the MRP-position formulation treats attitude and position uncertainties as separate Euclidean components, whereas the intrinsic formulation propagates and controls the coupled pose uncertainty on SE(3): neglecting that coupling limits how effectively the optimizer can shape dispersion in the nonlinear position-attitude constraints. 
+
+Fig. 8 Collision avoidance comparison between the intrinsic SE(3) solution and the MRP-position solution for the rendezvous scenario. 
+
+35 0 20 40 60 80 100 120 140 160 180 200 
+
+> Time [s]
+> 0510 15 20 25 30
+> Line-of-sight angle [deg]
+> SE3 vs MRP FOV chance constraint
+> SE3 samples
+> SE3 mean
+> SE3 deterministic
+> MRP samples
+> MRP mean
+> MRP deterministic
+> FOV limit
+
+Fig. 9 Camera field of view comparison between the intrinsic SE(3) solution and the MRP-position solution for the rendezvous scenario. 
+
+## VII. Conclusion 
+
+This paper presented an intrinsic stochastic successive convexification method for chance constrained six degree of freedom trajectory optimization on SE(3). The central idea is to keep the accepted pose trajectory on the Matrix Lie Group while expressing stochastic perturbations, covariance propagation, feedback synthesis, and chance constraint transcriptions in local tangent coordinates of the Lie algebra se(3) using the concept of concentrated probability distributions. The rendezvous example showed how the method can handle coupled position-attitude safety constraints and probabilistic control magnitude limits. Compared with tracking a deterministic reference using a feedback linearization controller, the proposed approach directly optimizes the nominal trajectory, covariance sequence, and feedback gains. The resulting closed loop Monte Carlo simulations demonstrate improved satisfaction of the probabilistic path and control constraints, confirming that designing the trajectory and feedback law together is advantageous when stochastic 36 dispersion interacts with nonlinear pose-dependent constraints. Future work will extend the implementation to include higher fidelity relative dynamics, navigation uncertainty, and actuation errors. Another natural extension is to carry out the same intrinsic stochastic SCvx derivation using unit dual quaternions, which share the same se(3) tangent representation while providing an alternative algebraic realization of rigid body pose. 
+
+## References 
+
+[1] Petersen, C., Caverly, R. J., Phillips, S., and Weiss, A., “Safe and Constrained Rendezvous, Proximity Operations, and Docking,” 
+
+2023 American Control Conference (ACC) , 2023, pp. 3645–3661. https://doi.org/10.23919/ACC55779.2023.10155826. [2] Ito, T., and Sakai, S., “Optimal Powered Descent Guidance Under Thrust Pointing Constraint,” Journal of Guidance, Control, and Dynamics , Vol. 46, No. 4, 2023, pp. 695–708. https://doi.org/10.2514/1.G006727. [3] Chirikjian, G., Stochastic Models, Information Theory, and Lie Groups. Volume 2: Analytic Methods and Modern Applications ,Birkhauser, 2012. https://doi.org/10.1007/978-0-8176-4944-9. [4] Ridderhof, J., and Tsiotras, P., Uncertainty Quantication and Control During Mars Powered Descent and Landing using Covariance Steering , 2018. https://doi.org/10.2514/6.2018-0611. [5] Kamath, A. G., Assadian, F. F., and Robinson, S. K., “Multivariable Robust Control for the Powered Descent of a Multibody Lunar Landing System,” 2020. URL https://api.semanticscholar.org/CorpusID:243866968, AAS 20-682. [6] Skogestad, S., and Postlethwaite, I., Multivariable Feedback Control: Analysis and Design , 2 nd ed., John Wiley & Sons, Hoboken, NJ, 2005. [7] Okamoto, K., Goldshtein, M., and Tsiotras, P., “Optimal Covariance Control for Stochastic Systems Under Chance Constraints,” 
+
+IEEE Control Systems Letters , Vol. 2, No. 2, 2018, pp. 266–271. https://doi.org/10.1109/LCSYS.2018.2826038. [8] Lew, T., Bonalli, R., and Pavone, M., “Chance-Constrained Sequential Convex Programming for Robust Trajectory Optimization,” 
+
+Proceedings of the European Control Conference , 2020. https://doi.org/10.23919/ECC51009.2020.9143595. [9] Bakolas, E., “Optimal covariance control for discrete-time stochastic linear systems subject to constraints,” 2016 IEEE 55th Conference on Decision and Control (CDC) , 2016, pp. 1153–1158. https://doi.org/10.1109/CDC.2016.7798422. [10] Liu, F., Rapakoulias, G., and Tsiotras, P., “Optimal Covariance Steering for Discrete-Time Linear Stochastic Systems,” IEEE Transactions on Automatic Control , Vol. PP, 2024, pp. 1–16. https://doi.org/10.1109/TAC.2024.3472788. [11] Ridderhof, J., Okamoto, K., and Tsiotras, P., “Nonlinear Uncertainty Control with Iterative Covariance Steering,” 2019 IEEE 58th Conference on Decision and Control (CDC) , 2019, pp. 3484–3490. https://doi.org/10.1109/CDC40024.2019.9029993. 
+
+37 [12] Zhang, Y., Cheng, M., Nan, B., and Li, S., “Stochastic Trajectory Optimization for 6-DOF Spacecraft Autonomous Rendezvous and Docking with Nonlinear Chance Constraints,” Acta Astronautica , Vol. 208, 2023, pp. 62–73. https: //doi.org/10.1016/j.actaastro.2023.04.004. [13] Takubo, Y., and D’Amico, S., “Multiplicative Approach to Constrained Stochastic Attitude Control with Application to Rendezvous and Proximity Operations,” AAS/AIAA Astrodynamics Specialist Conference , 2024. URL https://api.semanticscholar. org/CorpusID:271856199. [14] Malyuta, D., Reynolds, T. P., Szmuk, M., Lew, T., Bonalli, R., Pavone, M., and Acikmese, B., “Convex Optimization for Trajectory Generation: A Tutorial on Generating Dynamically Feasible Trajectories Reliably and Efficiently,” IEEE Control Systems Magazine , Vol. 42, No. 5, 2022, pp. 40–113. https://doi.org/10.1109/MCS.2022.3187542. [15] Mao, Y., Szmuk, M., and Acikmese, B., “Successive Convexification: A Superlinearly Convergent Algorithm for Non-convex Optimal Control Problems,” arXiv preprint arXiv:1804.06539 , 2018. URL https://arxiv.org/abs/1804.06539. [16] Szmuk, M., and Acikmese, B., “Successive Convexification for Real-Time 6-DoF Powered Descent Guidance with State-Triggered Constraints,” AIAA SciTech Forum , 2018. https://doi.org/10.2514/6.2018-0920. [17] Reynolds, T. P., Szmuk, M., Malyuta, D., Mesbahi, M., Acikmese, B., and Carson, J. M., “Dual Quaternion-Based Powered Descent Guidance with State-Triggered Constraints,” Journal of Guidance, Control, and Dynamics , Vol. 43, No. 8, 2020, pp. 1584–1599. https://doi.org/10.2514/1.G004536. [18] Kraisler, S., Mesbahi, M., and Acikmese, B., “Intrinsic Successive Convexification: Trajectory Optimization on Smooth Manifolds,” IEEE Control Systems Letters , Vol. 9, 2025, pp. 408–413. https://doi.org/10.1109/LCSYS.2025.3571671. [19] Hall, B., Lie Groups, Lie Algebras, and Representations: An Elementary Introduction , Graduate Texts in Mathematics, Springer, New York, NY, 2003. https://doi.org/10.1007/978-3-319-13467-3. [20] Sola, J., Deray, J., and Atchuthan, D., “A micro Lie theory for state estimation in robotics,” arXiv preprint arXiv:1812.01537 ,2018. https://doi.org/10.48550/arXiv.1812.01537. [21] Mardia, K. V., and Jupp, P. E., Directional Statistics , Wiley Series in Probability and Statistics, Wiley, New York, NY, 1999. https://doi.org/10.1002/9780470316979. [22] Wang, Y., and Chirikjian, G. S., “Error Propagation on the Euclidean Group with Applications to Manipulator Kinematics,” 
+
+IEEE Transactions on Robotics , Vol. 22, No. 4, 2006, pp. 591–602. https://doi.org/10.1109/TRO.2006.878978. [23] Barfoot, T. D., and Furgale, P. T., “Associating Uncertainty With Three-Dimensional Poses for Use in Estimation Problems,” 
+
+IEEE Transactions on Robotics , Vol. 30, No. 3, 2014, pp. 679–693. https://doi.org/10.1109/TRO.2014.2298059. [24] Applebaum, D., and Heyer, H., Probability on Compact Lie Groups , Probability Theory and Stochastic Modelling, Springer International Publishing, New York, NY, 2014. 
+
+38 [25] Miolane, N., “Defining a mean on Lie group,” Master’s thesis, Imperial College London, Sep 2013. URL https://inria.hal. science/hal-00938320. [26] Pennec, X., “Intrinsic Statistics on Riemannian Manifolds: Basic Tools for Geometric Measurements,” Journal of Mathematical Imaging and Vision , Vol. 25, 2006, pp. 127–154. https://doi.org/10.1007/s10851-006-6228-4. [27] Clohessy, W. H., and Wiltshire, R. S., “Terminal Guidance System for Satellite Rendezvous,” Journal of the Aerospace Sciences ,Vol. 27, No. 9, 1960, pp. 653–658. https://doi.org/10.2514/8.8704. [28] Kumagai, N., and Oguri, K., “Robust Cislunar Low-Thrust Trajectory Optimization Under Uncertainties via Sequential Covariance Steering,” Journal of Guidance, Control, and Dynamics , Vol. 48, No. 12, 2025, pp. 2725–2743. https://doi.org/10. 2514/1.G009092. [29] Pilipovsky, J., and Tsiotras, P., “Covariance Steering With Optimal Risk Allocation,” IEEE Transactions on Aerospace and Electronic Systems , Vol. 57, No. 6, 2021, pp. 3719–3733. https://doi.org/10.1109/TAES.2021.3086956. [30] Liu, X., and Lu, P., “Solving Nonconvex Optimal Control Problems by Convex Optimization,” Journal of Guidance, Control, and Dynamics , Vol. 37, No. 3, 2014, pp. 750–765. https://doi.org/10.2514/1.62110. [31] Ridderhof, J., Pilipovsky, J., and Tsiotras, P., “Chance-Constrained Covariance Control for Low-Thrust Minimum-Fuel Trajectory Optimization,” AAS/AIAA Astrodynamics Specialist Conference , 2021. Paper AAS 20-618. [32] Benedikter, B., Zavoli, A., Wang, Z., Pizzurro, S., and Cavallini, E., “Convex Approach to Covariance Control with Application to Stochastic Low-Thrust Trajectory Optimization,” Journal of Guidance, Control, and Dynamics , Vol. 45, No. 11, 2022, pp. 2061–2075. https://doi.org/10.2514/1.G006806. [33] Löfberg, J., “YALMIP: A Toolbox for Modeling and Optimization in MATLAB,” 2004 IEEE International Conference on Robotics and Automation , Institute of Electrical and Electronics Engineers, New York, 2004, pp. 284–289. https: //doi.org/10.1109/CACSD.2004.1393890. [34] MOSEK ApS, The MOSEK Optimization Toolbox for MATLAB Manual. Version 10.2 , 2023. URL https://docs.mosek.com/ latest/toolbox/index.html. 
+
+39
