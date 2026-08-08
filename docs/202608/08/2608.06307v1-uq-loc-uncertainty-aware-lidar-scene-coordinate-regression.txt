@@ -1,0 +1,395 @@
+Title: UQ-Loc: Uncertainty-Aware LiDAR Scene Coordinate Regression
+
+URL Source: https://arxiv.org/pdf/2608.06307v1
+
+Published Time: Fri, 07 Aug 2026 01:16:25 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+# UQ-Loc: Uncertainty-Aware LiDAR Scene Coordinate Regression 
+
+Jacek Komorowski 1[0000 −0001 −6906 −4318] 
+
+Warsaw University of Technology, Warsaw, Poland 
+
+jacek.komorowski@pw.edu.pl 
+
+Abstract. LiDAR-based Scene Coordinate Regression (SCR) maps point clouds directly to 3D scene coordinates, enabling precise 6-DoF localisa-tion without explicit map retrieval. However, existing methods produce deterministic predictions, discarding aleatoric uncertainty that could im-prove robustness and downstream decision-making. We present UQ-Loc ,which extends the LightLoc architecture [11] with an anisotropic Gaus-sian covariance head that predicts a full 3×3 positive-definite covariance matrix per voxel. Training uses a Negative Log-Likelihood (NLL) loss augmented with a kNN-based spatial smoothness regulariser, while infer-ence employs a modified SC2-PCR solver [4] with uncertainty-weighted seed scoring and a Mahalanobis-distance inlier test. We adopt Expected Calibration Error (ECE) as a principled metric for evaluating the qual-ity of the predicted uncertainty. Experiments demonstrate that UQ-Loc achieves consistent improvement in 6-DoF localization accuracy while producing well-calibrated covariances. 
+
+Keywords: LiDAR localisation · Scene coordinate regression · Uncer-tainty estimation 
+
+# 1 Introduction 
+
+Accurate and reliable 6-DoF localisation is fundamental to autonomous driving and mobile robotics. LiDAR sensors provide geometrically rich, weather-robust point clouds that complement or replace camera-based systems. Scene Coordi-nate Regression (SCR), the direct mapping of sensor observations to 3D scene co-ordinates, has demonstrated strong performance in camera-based localisation [2] and is now extending to the LiDAR domain [11]. In SCR, a network maps each voxel in an input scan to its corresponding world-coordinate location, and the resulting point-to-world correspondences are passed to a RANSAC-style solver to recover the 6-DoF pose. A critical limitation of current LiDAR SCR methods is that they produce purely deterministic predictions: each voxel yields a single point estimate ˆci ∈ R3, with no indication of how much that estimate should be trusted. This discards valuable information. Uncertain regions, such as glass building façades, vegetation, dynamic objects, and structural boundaries, gen-erate poor correspondences that degrade RANSAC performance when treated identically to high-quality ones. More broadly, the inability to communicate un-certainty prevents integration with probabilistic downstream modules such as arXiv:2608.06307v1 [cs.CV] 6 Aug 2026 2 J. Komorowski 
+
+factor-graph SLAM backends, occupancy estimation, and failure detection sys-tems. We address these limitations by presenting UQ-Loc , which augments Light-Loc [11] with full anisotropic per-voxel uncertainty. The main contributions of this work are as follows: 1. Anisotropic uncertainty head. We extend the LightLoc regression head with a lightweight branch that regresses a raw six-parameter Cholesky pa-rameterisation per voxel. We replace the original L1 regression loss with a multivariate Gaussian Negative Log-Likelihood (NLL) that jointly opti-mises coordinate accuracy and covariance calibration, augmented by a kNN smoothness regulariser. 2. Uncertainty-aware SC2-PCR solver. We modify the SC2-PCR solver to modulate spectral seed scores by down-weighting uncertain correspondences, and replace the fixed Euclidean inlier threshold with a Mahalanobis-distance criterion. 
+
+# 2 Related Work 
+
+LiDAR Place Recognition and Localisation. Metric LiDAR localisation is commonly achieved by matching local features or iterative closest-point align-ment against a pre-built map, but such methods are sensitive to initialisation and map density. Descriptor-based retrieval methods, including PointNetVLAD [16] and MinkLoc3D [10], aggregate global descriptors for coarse place retrieval but do not directly yield metric 6-DoF poses. Absolute Pose Regression (APR) meth-ods address this by training a network to directly regress the 6-DoF pose from a sensor observation [9], but they generalise poorly to unseen viewpoints and typically yield lower accuracy than geometry-based alternatives due to the diffi-culty of encoding absolute pose as a learnable output. Scene Coordinate Regres-sion (SCR) methods take a different approach: rather than regressing the pose directly, the network maps each point in the input scan to its corresponding lo-cation in a pre-defined world coordinate frame, and the resulting point-to-world correspondences are passed to a robust solver to recover the pose. SCR-based methods [11, 13] thus preserve geometric structure in the intermediate represen-tation, leading to higher accuracy than APR. We review LiDAR SCR methods below. 
+
+Scene Coordinate Regression (SCR). SCR was introduced by Shotton et al. [15] for RGB-D cameras. Subsequent deep learning formulations substantially improved scalability and accuracy, notably DSAC* [2] and SGLoc [13] extended the SCR paradigm to outdoor LiDAR by decoupling pose estimation into a point cloud correspondence regression stage followed by RANSAC-based pose recovery, encoding scene geometry implicitly in the network parameters and achieving sub-metre accuracy on large-scale outdoor benchmarks. LightLoc [11] retains the correspondence-regression paradigm while reducing training time through UQ-Loc: Uncertainty-Aware LiDAR SCR 3
+
+a classification-conditioned regression head and sparse convolutional features. None of these methods model per-point predictive covariance; UQ-Loc addresses this gap by extending LightLoc with full anisotropic uncertainty estimation 
+
+Uncertainty Estimation in Localisation. Kendall and Cipolla [7] estab-lished heteroscedastic aleatoric uncertainty for camera pose regression; their scalar output cannot capture directional anisotropy. Bayesian approaches quan-tify epistemic uncertainty but are computationally prohibitive [7]. In visual SCR, Brachmann and Rother [1] predicted per-pixel inlier probabilities to guide hy-pothesis selection. This is a related but weaker form of per-point uncertainty than the full covariance we propose. In 3D object detection, Cholesky-parameterised covariances have been used to ensure positive-definiteness without projection steps [6]. We adopt the same parameterisation for 3D scene coordinates. 
+
+Spectral Matching and RANSAC Solvers. SC2-PCR [4] estimates rigid transformations by building a compatibility graph over point correspondences and extracting the leading eigenvector via power iteration to score each cor-respondence by its geometric consistency with the full set; seeds for local hy-pothesis generation are then selected by non-maximum suppression on these spectral scores. This formulation is particularly well-suited to the SCR setting, where the number of correspondences is large (one per voxel) and the inlier ratio can be low in challenging scenes, conditions under which standard RANSAC requires prohibitively many iterations to find a good hypothesis. We therefore build on SC2-PCR and extend it with uncertainty-weighted seed scoring and a Mahalanobis-distance inlier test. 
+
+# 3 Method 
+
+3.1 UQ-Loc Overview and Base Architecture 
+
+UQ-Loc extends LightLoc [11] with three components that add principled un-certainty estimation while leaving the coordinate regression backbone intact: 
+
+(i) an anisotropic uncertainty head that predicts a full 3×3 covariance Σi per voxel (Section 3.2); (ii) a Negative Log-Likelihood training loss with spatial smoothness that jointly optimises coordinate accuracy and covariance calibra-tion (Section 3.3); and (iii) a modified SC2-PCR solver that uses predicted covariances for uncertainty-weighted seed scoring and Mahalanobis inlier testing (Section 3.4). The base architecture operates as follows. Given a LiDAR scan, we extract 
+
+N voxels and produce a 512-dimensional feature vector fi ∈ R512 per voxel via a frozen sparse 3D CNN backbone (MinkUNet-style [5]). A classification head assigns each voxel to one of K place clusters; the resulting cluster-conditioned features are passed to the regression head, which in the original LightLoc predicts 4 J. Komorowski 
+
+a single world coordinate per voxel: 
+
+ˆci = Reg_Head (fi) ∈ R3, LL1 =
+
+> N
+
+X
+
+> i=1
+
+∥ˆci − c∗ 
+
+> i
+
+∥1, (1) where c∗ 
+
+> i
+
+is the ground-truth world coordinate. The correspondences {(pi, ˆci)},sensor-frame point pi paired with predicted world coordinate ˆci, are passed to the SC2-PCR solver to recover the 6-DoF pose T ∈ SE (3) . UQ-Loc augments this pipeline by additionally predicting Σi per voxel, so the regression head now returns a tuple (ˆ ci, vi), where vi ∈ R6 parameterises the covariance Σi via a Cholesky factorisation (§3.2). The modified components are described in the following subsections. 
+
+3.2 Anisotropic Uncertainty Head 
+
+We add an UncertaintyHead branch inside the existing regression head, sharing the 512-dimensional residual-block features with the coordinate branch. Three fully-connected layers (512 → 256 → 128 → 6) output a compact 6-dimensional vector vi ∈ R6 that parameterises a lower-triangular Cholesky factor: 
+
+Li =
+
+
+
+softplus (v1) 0 0
+
+v2 softplus (v3) 0
+
+v4 v5 softplus (v6)
+
+ , Σi = LiL⊤ 
+
+> i
+
+∈ R3×3. (2) Applying softplus to the three diagonal entries guarantees strict positivity (Lkk > 0) and hence Σi ≻ 0 by construction. A 3×3 lower-triangular matrix has exactly 6 free parameters (3 diagonal + 3 sub-diagonal), matching the degrees of freedom of a general 3×3 symmetric positive-definite matrix. Compared with simpler alternatives, the scalar isotropic variant ( σ2 
+
+> i
+
+I, 1 DOF) cannot represent directional anisotropy; the axis-aligned diagonal variant (3 DOF) cannot capture correlations between coordinate axes. The full Cholesky parameterisation (6 DOF) subsumes both and can represent elongated ellip-soidal uncertainty aligned with scene structure. For example, uncertainty along the LiDAR ray direction at range discontinuities or planar surfaces. The regression head returns a tuple (ˆ ci, vi); the coordinate branch is struc-turally unchanged, so the modification introduces no additional computational cost at inference when uncertainty estimates are not required. 
+
+3.3 NLL Training Loss with Spatial Smoothness NLL Loss. We model scene coordinate prediction as a heteroscedastic Gaussian: the true world coordinate c∗ 
+
+> i
+
+is drawn from c∗ 
+
+> i
+
+∼ N (ˆ ci, Σi), where ˆci is the predicted mean and Σi ≻ 0 is the predicted covariance. Under this model, the probability of observing c∗ 
+
+> i
+
+is 
+
+p(c∗ 
+
+> i
+
+) = 1(2 π)3/2 det( Σi)1/2 exp  − 12 (c∗ 
+
+> i
+
+− ˆci)⊤Σ−1 
+
+> i
+
+(c∗ 
+
+> i
+
+− ˆci) .UQ-Loc: Uncertainty-Aware LiDAR SCR 5
+
+Maximising the log-likelihood over the training set is equivalent to minimising the negative log-likelihood (NLL) [7], which for a single voxel gives: 
+
+ℓi = 12
+
+∥L−1 
+
+> i
+
+(c∗ 
+
+> i
+
+− ˆci)∥2
+
+| {z }
+
+> Mahalanobis term
+
++ log det( Σi)
+
+| {z }
+
+> log-det penalty
+
+ = 12
+
+"
+
+∥L−1 
+
+> i
+
+(c∗ 
+
+> i
+
+− ˆci)∥2 + 2 
+
+> 3
+
+X
+
+> k=1
+
+log( Li)kk 
+
+#
+
+,
+
+(3) where we drop the constant 32 log(2 π) as it does not affect optimisation, and the simplification log det( Σi) = 2 P 
+
+> k
+
+log( Li)kk follows from det( Σi) = det( LiL⊤ 
+
+> i
+
+) = det( Li)2 = Q 
+
+> k
+
+L2
+
+> kk
+
+.The two terms play opposing roles and jointly prevent degenerate solutions. The Mahalanobis term ∥L−1 
+
+> i
+
+(c∗ 
+
+> i
+
+− ˆci)∥2 is the squared prediction error nor-malised by the predicted uncertainty: a voxel with large covariance Σi con-tributes a small residual even if the raw error ∥c∗ 
+
+> i
+
+− ˆci∥ is large. This gives the network an incentive to assign high uncertainty to hard-to-predict voxels (e.g. dynamic objects, glass) — effectively down-weighting their contribution to the gradient signal, a property Kendall and Gal [8] term learned loss attenuation .The log-det penalty log det( Σi) counteracts this: inflating Σi to minimise the Mahalanobis term increases the log-det, penalising the network for predicting uniformly large covariances. Compared to the scalar 1-D formulation of [7], our loss operates on a full 3×3 covariance, capturing anisotropic uncertainty (e.g. larger variance along the LiDAR ray direction than perpendicular to it). The Mahalanobis term ∥L−1 
+
+> i
+
+(c∗ 
+
+> i
+
+−ˆci)∥2 is computed via a triangular forward-substitution solve, which is numerically stable and avoids forming Σ−1 
+
+> i
+
+explicitly. 
+
+Spatial Smoothness Regulariser. Raw NLL optimisation can produce spa-tially noisy covariance fields. Neighbouring voxels observing the same surface should carry similar uncertainty. We penalise the Frobenius-norm difference be-tween adjacent covariances: 
+
+Lsmooth = λ X
+
+> i
+
+X 
+
+> j∈N k(i)
+
+∥Σi − Σj ∥2 
+
+> F
+
+, (4) where Nk(i) is the set of k=8 nearest neighbours of voxel i in Euclidean space. To reduce the complexity, the sum is capped at 2048 randomly sampled pairs per batch. We set λ=0 .001 ; the total loss is L = LNLL + Lsmooth .The Relative Scene Difficulty (RSD) hard-negative mining from LightLoc [11], which samples scans whose median loss exceeds the running 75th-percentile threshold, is preserved, with the per-scan median NLL replacing the median L1 error. 
+
+3.4 Uncertainty-Aware SC2-PCR Solver Uncertainty-Weighted Seed Scoring. SC2-PCR assigns a spectral compat-ibility score si to each correspondence. High-uncertainty voxels are less reliable 6 J. Komorowski 
+
+as RANSAC seeds; we modulate the score by an uncertainty-volume penalty: 
+
+˜si = si
+
+1 + α · det( Σi)1/3 , (5) where det( Σi)1/3 is the geometric mean of the three principal variances, and 
+
+α=1 in all experiments. 
+
+Mahalanobis Inlier Test. The standard Euclidean inlier criterion ∥Tp i −
+
+ˆci∥2 < τ treats all correspondences symmetrically. We replace it with an anisotropic test: 
+
+d2 
+
+> M
+
+(i, T) = ( Tp i − ˆci)⊤Σ−1 
+
+> i
+
+(Tp i − ˆci) < τ. (6) The threshold τ = 4 , chosen experimentally, is approximately the 74th percentile of χ23. Under perfect calibration, 74% of inliers at the true pose will satisfy the test. Computationally, Σ−1 
+
+> i
+
+is never formed explicitly; instead we solve Liz =(Tp i − ˆci) via solve_triangular and compute d2 
+
+> M
+
+= ∥z∥2. The solve is applied in a single batched GPU call across all seeds and correspondences simultaneously. 
+
+# 4 Experiments 
+
+4.1 Datasets and Metrics 
+
+We evaluate UQ-Loc on two large-scale outdoor LiDAR localisation benchmarks: Oxford RobotCar and NCLT. 
+
+Oxford RobotCar [14] is collected by sensors mounted on an Nissan LEAF platform, designed for urban scene localisation tasks. Each trajectory spans ap-proximately 10 km, covering an area of about 2 km 2. Point clouds are generated by dual Velodyne HDL-32E LiDAR sensors, with ground-truth poses provided by a GPS/INS system. The dataset is captured under varied weather and traffic conditions, making it highly suitable for comprehensive method evaluation. We employ QEOxford , a quality-enhanced version of the Oxford RobotCar dataset. It minimises GPS/INS errors through trajectory alignment techniques, yielding more accurate ground-truth poses that have been shown to benefit localisation training [13]. We use the same training and test sequences as LightLoc [11] with a voxel size of 0.25 m and 25 place clusters. 
+
+NCLT [3] is collected by sensors mounted on a Segway robotic platform on the University of Michigan’s North Campus. Each trajectory spans approxi-mately 5.5 km and covers an area of about 0.45 km 2. Point clouds are acquired by a Velodyne HDL-32E LiDAR sensor, with ground-truth poses provided by a SLAM-based post-processing pipeline. The dataset consists of 27 sessions recorded approximately bi-weekly over 15 months, encompassing a diverse range of conditions including seasonal changes, varying illumination, and both indoor and outdoor environments, making it particularly challenging for long-term lo-calisation. We use the same train and test sequences as LightLoc [11] with a voxel size of 0.3 m and 100 place clusters. UQ-Loc: Uncertainty-Aware LiDAR SCR 7
+
+Metrics. We report mean and median translation error (m), mean and me-dian rotation error (°), recall at (0 .5 m, 1◦), (1 m, 2◦), and (2 m, 5◦) thresholds, and Expected Calibration Error (ECE) calculated using formula 7. 
+
+4.2 Implementation Details 
+
+The MinkUNet backbone and classification heads are frozen from LightLoc pre-training. The UncertaintyHead uses ReLU activations in fc_chol1/2 and no ac-tivation in fc_chol3 before the chol_to_matrix mapping. Training uses Adam (lr =10 −3, cosine decay, 250 epochs). Smoothness parameters: k=8 , cap = 2048, 
+
+λ=0 .001 . SC2-PCR parameters: α=1 .0, χ2 threshold 4. All experiments run on a single NVIDIA A100 GPU. 
+
+4.3 Comparison with State of the Art 
+
+Table 1 compares UQ-Loc against our LightLoc reproduction on both the QEOx-ford and NCLT datasets. UQ-Loc consistently outperforms the baseline across all metrics. On QEOxford, the mean translation error is reduced by 16% and the mean rotation error by 35%. The median translation and rotation errors decrease by 24% and 33%, respectively. The improvement is most pronounced in the recall metric at the strict (0 .5 m, 1◦) threshold. UQ-Loc achieves 49.5% recall compared to 26.5% for LightLoc, a relative gain of 87%, confirming that it recovers a substantially larger fraction of high-precision poses. On NCLT, UQ-Loc achieves similar gains: reduction of mean translation and rotation errors by 18% and 27%; median translation and rotation errors by 43% and 19%, respectively.                                            
+
+> Table 1. Comparison with the baseline LightLoc method. We report the mean and median translation (TE) and rotation (RE) errors, alongside recall at various transla-tion and rotation error thresholds. ‡denotes our reproduction using weights available on GitHub. Method Mean ↓Median ↓Recall@ threshold ↑
+> TE (m) RE (°) TE (m) RE (°) 0.5m,1° 1m,2° 2m,5° QEOxford dataset (average over four test sequences) LightLoc ‡[11] 0.81 1.08 0.59 0.90 0.265 0.819 0.965
+> UQ-Loc (ours) 0.68 0.70 0.45 0.60 0.495 0.892 0.976
+> NCLT dataset (average over four test sequences) LightLoc ‡[11] 1.65 2.85 0.58 1.91 0.095 0.467 0.883
+> UQ-Loc (ours) 1.35 2.09 0.33 1.55 0.207 0.636 0.943
+
+Table 2 compares UQ-Loc against published APR and SCR baselines on the QEOxford dataset. UQ-Loc achieves the best translation and rotation accuracy 8 J. Komorowski 
+
+across all test sequences. Averaged over all sequences, it reduces the mean trans-lation estimation error by 16% (0.68 m versus 0.81 m) and the mean rotation estimation error by 20% ( 0.70 ◦ versus 0.87 ◦) compared to the best previously published results. The gain is consistent across all sequences, confirming that the Mahalanobis inlier test in the modified SC2-PCR solver generalises beyond a single recording condition. 
+
+Table 2. Comparison with SOTA on the test sequences from the QEOxford dataset. We report the mean translation (TE) and rotation (RE) errors. Best results in bold , second best underlined. † denotes results from the LightLoc paper [11], ‡ our reproduction using weights available on GitHub. Method Mean TE (m)/RE (°) 01-15-13-06 01-17-13-26 01-17-14-03 01-18-14-14 Average APR  PointLoc † [17] 10.75/2.36 11.07/2.21 11.53/1.92 9.82/2.07 10.79/2.14 PoseMinkLoc † [18] 6.77/1.84 8.84/1.84 8.08/1.69 6.56/2.06 7.56/1.86 PoseSOE † [18] 4.17/1.76 6.16/1.81 5.42/1.87 4.16/1.70 4.98/1.79 DiffLoc † [12] 2.03/1.04 1.78/0.79 2.05/0.83 1.56/0.83 1.86/0.87 SCR  SGLoc † [13] 1.79/1.67 1.81/1.76 1.33/1.59 1.19/1.39 1.53/1.60 LightLoc † [11] 0.82/1.12 0.85/1.07 0.81/1.11 0.82/1.16 0.83/1.12 LightLoc ‡ [11] 0.84/1.07 0.87/1.06 0.71/1.06 0.84/1.13 0.81/1.08 
+
+UQ-Loc (ours) 0.71 /0.70 0.71 /0.66 0.56 /0.66 0.72 /0.77 0.68 /0.70 
+
+Figure 1 visualizes the predicted trajectory on a QEOxford test sequence, with each scan colour-coded by localisation outcome: green indicates a correctly localised scan (translation error ≤ 1 m and rotation error ≤ 2◦), red indicates a failure. UQ-Loc correctly localises 89.1% of scans at this threshold. The failures are clustered at a small number of problematic regions. 
+
+4.4 Calibration Analysis ECE Metric for 3D Gaussian Predictions. For a correctly calibrated het-eroscedastic Gaussian, the squared Mahalanobis residual r2 
+
+> i
+
+= ( c∗ 
+
+> i
+
+−ˆci)⊤Σ−1 
+
+> i
+
+(c∗ 
+
+> i
+
+−
+
+ˆci) follows a χ23 distribution. We define the Expected Calibration Error as the mean absolute deviation between nominal and empirical coverage over a grid of confidence levels P = {0.05 , 0.10 , . . . , 0.95 }:ECE = 1
+
+|P |
+
+X
+
+> p∈P
+
+ˆE(p) − p , ˆE(p) = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+1
+
+h
+
+r2 
+
+> i
+
+≤ F −1
+
+> χ23
+
+(p)
+
+i
+
+, (7) where F −1
+
+> χ23
+
+(p) is the p-quantile of χ23. ˆE(p) is the empirical coverage at nominal confidence level p — the observed fraction of voxels whose squared Mahalanobis residual falls within the p-th quantile of χ23. A perfectly calibrated model has UQ-Loc: Uncertainty-Aware LiDAR SCR 9        
+
+> Fig. 1. Predicted trajectory for the 2019-01-17 QEOxford test sequence. Green dots indicate correctly localised scans (translation error ≤1m and rotation error ≤2◦); red dots indicate failures.
+
+ECE = 0; empirical coverage below the diagonal indicates overconfidence, above it underconfidence. 
+
+Results. Figure 2 shows the reliability diagram for UQ-Loc on the test se-quences from the QEOxford and NCLT datasets. The empirical coverage curve closely tracks the perfect-calibration diagonal, with a slight deviation indicat-ing mild overconfidence. This is consistent with the mean squared Mahalanobis residual during training exceeding 3 (the expected value of χ23 under perfect cal-ibration). Nevertheless, deviations remain small (ECE equal to 0.014 on QEOx-ford and 0.01 on NCLT dataset), confirming that the NLL loss with spatial smoothness produces well-calibrated covariances. Figure 3 visualises the predicted uncertainty det( Σi)1/3 for two exemplary scans colour-coded from blue (low) to red (high). Oxford RobotCar scans are inherently sparse which limits detailed semantic interpretation of the uncertainty patterns. Nevertheless, isolated points at the scene periphery and at greater range from the vehicle trajectory tend to be assigned higher uncertainty (redO, which is the expected behaviour for a well-calibrated model. And the majority of in-range scene points are confidently predicted (blue). 
+
+4.5 Ablation Study 
+
+Table 3 isolates the contribution of each component. The NLL loss with the Eu-clidean solver (B) degrades mean translation error relative to the L1 baseline (A) 10 J. Komorowski 
+
+Fig. 2. Reliability diagrams show empirical coverage ˆE(p) vs. nominal confidence p
+
+on the QEOxford (left) and NCLR (right) test sets. The diagonal (dashed) represents perfect calibration. 
+
+Fig. 3. Per-voxel uncertainty magnitude coloured blue (low) to red (high) on a scan from QEOxford. UQ-Loc: Uncertainty-Aware LiDAR SCR 11 
+
+(0.81 m vs. 0.63 m), confirming that NLL-trained covariances provide no bene-fit without a compatible inlier criterion. Switching to the Mahalanobis inlier test (C) recovers accuracy and improves recall to 48.0%, demonstrating that the two components are coupled. Adding the spatial smoothness regulariser (D, full model) yields the best results across all metrics, with recall at the strict 
+
+(0 .5 m, 1◦) threshold reaching 49.5%, confirming that smoother covariance fields further strengthen the Mahalanobis inlier scoring. The lower mean TE of A (0.63 m vs. 0.68 m) reflects a distribution shift: NLL training reduces large-error tails, improving median and recall at the cost of a modest increase in the bulk mean.                                            
+
+> Table 3. Ablation study on QEOxford dataset. All models trained with identical hyperparameters; only the loss, RANSAC inlier test, and smoothness weight ( λ) vary. TE/RE are mean translation/rotation errors. Cfg Loss λRANSAC Mean ↓Median ↓Recall ↑
+> TE (m) RE (°) TE (m) RE (°) 0.5m,1° AL1 —Euclidean 0.63 0.83 0.46 0.72 0.428 BNLL 0Euclidean 0.81 0.84 0.49 0.72 0.404 CNLL 0Mahalanobis 0.76 0.72 0.46 0.61 0.480
+> DNLL 0.001 Mahalanobis 0.68 0.70 0.45 0.60 0.495
+
+# 5 Conclusion 
+
+We have presented UQ-Loc, which extends LiDAR Scene Coordinate Regres-sion with per-voxel anisotropic Gaussian covariance estimation. The Cholesky-parameterised uncertainty head, NLL training loss with spatial smoothness, and Mahalanobis RANSAC solver each contribute incrementally to improved pose accuracy, as confirmed by an ablation study. The first application of ECE to Li-DAR SCR validates that the predicted covariances are well-calibrated and carry meaningful probabilistic information beyond pose accuracy metrics alone. Future work includes integration with factor-graph SLAM backends as uncertainty-weighted constraints, and temporal propagation across sequential frames. 
+
+# References 
+
+> 1. Brachmann, E., Rother, C.: Learning less is more – 6D camera localization via 3D surface regression. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR). pp. 4654–4663 (2018) 2. Brachmann, E., Rother, C.: Visual camera re-localization from rgb and rgb-d im-ages using dsac. IEEE Transactions on Pattern Analysis and Machine Intelligence
+> 44 (9), 5847–5865 (2021)
+
+12 J. Komorowski 3. Carlevaris-Bianco, N., Ushani, A.K., Eustice, R.M.: University of michigan north campus long-term vision and lidar dataset. The International Journal of Robotics Research 35 (9), 1023–1035 (2016) 4. Chen, Z., Sun, K., Yang, F., Tao, W.: SC2-PCR: a second order spatial com-patibility for efficient and robust point cloud registration. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition. pp. 13221– 13231 (2022) 5. Choy, C., Gwak, J., Savarese, S.: 4D spatio-temporal ConvNets: Minkowski convo-lutional neural networks. In: Proceedings of the IEEE/CVF Conference on Com-puter Vision and Pattern Recognition. pp. 3075–3084 (2019) 6. He, Y., Wang, J.: Deep mixture density network for probabilistic object detection. In: 2020 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS). pp. 10550–10555. IEEE (2020) 7. Kendall, A., Cipolla, R.: Geometric loss functions for camera pose regression with deep learning. In: Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition. pp. 5974–5983 (2017) 8. Kendall, A., Gal, Y.: What uncertainties do we need in bayesian deep learning for computer vision? Advances in neural information processing systems 30 (2017) 9. Kendall, A., Grimes, M., Cipolla, R.: PoseNet: A convolutional network for real-time 6-DoF camera relocalization. In: Proceedings of the IEEE International Con-ference on Computer Vision (ICCV). pp. 2938–2946 (2015) 10. Komorowski, J.: MinkLoc3D: Point cloud based large-scale place recognition. In: Proceedings of the IEEE/CVF Winter Conference on Applications of Computer Vision. pp. 1790–1799 (2021) 11. Li, W., Liu, C., Yu, S., Liu, D., Zhou, Y., Shen, S., Wen, C., Wang, C.: LightLoc: Learning outdoor lidar localization at light speed. In: Proceedings of the Computer Vision and Pattern Recognition Conference. pp. 6680–6689 (2025) 12. Li, W., Yang, Y., Yu, S., Hu, G., Wen, C., Cheng, M., Wang, C.: Diffloc: Dif-fusion model for outdoor LiDAR localization. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition. pp. 15045–15054 (2024) 13. Li, W., Yu, S., Wang, C., Hu, G., Shen, S., Wen, C.: SGLoc: Scene geometry encod-ing for outdoor LiDAR localization. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition. pp. 9286–9295 (2023) 14. Maddern, W., Pascoe, G., Linegar, C., Newman, P.: 1 year, 1000 km: The oxford RobotCar dataset. The International Journal of Robotics Research 36 (1), 3–15 (2017) 15. Shotton, J., Glocker, B., Zach, C., Izadi, S., Criminisi, A., Fitzgibbon, A.: Scene coordinate regression forests for camera relocalization in RGB-D images. In: Pro-ceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recogni-tion (CVPR). pp. 2930–2937 (2013) 16. Uy, M.A., Lee, G.H.: PointNetVLAD: Deep point cloud based retrieval for large-scale place recognition. In: Proceedings of the IEEE Conference on Computer Vi-sion and Pattern Recognition. pp. 4470–4479 (2018) 17. Wang, W., Wang, B., Zhao, P., Chen, C., Clark, R., Yang, B., Markham, A., Trigoni, N.: PointLoc: Deep pose regressor for lidar point cloud localization. IEEE Sensors Journal 22 (1), 959–968 (2021) 18. Yu, S., Wang, C., Wen, C., Cheng, M., Liu, M., Zhang, Z., Li, X.: LiDAR-based localization using universal encoding and memory-aware regression. Pattern Recog-nition 128 , 108685 (2022)

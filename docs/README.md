@@ -6,65 +6,65 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-07
-- 运行时间：2026-08-07 19:48:19 UTC
+- 最新运行日期：2026-08-08
+- 运行时间：2026-08-08 20:54:29 UTC
 - 运行状态：成功
 - 本次总论文数：15
 - 精读区：4
 - 速读区：11
 
 ### 今日简报（AI）
-今日聚焦15篇航天动力学论文，精读2篇高分工作。最值得关注地月空间交会对接的凸优化安全制导方法，以及三体问题中振荡运动通向碰撞的机理。普通读者可优先翻阅这两篇精读，理解地月轨道安全设计的新思路。
-- 详情：[/202608/07/README](/202608/07/README)
+今日15篇推荐中，精读聚焦地月空间交会与三体问题，速读覆盖航天器集群与地月网络。最值得关注的是满分论文《Passively Safe Convex Guidance for Cislunar Rendezvous and Proximity Operations》中的无源安全凸制导方法，以及三体问题中振荡运动导致的碰撞与逃逸结论。下一步可延伸了解航天器集群的碰撞感知轨迹规划，以及地月自主网络的通信机制。
+- 详情：[/202608/08/README](/202608/08/README)
 
 ### 精读区论文标签
-1. [Passively Safe Convex Guidance for Cislunar Rendezvous and Proximity Operations](/202608/07/2608.03060v1-passively-safe-convex-guidance-for-cislunar-rendezvous-and-proximity-operations)  
+1. [Passively Safe Convex Guidance for Cislunar Rendezvous and Proximity Operations](/202608/08/2608.03060v1-passively-safe-convex-guidance-for-cislunar-rendezvous-and-proximity-operations)  
+   标签：评分：10.0/10、query:cislunar-dyn-nav
+   evidence：直接针对南部9:2同步近直线晕轨道的地月空间交会与近距离操作给出凸优化制导
+2. [Oscillatory motion to collision and infinity in the Earth-Moon restricted three body problem](/202608/08/2608.05400v1-oscillatory-motion-to-collision-and-infinity-in-the-earth-moon-restricted-three-body-problem)  
    标签：评分：9.0/10、query:cislunar-dyn-nav
-   evidence：近直线晕轨道中地月空间自主交会与近距离操作制导
-2. [Oscillatory motion to collision and infinity in the Earth-Moon restricted three body problem](/202608/07/2608.05400v1-oscillatory-motion-to-collision-and-infinity-in-the-earth-moon-restricted-three-body-problem)  
-   标签：评分：9.0/10、query:cislunar-dyn-nav
-   evidence：地月平面圆型限制性三体问题中的运动与轨道
-3. [Physical Characterization of Moon Impactor 2025-010D](/202608/07/2608.00360v1-physical-characterization-of-moon-impactor-2025-010d)  
+   evidence：地月限制性三体问题；计算机辅助证明到碰撞与无穷的振荡运动存在
+3. [Physical Characterization of Moon Impactor 2025-010D](/202608/08/2608.00360v1-physical-characterization-of-moon-impactor-2025-010d)  
    标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：地月空间目标跟踪与月球撞击轨道确定
-4. [Intrinsic Stochastic Successive Convexification on SE(3) for Chance Constrained 6-DOF Rendezvous](/202608/07/2608.04114v1-intrinsic-stochastic-successive-convexification-on-se3-for-chance-constrained-6-dof-rendezvous)  
+   evidence：对月球撞击物体的地基物理与动力学特征刻画，直接涉及地月空间动力学
+4. [Intrinsic Stochastic Successive Convexification on SE(3) for Chance Constrained 6-DOF Rendezvous](/202608/08/2608.04114v1-intrinsic-stochastic-successive-convexification-on-se3-for-chance-constrained-6-dof-rendezvous)  
    标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：航天器六自由度交会轨迹优化方法，可应用于地月系统轨迹优化
+   evidence：航天器交会轨迹优化与机会约束处理，直接关联地月系统轨迹优化
 
 ### 速读区论文标签
-1. [Homotopy-Aware Corridor Generation without Predefined Reference Paths](/202608/07/2607.29513v1-homotopy-aware-corridor-generation-without-predefined-reference-paths)  
+1. [Neural operator learning for collision-aware trajectory planning of spacecraft swarms](/202608/08/2608.00320v1-neural-operator-learning-for-collision-aware-trajectory-planning-of-spacecraft-swarms)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：基于凸集图的免参考路径走廊生成，面向轨迹优化
-2. [Neural operator learning for collision-aware trajectory planning of spacecraft swarms](/202608/07/2608.00320v1-neural-operator-learning-for-collision-aware-trajectory-planning-of-spacecraft-swarms)  
+   evidence：航天器集群轨迹优化与精确轨道动力学约束
+2. [A Knowledge-Centric Communication For Autonomous Cislunar Networks](/202608/08/2608.04817v1-a-knowledge-centric-communication-for-autonomous-cislunar-networks)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：面向航天器编队避碰轨迹规划的神经算子方法，可服务地月系轨迹优化
-3. [GBOT: ground based optical tracking of the Gaia satellite](/202608/07/2608.04861v1-gbot-ground-based-optical-tracking-of-the-gaia-satellite)  
-   标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：对运行在拉格朗日点的盖亚卫星进行地基光学跟踪与定轨
-4. [KILVO: Kinematic-Inertial-LiDAR-Visual Odometry with Robust Multimodal Adaptation for Humanoid Robots](/202608/07/2608.05647v1-kilvo-kinematic-inertial-lidar-visual-odometry-with-robust-multimodal-adaptation-for-humanoid-robots)  
-   标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：在误差状态迭代卡尔曼滤波中融合运动学、惯性、激光和视觉数据，直接涉及多传感器融合定位与授时。
-5. [A Unified Discrete Gradient-SAV Framework for Structure-Preserving Integration](/202608/07/2607.27795v1-a-unified-discrete-gradient-sav-framework-for-structure-preserving-integration)  
+   evidence：面向自主地月空间网络的知识中心通信与数字孪生框架
+3. [On the Oja-Flow-Based Low-Rank Approximation of Kalman-Bucy Filters for Linear Time-Varying Systems](/202608/08/2607.29034v1-on-the-oja-flow-based-low-rank-approximation-of-kalman-bucy-filters-for-linear-time-varying-systems)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：面向保守/耗散系统的保结构积分框架，可用于轨道模拟
-6. [Non-autonomous KAM theory for lower dimensional invariant tori (I): Normally elliptic and hyperbolic cases](/202608/07/2607.28452v1-non-autonomous-kam-theory-for-lower-dimensional-invariant-tori-i-normally-elliptic-and-hyperbolic-cases)  
+   evidence：基于Oja流的低秩Kalman-Bucy滤波，适用于自主导航中的高效状态估计
+4. [Conserved Quantities of Optimal Continuous-Thrust Trajectories in A Central Gravitational Field](/202608/08/2608.00842v1-conserved-quantities-of-optimal-continuous-thrust-trajectories-in-a-central-gravitational-field)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：不变流形与KAM理论在天体力学中的应用
-7. [Non-autonomous KAM theory for lower dimensional invariant tori (II): Normally parabolic case](/202608/07/2607.28472v1-non-autonomous-kam-theory-for-lower-dimensional-invariant-tori-ii-normally-parabolic-case)  
+   evidence：中心引力场中连续推力最优轨迹的守恒量推导，可迁移至地月系统轨迹优化
+5. [Biconvex Optimization for Smooth Minimum-Time Trajectories around Convex Obstacles](/202608/08/2608.02834v1-biconvex-optimization-for-smooth-minimum-time-trajectories-around-convex-obstacles)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：证明了非自治哈密顿系统中不变流形的存在性，直接关系到地月系统等动力学中的不变流形与稳定性问题。
-8. [Adaptive Attitude Estimation for Multiple-Surface Object Using Light Curve Glints](/202608/07/2607.28912v1-adaptive-attitude-estimation-for-multiple-surface-object-using-light-curve-glints)  
+   evidence：面向障碍物的光滑最短时间轨迹双凸优化，可迁移至地月轨迹优化
+6. [Control Barrier Functions via Minkowski Operations for Safe Navigation among Polytopes](/202608/08/2608.02886v1-control-barrier-functions-via-minkowski-operations-for-safe-navigation-among-polytopes)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：空间目标自适应卡尔曼滤波姿态估计，可迁移至自主导航
-9. [RIT*: Riemannian Informed Trees for Cost-Adaptive Optimal Motion Planning](/202608/07/2608.00822v1-rit-riemannian-informed-trees-for-cost-adaptive-optimal-motion-planning)  
+   evidence：利用控制屏障函数实现精确安全导航，可用于航天器近距自主操作
+7. [POMDPs for Autonomous Science Exploration](/202608/08/2608.03155v1-pomdps-for-autonomous-science-exploration)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：提出基于黎曼流形的采样规划框架和成本自适应度量修正，可应用于复杂环境下的最优轨迹规划与避障。
-10. [Control Barrier Functions via Minkowski Operations for Safe Navigation among Polytopes](/202608/07/2608.02886v1-control-barrier-functions-via-minkowski-operations-for-safe-navigation-among-polytopes)  
+   evidence：面向科学探索的POMDP置信空间规划，适用于月球邻近自主导航
+8. [SLAMFormer-$\infty$: Infinite SLAM Transformer for Unbounded Frontend and Backend Processing](/202608/08/2608.03429v1-slamformer-infty-infinite-slam-transformer-for-unbounded-frontend-and-backend-processing)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：提出精确符号距离函数与非光滑控制障碍函数的安全导航方法，为月球近距离操作等复杂环境自主导航提供支撑。
-11. [A Knowledge-Centric Communication For Autonomous Cislunar Networks](/202608/07/2608.04817v1-a-knowledge-centric-communication-for-autonomous-cislunar-networks)  
+   evidence：支持长距离的几何SLAM Transformer，可支撑自主导航应用
+9. [A Vision-based Control Framework for Real-time Autonomous UUV Operations](/202608/08/2608.04723v1-a-vision-based-control-framework-for-real-time-autonomous-uuv-operations)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：地月空间数字孪生集成延迟观测、不确定性与通信物理以支持自主决策，与地月空间定位授时的多源融合相关
+   evidence：基于视觉的实时定位与自主导航框架，可迁移至月球近距操作任务
+10. [KILVO: Kinematic-Inertial-LiDAR-Visual Odometry with Robust Multimodal Adaptation for Humanoid Robots](/202608/08/2608.05647v1-kilvo-kinematic-inertial-lidar-visual-odometry-with-robust-multimodal-adaptation-for-humanoid-robots)  
+   标签：评分：6.0/10、query:cislunar-dyn-nav
+   evidence：融合惯性、激光雷达、视觉与运动学的多模态里程计传感器融合
+11. [UQ-Loc: Uncertainty-Aware LiDAR Scene Coordinate Regression](/202608/08/2608.06307v1-uq-loc-uncertainty-aware-lidar-scene-coordinate-regression)  
+   标签：评分：6.0/10、query:cislunar-dyn-nav
+   evidence：不确定性感知的LiDAR场景坐标回归定位，可应用于月球近距操作导航
 
 
 <div class="dpr-home-promo-card">
