@@ -1,0 +1,1012 @@
+Title: Satellite Trajectory Optimization via Proximal Policy Optimization for Space Debris Avoidance
+
+URL Source: https://arxiv.org/pdf/2608.09628v1
+
+Published Time: Tue, 11 Aug 2026 02:43:18 GMT
+
+Number of Pages: 18
+
+Markdown Content:
+> Received 30 November 2025, accepted 13 January 2026, date of publication 19 January 2026, date of current version 5 February 2026.
+> Digital Object Identifier 10.1109/ACCESS.2026.3655237
+
+# Satellite Trajectory Optimization via Proximal Policy Optimization for Space Debris Avoidance 
+
+LOGAN LUNA 14 , (Member, IEEE), JUAN ORTIZ COUDER 2, (Member, IEEE), and RAUL ALEJANDRO VARGAS-ACOSTA 3, (Member, IEEE)     
+
+> 1Department of Electrical Engineering and Computer Science, Embry-Riddle Aeronautical University, Daytona Beach, FL 32114 USA
+> 2Department of Electrical Engineering and Computer Science, Embry-Riddle Aeronautical University, Daytona Beach, FL 32114 USA (e-mail: ORTIZCOJ@my.erau.edu)
+> 3Department of Electrical Engineering and Computer Science, Embry-Riddle Aeronautical University, Daytona Beach, FL 32114 USA (e-mail: VARGASAR@erau.edu)
+> 4Present address: School of Computer Science, College of Computing, Georgia Institute of Technology, Atlanta, GA 30332 USA (e-mail: lluna@gatech.edu)
+
+Corresponding author: Logan Luna (e-mail: lluna@gatech.edu). 
+
+ABSTRACT 
+
+Collision avoidance systems are commonly used to avoid fragmentation events occuring in Low-Earth Orbit (LEO) and Geosynchronous Equatorial Orbit (GEO). However, these events have been growing in frequency as orbital congestion worsens with the launch of megaconstellations. Consequently, conjunction alerts and collision risks are becoming increasingly common. Current practices, which are commonly manual or rule-based, have difficulty scaling to these worsening dynamic environments. To address this intensifying situation, we propose a reinforcement-learning policy for autonomous collision avoidance, trained via Proximal Policy Optimization (PPO) along with an open-source, high-fidelity astrodynamics simulator for training and evaluation. In 1,000 deterministic GEO episodes, our agent achieves a 97.5% collision avoidance success rate, outperforming traditional controllers such as a rule-based baseline (20.7% success) and an impulsive ∆v planner baseline (27.5% success). To achieve these results, we designed a simulator to train and evaluate our agent, using real-world and simulated debris. We simulate Newtonian two-body dynamics using Sun/Moon third-body perturbations, fuel-dependent thrust, and configurable debris fields. The agent is trained with curriculum learning and shaped rewards oriented toward encouraging survival, adequate projected miss distance, and ∆v conservation. Finally, our evaluation consisted of a fully deterministic pipeline, including shared seeds, per-episode logs, and telemetry exports a.
+
+> a
+
+Our work is a publicly available framework at https://purl.org/sat-trajectory-avoidance 
+
+INDEX TERMS machine learning, reinforcement learning, proximal policy optimization, autonomous systems, orbital collision avoidance, space debris mitigation, trajectory optimization, space sustainability 
+
+I. INTRODUCTION: 
+
+The Earth’s orbital environment is becoming congested at a near exponential rate according to the European Space Agency [1] (Fig. 1). Currently there are over 40,500 tracked objects larger than 10 cm, 1.1 million untracked objects be-tween 1–10 cm and 130 million between 1 mm–1 cm [1]. Due to this increasingly cluttered environment, their annual frag-mentation events are projected to increase owing to collisions and satellite failures. This is further accelerated by satellite launches driven by megaconstellations and commercial ex-pansion, with a projected 28,000+ new satellites projected by 2033 [2]. Additionally, a small subset of all satellites launched by humans are still functional as of today, with the ESA’s Space Debris Office estimating that only half of satellites in space are still operational in 2021 [3]. Without proactive mitigation, this increasing debris den-sity threatens orbital sustainability and raises collision prob-abilities, accelerating the Kessler Syndrome [4], a feedback loop of cascading collisions. While the existing literature and agencies have explored procedural or manual collision avoid-ance, these systems are generally non-autonomous, propri-etary, and lack long-term orbital considerations. Therefore,   
+
+> VOLUME 4, 2016 1arXiv:2608.09628v1 [cs.LG] 10 Aug 2026 L. Luna et al. : Satellite Trajectory Optimization via PPO for Space Debris Avoidance
+
+these systems are often insufficient or infeasible for dynamic, debris-rich environments. We aim to address the need for intelligent and sustainable handling of these cascading issues by developing a machine learning (ML) driven autonomous collision avoidance system for geostationary satellites. Additionally, we aimed to create a publicly available astrodynamics simulation environment for training, testing, and monitoring based on current dy-namically changing debris environments. Using this system, we train a reinforcement learning (RL) Proximal Policy Optimization (PPO) agent that balances collision avoidance, orbital stability, and fuel conservation. The contributions of this study include the following. Realistic orbital simulator with Newtonian gravity, third-body perturbations, and fuel-aware thrust modeling. A Gym-compatible RL environment optimizes safety, efficiency, and orbital accuracy. Open-source training and evaluation pipeline for debris-rich Geosynchronous Equatorial Orbit (GEO) scenarios. Our simulated results show reduced col-lisions, improved stability, and lower fuel use compared to baselines. The broader impact of our study includes supporting in-telligent space-flight operations, space traffic management, operational resilience, and long-term orbital sustainability. 
+
+> II. BACKGROUND
+> A. ORBITAL CONGESTION
+
+Earth’s orbits, particularly Low Earth Orbit (LEO), are be-coming increasingly congested with satellites and debris. In 2023 alone, more than 2,800 new satellites were launched into LEO [2]. Most of these satellites are concentrated at altitudes between 500 and 600 km, creating a dense orbital band where nearly two-thirds of all active satellites currently reside [2]. This clustering significantly increases collision risks, since the average LEO satellite now receives approx-imately 30 close conjunction alerts each year [2]. Each close approach also introduces the possibility of fragmentation, which would generate additional debris and further increase the probability of future collisions—a phe-nomenon known as the Kessler Syndrome [4]. Managing these risks requires international coordination, advanced tracking capabilities, and more efficient space traffic man-agement systems. Without proactive measures, the rapid ex-pansion of satellite constellations and continued debris ac-cumulation threaten the safe and sustainable use of LEO for communications, Earth observation, and scientific missions. 
+
+> B. SPACE DEBRIS GROWTH
+
+At the end of 2024, more than 50,000 tracked objects larger than 10 cm are in orbit [5], a sharp increase from one year earlier when it was approximately 35,000 [2], even with pro-posed rules for commercial launches requiring upper stages to be disposed of in one of five ways (controlled reentry, transfer to graveyard orbit, Earth escape orbit, active removal within five years, or uncontrolled atmospheric disposal under certain conditions) [6]. This rapid growth reflects the con-tinuing accumulation of space debris from defunct satellites, spent rocket stages, and fragmentation events. Beyond cata-loged debris, estimates suggest that 1.2 million pieces larger than 1 cm and hundreds of millions of smaller fragments also exist in orbit [5], [7]. Even subcentimeter debris, traveling at orbital speeds of 7 to 8 km/s, has the kinetic energy to puncture shielding or damage critical spacecraft components. Ongoing fragmentation events further worsen the situ-ation. According to the European Space Agency, roughly ten such events occur every year, each injecting new debris into already congested orbital regions [8]. For example, the 2024 explosion of a 6A Long March rocket stage alone created more than 700 new fragments [5]. This accumulation increases operational risks for active satellites and accelerates the likelihood of a runaway Kessler Syndrome scenario [9], [10]. Without effective mitigation measures, experts warn that debris collisions could, within a few decades, surpass natural satellite failures as the primary source of new orbital debris, threatening the long-term sustainability of space ac-tivities. 
+
+2,000 2,005 2,010 2,015 2,020 2,025 012345
+
+·10 4
+
+Year Tracked Debris Growth of Space Debris Over Time 
+
+Tracked Debris FIGURE 1: Growth of tracked space debris from 2000 to 2025. Values are shown in units of 10 4 (i.e., the tick value 1 represents 10,000 pieces). 
+
+> C. MEGACONSTELLATIONS AND FUTURE GROWTH
+
+The rise of megaconstellations is expected to multiply the number of active satellites in orbit in the coming years. Multiple companies and agencies have proposed adding broadband constellations of satellites that would increase by tens of thousands the number of active satellites. Even under conservative forecasts, it is projected that there will be 58,000 new satellites by 2030 [11], while more aggressive forecasts predict more than 100,000 satellites by 2030 [12]. For context, the global satellite population in 2022 was only about 8,000 [13], underscoring the scale of this expansion. This growth rate is already alarming the space community.   
+
+> 2VOLUME 4, 2016 L. Luna et al. : Satellite Trajectory Optimization via PPO for Space Debris Avoidance
+
+The European Space Agency’s 2024 report explicitly warns that the current deployment strategies are "unsustainable" unless new mitigation measures are adopted [2]. In some key Low Earth Orbit altitudes, the number of active satel-lites now rivals the amount of tracked debris [5], creating conditions of extreme congestion. This convergence of large constellations and preexisting debris fields amplifies the risks of collision and long-term orbital instability. To manage these challenges, experts stress the urgent need for advanced, automated collision-avoidance systems and comprehensive space traffic management frameworks that can coordinate satellite operations at scale. 
+
+> D. CURRENT SATELLITE COLLISION AVOIDANCE PRACTICES
+> 1) Surveillance and Alerts
+
+Satellite collision avoidance today relies heavily on space surveillance networks, with the U.S. Space Surveillance Net-work (SSN) serving as the primary global operator. The SSN continuously tracks cataloged objects in orbit, predicts close approaches, and distributes standardized Conjunction Data Messages (CDMs) [14]. A typical LEO satellite may receive hundreds of CDMs per week, although most are automati-cally screened and filtered out as low-risk encounters [15]. After this filtering process is performed, operators are left with approximately two actionable alerts per satellite per week, which require manual assessment, and in some cases, the planning of collision-avoidance maneuvers [15]. These practices illustrate the growing operational burden posed by the expanding satellite population. 
+
+> 2) Human-in-the-Loop Decision Process
+
+Collision avoidance in current satellite operations relies on a human-in-the-loop decision framework, where analysts eval-uate predicted conjunctions and determine whether a maneu-ver is necessary. Commonly adopted probability thresholds guide these decisions: for uncrewed satellites, a collision probability of 10 −4 for uncrewed satellites, while crewed missions apply a more conservative threshold of 10 −5 [16], [17]. For instance, the ESA typically issues a collision avoid-ance command if the predicted chance of collision exceeds 
+
+1/10 ,000 . When this command is triggered, Collision Avoid-ance Maneuvers (CAM) involve small orbital adjustments executed hours or days before the predicted conjunction to ensure sufficient separation and reduce the risk of impact. This human-centric approach balances operational caution with practical resource management but can become increas-ingly challenging as the number of conjunctions rises with the growth of active satellites. 
+
+> 3) Manual Coordination and Communication
+
+In addition to automated alerts and human-in-the-loop as-sessment, satellite operators must often engage in direct coordination to manage potential collisions. Communication is often conducted via email as no formalized “right-of-way” rules exist to assign maneuver responsibility [18]. This informal process can create operational vulnerabilities, as demonstrated by a 2019 near-miss between ESA’s Aeolus satellite and SpaceX’s Starlink. In this instance, ESA was required to perform the CAM because the lack of timely communication prevented the coordinator of the Starlink operator [18]. Such events highlight the limitations of current manual coordination processes and the growing need for standardized communication protocols and automated space traffic management systems as orbital congestion intensifies. 
+
+> 4) Maneuver Planning
+
+Collision avoidance maneuvers are carefully planned using flight dynamics software, which calculates optimal ∆v burns to ensure sufficient separation while minimizing fuel con-sumption and mission disruption [19]. Various approaches are employed in this planning process, including analytical solutions, numerical simulations, and heuristic optimization techniques. Despite these tools, significant human super-vision is still required as operators must define mission constraints, validate proposed maneuvers, and ensure that the solutions align with broader operational objectives. This combination of automated computation and expert oversight allows satellites to safely execute collision avoidance ma-neuvers while preserving limited propellant and maintaining mission performance. 
+
+> 5) Timing and Execution
+
+The timing of collision avoidance maneuvers is critical, as CDMs are continually updated to reflect evolving orbital information. Operators often postpone decision-making to incorporate the latest data, reducing the likelihood of false alarms and unnecessary maneuvers. However, this approach frequently compresses the window for final analysis, maneu-ver approval, and command upload to just a few hours before the predicted conjunction. As a result, operators must balance the benefits of up-to-date data against the operational risks of limited execution time. 
+
+> 6) Current Effectiveness
+
+Historically, collision avoidance practices have been suffi-cient to manage the relatively small population of active satellites. For example, the European Space Agency averages roughly one collision avoidance maneuver per satellite per year [15], while NASA and the International Space Sta-tion conduct occasional orbital adjustments, typically a few burns annually [20]. These statistics showcase that, until recently, manual and semi-automated methods were largely adequate to mitigate collision risks. However, as the number of satellites and debris continues to surge, these traditional practices are increasingly insufficient, underscoring the need for more automated, scalable, and coordinated space traffic management solutions.   
+
+> E. LIMITATIONS OF MANUAL AND AD HOC METHODS
+> VOLUME 4, 2016 3L. Luna et al. : Satellite Trajectory Optimization via PPO for Space Debris Avoidance
+> 1) Limited Autonomy
+
+Current collision avoidance practices rely heavily on hu-man judgment and manual processes, which are increasingly strained as satellite populations grow [21]. With thousands of conjunctions occurring in Low Earth Orbit each week, these manual methods are not scalable, creating the potential for delayed responses or missed collision warnings. Recognizing these limitations, officials at the European Space Agency have called for the development of formal space traffic man-agement frameworks and greater automation in maneuver planning and execution [18]. Such enhancements would en-able operators to handle larger volumes of conjunction data more efficiently while maintaining mission safety. 
+
+> 2) Fuel and Mission Impact
+
+Collision avoidance maneuvers consume significant fuel, di-rectly reducing satellite operational lifespan. The use of fixed probability thresholds, such as 10 −4 for uncrewed satellites, create suboptimal trade-offs: if the threshold is set too low, it will result in frequent, and often unnecessary maneuvers, yet, if the threshold is set too high, the collision risk is elevated. For example, Starlink initially used a conservative threshold of 10 −5, which resulted in frequent maneuvers. This threshold was later switched to 10 −6, resulting in roughly 50,000 avoidance maneuvers over six months (~14 per satellite) [22]. While conservative thresholds enhance safety, they also accelerate propellant depletion and limit the effective lifetime of spacecraft [22]. Current collision avoidance methods lack comprehensive global optimization that balances fuel efficiency with mission objectives. 
+
+> 3) Scalability and Coordination Challenges
+
+Human-led collision avoidance systems are increasingly un-able to manage the complexity of megaconstellations, where thousands of active satellites operate simultaneously. Star-link’s onboard automation provides a notable exception, al-lowing some level of autonomous maneuvering [22]. How-ever, the absence of standardized inter-operator coordination creates a "traffic log" in which the effects of maneuvers are difficult to track across different operators. Avoidance maneuvers can alter orbits by up to 40 km, complicating the prediction and confusing the tracking systems [23]. When this happens, and multiple autonomous systems act inde-pendently, without coordinating with each other, the risk of counter-maneuvers increases, thus causing more counter-maneuvers as a result iteratively [23]. 
+
+> 4) Transparency and Data Sharing
+
+A significant limitation of current collision avoidance prac-tices is the lack of transparency and widespread data sharing among satellite operators. Many operators treat maneuver data as proprietary, which restricts public access to datasets that are essential for research, model development, and inde-pendent verification. Exceptions to this norm are rare, such as the ESA’s 2019 anonymized CDM dataset [14]. Some progress to improving the transparency has been made in the recent years, like China’s publication of daily bulletins for its space station, or SpaceX’s sharing Starlink ephemerides publicly since 2021 [24]. Nevertheless, international experts continue to call for broader transparency measures, including shared maneuver thresholds, best-practice norms, and more accessible data to improve the safety and sustainability of orbital operations [24]. 
+
+> 5) Conclusion
+
+The current collision avoidance practices highlights that ex-isting systems are not scalable for the rapid growth in orbital population. There is an urgent need for increased automation, intelligent decision-making, and globally coordinated space traffic management. To ensure the long-term safety and sus-tainability of orbital operations, a transition away from ad hoc, human-centric responses towards a more systematic, AI-driven collision avoidance framework must be made. This transition will allow collision frameworks to handle large volumes or data while minimizing operational risks. 
+
+> F. MACHINE LEARNING
+
+Machine Learning (ML) is a subfield of artificial intelligence (AI) that focuses on designing algorithms and systems that can learn patterns from some data and improve their perfor-mance over time without being explicitly programmed to do so [25]. There are three main types of ML based on the train-ing methods: Supervised Learning, Unsupervised Learning, and Reinforcement Learning (RL). In Supervised Learning, the model learns from labeled data in the form of input-output pairs, and models its behavior to match underlying trends within that data [26]. For Unsupervised learning, the model aims to find structured to unlabeled data, without knowing the output to that data, and clusters the given data into groups based on their behavior [26]. Last, RL makes the model learn by interacting with the environment, upon each interaction, the model receives either a rewards if the model’s behavior is correct, or a penalty if the behavior is incorrect [27]. Fig. 2 shows an architecture of a ML model. It shows two layers that are filly connected, also known as dense layers, which are the most common within ML models. Every single neuron is connected to every neuron of the next layer. Each neuron receives an input from every neuron in the previous layer, and the importance of each input is known as its weight. 
+
+> G. REINFORCEMENT LEARNING
+
+Reinforcement Learning (RL) is a paradigm in machine learning in which an agent learns to make decisions by inter-acting with an environment to maximize cumulative rewards. 
+
+> 1) Environment, States, and Agent
+
+In RL, the environment represents the system in which an agent interacts, providing states ( st) that describe the current situation and rewards ( rt) based on the agent’s actions ( at). The agent then interacts with the environment based on these   
+
+> 4VOLUME 4, 2016 L. Luna et al. : Satellite Trajectory Optimization via PPO for Space Debris Avoidance
+
+FIGURE 2: A single layer’s forward pass: input vector a(0) 
+
+transforms into a(1) via weights wj,i , biases bj , and an activation σ(·).
+
+FIGURE 3: Neural network architecture illustrating agent–environment interaction. st is the environment state at time t, at is the action chosen by the agent, rt is the reward returned by the environment, and θ denotes the network’s learned parameters. The policy Π( θ, a ) uses θ to map states to actions. results, selecting actions to maximize the expected cumula-tive reward. This creates an interaction loop that involves the agent perceiving the state, choosing an action, and receiving feedback from the environment, as shown in Fig. 3. 
+
+> 2) Actions and Rewards
+
+Actions refer to possible moves or decisions that an agent can make in each state. The choice of actions influences the next state and the rewards received, which guides the agent towards desirable behaviors. The objective of the agent is to learn a policy Π that maps states to actions, maximizing the long term reward. 
+
+> H. PROXIMAL POLICY OPTIMIZATION (PPO)
+
+Proximal Policy Optimization (PPO) is a popular reinforce-ment learning algorithm designed to provide stable and effi-cient policy updates [28]. These updates leads to balanced exploration, stability, and sample efficiency, resulting in it being commonly used for continuous-control tasks. PPO is a policy gradient method that optimizes behavior through adjusting the policy parameters with the aim of increasing the expected cumulative reward. In order to promote stability, PPO has a clipped surrogate objective function. This restricts the policy updates, preventing large changes to limit poten-tially negative behavior. In addition to this, it utilizes an actor-critic architecture, where two neural networks are employed. The actor network outputs actions based on a learned policy, and the critic network estimates the value function to guide policy improvement. This improves learning efficiency and reduces variance in gradient estimates. Lastly, PPO uses Gaussian distributions to model continuous action spaces. This makes it perform well in continuous environments that require precise, continuous action. As a result of this design we employ PPO as the primary architecture in our study. 
+
+> I. BASELINE CONTROLLERS
+
+In our study we evaluate our work with variations of the following baseline controllers.   
+
+> 1) Impulsive ∆vPlanner
+
+This baseline implements an avoidance strategy focused on classical orbital mechanics and conjunction analysis. This strategy applies a constant lateral acceleration, with the goal of increasing the projected miss distance beyond a defined safety threshold. Previous studies using methods similar to this generally compute a thrust ( ∆v) to maximize miss distance. This is done by using the relative position and velocity between the primary and secondary objects [29]. Additionally, an operational conjunction assessment is used to apply spatial and probabilistic thresholds to decide when to execute avoid-ance burns [30]. The controller also uses linearized relative motion models for the propagation and maneuver design [31]. As a result, these impulsive methods yield predictable, interpretable trajectories suitable as benchmarks for learning-based systems [29], [30]. 
+
+> 2) Rule-Based Controller
+
+The rule-based baseline approaches collision avoidance by evaluating relative kinematics for all debris fragments and calculating the thrust magnitude based on a risk metric. This controller computes relative position rrel and velocity 
+
+vrel for estimating the closing speed to the debris in order to determine the best avoidance action [31]. This controller is commonly used by agencies such as NASA and ESA, which employ assessment frameworks that trigger avoidance maneuvers when spatial or temporal thresholds are violated [32], [33]. While this is a more classical approach, recent studies have proposed combining spatial proximity and time   
+
+> VOLUME 4, 2016 5L. Luna et al. : Satellite Trajectory Optimization via PPO for Space Debris Avoidance
+
+pressure into scalar risk indices, using them to guide the controllers maneuver magnitude and direction [34]–[36]. Overall, rule-based controllers provide predictable responses while serving as a common baselines for evaluating learning-based collision avoidance policies. 
+
+> 3) Deep Q-Network (DQN)
+
+In addition to the traditional controllers used in collision avoidance, we also include a baseline reinforcement learning policy to compare the performance of our introduced PPO policy. This policy is a Deep Q-Network (DQN) that learns as state-action value function via a neural approximator updated by temporal-difference targets [37]. For a more in depth explanation regarding architecture and policy design, please refer to IV-C1c. 
+
+> 4) No-Action Controller
+
+This baseline serves as an evaluation tool as a sanity check, verifying if the environment correctly detects collisions. In our application it represents a passive satellite that performs no collision-avoidance maneuvers. As a result, it reflects the inherent risk of simulated scenarios and demonstrates the effectiveness of collision-avoidance systems. 
+
+> III. RELATED WORK
+> A. TOWARD AUTONOMOUS AND ML-DRIVEN COLLISION AVOIDANCE
+
+Manual collision avoidance, due to requiring manual han-dling, are recognized as slow, reactive, and unsustainable given the rapid growth of orbital populations. In response, some space agencies and researchers are developing auto-mated systems designed to minimize human involvement in conjunction handling. The overarching goal is to enable satellites, or their ground-based software counterparts, to autonomously assess collision risk, plan optimal maneuvers, and execute these rapidly and consistently. As an example, ESA is prototyping a fully automated collision avoidance system that autonomously manages the entire workflow, from risk assessment, to maneuver execution, and leverages the space-based communication links for real-time command up-loads [38]. Similarly, U.S. Space Policy Directive-3 (SPD-3), advocates for enhanced Space Traffic Management (STM) tools to support more efficient and scalable operations [39]. These developments reflect a broader vision to transition from reactive, manual approaches, to a more streamlined, autonomous collision avoidance capable of safely handling the growing density of satellites in orbit. 
+
+> 1) Machine Learning for Conjunction Analysis and Decision Support
+
+ML offers significant advantages for collision avoidance by providing adaptability and data-driven decision-making be-yond fixed-rule approaches. Early applications of ML have focused on improving conjunction analysis and prioritizing risk among other alerts. For example, ESA’s Collision Avoid-ance Challenge invited participants to develop ML models to predict whether initial alerts would escalate into serious col-lision threats [40]. The resulting Kessler library is an open-source Bayesian deep learning tool that leverages recurrent neural networks to forecast the evolution of conjunctions [41], [42]. By identifying high-risk events more accurately, the tool helps operator focus their attention where it is most needed, reducing cognitive load. Similarly, NASA’s Conjunc-tion Assessment Risk Analysis (CARA) program explored AI and ML classifiers for automated "Go/No-Go" maneuver decisions [43], emphasizing front-end filtering and decision support rather than full autonomy. ML-based risk analysis enhance early-stage decision-making, aiding operators by providing actionable insights, yet, they stop short of fully replacing human oversight. 
+
+> 2) Reinforcement Learning for Maneuver Planning and Execution
+
+RL provides a promising approach for enabling autonomous spacecraft to learn optimal collision avoidance maneuvers through trial-and-error interactions within simulated environ-ments. RL is particularly well-suited for sequential decision-making under uncertainty, where trade-offs between safety, fuel consumption, and mission objectives must be continu-ously balanced. Bourriez et al. (2023) framed the collision avoidance problem as a partially observable Markov decision process (POMDP), training an AI agent to autonomously decide CAMs without human intervention [44]. The primary objective is to delegate decision-making to spacecraft itself, enabling faster, decentralized responses that don’t rely on ground-based commands. This represents a significant shift from traditional ground-controlled operations towards on-board AI autonomy, potentially allowing satellites to respond more rapidly and efficiently to the growing number of satel-lites in orbital environments. 
+
+> 3) Proximal Policy Optimization (PPO) Applications
+
+Proximal Policy Optimization (PPO) has emerged as a state-of-the-art deep reinforcement learning algorithm, valued for its stability, robustness, and efficiency in high-dimensional decision spaces [28]. Recent research demonstrates its strong potential for autonomous collision avoidance in LEO. Kazemi et al. (2024) applied PPO to train a LEO satellite for optimal avoidance planning over an eight-day horizon, achieving significantly lower collision risk and reduced fuel consumption compared to heuristic methods [45]. While their implementation does not appear to be publicly available, our work emphasizes full transparency to support reproducibility. Similarly, Smith et al. (2024) report that PPO-based policies consistently outperform rule-based baselines in maneuver decision-making [46]. The core advantage of PPO lies in its ability to dynamically adapt to evolving orbital conditions and to identify non-intuitive maneuvers that go beyond the scope of human-designed rules.   
+
+> 6VOLUME 4, 2016 L. Luna et al. : Satellite Trajectory Optimization via PPO for Space Debris Avoidance
+
+4) Openness and Transparency in ML-Driven Approaches 
+
+A recurring theme in the development of ML-driven collision avoidance systems is the emphasis on openness and repro-ducibility. Many initiatives adopt open-source frameworks and leverage open simulators such as Python-based environ-ments or OpenAI’s Gym, to encourage community validation and rapid iteration [47], [48]. ESA’s Kessler library exempli-fies this approach by providing an openly available Bayesian deep learning tool for conjunction forecasting [41]. The openness in this domain carries several benefits, including the promotion of peer review and reproducibility, increased trust in autonomous decision-making systems, and the facilitation of cross-operator adoption for unified avoidance strategies. In contrast, many industrial implementations of ML remain proprietary and opaque, limiting transparency and slowing collaboratively practices. 
+
+5) Summary and Future Directions 
+
+ML-driven methods offer faster reaction times, improved fuel efficiency, and scalability for large constellations. Open, collaborative frameworks strengthen this transition by im-proving transparency and trust among different stakehold-ers. Nevertheless, several important challenges still remain, including the rigorous validation of RL policies for safety-critical missions and the development of coordination mech-anisms to prevent conflicting maneuvers between indepen-dently operated agents. The convergence of advanced al-gorithms, high-fidelity data, and open collaboration points towards a transformative shift from manual responses to a more proactive and autonomous collision avoidance, sup-ported by data-driven space traffic management practices and sustainable orbital operations [38], [39]. 
+
+IV. METHODOLOGY 
+
+In the following sections, we discuss the creation of our sim-ulation environment along with the training and evaluation of our proposed PPO model. 
+
+A. ASTRODYNAMIC SATELLITE SIMULATION 
+
+Below, we describe the creation steps and usage of the environments in our simulation. Fig. 4 shows a sample in our simulated environment. 
+
+1) Initialization 
+
+To initialize our environment, depending on the user’s se-lection, the simulation either randomly generate debris and active satellites in LEO or pull real-time, active locations. If real-time locations are used, publicly available orbital debris state vectors and Two-Line Element (TLE) entries are retrieved from the CelesTrak database [49]. After collecting and reformatting this data, we convert each TLE entry into an orbital state vectors using standard simplified pertur-bations model propagation to initialize the satellite orbits. Subsequently, we define the simulation duration and sam-ple time steps across this period for trajectory propagation. We perform the trajectory propagation using astrodynamics 
+
+FIGURE 4: Model Orbit Yellow Dots: Debris Red Lines: Debris Trajectories Blue Dots: Active Satellites Blue Lines: Active Satellites Trajectories Green Dot: Agent Green Line: Agent Trajectory primitives from the libraries Astropy [50] and Poliastro [51]. In each episode we calculate the propagation of an active satellite subjected to cumulative thrust force, gravity from the Earth, Moon, and Sun, and optional dynamic debris velocities. Visualizations of this are shown in Figs. 5, 6, and 7. The configurable parameters of our simulation are presented in Appendix B. To not overfit on real-world data, we generate a simulated dataset for debris positions for training. Using a set seed the simulation generates states from configured ranges, including number of debris, initial rela-tive positions/velocities, and time-to-collision (TTC). These ranges are based on trends in real data. 
+
+2) Physical Dynamics Modeling 
+
+Algorithm 1 Compute Total Gravitational Acceleration 
+
+Require: Satellite position rsat ∈ R3, current time t
+
+Require: Constants G, MEarth , MMoon , MSun 
+
+Ensure: atotal  
+
+> 1:
+
+aEarth ← − G M Earth 
+
+rsat 
+
+∥rsat ∥3 
+
+> 2:
+
+pmoon ← get _body _barycentric( ’moon’ , t ); 
+
+> 3:
+
+pearth ← get _body _barycentric( ’earth’ , t ) 
+
+> 4:
+
+rmoon,EC ← pmoon − pearth ▷ Earth–centered moon position  
+
+> 5:
+
+rrel,moon ← rmoon,EC − rsat , amoon ←
+
+G M Moon 
+
+rrel,moon 
+
+∥rrel,moon ∥3 
+
+> 6:
+
+psun ← get _body _barycentric( ’sun’ , t ) 
+
+> 7:
+
+rsun,EC ← psun − pearth  
+
+> 8:
+
+rrel,sun ← rsun,EC − rsat , asun ← G M Sun 
+
+rrel,sun 
+
+∥rrel,sun ∥3 
+
+> 9:
+
+return atotal ← aEarth + amoon + asun 
+
+Orbital propagation follows Newtonian two-body dynam-  
+
+> VOLUME 4, 2016 7L. Luna et al. : Satellite Trajectory Optimization via PPO for Space Debris Avoidance
+
+Earth Moon Sun Satellite ⃗FE⃗FM⃗F⊙
+
+FIGURE 5: Third-body perturbations in an Earth-centered frame. Gravitational contributions from the Moon and Sun act alongside Earth’s gravity on the satellite; the simulator sums these accelerations to produce the total force model used for propagation and control. Vectors not to scale. Orbit 
+
+drrr dϕ
+
+dϕ
+
+∆t1
+
+∆t2
+
+O
+
+v⊥
+
+FIGURE 6: Kepler’s Second Law in our simulator. The shaded sectors illustrate that the line from the focus to the satellite sweeps out equal areas in equal times (conservation of angular momentum). ics with perturbations from secondary bodies. Let r and v
+
+denote the satellite position and velocity in Earth-centered inertial (ECI) coordinates and let rk be the position of the perturbing body k ∈ { Moon , Sun }. 1 The continuous-time equations of motion are 
+
+˙r = v, (1) 
+
+˙v = −μ⊕
+
+r
+
+∥r∥3 − X
+
+> k
+
+μk
+
+ r − rk
+
+∥r − rk∥3 + rk
+
+∥rk∥3
+
+
+
++ 1
+
+mt
+
+Tt
+
+(2) where μ denotes the standard gravitational parameter, mt
+
+is the instantaneous mass, and Tt is the thrust force gener-ated by the agent at time t. We integrate these dynamics with a semi-implicit Euler step of duration ∆t = 1 s , shown in Eq. 3: 
+
+> 1All variable definitions can be found in the nomenclature Table 5.
+
+rsat 
+
+rj
+
+∆r1
+
+∆rj
+
+reff 
+
+Earth Satellite 
+
+Debris 1
+
+Debris 2
+
+Debris 3
+
+Debris 4
+
+Debris 5
+
+Debris 6
+
+Debris 7
+
+Debris j
+
+FIGURE 7: Relative geometry used for conjunction assess-ment. We model Earth-centric absolute states rsat and ri
+
+and use relative separations ∆ri = ri − rsat (blue) to drive conjunction checks. A dashed circle of radius reff around the satellite marks the minimum separation threshold used for rewards/penalties and episode termination. 
+
+vt+1 = vt + ∆ t ˙v(rt, vt, Tt), rt+1 = rt + ∆ t vt+1 (3) Propellant expenditure follows the rocket equation with effective exhaust velocity ve:
+
+mt+1 = mt − ∆tve
+
+∥Tt∥, ∆vt = ∥Tt∥
+
+mt
+
+∆t (4) and we track the cumulative delta-v ∆Vt = P 
+
+> i≤t
+
+∆vi,which is fed back to the agent along with mt.  
+
+> 8VOLUME 4, 2016 L. Luna et al. : Satellite Trajectory Optimization via PPO for Space Debris Avoidance
+
+Collision detection compares the instantaneous separation 
+
+dt = min i ∥rt − ri
+
+> debris
+
+∥ to the effective safety radius reff . An episode terminates in collision whenever 
+
+dt < r eff = rsat + rdebris + rmargin (5) and the minimum observed dt is retained for reporting. 
+
+Algorithm 2 Apply Thrust to Satellite (per step) 
+
+Require: Action a ∈ [−1, 1] 3, max_thrust , velocity vsat ,masses msat , m fuel , step ∆t; Isp =300 s, g0=9 .80665 m/s 2
+
+Ensure: Updated vsat , m sat , m fuel , ∆v 
+
+> 1:
+
+Sanitize action: clamp and map to acceleration 
+
+acmd ← clip( a, −1, 1) , athrust ← acmd · max_thrust  
+
+> 2:
+
+Integrate velocity: apply thrust over ∆t
+
+vsat ← vsat + athrust ∆t, ∆v ← ∥ athrust ∥ ∆t 
+
+> 3:
+
+Propellant use: rocket equation (instantaneous approxi-mation) 
+
+mconsumed ←
+
+(
+
+msat 
+
+ 1 − e−∆v/ (Isp g0) , ∆v > 00, otherwise  
+
+> 4:
+
+Mass bookkeeping: reduce fuel and wet mass 
+
+mfuel ← max(0 , m fuel − mconsumed ),msat ← msat − mconsumed  
+
+> 5:
+
+return vsat , m sat , m fuel , ∆v
+
+3) Environment Observation Space 
+
+The observation vector for our environment concatenates the satellite position, velocity, residual fuel, and up to 100 debris positions. Additionally, this information regarding the environment is saved to a scenario blueprint, including the debris state, target index, deterministic flags, and initial fuel. This blueprint allows for the exact replication of episodic outcomes and enables trajectory visualization without rerun-ning the policy. Internally, the environment tracks auxiliary telemetry (elapsed time, cumulative delta-v, minimum dis-tance to any debris, collision flags, projected miss distance) and exports these to support both post-evaluation reward shaping and analytics. 
+
+B. REINFORCEMENT LEARNING ENVIRONMENT DESIGN 
+
+In addition to creating our simulation software, we aim to produce a high-performing collision avoidance model. In this section, we explain the chosen model architecture, reward structure design, and model integration in our simulation. 
+
+1) Policy Architecture and Training 
+
+For our agent, we chose to use a PPO architecture (shown in Fig. 8, made up of three layers, with 256, 256, and 128 nodes      
+
+> ............State Inputs
+> Environment features
+> Layer 1 (256 units) Layer 2 (256 units) Layer 3 (128 units) Outputs
+> Policy π(a|s)
+> Value V(s)
+> PPO Agent (MLP Policy)
+
+FIGURE 8: PPO agent architecture (schematic). A shared multilayer perceptron processes state inputs and produces both policy and value outputs. respectively) due to its proven reliability and performance in complex scenarios [28]. PPO optimizes a clipped surrogate objective to ensure stable updates: 
+
+LCLIP (θ) = ˆEt
+
+h
+
+min 
+
+
+
+rt(θ) ˆAt, clip (rt(θ), 1 − ϵ, 1 + ϵ) ˆAt
+
+i 
+
+(6) where rt(θ) is the probability ratio between new and old policies. Next, it combines the policy loss with a value function loss and entropy bonus for stability and exploration: 
+
+LPPO (θ) = ˆEt
+
+LCLIP (θ) − c1LVF (θ) + c2S[πθ ]( st)
+
+(7) Lastly, it estimates advantages using Generalized Advan-tage Estimation (GAE): 
+
+ˆAt = 
+
+> T−t−1
+
+X
+
+> l=0
+
+(γλ )l δt+l, δt = rt + γV (st+1 ) − V (st) (8) reducing variance while preserving learning stability. For the implementation of this model, we use Stable-Baselines3 [48] with the configuration summarized in Table 10 in Appendix B. For training, we perform the curriculum shown in Table 1, which is enforced deterministically by the training loop, so replays of the same checkpoint experience identical scenario difficulties over time. During training, we log episodic re-wards, collision flags, and delta-v usage to TensorBoard sum-maries and invoke deterministic evaluations every 20,000. 
+
+2) Reward Design and Shaping 
+
+The shaped reward for timestep t is summarized in Algorithm 3. Its features include a magnified survival and projected-miss rewards, delta-v penalties, a milestone bonus every 100 steps, and penalties for large burns and jitter to promote smooth, fuel-aware trajectories. This reward function encour-ages safe, fuel-efficient, and stable orbital behavior. 
+
+3) Model and Simulation Integration 
+
+To integrate our model with the previously described simu-lation, we use the OpenAI Gym API to support autonomous   
+
+> VOLUME 4, 2016 9L. Luna et al. : Satellite Trajectory Optimization via PPO for Space Debris Avoidance
+
+TABLE 1: Curriculum schedule                 
+
+> Stage Duration (steps) Collision Probability Debris Radius (m) Notes
+> Basic avoidance 250,000 0.4 25.0 Introduces frequent near-miss encounters. Intermediate 350,000 0.6 50.0 Forces proactive burns under moderate clutter. Advanced 400,000 1.0 100.0 Full adversarial scenarios before test regime.
+
+Algorithm 3 Reward & Termination (Corrected Notation) 
+
+Require: Satellite rsat , debris {ri}, step ∆v, action change 
+
+∆a, cumulative P ∆v, step t
+
+Require: Params: collision threshold dcoll , safe radius dsafe = dcoll + B, penalties/weights 
+
+{Pcoll , λ surv , c d, λ coast , c 1, c 2, p large , λ smooth , c Σv , v soft , λ proj , R mile }
+
+Ensure: (R, done ) 
+
+> 1:
+
+R ← 0, done ← False  
+
+> 2:
+
+dt ← min i ∥rsat − ri∥ (or +∞) 
+
+> 3:
+
+if dt ≤ dcoll then  
+
+> 4:
+
+return (R − Pcoll , True ) 
+
+> 5:
+
+end if  
+
+> 6:
+
+R ← R + λsurv ▷ survival reward  
+
+> 7:
+
+Distance shaping & coasting: 
+
+R ← R+
+
+
+
+cd · min( dt − dsafe , 8000) + 1[∆ v < 0.005] λcoast , dt > d safe ,
+
+−0.00015 · min( dsafe − dt, 8000) , otherwise.  
+
+> 8:
+
+Projected miss / closing speed: 
+
+R ← R + λproj · min   max( dpm − dcoll , 0) , 15000 
+
++ 0 .5 · max 
+
+
+
+0, vclose ,t −1 − vclose ,t 
+
+max( vclose ,t −1, 10 −6)
+
+ 
+
+> 9:
+
+∆v cost (context-aware): 
+
+if ∆v > 0 : C∆v ← (c1∆v+c2∆v2)·
+
+(
+
+0.6, dt ≤ dsafe ,
+
+1, otherwise. 
+
+R ← R − C∆v − 1[∆ v > 0.2] plarge (∆ v − 0.2) 2 
+
+> 10:
+
+Smoothness & cumulative cap: 
+
+R ← R − 1[∆ v < 0.25] λsmooth ∆a2
+
+− 1[X ∆v > v soft ] cΣv (X ∆v − vsoft )1.3 
+
+> 11:
+
+Milestone reward:  
+
+> 12:
+
+if t > 0 and t mod 100 = 0 then  
+
+> 13:
+
+R ← R + Rmile  
+
+> 14:
+
+end if  
+
+> 15:
+
+return (R, done )    
+
+> Note: Projected miss distance is dpm (m) and relative closing speed is vclose ,t
+> (m/s), estimated over a short lookahead horizon.
+
+collision avoidance [47]. The environment provides an obser-vation space that includes the agent’s state, position, velocity, fuel mass, and the positions the of surrounding debris. Ad-ditionally, the environment is a continuous action space, al-lowing the agent to make small velocity adjustments leading to a larger change over time and requiring precise decision making. The agent’s primary focus in our scenarios is to make continuous orbital control decisions aimed at avoiding collisions while maintaining stable and efficient trajectories. 
+
+C. EVALUATION AND TESTING 
+
+1) Baseline Controllers 
+
+In our evaluation, we compare our trained agent against three deterministic baselines, each of which are implemented based on the general literature surrounding them, as de-scribed in Section II-I. 
+
+a: Risk-aware rule-based controller 
+
+These baselines uses the relative kinematics of the scenario, estimating the closing speed and time-to-closest-approach for each debris fragment. Subsequently, maneuvers are triggered when either spatial thresholds (e.g. 4 × collision distance) or temporal limits (e.g. <240 s) are violated. The initial imple-mentation of this baseline achieved a 0% success rate, so to improve its performance we replaced the threshold heuristic with a multi-factor decision rule, improving the baselines performance and making it a competitive comparison. This improvement was achieved by using the following steps: For debris body i, let di be the relative distance, τi the time-to-closest-approach (TCA), and ˆui the unit vector from the satellite toward the debris. We compute a scalar risk score 
+
+ρi = σ
+
+
+
+αd
+
+reff 
+
+di
+
++ ατ
+
+τcrit − τi
+
+τcrit 
+
+
+
+, (9) where σ is the logistic function, τcrit = 240 s , and 
+
+(αd, α τ ) = (3 .0, 2.5) weight spatial and temporal urgency. The commanded thrust for the baseline is 
+
+Tt = Tmax ρi∗ [ˆ ui∗ + β ˆvrel ,i ∗ ] , i∗ = arg max  
+
+> i
+
+ρi, (10) where ˆvrel ,i is the normalized relative velocity, β = 0 .35 adamping gain, and Tmax the thrust authority. 
+
+b: Impulsive ∆v Planner 
+
+Our next baseline is a physically grounded controller that computes the instantaneous relative state (rrel , vrel ) between the satellite and the nearest debris and predicts the time to the closest approach   
+
+> 10 VOLUME 4, 2016 L. Luna et al. : Satellite Trajectory Optimization via PPO for Space Debris Avoidance
+
+t∗ = − rrel · vrel 
+
+∥vrel ∥2 , (11) clamped to a finite prediction horizon and estimates the required lateral clearance dreq such that the projected miss distance dpm at the TCA exceeds the safety threshold tsafe .Then, a constant lateral acceleration is applied as follows: 
+
+a⊥ = 2 dreq 
+
+t∗2 (12) along the direction perpendicular to vrel (aligned with the current lateral offset), saturating at the environment’s action bounds and sustaining the burn for ⌈t∗/∆t⌉ integration steps. This particular implementation was necessary to make the impulsive competitive with the simulator’s discrete-time ac-celeration model and yield an interpretable avoidance behav-ior. 
+
+> c: Deep Q-Network (DQN)
+
+To evaluate our PPO model we provide a learning-based baseline by implementing a DQN using a discrete-action formulation. The continuous thrust space of the avoidance environment was discretized into a symmetric action set 
+
+A = {0, ±a0ˆex, ±a0ˆey , ±a0ˆez }, (13) where a0 is the action magnitude specified in the configura-tion file and ˆex,y,z are the body-frame unit vectors. This dis-cretization was applied using a wrapper that maps the agent’s action index to a clipped thrust vector, ensuring compatibility with Stable-Baselines3’s DQN implementation. We train the DQN with a two-layer MLP policy using the following same hyperparameters and reward as our PPO method. We use a smaller architecture of two layers of 64 nodes each as this results in an overall improvement in the policy’s performance versus having a matching structure as our PPO policy. Unlike the PPO agent, the DQN does not optimize over a continuous action manifold; instead, it must approximate long-horizon collision avoidance using only this restricted, fixed action set. This limitation is reflected in its high-variance behavior and reduced reliability during evaluation. 
+
+> d: No-action controller
+
+Lastly, a no-action baseline serves as a lower bound that coasts without intervention and verifies that the scenario set is non-trivial. 
+
+> 2) Deterministic Evaluation Pipeline
+
+Deterministic evaluation is a large focus in our work; thus, it is possible for others to reproduce our results and potentially expand upon our work. Our evaluation script enforces shared seeds across controllers, re-instantiates environments per pol-icy, and records the following metrics. These metrics include the collision/success rates, episode length, total reward, delta-v usage, minimum approach distance, and fuel consump-tion. Additionally, per-episode metrics and seeds for direct 
+
+FIGURE 9: Evaluation Avoidance Sample Green Dot: Agent Location Green Line: Agent Orbit Trajectory Yellow Dot: Debris Location Orange Line: Agent Thrust Vector 
+
+FIGURE 10: Evaluation Collision Sample Green Dot: Agent Location Green Line: Agent Orbit Trajectory Yellow Dot: Debris Location Red Marker: Agent Collision Point inspection, and per-step time-series (elapsed time, delta-v increments, cumulative delta-v, and minimum distance). After completing the evaluation, the results are exported to the user’s desired path. By saving these results along with the deterministic training of our simulation, we create a fully reproducible system that allows others to continue our work. Samples of our evaluation can be seen in Figs. 9 and 10. 
+
+> V. RESULTS
+
+During our deterministic evaluations, we executed 1,000 episodes per policy using the test configuration outlined in Table 9. Table 2 summarizes the quantitative comparisons. As shown in Table 3, the PPO agent succeeds in 975 of 1,000 trials, with the remaining failures attributable to deliberate risk-taking near the boundary. This shows that the agent   
+
+> VOLUME 4, 2016 11 L. Luna et al. : Satellite Trajectory Optimization via PPO for Space Debris Avoidance
+
+FIGURE 11: Sample Agent Trajectories TABLE 2: Agent Performance (1,000-run evaluation)                                                   
+
+> Policy Collision Rate Collisions Success Rate Avg Reward Avg Steps Avg ∆v(m/s) Avg Min Dist (m) Fuel Used (kg)
+> PPO 2.50% 25 97.50% 3.47 ×10 7976.20 888.410 1,428.59 254.492
+> DQN 62.00% 620 38.00% -4.74 ×10 4319.68 147.748 176,055.46 45.915 Rule-based 79.30% 793 20.70% 7.35 ×10 6276.89 437.606 235.01 137.666 Impulsive 72.50% 725 27.50% 1.00 ×10 7321.13 12.175 269.54 4.125 No-action 100.00% 1000 0.00% 3.87 ×10 563.96 0.000 140.11 0.000
+
+TABLE 3: Termination counts (1,000-run evaluation)                         
+
+> Policy Success Collision Fuel Depleted Timeout
+> PPO 970 25 50
+> DQN 200 620 0180 Rule-based 207 793 00Impulsive 275 725 00No-action 01000 00
+
+FIGURE 12: Collision Success Rates learned effective collision avoidance strategies, resulting in a 76.8 percentage-point lower collision rate compared to the rule-based baseline policy, and 70.0 percentage-point lower than the impulsive baseline. 
+
+A. POLICY BEHAVIOR 
+
+1) PPO Agent 
+
+During training and evaluation, several behaviors led to an increased performance of our agent. First, once the agent receives an observation of the debris’ location, it begins a proactive burn. This burn allows it to exploit the thrust limit and widen the miss window, thereby ensuring safe avoidance. Generally, we found that the agent spent approximately the first 150 seconds increasing the separation to greater than 
+
+500 m before coasting for the rest of the simulation. This behavior can be observed in Figs. 13 and 14a, where the agent’s mean curve quickly exits the danger zone and main-tains a 1–2 km buffer. A notable point that we discuss later is that the agent achieves a higher cumulative ∆v and fuel consumption, which is consistent with our reward design that tolerates aggressive maneuvers near collisions. Examples of the agents resulting trajectories can be seen in Fig. 11. 
+
+2) Rule-Based Policy 
+
+The rule-based policy achieved a 20.7% success rate, which, while better than the no-action baseline, is still an insufficient   
+
+> 12 VOLUME 4, 2016 L. Luna et al. : Satellite Trajectory Optimization via PPO for Space Debris Avoidance
+
+TABLE 4: Mean reward components per episode (1,000-run evaluation)                                                    
+
+> Policy Survival Distance Closing Milestone ∆vPenalty Cumulative Penalty Total
+> PPO 1.95 ×10 33.48 ×10 75.21 9.74 ×10 1−8.05 ×10 2−5.32 ×10 43.47 ×10 7
+> DQN 6.38 9.86 ×10 20.31 1.12 -1.74 ×10 3-4.60 ×10 4-4.74 ×10 4
+> Rule-based 5.52 ×10 27.37 ×10 61.19 2.18 ×10 1−1.25 ×10 3−1.33 ×10 47.35 ×10 6
+> Impulsive 6.41 ×10 21.00 ×10 70.61 2.75 ×10 1−5.95 0.00 1.00 ×10 7
+> No-action 1.26 ×10 23.87 ×10 50.00 0.00 ×10 00.00 0.00 3.87 ×10 5
+
+score. This likely results from a lack of long-horizon plan-ning, with it often using the majority of its avoidance budget early on, leading to no possible late-stage corrections. Fig. 14a shows that spacing rarely exceeds ∼ 300 m, with Fig. 13 highlighting the discrete ∆v bursts without sustained follow-through profiles. 
+
+3) Impulse 
+
+The impulse baseline displayed a similar behavior to the rule-based baseline, with it’s actions and ∆v spending tapering off very quickly. The baseline began with large burns at the encounter onset rather than the gradual maneuvers, leading to a distance offset initially but not enough for collision avoid-ance (Figs. 13, 14). This led to limited trajectory corrections, while it was more accurate and fuel-efficient than the rule-based baseline (27.5% success rate), it still did not surpass our PPO agent. As a result, it maintains very low cumulative 
+
+∆v (12.2,m/s) and minimal fuel usage (4.1,kg), prioritizing conservation over consistent avoidance. Overall, this displays the limitations of open-loop impulsive avoidance, where while it is fuel-efficient, it fails to ensure safety in dynamic multi-body environments. 
+
+4) Deep Q-Network (DQN) 
+
+In the evaluation of DQN, it exhibited high-variance behav-ior, with its trajectories often diverging into large, unstable orbits. This is what resulted in the disproportionately large average minimum distance when it did successfully avoid, shown in 14 and 14b. DQN showed difficulty with long-horizon planning, often failing to apply early corrective burns needed for safe avoidance. Additionally, DQN produced noisy and inconsistent ∆v usage, with small unstructured thrusts rather than coordinated maneuvers. Many episodes terminated via max_steps or drifting into wide orbits rather than achieving stable controlled avoidance. One no-table point is this policy was much more conservative with its fuel usage in comparison to the other baselines and our own PPO policy. Overall, the policy failed to learn a stable avoidance strategy, highlighting the limitations of DQN in continuous, long-duration orbital tasks and displaying the efficiency of PPO. 
+
+5) No-Action Policy 
+
+We utilized this as an adversarial baseline to display the result if no action was taken. This shows that only 0.1% of the trajectories were naturally safe, confirming the difficulty of the encounter set. 
+
+FIGURE 13: Cumulative Delta-V Distribution 
+
+B. FUEL PERFORMANCE 
+
+During the evaluation, the PPO agent consumed 254 kg of fuel compared to the rule-based controller’s 138 kg and impulsive’s 4 kg, likely due to the reward function penalizing collision more than fuel usage. This is a notable increase, showing a much lesser regard for fuel usage; however, this higher usage is a trade-off for over double the increase in performance, with the PPO’s average reward being nearly five times higher. Therefore, we believe that the increased usage is offset by the increase in performance, with the delta-v efficiency being acceptable for high-priority avoidance maneuvers. 
+
+C. CUMULATIVE REWARDS 
+
+Table 4 shows the resulting reward from 3 into constituent terms. The PPO agent’s dominance stems from strongly positive survival and distance components that outweigh fuel penalties. In contrast, the baselines accrue modest survival reward and pay proportionally smaller penalties, yet fail to offset the collision losses. Fig. 15 shows two manifolds: high reward/high ∆v avoidance (PPO) and low reward/low 
+
+∆v failures (baselines). The elongated lobes of the Kernel Density Estimation quantify the trade-off frontier between fuel expenditure and reward. 
+
+VI. LIMITATIONS 
+
+Despite promising results, several limitations remain:    
+
+> VOLUME 4, 2016 13 L. Luna et al. : Satellite Trajectory Optimization via PPO for Space Debris Avoidance
+> (a) Without DQN (b) With DQN
+
+FIGURE 14: Comparison of Minimum Distance Distributions With and Without DQN 
+
+FIGURE 15: Reward vs. Delta-V (Joint Kernel Density Esti-mation (KDE)) 
+
+> A. ERROR ANALYSIS
+
+As discussed previously, PPO achieves higher success but expends more ∆v than baselines. This is due to a reward imbalance, with an overemphasis on collision avoidance, leading to suboptimal fuel use. In future work, we will focus on balancing the reward function to improve the fuel consumption while maintaining the performance. 
+
+> B. MODELING AND EVALUATION LIMITS
+
+Currently, there are several limitations to the implementation of the agent with the simulation environment, preventing it from representing the real world. First, we provide an agent with a perfect sensing of the environment and full noise-free state knowledge. This differs from real missions that require filters for delayed and uncertain observations. We also use a simplified thrust model, ignoring slew rates, burn durations, and control windows, all of which are crucial factors in real TT&C operations. For future work, we will address both of these issues, no longer providing the agent with full information on the environment and develop a more representative thrust model. 
+
+> C. REAL-TIME DEPLOYMENT CHALLENGES
+
+A potential application of our simulation would be the devel-opment and deployment of learning-based collision avoid-ance systems on operational satellites. To further explore this possibility, several real-time constraints would need to be addressed. Firstly, satellite processors often have limited onboard compute, with strict power and memory budgets. Due to this, using a continuous PPO akin to ours would be challenging without model compression or lightweight architectures. The next challenge would include latency and communication windows, with decision making often being delayed due to uplink/downlink schedules. This would re-quire a policy that can operate autonomously with intermit-tent ground support. Lastly, our currently simulation does not include any realistic safety and verification requirements. Real world policies must be constrained to avoid unsafe actions, often interacting with rule-based systems. Currently our simulation is unconstrained as to best evaluate policy performance, but to explore real-time deployment formal safety guarantees would need to be incorporated.   
+
+> 14 VOLUME 4, 2016 L. Luna et al. : Satellite Trajectory Optimization via PPO for Space Debris Avoidance
+
+FIGURE 16: Example swarm simulation scenario. 
+
+> VII. FUTURE WORK
+
+In future work, as stated in the limitations, we will focus on implementing realistic sensing, which is representative of the real world. This includes observation noise, delays, and partial observability by using recurrent or belief-based policies. In addition, we intend to add operational constraints often used in spaceflight operations, including enforcing burn magnitude, direction, and timing limits with mission-level cost tradeoffs. We plan to explore hybrid control systems by combining the commonly used rule-based safety logic with learned policies for fallback and safety handovers. Ad-ditionally, our work does not feature many modern baselines that are often used owing to initial development constraints, project timelines, and the complexity of their implementa-tion. Our hope was that the current baselines, although older, still provide the necessary insight into the improvements that our agent provides in collision avoidance. Therefore, we intend to address this in future work by implementing advanced guidance (e.g., MPC, optimal control, conjunction analysis) for stronger comparisons. Finally, we will explore the implementation of swarm modeling in our environment, extending to multi-agent avoidance and debris-field interac-tions (Fig. 16). 
+
+> VIII. CONCLUSION
+
+Our study introduces a publicly available collision avoidance simulation environment for real-time mapping of space de-bris and active satellites in orbit, along with the capabilities of training and evaluating autonomous agents. Our pipeline focuses on reproducible results, including deterministic train-ing and evaluation of methods, along with telemetry data log-ging for transparent peer review and rapid experimentation, including set-scenario blueprints, per-episode logs, summary tables, and evaluation seeds. We found that this level of pack-aging and transparency is uncommon in orbital RL research, thus lowering the barrier for comparative studies. Additionally, we create an autonomous Proximal Policy Optimization agent that demonstrates a collision avoidance capability that exceeds that of classical methods and other RL policies, with the agent’s distributed burn strategy and small repeated thrusts achieving smoother and more consis-tent avoidance than the baseline’s sporadic spike. We also integrate a curriculum learning schedule and reward shaping oriented towards collision avoidance that balances collision penalties with fuel-conservation incentives, enabling the re-sponsible use of thrust authority. For a competitive evalua-tion, we compare our model to industry baselines, a risk-aware heuristic controller that reacts to distance and time-to-collision, and an impulsive strategy grounded in classical orbital mechanics and conjunction analysis. This comparison validates the advantage of our method, owing to its increased performance over these baselines. Overall, our framework es-tablishes a robust foundation for training and evaluating RL-based collision avoidance in contested orbital environments while providing a new competitive agent. .  
+
+> VOLUME 4, 2016 15 L. Luna et al. : Satellite Trajectory Optimization via PPO for Space Debris Avoidance
+
+APPENDIX A NOMENCLATURE 
+
+TABLE 5: Nomenclature 
+
+Symbol Quantity Description / Units 
+
+r Position vector Satellite position in ECI frame [m] 
+
+v Velocity vector Satellite velocity in ECI frame [m/s] 
+
+˙r Velocity derivative ˙r = v
+
+˙v Acceleration vector Total acceleration incl. gravity and thrust [m/s 2]
+
+μ⊕ Earth gravitational parame-ter 
+
+3.986 × 10 14 [m 3/s 2]
+
+μk Perturber parameter Grav. parameter of Moon/Sun [m 3/s 2]
+
+rk Perturber position Moon/Sun position relative to Earth [m] 
+
+mt Satellite mass Includes structure + remaining fuel [kg] 
+
+Tt Thrust vector Applied thrust at time t [N] 
+
+Tmax Max thrust Engine thrust limit [N] 
+
+ve Exhaust velocity ve = Isp g0 [m/s] 
+
+Isp Specific impulse Engine efficiency [s] 
+
+g0 Standard gravity 9.80665 [m/s 2]
+
+∆vt Velocity increment Speed change over ∆t [m/s] 
+
+∆t Time step Integration interval [s] 
+
+dt Separation distance min i ∥rsat − ri∥ [m] 
+
+dcoll Collision threshold Unsafe separation distance [m] 
+
+dsafe Safety buffer radius dcoll + B [m] 
+
+reff Effective safety radius rsat + rdeb + rmargin [m] 
+
+dpm Projected miss distance Estimated closest approach [m] 
+
+vclose ,t Relative closing speed Instantaneous LOS approach rate [m/s] 
+
+ρi Hazard score Risk weight for debris iσ(·) Sigmoid Logistic function for ρi
+
+αd, α τ Weighting scalars Distance/TTC scaling parameters 
+
+di Distance to debris i ∥rsat − ri∥ [m] 
+
+τi TTC Time to closest approach of debris iτcrit Critical TTC Safety-conditioned threshold [s] 
+
+i∗ Most threatening index i∗ = arg max i ρi
+
+ˆui Avoidance direction Unit vector away from debris i
+
+ˆvrel ,i Rel. velocity dir. Normalized relative velocity 
+
+β Blending factor Velocity-alignment weight 
+
+rrel Relative position (rsat − ri) [m] 
+
+vrel Relative velocity (vsat − vi) [m/s] 
+
+t∗ Time of closest approach −(rrel · vrel )/∥vrel ∥2
+
+a⊥ Required normal accel. 2dreq /t ∗2 [m/s 2]
+
+dreq Required clearance Target minimum pass distance [m] 
+
+A Action set {0, ±a0 ˆex, ±a0 ˆey , ±a0 ˆez }
+
+a0 Action magnitude Discrete thrust level [N] 
+
+∆a Action change ∥at − at−1∥
+
+C∆v ∆v cost term Context-aware burn penalty 
+
+λsurv ,
+
+λcoast ,
+
+λsmooth ,
+
+λproj 
+
+Reward coefficients Survival, coasting, smoothness, pro-jection shaping 
+
+cd, c1,
+
+c2, cΣv
+
+Cost constants Distance, ∆v, cumulative-∆v shap-ing 
+
+plarge Large burn penalty Quadratic penalty on large impulses 
+
+vsoft Soft ∆v cap Cumulative burn threshold [m/s] 
+
+Rmile Milestone reward Bonus for long-term survival 
+
+Rt Step reward Reward at timestep tRtotal Episode reward Sum of step rewards 
+
+Pcoll Collision penalty Large negative terminal reward 
+
+Indicator function: 1[·] = 1 if condition true, else 0. All quantities use SI units unless stated otherwise. 
+
+APPENDIX B TRAINING AND EVALUATION CONFIGURATIONS 
+
+TABLE 6: Training reward shaping coefficients 
+
+Parameter Value 
+
+collision_penalty 1000.0 
+
+survival_reward 0.02 
+
+distance_shaping_coeff 0.0002 
+
+coast_bonus 0.05 
+
+delta_v_linear_cost 8.0 
+
+delta_v_quadratic_cost 0.8 
+
+large_burn_penalty 4.0 
+
+smoothness_penalty 0.008 
+
+cumulative_dv_penalty 0.3 
+
+projected_miss_reward 0.0002 
+
+milestone_reward 0.4 
+
+TABLE 7: Evaluation reward shaping coefficients 
+
+Parameter Value 
+
+collision_penalty 50.0 
+
+survival_reward 2.0 
+
+distance_shaping_coeff 1.0 
+
+coast_bonus 3.0 
+
+delta_v_linear_cost 0.5 
+
+delta_v_quadratic_cost 0.05 
+
+large_burn_penalty 0.5 
+
+smoothness_penalty 0.0005 
+
+cumulative_dv_penalty 0.02 
+
+projected_miss_reward 2.0 
+
+milestone_reward 10.0 
+
+TABLE 8: Training runtime settings 
+
+Parameter Value 
+
+vec_env dummy num_envs 8
+
+device cpu total_timesteps 1,000,000 
+
+eval_freq 20,000 
+
+TABLE 9: Evaluation scenario and parameters 
+
+Parameter Value 
+
+collision.guarantee false collision.probability 1.0 
+
+collision.ttc_steps 20 
+
+debris_radius_m 50.0 
+
+max_thrust 0.15   
+
+> 16 VOLUME 4, 2016 L. Luna et al. : Satellite Trajectory Optimization via PPO for Space Debris Avoidance
+
+TABLE 10: PPO hyperparameters 
+
+Parameter Value 
+
+n_steps 2048 
+
+batch_size 256 
+
+n_epochs 10 
+
+learning_rate 0.0003 
+
+lr_schedule constant ent_coef 0.01 
+
+vf_coef 0.5 
+
+max_grad_norm 0.5 
+
+gamma 0.995 
+
+gae_lambda 0.95 
+
+clip_range 0.2 
+
+target_kl 0.01 
+
+net_arch [256, 256, 128] 
+
+REFERENCES 
+
+[1] European Space Agency (ESA), “The Current State of Space Debris.” https://www .esa .int/Space_Safety/Space_Debris/The_current_state_of_ space_debris, 2024. [2] PayloadSpace News, “ESA Report Shows Unsustainable Levels of Or-bital Debris.” https://payloadspace .com/esa-report-shows-unsustainable-levels-of-orbital-debris, 2024. [3] ESA Space Debris Office, “Space Debris by the Numbers.” https : / / www .esa .int / Safety _ Security / Space _ Debris / Space _ debris _ by _ the _ numbers, 2021. [4] D. J. Kessler and B. G. Cour-Palais, “Collision Frequency of Artificial Satellites: The Creation of a Debris Belt,” Journal of Geophysical Re-search, vol. 83, no. A6, pp. 2637–2646, 1978. [5] D. Pine, “It’s time to clean up space junk before orbits become ‘unusable,’ according to new esa report.” https://www .livescience .com/space/its-time-to-clean-up-space-junk-before-orbits-become-unusable-according-to-new-esa-report, 2025. [6] Federal Aviation Administration, “Faa proposed rule would reduce growth of debris from commercial space vehicles.” https://www .faa .gov/ newsroom/faa-proposed-rule-would-reduce-growth-debris-commercial-space-vehicles, 2023. [7] C. Eberle and Z. Sebesvari, “Technical report: Space debris,” tech. rep., United Nations University, Bonn, Germany, 2022. [8] P. B. de Selding, “ESA’s annual debris report: Fragmentations averaging 10 per year; surprising debris effect on Earth observation imagery,” Space Intel Report, Apr. 2025. [9] N. L. Johnson, “Orbital debris: The growing threat to space operations,” in Proceedings of the 33rd Annual Guidance and Control Conference, (Breckenridge, CO, USA), American Astronautical Society, 2010. [10] B. Tarran, “Prepare for impact: Space debris and statistics,” Significance, vol. 18, no. 3, pp. 18–23, 2021. [11] U.S. Government Accountability Office, “Satellite deployments: Expected growth and regulatory implications,” Tech. Rep. GAO-23-105678, U.S. Government Accountability Office, 2023. [12] Arcep, “Satellites and the environment: When the promises of megacon-stellations collide with the limits of space.” https://en .arcep .fr/news/press-releases/view/n/satellites- and- environnement- event- ademe- arcep- cnes-201123 .html, 2021. [13] Union of Concerned Scientists, “Ucs satellite database.” https : / / www .ucsusa .org/resources/satellite-database, 2024. [14] T. Uriot, D. Izzo, J. A. Martinez-Heras, F. Letizia, J. Siminski, and K. Merz, “Collision avoidance challenge dataset.” https://doi .org/10 .5281/ zenodo .4463683, 2021. [15] European Space Agency, “Reentry and collision avoidance.” https : / / www .esa .int / Space _ Safety / Space _ Debris / Reentry _ and _ collision _ avoidance. [16] European Space Agency, “ESA Space Debris Mitigation Requirements,” Standard ESSB-ST-U-007 Issue 1, European Space Agency, Paris, France, 2023. [17] A. C. Boley and M. Byers, “Satellite mega-constellations create risks in low earth orbit, the atmosphere and on earth,” Scientific Reports, vol. 11, no. 10642, 2021. [18] European Space Agency, “Esa spacecraft dodges large constellation.” https : / / www .esa .int / Space _ Safety / ESA _ spacecraft _ dodges _ large _ constellation, 2019. [19] A. Thompson, “Traffic jams from satellite fleets are imminent—what it means for earth.” https : / / observer .com / 2019 / 09 / satellite - space -congestion-spacex-starlink-esa-aeolus/, 2019. [20] E. Howell, “How often does the international space station have to dodge space debris?.” https : / / www .space .com / international - space - station -space-dodge-debris-how-often, 2023. [21] New Space Economy Editorial Team, “How do satellites avoid colli-sions?.” https : / / newspaceeconomy .ca / 2025 / 11 / 10 / how - do - satellites -avoid-collisions/, 2025. [22] T. Pultarova, “How many satellites can we safely fit in earth orbit?.” https: //www .space .com/how-many-satellites-fit-safely-earth-orbit, 2023. [23] A. Rossi, N. Sánchez-Ortiz, E. David, R. Opromolla, and D. Grishko, “Future activities in the near-earth space in the face of ever-increasing space traffic,” Acta Astronautica, vol. 225, pp. 891–897, 2024. [24] P. J. Blount, “Space traffic management: Standardizing on-orbit behavior,” AJIL Unbound, vol. 113, pp. 120–124, 2019. [25] E. Alpaydin, Introduction to Machine Learning. Cambridge, MA, USA: MIT Press, 4 ed., 2020. [26] M. Alloghani, D. Al-Jumeily, J. Mustafina, A. Hussain, and A. J. Aljaaf, “A systematic review on supervised and unsupervised machine learning algorithms for data science,” in Supervised and Unsupervised Learning for Data Science, pp. 3–21, Cham, Switzerland: Springer, 2020. [27] V. François-Lavet, P. Henderson, R. Islam, M. G. Bellemare, and J. Pineau, “An introduction to deep reinforcement learning,” Foundations and Trends® in Machine Learning, vol. 11, no. 3–4, pp. 219–354, 2018. [28] J. Schulman, F. Wolski, P. Dhariwal, A. Radford, and O. Klimov, “Prox-imal policy optimization algorithms,” arXiv preprint arXiv:1707.06347, 2017. [29] R. Armellin, “Collision avoidance maneuver optimization with a multiple-impulse convex formulation,” Acta Astronautica, vol. 186, pp. 347–362, 2021. [30] K. Chan, Spacecraft Collision Probability. El Segundo, CA, USA: Aerospace Press, 2008. [31] R. H. Battin, An Introduction to the Mathematics and Methods of Astro-dynamics. Reston, VA, USA: AIAA, 1999. [32] L. K. Newman, “Nasa conjunction assessment risk analysis (cara) pro-gram: Updated requirements architecture,” Tech. Rep. GSFC-E-DAA-TN39817, NASA Goddard Space Flight Center, Greenbelt, MD, USA, 2019. [33] H. Klinkrad, P. Beltrami, H. Krag, et al., “The ESA space debris mitigation handbook 2002,” Advances in Space Research, vol. 34, no. 5, pp. 1251– 1259, 2004. [34] S. Alfano, D. L. Oltrogge, H. Krag, K. Merz, and R. Hall, “Risk assessment of recent high-interest conjunctions,” Acta Astronautica, vol. 184, pp. 241– 250, 2021. [35] N. Reiland, A. J. Rosengren, R. Malhotra, and C. Bombardelli, “Assessing and minimizing collisions in satellite mega-constellations,” Advances in Space Research, vol. 67, no. 11, pp. 3755–3774, 2021. [36] J.-S. Ardaens and C. Früh, “Collision avoidance maneuver planning using a multi-objective optimization approach,” in 2013 6th International Con-ference on Recent Advances in Space Technologies (RAST), pp. 603–608, IEEE, 2013. [37] V. Mnih, K. Kavukcuoglu, D. Silver, A. A. Rusu, J. Veness, M. G. Bellemare, A. Graves, M. Riedmiller, A. K. Fidjeland, G. Ostrovski, S. Petersen, C. Beattie, A. Sadik, I. Antonoglou, H. King, D. Kumaran, D. Wierstra, S. Legg, and D. Hassabis, “Human-level control through deep reinforcement learning,” Nature, vol. 518, no. 7540, pp. 529–533, 2015. [38] European Space Agency, “Automating collision avoidance.” https : / / www .esa .int / Space _ Safety / Space _ Debris / Automating _ collision _ avoidance, 2019. [39] The White House, “Space policy directive-3: National space traffic management policy.” https://trumpwhitehouse .archives .gov/presidential-actions/space- policy- directive- 3- national- space- traffic- management-policy/, 2018. [40] T. Uriot, D. Izzo, L. Simões, R. Abay, N. Einecke, S. Rebhan, J. A. Martinez-Heras, F. Letizia, J. Siminski, and K. Merz, “Spacecraft collision avoidance challenge: Design and results of a machine learning competi-tion,” Astrodynamics, vol. 6, no. 2, pp. 121–140, 2022. [41] G. Acciarini, F. Pinto, F. Letizia, J. A. Martinez-Heras, K. Merz, C. Bridges, and A. G. Baydin, “Kessler: A machine learning library for spacecraft collision avoidance,” in Proceedings of the 8th European Conference on Space Debris, (Darmstadt, Germany), ESA Space Debris Office, 2021.   
+
+> VOLUME 4, 2016 17 L. Luna et al. : Satellite Trajectory Optimization via PPO for Space Debris Avoidance
+
+[42] G. Acciarini, N. Baresi, C. Bridges, L. Felicetti, S. Hobbs, and A. G. Bay-din, “Observation strategies and megaconstellations impact on current leo population,” in 2nd NEO and Debris Detection Conference, (Darmstadt, Germany), 2023. [43] F. J. Krage, “Nasa spacecraft conjunction assessment and collision avoid-ance best practices handbook,” Tech. Rep. NASA/SP-20230002470, Na-tional Aeronautics and Space Administration (NASA), Washington, DC, USA, 2023. [44] A. Abdin, N. Bourriez, and A. Loizeau, “Spacecraft autonomous decision-planning for collision avoidance: a reinforcement learning-based ap-proach,” in Proceedings of the 74th International Astronautical Congress (IAC-23), Symposium A6.7: Operations in Space Debris Environment, (Baku, Azerbaijan), International Astronautical Federation, 2023. [45] C. Mu, S. Liu, M. Lu, Z. Liu, et al., “Autonomous spacecraft collision avoidance with a variable number of space debris based on safe reinforce-ment learning,” Aerospace Science and Technology, vol. 149, p. 109131, 2024. [46] A. Solomon and C. P˘ aduraru, “Collision avoidance and return manoeuvre optimisation for low-thrust satellites using reinforcement learning,” in Proceedings of the 17th International Conference on Agents and Artificial Intelligence (ICAART 2025), vol. 3, pp. 1009–1016, SCITEPRESS, 2025. [47] G. e. a. Brockman, “Openai gym: A toolkit for developing and comparing rl algorithms.” https://arxiv .org/abs/1606 .01540, 2016. [48] P. e. a. Dhariwal, “Stable baselines: High-quality implementations of rl algorithms.” https://github .com/openai/baselines, 2017. [49] CelesTrak, “Norad two-line element sets for satellite tracking.” https:// celestrak .org/NORAD/elements/index .php?FORMAT=csv, 2024. [50] A. Collaboration, A. M. Price-Whelan, P. L. Lim, N. Earl, N. Starkman, et al., “The astropy project: Sustaining and growing a community-oriented open-source project and the latest major release (v5.0),” The Astrophysical Journal, vol. 935, no. 2, p. 167, 2022. [51] J. L. Benito, M. Lara, A. Cappelletti, et al., “Poliastro: An open source python library for orbital mechanics,” Journal of Open Source Software, vol. 4, no. 43, p. 1884, 2019. 
+
+LOGAN LUNA (Member, IEEE) received the B.S. degree in computer science with a mi-nor in computational mathematics from Embry-Riddle Aeronautical University, Daytona Beach, FL, USA. He is currently pursuing the M.S. degree in computer science with the School of Computer Science, College of Computing, Georgia Institute of Technology, Atlanta, GA, USA. He is a Depart-ment of Defense SMART Scholar. His research focuses on machine learning, reinforcement learn-ing, and autonomous systems, with applications in orbital collision avoid-ance, intrusion detection, and sensor fusion. He was a recipient of the IEEE-Eta Kappa Nu Best Paper Award and the 2025 Outstanding Undergraduate in Computer Science Award. 
+
+JUAN ORTIZ COUDER (Member, IEEE) re-ceived the B.S. and M.S. degrees in software en-gineering from Embry-Riddle Aeronautical Uni-versity, where he is currently pursuing the Ph.D. degree. His research centers on the integration of machine learning into the cybersecurity field from a software engineering perspective. In addition, his research interest includes software engineering education, with a particular focus on incorporating current AI trends into academia. 
+
+RAUL ALEJANDRO VARGAS-ACOSTA 
+
+(Member, IEEE) received the Ph.D. degree in computer science from The University of Texas at El Paso, El Paso, TX, USA, in 2024. He is currently an Assistant Professor with the De-partment of Electrical Engineering and Computer Science, Embry-Riddle Aeronautical University, Daytona Beach, FL, USA. His research interests include data analytics, knowledge representation, and their applications across diverse domains. He is a member of the Upsilon Pi Epsilon.
