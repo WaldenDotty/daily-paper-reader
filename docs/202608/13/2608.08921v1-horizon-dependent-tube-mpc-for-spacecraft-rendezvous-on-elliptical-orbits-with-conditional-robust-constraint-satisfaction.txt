@@ -1,0 +1,1422 @@
+Title: Horizon-Dependent Tube MPC for Spacecraft Rendezvous on Elliptical Orbits with Conditional Robust Constraint Satisfaction
+
+URL Source: https://arxiv.org/pdf/2608.08921v1
+
+Published Time: Tue, 11 Aug 2026 01:36:32 GMT
+
+Number of Pages: 34
+
+Markdown Content:
+# Horizon-Dependent Tube MPC for Spacecraft Rendezvous on Elliptical Orbits with Conditional Robust Constraint Satisfaction 
+
+Omer Burak Iskender a, ∗
+
+> aSchool of Electrical and Electronic Engineering, Nanyang Technological University, Singapore
+
+Abstract 
+
+Spacecraft rendezvous on elliptical orbits must hold a safety corridor under navigation noise, unmodelled perturbations, and thrust errors driven by propellant mass uncertainty. This paper develops a tube-based model predictive controller for the Yamanaka–Ankersen linear time-varying dynamics, carrying constraint-tightening tube methods from circular to elliptical orbits. A horizon-dependent, element-wise error bound propagates the actual closed-loop matrices along the prediction window, so early prediction steps keep nearly the full corridor that a constant-width tube would surrender. A multiplicative-to-additive conversion folds mass and thrust uncertainty into the same tightening recursion, and a Perron–Frobenius spectral-radius condition supplies a computable certificate that the tightening converges, with an explicit input-to-state stability gain. In a paired Monte Carlo campaign on a Mars sample-return orbit, the tube controller cuts mean corridor violations by more than an order of magnitude against a nominal predictive baseline at comparable fuel cost. A nonlinear truth-model test with oblateness perturbations well beyond the assumed disturbance budget leaves the corridor unviolated, and when the design envelope is exceeded the tightened problem becomes infeasible and the controller reverts to a saturated linear fallback, making the loss of guarantee explicit rather than silent. The construction requires only element-wise arithmetic and an open-source quadratic-programming solver. 
+
+Keywords: tube MPC, spacecraft rendezvous, elliptical orbit, robust control, LTV systems 
+
+Accepted for publication in Advances in Space Research. 
+
+Nomenclature 
+
+a = semi-major axis, m 
+
+Ak = discrete YA state matrix at step k, R6×6
+
+¯A = element-wise worst-case matrix, max k |Acl ,k |
+
+Acl ,k = closed-loop matrix, Ak + BkKBk = discrete input matrix at step k, R6×3
+
+e = orbital eccentricity 
+
+ek = tracking error, xk − zk
+
+¯ej = element-wise error bound at horizon step jγISS = input-to-state stability gain 
+
+K = tube feedback gain, R3×6
+
+N = MPC prediction horizon (steps) 
+
+n = mean motion, rad/s 
+
+ν = true anomaly, rad   
+
+> ∗Corresponding author
+> Email address: iske0001@e.ntu.edu.sg (Omer Burak Iskender) arXiv:2608.08921v1 [eess.SY] 9 Aug 2026
+
+P = terminal cost weight matrix 
+
+Q, R = state and input running cost matrices 
+
+ρ(·) = spectral radius 
+
+α, α N = terminal level set and its horizon-deflated value 
+
+λ⋆ = worst-case contraction-loss ratio in the P -metric 
+
+ε = DARE regularisation scalar (Equation (26)) 
+
+ε∗ = Young-inequality weight in Equation (20) 
+
+Xf = ellipsoidal terminal set 
+
+ν⋆ = worst-case orbit phase for the terminal-set design 
+
+Ts = sampling period, s 
+
+uk = applied control input (velocity increment), m/s 
+
+vk = nominal planned input (QP variable), m/s 
+
+wk = additive bounded disturbance 
+
+¯w = process-noise disturbance bound vector 
+
+¯wj = per-step total disturbance bound (process noise + mass) 
+
+δm, max = maximum mass/thrust uncertainty fraction 
+
+xk = relative state, [rx, r y , r z , v x, v y , v z ]⊤
+
+xs = setpoint state 
+
+zk = nominal state trajectory 
+
+Notation 
+
+For a vector v ∈ Rn and a matrix M ∈ Rm×n, |v| and |M | denote element-wise absolute values; inequal-ities between vectors or matrices of equal dimension are read element-wise. ρ(M ) = max i |λi(M )|. The row-wise triangle inequality |M v | ≤ | M | | v| and, for non-negative A ≤ B, ρ(A) ≤ ρ(B) Horn and Johnson (2013). “Element-wise box” is the hyper-rectangle {x : |x| ≤ ¯x}.
+
+1. Introduction 
+
+Active debris removal Innocenti et al. (2021); Forshaw et al. (2022), in-orbit servicing, and planetary sample return require autonomous proximity operations on orbits whose eccentricity is set by insertion accuracy and mission budget: LEO values of 0.001 –0.01 , GTO up to 0.73 , Mars-capture ellipses of 0.05 –0.3
+
+are all routine Sullivan et al. (2017); Fehse (2003). The Hill–Clohessy–Wiltshire (HCW) model Clohessy and Wiltshire (1960) underpinning most rendezvous studies assumes a constant orbital rate; position-propagation error then grows quadratically with e and linearly with horizon. At e = 0 .2 a 30-step HCW prediction departs from Keplerian propagation by kilometres (Figure 1); a controller using HCW must inflate robustness margins or accept violations. 
+
+A. Rendezvous on elliptical orbits.. Few constrained RPO studies move beyond CW. Inalhan et al. Inalhan et al. (2002) demonstrated fuel-optimal planning on the YA STM Yamanaka and Ankersen (2002); Hartley et al. Hartley et al. (2015) solved the LTV MPC in real time on FPGA on the identical MSRE orbit; neither provides tube-based robustness. In ASR, Lim et al. Lim et al. (2018) used heuristic constraint backoffs without invariant-set tightening. The robustness mechanism on eccentric orbits is therefore either absent or heuristic. 
+
+B. Tube-based MPC for spacecraft.. Tube MPC Langson et al. (2004); Mayne et al. (2005) decomposes the control into a nominal QP input and feedback K(xk − zk) that confines tracking error to a bounded set; for LTI systems the tube width is the mRPI set Raković et al. (2005). Surveys Eren et al. (2017); Mayne (2014) identify robust constraint satisfaction as an open problem in MPC for aerospace Weiss et al. (2015). Within ASR, Dong et al. Dong et al. (2020) published the first tube-based MPC for rendezvous, with constant-width mRPI on CW dynamics and output feedback; a follow-up Dong et al. (2024) added an online disturbance observer that narrows the tube under mild perturbations but stays on CW with constant-width 2tubes. Zhu et al. Zhu et al. (2018) use worst-case reachable-set backoffs without the tube decomposition. Kang et al. Kang et al. (2025) tighten using the closed-loop rather than open-loop reachable set, reducing conservatism but on CW. Outside ASR, Specht and Mooij Specht and Mooij (2023) designed multi-phase tube MPC for En-visat capture with constant polytopic tubes, Oestreich and Linares Oestreich and Linares (2023) proposed adaptive ellipsoidal tubes updated via per-step SDP, and Mammarella et al. Mammarella et al. (2017); Mam-marella and Capello (2020) validated box-tube MPC on an air-bearing testbed, all under LTI dynamics. Bokor et al. Bokor et al. (2025) addressed robust MPC for rendezvous under sector-bounded nonlinearities; the formulation handles aerodynamic and gravity-gradient nonlinearities but inherits CW dynamics. On the general LTV front, Yu and Cannon Yu and Cannon (2016) established tube MPC with time-varying constraint tightening, and Köhler et al. Köhler et al. (2020) extended the ideas to tracking. Closest to the present work, Bumroongsri Bumroongsri (2015) formulated tube-based MPC for LTV systems with a horizon-dependent invariant set for chemical-process applications without addressing orbital mechanics, mass uncertainty, or eccentric-orbit specialisation. The present manuscript builds on that horizon-dependent tightening and specialises it to the YA dynamics. 
+
+C. Safety corridors and keep-out zones.. Richards et al. Richards et al. (2002) formulated mixed-integer LPs for obstacle avoidance; Gavilán et al. Gavilán et al. (2012) added chance constraints. In ASR, Wang et al. Wang et al. (2023) iteratively convexify non-convex keep-out constraints around the current trajectory, enforced on the nominal path without a disturbance margin. Iskender et al. Iskender et al. (2019); Iskender (2020) validated MPC docking with dual-quaternion kinematics in simulation and hardware. All these methods rely on stochastic margins or empirical backoffs; none provides a deterministic worst-case bound on constraint violation. 
+
+D. Uncertainty modelling in relative motion.. Uncertainty in RPO arises from navigation errors, propellant-driven mass changes, thruster execution errors, and unmodelled perturbations ( J2, third-body). In ASR, Zheng and Luo Zheng and Luo (2024) performed closed-loop uncertainty analysis for non-cooperative ren-dezvous, propagating linearised covariance to generate robust trajectory corridors, a stochastic rather than set-membership approach. The multiplicative-to-additive conversion introduced here absorbs mass uncer-tainty δm into a per-step additive bound ¯wj = ¯ w + δm, max |Bk+j |umax , capturing parametric uncertainty within the box-tightening framework without online covariance propagation or SDP-based tube updates. 
+
+E. Gap and contribution statement.. Horizon-dependent tightening for LTV systems exists generically Yu and Cannon (2016); Bumroongsri (2015); Köhler et al. (2020); this paper specialises it to spacecraft ren-dezvous on elliptical orbits with four additions that do not appear in the cited LTV tube MPC literature: (C1) YA specialisation with an orbit-specific spectral-radius certificate. The Perron–Frobenius condition ρ( ¯A) < 1, where ¯A = max k |Ak + BkK| is taken element-wise over one orbital period, is verified analytically and numerically for the Yamanaka–Ankersen STM, giving a computable eccen-tricity threshold emax below which the box-tube tightening converges. This converts a generic LTV requirement into a closed-form rendezvous certificate. (C2) Mass-aware multiplicative-to-additive lifting. A per-step bound ¯wj = ¯w + δm, max |Bk+j |umax 
+
+folds parametric thrust/mass uncertainty into the same additive tightening recursion that handles process noise, eliminating the need for a separate parametric tube. The per-step structure follows the time-varying Bk of the YA model. (C3) Ellipsoidal terminal invariant set for the LTV closed loop. A single ellipsoid Xf = {x :(x − xs)⊤P (x − xs) ≤ α} computed offline from the DARE at the worst-case orbit phase closes, in theory, the recursive-feasibility gap that constant-width tubes leave open. This contribution is derived and its level set computed in closed form, but the Monte Carlo campaign reported here runs without it (Remark 7); enforcing it exactly requires a second-order-cone solver rather than the QP solver used throughout. (C4) Empirical conservatism map and direct comparison against a classical constant-width tube on the identical scenario , demonstrating that the horizon-dependent recursion delivers a 3∼ 3.5× reduction in violations and a ∼ 3.4× reduction in fallback events at the design envelope boundary (5.1.5). The construction uses element-wise arithmetic plus one quadratic terminal constraint solvable by the open-source OSQP solver; no polytope vertex enumeration, no per-step SDP, and no commercial software are required. Augmented-dynamics extensions (fuel slosh, modal flexibility) are pursued in companion for-mulations Iskender and Redondo Gutierrez (2026a); Iskender (2026b). All Monte Carlo results are bit-reproducible from the seed-deterministic Python implementation released with the paper. A preliminary version of the horizon-dependent tightening recursion (C2) and the Perron–Frobenius certificate (C1) was presented at the 77th International Astronautical Congress Iskender and Ling (2026), where they were applied to a phased Hartley-style approach and a geostationary co-location case study. The present paper extends that work in four directions: the ellipsoidal terminal set and the recursive-feasibility and input-to-state-stability results of 3 (C3), which the conference version does not carry, derived here but not exercised in the reported campaign (Remark 7); the paired comparison against a constant-width tube on an identical scenario (C4); a nonlinear truth-model test with J2 oblateness driven well past the assumed disturbance budget; and the cross-body envelope study spanning Mars, low Earth, geostationary transfer, and lunar orbits. 
+
+2. Problem Formulation 
+
+The scenario and formulation match Hartley et al. Hartley et al. (2012): identical MSRE orbit ( a =4643 km, e = 0 .204 ), YA relative dynamics, impulsive delta-v, and receding-horizon LTV MPC. The con-tribution is to replace that controller with a horizon-dependent tube MPC handling mass uncertainty and unmodelled disturbances without constraint violation. This section records the dynamics, assumptions, and constraints used by both. 
+
+2.1. Yamanaka–Ankersen Relative Dynamics 
+
+Consider two spacecraft orbiting a central body: a chief (target) on a known Keplerian ellipse, and a deputy (chaser) whose position and velocity are measured relative to the chief in a local-vertical–local-horizontal (LVLH) frame. The x-axis points along the chief’s velocity direction (V-bar), z points radially outward (R-bar), and y completes the right-handed triad (cross-track, H-bar). The relative state is 
+
+x = rx ry rz vx vy vz
+
+⊤ ∈ R6, (1) with positions in metres and velocities in metres per second. The relative motion is governed by the linearised Tschauner–Hempel equations Tschauner and Hempel (1965), whose closed-form solution is the Yamanaka–Ankersen state transition matrix (STM) Φ( ν, ν 0) ∈
+
+R6×6 Yamanaka and Ankersen (2002). With zero-order-hold sampling at period Ts, the discrete-time model is 
+
+xk+1 = Ak xk + Bk uk + wk, Ak = Φ( νk+1 , ν k), Bk = Ak
+
+03×3
+
+I3
+
+
+
+, (2) where uk ∈ R3 is the impulsive delta-v applied at the start of the interval and wk ∈ R6 is the additive disturbance. Both Ak and Bk depend on the orbit phase νk and trace a periodic cycle over one orbit; as 
+
+e → 0 the YA STM reduces continuously to the HCW matrix. The MSRE-orbit propagation gap between the YA and HCW models, and the residual against the nonlinear two-body truth, are quantified in Figure 1. 
+
+2.2. Assumptions 
+
+The framework rests on four standing hypotheses, stated here so that each later guarantee can name the ones it uses. 
+
+Assumption 1 (Keplerian Chief Orbit and Linearisation Validity) . The chief spacecraft follows a Keplerian elliptical orbit with known classical elements (a, e, i, Ω, ω ) and eccentricity 0 < e < 1. The relative separation between chaser and chief is small enough relative to the orbit radius that the linearised Tschauner–Hempel equations capture the relative dynamics within the disturbance budget of Assumption 2. 
+
+40.0 0.2 0.4 0.6 0.8 
+
+# Orbits 50 
+
+# 050 
+
+> Position [km]
+
+x (YA) x (CW) x (truth) y (YA) y (CW) z (YA) z (CW) 
+
+# 0 2000 4000 6000 8000 
+
+# Time [s] 
+
+# 10 3
+
+# 10 1
+
+# 10 1
+
+# 10 3
+
+# 10 5
+
+> Position error [m]
+
+||r_YA - r_truth|| (LTV linear vs 2-body) ||r_CW - r_truth|| (LTI linear vs 2-body) ||r_YA - r_CW|| (linear models only) Figure 1: Free-drift propagation comparison on the MSRE orbit ( e = 0 .204 ). The CW model (dashed) accumulates kilometre-scale position errors relative to the exact YA model (solid) over a 30-step prediction horizon. Grey shading indicates the absolute error magnitude. 
+
+5Remark 1 (Scope of Assumption 1) . Assumption 1 is a small-separation linearisation. It is well satisfied during the corridor approach, station-keeping, and waypoint-transfer phases on which the present study evaluates the controller (separations ≤ 15 km, well below 1% of the MSRE orbit radius). It is not intended to cover far-rendezvous phasing manoeuvres at thousands of kilometres separation, nor terminal contact dynamics inside the docking envelope where contact forces dominate. The cross-body validation of 5.2 respects the same scope: corridor sizes are chosen to keep the second-order nonlinearity below the medium-tier additive bound ¯w, as quantified by the two-body validation in 6.1 (residual ∼ 2.75 m at 15 km offset). 
+
+Assumption 2 (Bounded Disturbance) . The disturbance satisfies |wk| ≤ ¯w element-wise for all k ≥ 0,where ¯w ∈ R6 
+
+> ≥0
+
+is known. This bound encompasses residual J2 differential acceleration, solar radiation pressure, third-body perturbations, navigation-filter output noise, discretisation error, and any other bounded exogenous effect. 
+
+Assumption 3 (State Feedback) . The controller has access to an estimate ˆxk of the relative state xk at each sampling instant. The estimation error xk − ˆxk is treated as one of the bounded exogenous effects absorbed into ¯w of Assumption 2; consequently, residual navigation-filter noise, sensor bias, and discretisation error are all carried inside the tightening recursion. The construction of the estimator itself (typical implementa-tions couple a Kalman filter on LIDAR/camera relative-pose measurements Iskender et al. (2019); Iskender (2020)) is outside the scope of this paper. 
+
+Assumption 4 (Controllability) . The pair (Ak, B k) is controllable for every k. This is guaranteed by three-axis thrust authority and the non-singularity of the YA STM for e < 1.2.3. Constraint Formulation 
+
+The actuator imposes element-wise bounds on the velocity increment: 
+
+umin ≤ uk ≤ umax , umin = −ua13, umax = + ua13, (3) with per-axis authority ua = 5 m s −1 (Table 4). The state is confined to a safety corridor: 
+
+xmin ≤ xk ≤ xmax , (4) with the specific values of xmin and xmax depending on the scenario (approach corridor, station-keeping box, or waypoint transfer) as detailed in 4. 
+
+Remark 2 (Disturbance budget) . The dominant unmodelled acceleration on the MSRE orbit is the dif-ferential J2 effect ( J2 = 1 .96 ×10 −3 for Mars), producing δa J2 ≈ 10 −6 m/s 2 at ∆r = 10 km and yielding per-step bounds ∆v ≈ 2×10 −4 m/s, ∆r ≈ 0.02 m over Ts = 200 s. Navigation noise adds ∼1 m position and ∼0.01 m/s velocity per sample. The “medium” disturbance tier (Table 4) encompasses this budget; the “extreme” tier stress-tests beyond it. 
+
+3. Tube-Based MPC 
+
+3.1. Nominal MPC Inner Loop 
+
+The tube MPC solves the same QP structure as nominal MPC (25), with one critical modification: the constraints are tightened to leave room for the worst-case tracking error. The QP decision variables are the nominal states z0: N and nominal inputs v0: N −1, and the nominal dynamics propagate disturbance-free: 
+
+zj+1 = Ak+j zj + Bk+j vj , j = 0 , . . . , N −1. (5) The initial condition is set to the current measured state, z0 = xk, so that the nominal and true trajectories coincide at the start of each planning cycle. 63.2. Error Dynamics and the Tube Feedback Law 
+
+The control actually applied to the spacecraft is not the nominal input alone, but a sum of the planned input and a feedback correction: 
+
+uk = vk + K(xk − zk). (6) Subtracting the nominal dynamics (5) from the true dynamics (2) and substituting the control law (6) yields the error dynamics :
+
+ek+1 = ( Ak + BkK) ek + wk = Acl ,k ek + wk, (7) where ek = xk − zk is the tracking error and Acl ,k = Ak + BkK is the closed-loop error matrix at step k.The error evolves as a stable linear system driven by the disturbance; the feedback gain K determines how quickly the error decays, and hence how wide the tube must be. The gain K is designed once, offline, via discrete LQR at a representative operating point: 
+
+K = −dlqr (A0, B 0, Q K , R K ), (8) with QK = diag(10 3, 10 3, 10 3, 10 , 10 , 10) and RK = I3. The large position weights in QK (relative to RK )produce a gain that aggressively suppresses position errors, keeping the tube narrow in the spatial dimensions that matter most for constraint satisfaction. Using a separate cost pair (QK , R K ) for the tube gain, distinct from the MPC cost (Q, R ), decouples two design objectives: K controls the tube width (robustness), while 
+
+Q and R shape the nominal trajectory (optimality). 
+
+3.3. Element-Wise Box Tightening for LTV Systems 
+
+The recursion rests on one elementary fact about element-wise absolute values. 
+
+Lemma 1 (Element-Wise Triangle Inequality) . Let M ∈ Rm×n, v ∈ Rn, and let ¯v ∈ Rn 
+
+> ≥0
+
+satisfy |v| ≤ ¯v
+
+element-wise. Then 
+
+|M v | ≤ | M | | v| ≤ | M | ¯v element-wise , (9) 
+
+where | · | denotes element-wise absolute value as defined in Notation .Proof. For each row i, the standard triangle inequality on scalar sums gives (|M v |)i = | P 
+
+> l
+
+Mil vl| ≤ P 
+
+> l
+
+|Mil | | vl| = ( |M | | v|)i, establishing the first inequality. Because every entry of |M | is non-negative, the map v 7 → | M |v is monotone with respect to the element-wise order: |v| ≤ ¯v implies |M | | v| ≤ | M | ¯v,giving the second inequality. 
+
+Remark 3 (How Lemma 1 controls the input-side tightening) . Applied with M = K ∈ R3×6 and v = ej ,Lemma 1 yields |Kej | ≤ | K| | ej | ≤ | K| ¯ej element-wise. This bound is the sole justification for the input tightening umin + |K|¯ej ≤ vj ≤ umax − | K|¯ej that appears later in (17e) . The bound is valid at every horizon step j ∈ { 0, . . . , N − 1} for which the error-bound recursion has been propagated (Proposition 1 below). Consequently the input tightening uses the same ¯ej sequence as the state tightening, ensuring a single internally consistent bounding logic across both constraint classes. 
+
+Define the element-wise error bound ¯ej ∈ R6 
+
+> ≥0
+
+by the recursion 
+
+¯e0 = 0, (10) 
+
+¯ej+1 = |Acl ,k +j | ¯ej + ¯ wj , j = 0 , . . . , N −1, (11) where |Acl ,k +j | is the matrix whose entries are the absolute values of those of Acl ,k +j , and ¯wj is a per-step disturbance bound defined below. This recursion costs O(N n 2
+
+> x
+
+) floating-point operations, negligible compared with the QP solve. 73.3.1. Mass-Aware Per-Step Disturbance Bound 
+
+Thrust mismatch due to mass uncertainty introduces a multiplicative perturbation (1 + δm)Bk with 
+
+|δm| ≤ δm, max . The induced disturbance is bounded element-wise by |δmBkuk| ≤ δm, max |Bk|umax (per step, because Bk varies with ν). Combining with ¯w gives a per-step total 
+
+¯wj = ¯ w + δm, max |Bk+j | umax , j = 0 , . . . , N −1, (12) absorbing multiplicative uncertainty into the additive-tube framework without a separate tube. At the medium tier ( δm, max = 5% ) the mass contribution adds 50 –60 m per step, making total tightening ∼ 14% 
+
+of the ±500 m corridor. Three properties make the recursion useful: a spectral-radius condition for the contraction (Lemma 2), validity of the bound (Proposition 1), and convergence to a finite steady state (Proposition 2). Lemma 2 certifies that the non-negative matrix |Acl ,k | is Schur-stable in the Perron–Frobenius sense, the condition the recursion (11) requires for ¯ej to remain bounded. 
+
+Lemma 2 (Closed-Loop Stability via Perron–Frobenius) . Under Assumptions 1 and 4, let K be obtained from (8) . Then: 
+
+(i) Acl ,0 = A0 + B0K is Schur stable: ρ(Acl ,0) < 1.
+
+(ii) The non-negative matrix |Acl ,0| satisfies ρ(|Acl ,0|) < 1.
+
+(iii) There exists a computable eccentricity threshold emax > 0 such that for all orbits with e < e max and for all k:
+
+ρ(|Acl ,k |) < 1. (13) 
+
+Proof. (i) follows from standard LQR theory Rawlings et al. (2017): (A0, B 0) controllable plus QK , R K ≻ 0
+
+yield ρ(Acl ,0) < 1. (ii) does not follow from (i). Only ρ(|M |) ≥ ρ(M ) holds in general Horn and Johnson (2013), which bounds ρ(M ) from above and says nothing about ρ(|M |); the reverse implication is false for matrices whose stability relies on sign cancellation (Remark 5). Condition (ii) is therefore a verifiable design condition , not a consequence: it is checked numerically at the design point in Remark 4, where it holds with two orders of magnitude of margin. (iii) is a continuity argument over e: the entries of 
+
+Acl ,k depend continuously on e and ρ is continuous in the entries, so the set {e : max k ρ(|Acl ,k (e)|) < 1}
+
+is open and contains the verified design point; emax is defined as the smallest e above the design point at which max k ρ(|Acl ,k |) = 1 and is located by bisection in Remark 4. Monotonicity of max k ρ in e is observed numerically over the sampled range (Figure 3) but is not proved here, so emax should be read as the numerically located first crossing. 
+
+Remark 4 (Numerical verification of Lemma 2) . For the MSRE design point ( e = 0 .204 , ν0 = 0 , QK , R K
+
+as in Table 3), direct evaluation gives ρ(Acl ,0) = 0 .0016 , ρ(|Acl ,0|) = 0 .0019 , and ∥Acl ,0∥∞ = 0 .006 , so 
+
+δ0 ≈ 0.998 . Sampling 200 equispaced true-anomaly values yields max k ρ(|Acl ,k |) = 0 .128 (Figure 2) and, for the element-wise maximum required by Proposition 2, ρ( ¯A) = 0 .129 . The eccentricity threshold of part (iii) is obtained by bisection: at each candidate e, K is recomputed via LQR at ν = 0 and max ν ρ(|Acl (ν)|) is evaluated over the same 200-point grid. The crossing max ν ρ(|Acl (ν)|) = 1 occurs at emax ≈ 0.661 , giving a safety factor emax /e MSRE ≈ 3.23 (Figure 3). These numerics are application-specific and do not enter the proof; they confirm that Lemma 2 is non-vacuous for the MSRE scenario. 
+
+Remark 5. The condition ρ(|Acl ,k |) < 1 is strictly stronger than Schur stability. A Schur-stable matrix can have ρ(|M |) > 1 if it contains large entries with cancelling signs; for instance, a 2 × 2 rotation near π/ 2 has spectral radius less than one but element-wise absolute value with spectral radius exceeding one. The LQR design with dominant position weighting avoids this pathology by producing gains that make Acl element-wise small rather than relying on sign cancellations. 
+
+Proposition 1 states soundness: ¯ej upper-bounds the realised tracking error |ej | at every horizon step for every admissible disturbance sequence. 80 60 120 180 240 300 360 
+
+True anomaly ν [deg] 
+
+0.00 0.25 0.50 0.75 1.00 1.25 
+
+> ρ(| Acl |)
+
+peak 0.128 at apoapsis 
+
+ρ(| Acl (ν)|) 
+
+stability boundary ρ = 1 Figure 2: Spectral radius ρ(|Acl ,k |) versus true anomaly ν on the MSRE orbit. The value remains below unity at all orbit phases, with a peak of 0.128 near periapsis where the orbital dynamics vary most rapidly. 0.0 0.2 0.4 0.6 0.8 
+
+Eccentricity e
+
+0.0 0.2 0.4 0.6 0.8 1.0 
+
+> max
+> ν ρ(| Acl  (ν)|)
+
+emax ≈ 0.659 
+
+MSRE 
+
+Figure 3: Maximum spectral radius max ν ρ(|Acl (ν)|) as a function of eccentricity. The dashed red line marks the stability boundary at 1. The MSRE orbit ( e = 0 .204 ) lies well within the feasible region. 
+
+9Proposition 1 (Error Bound Validity) . Under Assumption 2, if |e0| ≤ ¯e0 element-wise and |wj | ≤ ¯w for all j, then 
+
+|ej | ≤ ¯ej , j = 0 , 1, . . . , N, (14) 
+
+where ¯ej satisfies the recursion (11) .Proof. By induction on j. The base case |e0| = |xk − z0| = 0 = ¯ e0 is immediate since z0 = xk. For the inductive step, Lemma 1 applied to M = Acl ,k +j and v = ej together with the inductive hypothesis |ej | ≤ ¯ej
+
+gives 
+
+|ej+1 | = |Acl ,k +j ej + wj | ≤ | Acl ,k +j | | ej | + |wj | ≤ | Acl ,k +j | ¯ej + ¯ wj = ¯ ej+1 , (15) using Assumption 2 for |wj | ≤ ¯w ≤ ¯wj (since ¯wj = ¯ w + δm, max |Bk+j |umax ≥ ¯w). Proposition 2 removes the horizon-length dependence: when the orbit-worst-case matrix is Perron– Frobenius stable the recursion has a finite steady state ¯e∞, the “cost of robustness” that quantifies the corridor width consumed by the tube. Its hypothesis ρ( ¯A) < 1 is a condition on the element-wise maximum 
+
+¯A, which is strictly stronger than ρ(|Acl ,k |) < 1 holding at each k separately, and must be verified in its own right; for the MSRE design ρ( ¯A) = 0 .129 against max k ρ(|Acl ,k |) = 0 .128 (Remark 4). 
+
+Proposition 2 (Convergence of Error Bound) . If the orbit-worst-case matrix ¯A = max k |Acl ,k | satisfies 
+
+ρ( ¯A) < 1, then the error bound sequence {¯ej }j≥0 converges to a finite limit satisfying 
+
+¯e∞ ≤ (I − ¯A)−1 ¯w∞, ¯w∞ := ¯ w + δm, max max  
+
+> k
+
+|Bk| umax , (16) 
+
+where ¯A = max k |Acl ,k | is the element-wise maximum over one orbital period. Proof. |Acl ,k +j | ≤ ¯A and ¯wj ≤ ¯w∞ hold element-wise by construction. Consider the majorising recursion 
+
+ˆej+1 = ¯Aˆej + ¯ w∞ from ˆe0 = 0. Its closed form is ˆej = Pj−1 
+
+> i=0
+
+¯Ai ¯w∞; since ρ( ¯A) < 1, the Neumann series converges to (I − ¯A)−1 ¯w∞ < ∞. The bound ¯ej ≤ ˆej follows by induction using the same step as in Proposition 1, with ¯A replacing |Acl ,k +j | and ¯w∞ replacing ¯wj . Taking j → ∞ yields (16). 
+
+Remark 6. The horizon-dependent bound is less conservative than the constant-width mRPI tube because (i) ¯e0 = 0 leaves the first prediction step untightened, and (ii) the actual matrices Acl ,k +j track orbit-phase-dependent error growth rather than bounding it uniformly with ¯A. Figure 4 illustrates the tightening profile. 3.4. Tightened-Constraint QP 
+
+The tube MPC QP replaces the original constraints in (25) with their tightened counterparts: 
+
+min     
+
+> z0: N,v0: N−1
+> N−1
+
+X
+
+> j=0
+
+h
+
+(zj − xs)⊤Q (zj − xs) + v⊤ 
+
+> j
+
+R vj
+
+i
+
++ ( zN − xs)⊤P (zN − xs) (17a) s.t. z0 = xk, (17b) 
+
+zj+1 = Ak+j zj + Bk+j vj , j = 0 , . . . , N −1, (17c) 
+
+xmin + ¯ ej ≤ zj ≤ xmax − ¯ej , j = 1 , . . . , N, (17d) 
+
+umin + |K| ¯ej ≤ vj ≤ umax − | K| ¯ej , j = 0 , . . . , N −1. (17e) The state tightening (17d) shrinks the position and velocity corridors by ¯ej on each side, ensuring that even in the worst case the true state xj = zj + ej remains inside [xmin , x max ]. The input tightening (17e) accounts for the feedback correction Kej , whose worst-case magnitude is |K|¯ej entry-wise. For the tightened sets to be non-empty, one requires 
+
+xmin + ¯ ej < x max − ¯ej and umin + |K|¯ej < u max − | K|¯ej (18) 10 0 5 10 15 20 25 30 
+
+Horizon step j
+
+050 100 150 ̄
+
+> ey(j) [m]
+
+(a) cross-track position bound 
+
+0 5 10 15 20 25 30 
+
+Horizon step j
+
+0.0 0.5 1.0 1.5 ̄
+
+> ė y(j) [m/s]
+
+(b) cross-track velocity bound 
+
+0 5 10 15 20 25 30 
+
+Horizon step j
+
+−500 0500 
+
+> Tightened bound [m]
+
+nominal corridor ±500 m
+
+(c) usable corridor, medium tier 
+
+0 90 180 270 360 
+
+True anomaly ν [deg] 
+
+0.0 0.5 1.0 
+
+> ρ(| Acl |)
+
+(d) Perron–Frobenius certificate 
+
+Light Medium Extreme Figure 4: Horizon-dependent constraint tightening on the MSRE orbit. Light (solid), medium (dashed), extreme (dotted) tiers. (a) Cross-track position bound ¯emax ,y (j) grows from zero and saturates in ∼ 5 steps; saturation level scales with the tier. (b) Cross-track velocity bound, same staircase pattern. (c) Tightened corridor (shaded) vs original ±500 m(thin lines): early steps retain almost the full corridor; late steps lose ∼ 14 % (medium) to ∼ 30 % (extreme) of half-width. (d) Spectral radius ρ(|Acl ,k |) over the orbit, below unity (dashed red) throughout, the Perron–Frobenius certificate of Lemma 2. 
+
+11 for all j = 0 , . . . , N . If any tightened set is empty, the disturbance bound ¯w exceeds what the system can robustly tolerate given the constraint margins, and the controller falls back to LQR. Because ¯e0 = 0, the tightened constraints at j = 0 coincide with the original constraints. The tightening grows monotonically with j, so the constraint set is narrowest at the end of the horizon. The applied control is simply uk = v⋆ 
+
+> 0
+
+: since z0 = xk, the tracking error is zero at j = 0 , and the feedback correction Ke0 = 0
+
+vanishes. 
+
+3.5. Robustness Guarantees 
+
+Three guarantees build on Proposition 1: robust constraint satisfaction, recursive feasibility, and an input-to-state-stability bound. Proofs longer than four lines are deferred to Appendix A. 
+
+Theorem 1 (Robust Constraint Satisfaction) . Under Assumptions 1, 2 and 4, if the tube MPC QP (17) is feasible at time k, then for any disturbance realisation satisfying |wj | ≤ ¯w, the true closed-loop state xk+j
+
+and input uk+j satisfy the original constraints (4) –(3) for j = 0 , . . . , N .Proof. By Proposition 1, |ej | ≤ ¯ej . The state decomposition xk+j = zj + ej with the tightened state constraint (17d) gives zj + ¯ ej ≤ xmax and zj − ¯ej ≥ xmin , so xmin ≤ xk+j ≤ xmax . The same argument applied to uk+j = vj + Kej with |Kej | ≤ | K|¯ej and the tightened input constraint (17e) delivers umin ≤
+
+uk+j ≤ umax .Recursive feasibility (feasibility at k implies feasibility at k+1 despite unknown disturbances) requires one terminal ingredient: an ellipsoidal robust positively invariant (RPI) terminal set under the static feedback gain K, enforced as a single quadratic constraint in the QP. The construction is summarised below; the derivation of the level set α is given in Appendix A. 
+
+Ellipsoidal terminal set.. Let ν⋆ denote the worst-case orbit phase that maximises the contraction-loss ratio 
+
+λmax (P −1/2A⊤
+
+> cl ,k
+
+P A cl ,k P −1/2) over one orbital period (numerically, ν⋆ corresponds to apocenter for the MSRE design), and let P = DARE( A⋆, B ⋆, Q K +εI, R K ) be the Riccati solution there. Define 
+
+Xf = {x ∈ R6 : ( x − xs)⊤P (x − xs) ≤ α}, (19) with the level α chosen as 
+
+α = (1 + 1 /ε ∗) ¯ w⊤∞|P | ¯w∞
+
+1 − (1 + ε∗) λ⋆
+
+, λ⋆ := max  
+
+> k
+
+λmax 
+
+
+
+P −1/2A⊤
+
+> cl ,k
+
+P A cl ,k P −1/2
+
+, (20) where ε∗ ∈ (0 , (1 − λ⋆)/λ ⋆) is a free parameter chosen offline to minimise α (Appendix A). The inequality 
+
+λ⋆ < 1 is equivalent to P being a common Lyapunov function for the family {Acl ,k }k on the orbit; Lemma 3 verifies this is satisfied under Lemma 2. 
+
+Lemma 3 (Robust Forward Invariance of Xf ). Under Assumptions 1, 2 and 4 and the conditions of Lemma 2, the set Xf defined by (19) –(20) is robustly positively invariant under the closed-loop dynamics 
+
+xk+1 = Acl ,k (xk − xs) + xs + wk: for every k, every xk ∈ X f , and every wk with |wk| ≤ ¯w∞, xk+1 ∈ X f .
+
+The proof, the offline choice of ε∗, and the level-set arithmetic are deferred to Appendix A. 
+
+Terminal constraint and augmented QP.. The tube MPC QP (17) is augmented with the single quadratic constraint 
+
+(zN − xs)⊤P (zN − xs) ≤ αN , αN := 
+
+√α − |P 1/2| ¯eN 2
+
+2
+
+, (21) where the deflated level αN ensures that the predicted nominal terminal state zN lies in Xf after accounting for the worst-case error tube radius ¯eN in the P -metric. The element-wise absolute value |P 1/2| is required: 
+
+|e| ≤ ¯eN bounds the error component-wise, and ∥P 1/2e∥2 ≤ ∥ | P 1/2| ¯eN ∥2 holds for every such e, whereas 
+
+∥P 1/2¯eN ∥2 does not upper-bound the box when P 1/2 carries negative entries. For the MSRE design the two differ by less than 10 −5 relative, since P is dominated by QK . Equation (21) is a second-order cone constraint. 12 OSQP solves quadratic programs with linear constraints only, so an implementation on that solver must replace it with a polyhedral surrogate; the accompanying code uses the axis-aligned box |(zN − xs)i| ≤ pαN /P ii , which circumscribes the ellipsoid and is therefore a relaxation, not an enforcement, of (21). An inscribed polytope, or a solver with native SOC support, is required for Theorem 2 to transfer to the implementation. The Monte Carlo campaign of 5 was run without the terminal constraint; see Remark 7. With (21) in place, recursive feasibility becomes a theorem rather than a sufficient-condition template. 
+
+Theorem 2 (Recursive Feasibility) . Under Assumptions 1, 2 and 4 and Lemmas 2 and 3, suppose the augmented tube MPC QP (17) +(21) is feasible at time k. For every disturbance realisation with |wk| ≤ ¯w,the augmented QP at time k+1 is feasible. 
+
+The candidate is a shift-and-append: ˜vj = v⋆j+1 for j < N −1, ˜vN −1 = K(˜ zN −1 − xs). Reinitialising 
+
+˜¯e0 = 0 at ˜z0 = xk+1 inherits linear-constraint feasibility because ˜¯ej ≤ ¯ej+1 ; the terminal constraint follows from z⋆N ∈ X f together with Lemma 3. Full algebra is in Appendix A. 
+
+Remark 7 (Scope of Theorem 2 in this study) . Theorem 2 is a design result: it holds for the QP that enforces (21) exactly. The Monte Carlo campaign reported in 5 was run with the unaugmented tube MPC of (17) , without the terminal constraint, so none of the empirical results below exercises the terminal set, and the recursive-feasibility guarantee is not what produces the reported fallback rates. Those rates are governed by the linear tightening and by triggers F1 and F3 of 3.6. Quantifying what the terminal constraint adds in closed loop, using a solver with native second-order-cone support, is left to future work. 
+
+Remark 8 (Why the worst-case design point?) . Computing P at the apocenter true anomaly ν⋆ (rather than at ν0 = 0 ) ensures that λ⋆ < 1 in (20) is satisfied at every orbit phase, since by construction ν⋆ maximises the contraction-loss ratio. The MSRE evaluation gives λ⋆ = 0 .016 , ε∗ = 6 .90 , and α ≈ 2.3 × 10 7 (units consistent with the QK weighting) at the medium tier. The resulting Xf projected onto the (ry , r z ) plane covers an ellipse of semi-axes ≈ [152 , 152] m, comfortably inside the ±500 m corridor. 3.6. Conditions for QP Infeasibility and Recovery 
+
+Three operational triggers can still cause infeasibility despite Theorem 2: (F1) Empty linear tightened sets: xmin + ¯ ej > x max − ¯ej or umin + |K|¯ej > u max − | K|¯ej at some j;detected before OSQP. Indicates that ¯w, K, or the corridor is mismatched. (F2) Empty terminal level set: αN ≤ 0 in (21), equivalent to (F1) localised to the terminal constraint. (F3) Out-of-bound disturbance: ∆x0 or wk exceeds ¯w (e.g. off-nominal J2 residuals), landing the realised state outside the feasible basin. On any trigger the controller applies uk = sat( −KLQR (xk − xs), u max ), re-propagates ¯ej from zero, and re-attempts the QP at k+1 . The Theorem 1 certificate is forfeited for the fallback step; closed-loop stability via Lemma 2 and the bound of Proposition 1 persist. Table 7 reports 0.7 fallbacks per trial at medium tier and 9.5 at extreme. Corollary 1 converts the bound of Proposition 2 into a standard ISS gain in the ∞-norm. 
+
+Corollary 1 (Input-to-State Stability) . Under Theorems 1 and 2 and the conditions of Lemma 2, the closed-loop system (2) under the tube MPC law (6) is input-to-state stable with respect to the disturbance 
+
+w. The tracking error satisfies 
+
+|ej | ≤ ¯Aj |e0| +
+
+> j−1
+
+X
+
+> i=0
+
+¯Ai ¯w∞ ≤ (I − ¯A)−1 ¯w∞, (22) 
+
+with ¯A = max k |Acl ,k | and ρ( ¯A) < 1 as verified in Remark 4. The asymptotic ISS gain is 
+
+γISS = ∥(I − ¯A)−1∥∞. (23) 
+
+Proof. Iterating the error dynamics (7) and applying Lemma 1 step by step gives the first inequality in (22); the second follows from ρ( ¯A) < 1 and the Neumann series argument of Proposition 2. Taking the ∞-norm yields ∥ej ∥∞ ≤ γISS ∥ ¯w∞∥∞.13 Remark 9 (Numerical values of the ISS bound for the MSRE design) . For the MSRE design point, γISS ≈
+
+1.16 . With the mass-aware per-step bound (12) at the medium tier, the steady-state error bound evaluates to ¯e∞ ≈ [90 .7, 70 .5, 92 .7, 1.10 , 0.80 , 1.12] ⊤ (m;m/s), tightening the ±500 m lateral corridor by 14% on the cross-track side and 19% on the radial side. The horizon-dependent recursion reaches a smaller terminal value, ¯eN ≈ [84 , 71 , 86] ⊤ m at N = 30 , because it propagates the actual |Acl ,k +j | rather than the orbit-worst-case ¯A; the gap between the two is quantified in 5.1.5. 3.7. Summary of Theoretical Guarantees 
+
+Table 1 consolidates the formal results of 3.                                                  
+
+> Table 1: Guarantees provided by the augmented tube MPC of 3. “Holds” indicates that the property is established under the listed assumptions.
+> Property Result Required assumptions Holds Element-wise input bound |Kej| ≤ | K|¯ejLemma 1 none always Spectral-radius condition ρ(|Acl ,k |)<1Lemma 2 Assumptions 1 and 4; e < e max yes Error-bound validity |ej| ≤ ¯ejProposition 1 Assumption 2; Lemma 1 yes Steady-state convergence ¯e∞<∞Proposition 2 ρ( ¯A)<1yes Robust constraint satisfaction Theorem 1 Proposition 1; QP feasible yes Robust forward invariance of XfLemma 3 Lemma 2; λ⋆<1yes Recursive feasibility Theorem 2 Lemma 3; (21) enforced exactly by design; not exercised here Input-to-state stability γISS <∞Corollary 1 Theorems 1 and 2 yes
+
+Limits of the guarantees.. The Theorem 1 certificate holds only at feasible-QP steps; at fallback steps it is forfeited. The additive disturbance budget ¯w∞ must cover realised perturbations; structural model errors beyond (12) are out of scope. Timing is measured, not certified. 
+
+3.8. Implementation: Algorithm and Solver 
+
+The QP is solved in condensed form: eliminating states via (17c) leaves 3N = 90 decision variables and 276 linear inequalities, all handled natively by OSQP Stellato et al. (2020). Settings: max iter 20 ,000 ,tol 10 −7, polish off, warm-start on. Measured solve time on a 3.5 GHz desktop is 29 .3 ms (mean), 4.0 ms (median), 549 ms (worst) over 18 ,000 solves, all well within Ts = 200 s. Infeasibility (3.6, F1–F3) falls back to saturated LQR; OSQP’s auto-generated C provides a path to embedded deployment. 
+
+4. Simulation Setup 
+
+4.1. MSRE Orbit 
+
+The simulations model a rendezvous campaign on the Mars Sample Return Elliptical (MSRE) orbit, whose parameters reflect a representative Mars orbit insertion scenario. Table 2 summarises the orbital elements. 
+
+4.1.1. Sampling-rate justification ( Ts = 200 s) 
+
+Ts = 200 s, umax = ±5 m/s, and the 50 m terminal-accuracy spec are mutually consistent under closed-loop operation, not under open-loop free drift. The open-loop drift over one sample from a 1 m/s velocity perturbation is ∆r ≈ v T s = 200 m. With the loop closed, the tube feedback gain K contracts the error bound by ∥ | Acl ,k | ∥ ∞ ≤ 0.13 per step (Remark 4; the spectral radius 0.128 gives the asymptotic rate, the induced norm the one-step bound); the per-sample drift the closed loop can absorb while meeting the 50 mterminal spec is ∼ 50 · (1 − 0.128) /0.128 ≈ 340 m. Actuator authority umax Ts = 1000 m corrects any single-step drift up to one kilometre. The 50 m spec is therefore a closed-loop residual after settling, not a per-step bound. A smaller Ts would multiply the QP solve rate and the number of impulses; Ts = 200 saligns with the Hartley Hartley et al. (2015) MSRE study ( Ts = 300 s) and with operational MSR burn cadence ( 3–10 min). 14 Algorithm 1 Augmented Tube-Based MPC for YA Relative Motion (with Terminal Constraint) 
+
+Require: State xk, true anomaly νk, parameters Q, R, P, K, ¯w, δ m, max , α  
+
+> 1:
+
+Build {Ak+j , B k+j }N −1 
+
+> j=0
+
+via YA STM at νk, T s 
+
+> 2:
+
+Acl ,j ← Ak+j + Bk+j K for j = 0 , . . . , N −1 
+
+> 3:
+
+¯e0 ← 0 
+
+> 4:
+
+for j = 0 to N −1 do  
+
+> 5:
+
+¯wj ← ¯w + δm, max |Bk+j | umax {mass-aware bound (12)}  
+
+> 6:
+
+¯ej+1 ← | Acl ,j | ¯ej + ¯ wj 
+
+> 7:
+
+end for  
+
+> 8:
+
+Tighten: xtmin / max ,j ← xmin / max ± ¯ej , utmin / max ,j ← umin / max ± | K|¯ej 
+
+> 9:
+
+if terminal set enabled then αN ←  √α − |P 1/2| ¯eN 2
+
+2 {optional; disabled in 5, see Remark 7}  
+
+> 10:
+
+if any tightened linear set is empty or αN ≤ 0 then  
+
+> 11:
+
+Fallback: uk ← sat( −KLQR (xk − xs), u max ) {trigger F1/F2; see 3.6}  
+
+> 12:
+
+else  
+
+> 13:
+
+Solve augmented QP (17)+(21) via OSQP → v⋆ 
+
+> 0
+> 14:
+
+if QP infeasible then  
+
+> 15:
+
+Fallback: uk ← sat( −KLQR (xk − xs), u max ) {trigger F3}  
+
+> 16:
+
+else  
+
+> 17:
+
+uk ← v⋆ 
+
+> 0
+
+{certified by Theorem 1}  
+
+> 18:
+
+end if  
+
+> 19:
+
+end if  
+
+> 20:
+
+return uk
+
+> Table 2: MSRE orbital and scenario parameters.
+
+Parameter Symbol Value Central body Mars Gravitational parameter μ 4.2835 × 10 13 m3/s 2
+
+Mars equatorial radius RM 3396 .2 km 
+
+Semi-major axis a 4643 km 
+
+Eccentricity e 0.2044 Orbital period Torb 9605 s (≈160 min) Mean motion n 6.542 × 10 −4 rad/s Sampling period Ts 200 s 
+
+MPC horizon N 30 steps ( 6000 s )15 4.2. Operational Scenarios 
+
+The tube MPC framework is applicable to any proximity-operations scenario expressible within the YA dynamics model. Three representative scenarios are defined below; the Monte Carlo campaign in 5 focuses on the approach corridor (Scenario 1), which is the primary operational mode for rendezvous. 
+
+4.2.1. Scenario 1: Approach Corridor (Primary) 
+
+The deputy starts at x0 = [ −15 ,000; 0; 0; 0; 0; 0] ⊤ (15 km behind the target along V-bar) and must reach the hold point xs = [ −1,000; 0; 0; 0; 0; 0] ⊤. The state constraints impose a lateral safety corridor of half-width rc = 500 m :
+
+−rc ≤ ry ≤ rc, −rc ≤ rz ≤ rc, (24) preventing the deputy from drifting into cross-track or radial regions where collision risk is elevated. The same box bounds the V-bar coordinate to [−15 .5, +0 .5] km and every velocity component to ±3 m/s; the velocity face is the one the baselines breach most often, so the violation counts reported below are dominated by it rather than by the lateral corridor. Terminal tolerances are 50 m in position and 0.5 m s −1
+
+in velocity. The medium-tier disturbance bound is ¯w = [20 , 20 , 20 , 0.2, 0.2, 0.2] ⊤ (m, m/s), encompassing navigation noise, J2 perturbation residuals, and atmospheric drag uncertainty (Table 4). Figure 5 illustrates the geometry. −5000 0
+
+[km]  
+
+> −4000 −2000 02000 4000
+> [km]
+> Mars periapsis apoapsis
+
+(a) MSRE orbit, e = 0.204       
+
+> −15.0 −12.5 −10.0 −7.5 −5.0 −2.5 0.0
+
+V-bar rx [km]     
+
+> −0.5 0.0 0.5
+> ry [km]
+> corridor ±500 mstart
+> −15 km hold point
+> −1 km
+
+(b) approach corridor (LVLH)               
+
+> Figure 5: MSRE mission geometry. Left: elliptical orbit around Mars ( a= 4643 km ,e= 0 .204 ). Right: V-bar approach corridor in the LVLH frame from −15 km to −1km, with ±500 m lateral bounds.
+
+4.2.2. Scenarios 2–3: Station-Keeping and Waypoint Transfer 
+
+Two supplementary scenarios test additional operational modes: (2) station-keeping inside a ±50 mbox at the hold point xs = [ −1000 , 0, 0, 0, 0, 0] ⊤, and (3) a four-leg waypoint transfer with progressively tightening corridors ( ±1000 to ±100 m). These are included in the cross-body generalisation study (5.2) but are not the primary evaluation focus. 
+
+4.3. Baseline Controllers for Comparison 
+
+Four controllers serve as comparators against the augmented tube MPC developed in 3. All share the same sampling period Ts, the same state measurement, and the same actuator saturation bounds. 
+
+4.3.1. PD and LQR Baselines 
+
+The PD controller applies uk = sat( −Kp(rk−rs) − Kd(vk−vs)) with Kp = 5 ×10 −5I3, Kd = 3 ×10 −2I3;the derivation of these gains from a closed-form impulsive-thrust pole-placement rule is given in Appendix B. PD ignores both the orbital dynamics and the state constraints, enforcing actuator limits only through clipping. The LQR controller uses a static gain KLQR = dlqr (A0, B 0, Q K , R K ) evaluated at the initial true anomaly, with post-hoc saturation. Both serve as model-free and model-based baselines, respectively. 16 4.3.2. Nominal MPC (Hartley-2012 baseline) 
+
+The Nominal MPC baseline is the standard LTV MPC formulation of Hartley et al. Hartley et al. (2012): the seminal study that introduced YA-based predictive control for MSRE rendezvous, using the same orbit (a = 4643 km, e = 0 .204 ), the same impulsive delta-v model, and a directly comparable receding-horizon QP. That formulation is adopted verbatim as the baseline against which the tube extension is measured, replacing only the cost (the present study uses a quadratic cost suited to QP solvers; Hartley et al. (2012) uses an LP-equivalent 1-norm cost) and the constraint enforcement (no tightening). The QP is 
+
+min     
+
+> z0: N,v0: N−1
+> N−1
+
+X
+
+> j=0
+
+h
+
+(zj − xs)⊤Q (zj − xs) + v⊤ 
+
+> j
+
+R vj
+
+i
+
++ ( zN − xs)⊤P (zN − xs) (25a) s.t. z0 = xk, (25b) 
+
+zj+1 = Ak+j zj + Bk+j vj , j = 0 , . . . , N −1, (25c) 
+
+xmin ≤ zj ≤ xmax , j = 1 , . . . , N, (25d) 
+
+umin ≤ vj ≤ umax , j = 0 , . . . , N −1. (25e) The state cost is Q = diag(10 −3, 10 −3, 10 −3, 10 −2, 10 −2, 10 −2), the input cost is R = I3, and the terminal cost P is the DARE solution at the initial true anomaly: 
+
+P = DARE( A0, B 0, Q + εI 6, R ), (26) where the regularisation ε = 10 −6 guarantees a strictly positive-definite state cost. The QP is solved in condensed form via OSQP Stellato et al. (2020). The Hartley-2012 baseline is fuel-optimal at the open-loop nominal trajectory but has no disturbance margin: the prediction has no w term. To give it the strongest fair form, a fixed constraint backoff 
+
+δx = [0 , 100 , 100 , 0, 0.3, 0.3] ⊤ (m;m/s) is applied on the constrained channels, with δu = |K|δx. These are engineering margins chosen to be comparable to the steady-state tube width ¯e∞ of (16) at the medium tier, not computed from it; a designer without tube theory would pick round numbers of this order. This is the strongest fixed-margin formulation available from Hartley et al. (2012) without horizon-dependent tightening. 
+
+4.3.3. MPC with Integral Action 
+
+A common engineering remedy for steady-state offset is integral action via an outer-loop correction: a discrete integrator ξk+1 = ξk + Ts(rk − rs) shifts the MPC setpoint by −KI ξk in the position channels, with KI = 10 −7I3 (offline-tuned) and activation within 2 km of the target. Integral MPC offers no formal constraint guarantee; the slow integrator cannot correct fast disturbances before they breach the corridor. It is included to quantify the practical engineering fix without formal robustness. 
+
+4.4. Controller Parameters and Design Guidelines 
+
+Table 3 collects all tuning parameters; the five controllers share Ts, N , and actuator bounds. Three design rules drive the tube tuning: (i) choose Ts to match the propulsion coast arc with N T s ≈ 0.5–0.7 Torb ;(ii) design K = −dlqr( A0, B 0, Q K , R K ) at ν = 0 and verify ρ(max k |Ak + BkK|) < 1 over one orbit; (iii) compose ¯w from physics ( J2, navigation noise) plus the mass term δm, max |Bk+j |umax .
+
+4.5. Disturbance Tiers 
+
+Three tiers of increasing severity test robustness systematically. Table 4 defines each tier. The medium tier corresponds to the physical disturbance budget (Remark 2); the extreme tier stress-tests beyond it. 17 Table 3: Controller parameters for all five controllers. 
+
+Parameter Symbol Value State cost (MPC) Q diag(10 −3, 10 −3, 10 −3, 10 −2, 10 −2, 10 −2)
+
+Input cost (MPC) R I3
+
+Terminal cost P DARE (A0, B 0, Q +εI 6, R ), ε = 10 −6
+
+Tube gain state cost QK diag(10 3, 10 3, 10 3, 10 , 10 , 10) 
+
+Tube gain input cost RK I3
+
+Integral gain KI 10 −7I3
+
+PD gains Kp, K d 5×10 −5I3, 3×10 −2I3
+
+Input bounds umin / max ±5 m s −1
+
+MPC horizon N 30 
+
+> Table 4: Three-tier disturbance model for Monte Carlo study.
+
+Disturbance Source Units Light Medium Extreme Position disturbance ¯wr m 5 20 50 Velocity disturbance ¯wv m s −1 0.05 0.2 0.5 Initial position error m ±50 ±100 ±200 
+
+Initial velocity error m s −1 ±0.02 ±0.1 ±0.3
+
+Mass/thrust mismatch % ±2 ±5 ±10 
+
+4.6. Monte Carlo Protocol 
+
+The primary scenario uses NMC = 300 paired trials per controller–tier; the supplementary scenarios use NMC = 50 as breadth checks, and the tightening-rule ablation of 5.1.5 uses NMC = 30 . Each trial uses seed 42+ trial index to pre-generate ∆x0, δm, and {wk}Nsim −1 
+
+> k=0
+
+; all five controllers process the same realisation Specht and Mooij (2023). Bootstrap 95% CIs ( 10 ,000 resamples) accompany every aggregate. A trial achieves tracking success if the terminal position error is below 50 m and the terminal velocity error is below 0.5 m s −1; it achieves safety success if it additionally incurs zero state or input constraint violations throughout the trajectory. 
+
+4.6.1. Disturbance-injection rules 
+
+For each trial t, seed = 42 + t drives the draws of Table 5: per-step process noise wk,i ∼ U (− ¯wi, + ¯ wi)
+
+i.i.d. over (k, i ), single per-trial uniform draws for ∆x0 and δm, with Btruth  
+
+> k
+
+= (1 + δm)Bk persistent across steps. The uniform prior places mass on the boundary |wk| ≤ ¯w where Gaussian draws would under-load it. All controllers in a trial share the pre-drawn sequence. 
+
+> Table 5: Disturbance-injection rules used in the Monte Carlo campaign.
+
+Quantity Distribution Support Persistence Process noise wk,i U [− ¯wi, + ¯ wi] (Table 4) i.i.d. across k and i
+
+Initial position ∆r0,i U [−∆rmax , +∆ rmax ] single per trial Initial velocity ∆v0,i U [−∆vmax , +∆ vmax ] single per trial Mass error δm U [−δm, max , +δm, max ] single per trial 
+
+5. Results 
+
+The empirical evaluation has four parts: the 300-trial MSRE approach corridor (5.1); cross-body gener-alisation over four additional environments (5.2); multi-phase protocol validation (5.3); and operational tier 18 interpretation (5.4). Every controller sees identical disturbance realisations per trial. 
+
+5.1. Scenario 1: Approach Corridor 5.1.1. Single trajectory 
+
+Figure 6 shows a medium-tier representative trajectory. PD does not converge ( > 49 km final error). LQR converges to 7.7 m but breaches the corridor by up to 2306 m (10 violations). Nominal MPC converges to 12 .0 m but has 13 violations and −23 .9 m slack. Integral MPC suffers accumulation instability ( ∼ 392 m). Tube MPC converges to the same 12 .0 m with zero violations and +0 .3 m slack. −30 −20 −10 0
+
+V-bar rx [km] 
+
+> −300 −200 −100 0
+> ry [m]
+
+(a) trajectory    
+
+> 0123
+
+Time [h] 
+
+> 10 3
+> 10 4
+> ‖r‖ [m]
+
+(b) position error    
+
+> 0123
+
+Time [h] 
+
+> 10 −4
+> 10 −2
+> 10 0
+> ‖v‖ [m/s]
+
+(c) velocity error    
+
+> 0123
+
+Time [h] 
+
+> 025 50 75
+> ∑‖Δ v‖ [m/s]
+
+(d) cumulative Δv   
+
+> 0123
+
+Time [h] 
+
+> −500 0500
+> ry [m]
+
+(e) cross-track y    
+
+> 0123
+
+Time [h] 
+
+> −500 0500
+> rz [m]
+
+(f) cross-track z                  
+
+> PD LQR Nom. MPC Int. MPC Tube MPC
+> Figure 6: Approach corridor: single-trajectory comparison under medium disturbance ( 5% mass, ¯wr= 20 m). Line styles: PD (dotted, ▽), LQR (dashed, □), nominal MPC (dash-dot, ♢), integral MPC (dash-dot-dot, △), tube MPC (solid, ◦). (a) V-bar vs. cross-track trajectory with ±500 m corridor. (b) Position error magnitude (log scale). (c) Velocity error magnitude (log scale). (d) Cumulative delta-v. (e) Cross-track constraint detail. (f) OSQP solve time per MPC step.
+
+The tube concept is visualised in Figure 7: the error bound starts at zero and grows monotonically, confirming the horizon-dependent tightening. 
+
+5.1.2. Monte Carlo statistics 
+
+Table 6 summarises the 300-trial results. Success metrics are defined in 4.6. The headline is a fuel-versus-safety trade. The Hartley-2012-style Nominal MPC baseline is fuel-efficient (29 .7 m/s light, 36 .5 m/s medium) but fails the safety constraint on every trial in both operational tiers (0% safety, 11 .0 violations despite the 100 m fixed backoff). Tube MPC reaches 95% safety with 0.7 mean violations and +0 .3 m slack at 31 .1 / 35 .4 m/s, the latter 3% below the Hartley baseline. The extreme tier (5.4) is intentionally out of envelope: the tightening triggers 9.5 LQR fallbacks per trial, an explicit infeasibility signal. PD fails on all tiers: with the gains of Table 3 the per-axis closed loop carries a pole outside the unit circle (Appendix B), so the baseline diverges rather than merely violating constraints. Integral MPC is stable but the slow integrator leaves a persistent offset of 390 –450 m, above the 50 mtracking threshold at every tier, so it too scores zero on both metrics. 19 0 5 10 15 20 25 30 
+
+Horizon step j
+
+020 40 60 80 
+
+> Error bound [m]
+
+̄
+
+ex̄
+
+eȳ
+
+ez
+
+0 5 10 15 20 25 30 
+
+Horizon step j
+
+02468
+
+> Tube / constraint range [%]
+
+Figure 7: Tube MPC concept visualisation for the approach corridor. Left: error bound components emax ,x (solid, ◦), emax ,y 
+
+(dashed, □), emax ,z (dotted, △). Right: relative tightening as a percentage of the constraint range. Table 6: Monte Carlo results for Scenario 1 (Approach Corridor), NMC = 300 paired trials, Nsim = 60 steps. Tracking :
+
+∥rN ∥ < 50 m and ∥vN ∥ < 0.5 m/s. Safety : tracking + zero constraint violations throughout the trajectory. The safety column is the key engineering metric: Tube MPC demonstrates the highest safety success rate in the light and medium tiers (the operationally relevant regime; the extreme tier is a stress test discussed in 5.4). Bootstrap 95% CIs in brackets where shown. 
+
+Light tier Medium tier Extreme tier Mean P ∥∆v∥ [m/s] (operational) (operational) (stress test) Controller Track [%] Safe [%] Track [%] Safe [%] Track [%] Safe [%] Light Med. Extreme PD 0 0 0 0 0 0 32.7 32.7 32.8 LQR 100 0 100 0 24 0 72.3 83.5 104.2 Nom. MPC 100 0 100 0 24 0 29.7 36.5 49.2 Int. MPC 0 0 0 0 0 0 35.1 39.0 48.7 
+
+Tube MPC 100 95 100 95 24 3 31.1 35.4 89.5 20 5.1.3. Fallback attribution 
+
+Table 7 separates safety metrics. The fixed 100 m backoff cannot absorb accumulating disturbances; horizon-dependent tightening keeps positive slack at light/medium and signals infeasibility at extreme via increased fallback rate.        
+
+> Table 7: Safety metrics comparison: tube MPC vs nominal MPC (with 100 m backoff). Tube MPC maintains positive constraint slack at light/medium tiers. At the extreme tier its median slack is far worse than the baseline’s ( −1960 m vs −0.5m): once the tightened QP is infeasible the controller hands over to saturated LQR for 9.5steps per trial, and the excursion belongs to the fallback, not to the tube. The baseline never had a guarantee to lose and so degrades gradually instead.
+
+Mean Fallbacks/trial Mean Violations Med. Min Slack [m] Tier Light Med. Ext. Light Med. Ext. Light Med. Extreme Tube MPC 0.5 0.7 9.5 0.5 0.7 9.0 +0 .1 +0.3 −1960 
+
+Nom. MPC 0.0 0.4 0.6 10.9 11.0 11.1 −0.0 −0.2 −0.5
+
+5.1.4. Paired comparison: Hartley-2012 baseline vs Tube MPC across four difficulty levels 
+
+Figure 8 condenses the aggregate statistics into a single paired trajectory across four disturbance levels: the Hartley-2012 baseline is fuel-optimal at nominal conditions but degrades into violations as disturbances grow, whereas Tube MPC absorbs the disturbance into the tightening recursion at marginal fuel cost until the design envelope is exceeded, at which point the LQR fallback fires as a feasibility-detection signal. The corresponding single-trial numerics are in Table 8: at the light tier, Tube MPC saves 1.0 m/s of fuel (from 29 .2 down to 28 .2 m/s) while reducing violations from 15 to 0; at the medium tier, Tube MPC saves 
+
+2.9 m/s while again reducing violations from 14 to 0. The 300-trial Monte Carlo numbers in Table 6 confirm these patterns hold in the average sense ( 95% safety success for Tube MPC vs 0% for the Hartley baseline at both operational tiers).                
+
+> Table 8: Single-trial numerics for the four-difficulty comparison of Figure 8 (seed = 42 ). “Track” =∥rN∥<50 m and
+> ∥vN∥<0.5m/s; “Safe” = Track +zero state/input constraint violations.
+
+Condition Controller ∥rN ∥ [m] ∥vN ∥ [m/s] P ∥∆v∥ [m/s] Viol. Fallbacks Track Safe ZERO Hartley-2012 0.78 0.015 28.35 4 0 Yes No Tube MPC 0.78 0.015 28.35 4 0 Yes No LIGHT Hartley-2012 7.09 0.049 29.19 15 0 Yes No 
+
+Tube MPC 7.09 0.049 28.18 0 0 Yes Yes 
+
+MEDIUM Hartley-2012 28.38 0.174 34.95 14 0 Yes No 
+
+Tube MPC 28.38 0.174 32.05 0 0 Yes Yes 
+
+HARD Hartley-2012 68.56 0.415 48.75 14 0 No No Tube MPC 68.60 0.415 78.88 7 7 No No                  
+
+> Reading. The ZERO row shows that, in the absence of disturbance, the two controllers reduce to the identical trajectory: the tube tightening is zero because ¯w= 0 . The 4 violations are sub-mm velocity breaches during the 3m/s deceleration leg, of no operational significance (see Figure 8 bottom-left panel: peak breach ∼3×10 −3m/s). The LIGHT and MEDIUM rows are the headline: Tube MPC achieves zero significant breaches at fuel cost equal to or below the Hartley baseline. The HARD row shows the out-of-envelope behaviour analysed in 5.4: the tube’s ∆vblows up to 78 .9m/s because the LQR fallback fires 7
+> times when the tightened QP becomes infeasible.
+
+5.1.5. Quantitative conservatism: horizon-dependent vs constant-width tightening 
+
+The headline novelty is the horizon-dependent recursion ¯ej+1 = |Acl ,k +j |¯ej + ¯ wj with ¯e0 = 0. The natural question is how much of the gain comes from the recursion itself, rather than from a constant-width mRPI-style tube tuned to the same budget. This subsection answers quantitatively by simulating a 21 −15 −10 −5 0
+
+> V-bar  rx [km]
+
+Zero viol 5 / 5 Δv 28.4 / 28.4 Light viol 15 / 0 Δv 29.2 / 28.2 Medium viol 14 / 0 Δv 34.9 / 32.0 Hard viol 14 / 7 Δv 48.8 / 78.9 010 
+
+> ‖v‖ [m/s]
+
+3 m/s limit 0 25 50 
+
+Step 
+
+10 −3 
+
+10 −1 
+
+10 1
+
+10 3
+
+> Worst-axis breach
+
+0 25 50 
+
+Step 
+
+0 25 50 
+
+Step 
+
+0 25 50 
+
+Step 
+
+Hartley-2012 Tube MPC Figure 8: Paired single-trial comparison (seed = 42): Hartley-2012 Nominal MPC (dashed orange) vs Tube MPC (solid green) at four disturbance levels. Rows: V-bar approach; speed |v| with the 3 m/s constraint (red dash-dot); worst-axis breach magnitude (log). At ZERO the two controllers coincide. At LIGHT/MEDIUM (operational), Hartley breaches the constraint while Tube MPC stays inside. At HARD (out-of-envelope), the tube’s LQR fallback fires (the 18 m/s overshoot in row 2) as an honest infeasibility signal. Column headers report violation count and total ∆v.
+
+22 constant-width baseline that replaces (11) with the steady-state value 
+
+¯econst  
+
+> j
+
+= ( I − ¯A)−1 ¯w∞, j = 0 , 1, . . . , N, (27) the LTI tube MPC tightening of Mayne et al. (2005); Raković et al. (2005) taken at the orbit-worst-case closed-loop matrix. The constant-width and proposed schemes share K, Q, R, Q K , R K , N , Ts, and actuator bounds; only the tightening rule differs. The comparison is orthogonal to the controller-level results in Table 6 (which contrasts tube MPC against non-tube baselines). 
+
+Per-step tightening.. Figure 9 plots ¯ej for both schemes at the MSRE medium tier. The horizon-dependent recursion starts at zero and saturates to ¯eN ≈ [84 , 71 , 86] ⊤ m in ∼ 5 steps; the constant-width tube imposes 
+
+¯econst  
+
+> ∞
+
+≈ [90 , 71 , 92] ⊤ m at every step. The constant-width scheme over-tightens the first prediction step by the full ¯econst  
+
+> ∞
+
+, removing ∼ 18% of the corridor at j = 0 . At terminal steps the constant-width is ∼ 6–7% 
+
+larger than horizon-dependent because ¯A ≥ | Acl ,k +j | pointwise. 0 5 10 15 20 25 30 
+
+Horizon step j           
+
+> 020 40 60 ̄
+> ey(j) [m]
+> conservatism removed constant-width (classical) horizon-dependent (proposed)
+> Figure 9: Per-step constraint tightening: horizon-dependent vs constant-width tube (MSRE medium tier). The proposed recursion (solid green, ◦) starts at zero and grows; the classical constant-width tube (dashed orange, □) imposes the steady-state value ¯econst
+> ∞at every horizon step. The shaded region between the two curves is the conservatism gap removed by horizon-dependent tightening; it is largest at j= 0 where the proposed scheme retains the full unrestricted corridor.
+
+Paired Monte Carlo.. Table 9 reports a paired 30 -trial Monte Carlo per tier with identical disturbance realisations. Both tubes preserve high safety success in the operational tiers; the horizon-dependent scheme retains feasibility on more medium-tier trials ( 96 .7% vs 93 .3% ), while the constant-width uses ∼ 9% less fuel because its tighter early-step bounds steer the planned trajectory closer to the centre. Both degrade at the extreme tier (out of envelope, 5.4). 
+
+5.2. Cross-Body Generalization 
+
+The YA dynamics model any Keplerian orbit. Identical NMC = 50 paired-trial Monte Carlo campaigns are run on four additional environments spanning eccentricities 0.001 to 0.73 (table 10). Ts is scaled to keep 
+
+48 –190 steps per orbit; corridors and disturbance bounds reflect each environment’s perturbation budget (atmospheric drag for LEO, mascons for the Moon, SRP for GTO). Figure 10 compares safety success rates at the medium tier. For Earth LEO, Moon LLO, and Moon Frozen, tube MPC delivers 100% safety success across all three tiers while nominal MPC never exceeds 
+
+8% ; the near-circular dynamics give ρ(|Acl |) < 0.001 and tightening consumes < 1% of the corridor half-width. GTO ( e = 0 .73 ) is the demanding case: tightening consumes ≈ 30% of the corridor, and tube MPC reaches 68% safety at light and 24% at medium (vs 0% for nominal). At the extreme tier the QP becomes infeasible on ∼ 21 steps per trial, dropping tube MPC to 0% safety; this signals the tube guarantee cannot be maintained rather than silently violating. Figure 11 plots the cost-of-robustness ratio: < 1% for LEO/LLO, ≈ 14% for Mars, ≈ 30% for GTO. The monotone scaling follows from ¯e∞ = ( I − ¯A)−1 ¯w∞ and the growth of ρ( ¯A) with e.23 Table 9: Horizon-dependent vs constant-width tube MPC, paired 30-trial MC per tier. Both schemes share dynamics, distur-bance budget, gain K, horizon, and actuator bounds; only the per-step tightening rule differs. 
+
+Tier Tightening Track [%] Safe [%] P ∥∆v∥ [m/s] Mean viol Mean FB Light Horizon-dep. (proposed) 100.0 93.3 32.18 0.73 0.7 Constant-width (classical) 100.0 96.7 29.10 0.33 0.4 Medium Horizon-dep. (proposed) 100.0 96.7 33.80 0.43 0.4 Constant-width (classical) 100.0 93.3 30.96 0.47 0.5 Hard Horizon-dep. (proposed) 20.0 6.7 87.8 8.7 9.3 
+
+Constant-width (classical) 3.3 0.0 74.9 30.7 31.9 
+
+Reading. The gap is dominated by the early-horizon difference of Figure 9: horizon-dependent tightening retains the full corridor at the current step, the constant-width tube pre-shrinks by ∼ 90 m everywhere. In the operational tiers safety is comparable; the constant-width tube uses ∼ 9% less fuel by steering toward the corridor centre (the standard mRPI fuel-vs-conservatism trade Mayne et al. (2005)). The decisive difference is at the hard tier: the constant-width tube becomes infeasible on ∼ 32 /40 steps per trial, the horizon-dependent on only ∼ 9. Tracking success is 20 .0% vs 3.3% , violations 8.7 vs 
+
+30 .7. The benefit attributable to horizon dependence is therefore ∼ 18% early-horizon corridor preserved at operational tiers and a 3.5× violation reduction at the envelope boundary. Table 10: Cross-body scenario parameters. All share N = 30 , five controllers, three disturbance tiers, and NMC = 50 paired trials per cell. 
+
+Parameter Mars MSRE Earth LEO Earth GTO Moon LLO Moon Frozen 
+
+e 0.204 0.001 0.73 0.001 0.05 
+
+a [km] 4643 6928 24 400 1837 1937 
+
+μ [km 3/s 2] 42 835 398 600 398 600 4903 4903 
+
+Ts [s] 200 60 200 120 120 
+
+umax [m/s] 5.0 1.92 4.0 9.6 9.6 Cross-track ± [m] 500 300 800 500 500 
+
+wmax ,med [m] 20 2 15 3 5
+
+max ν ρ(|Acl |) 0.128 < 0.001 0.330 < 0.001 0.022 Mars MSRE Earth LEO Earth GTO Moon LLO Moon Frozen 020 40 60 80 100 
+
+> Safety success [%]
+
+PD LQR Nom. MPC Int. MPC Tube MPC 
+
+Figure 10: Safety success rates across five orbital environments and three disturbance tiers ( NMC = 50 paired trials). Tube MPC (rightmost bar per group) achieves the highest safety success in all environments. 
+
+24 5.2.1. Physical mechanism of GTO degradation 
+
+GTO degradation is not numerical conditioning; it is the orbital-rate dispersion between periapsis and apocenter and the resulting amplification of Ak at periapsis. Kepler’s second law gives ˙ν(0) / ˙ν(π) = ((1 + 
+
+e)/(1 − e)) 2: 1.004 at LEO, 2.29 at MSRE, 41 .1 at GTO. With one fixed Ts, the periapsis-side step traverses a larger arc of ν and admits a larger STM, raising max k ρ(|Acl ,k |) from < 0.001 (LEO) through 0.128 (Mars) to 0.330 (GTO); the steady-state tightening ¯e∞ = ( I − ¯A)−1 ¯w∞ scales with it. The input matrix Bk grows at periapsis through the same mechanism, inflating the mass-aware bound ¯wj at periapsis steps and producing the cliff between medium and extreme tiers of Figure 10. The feasibility envelope under the time-invariant K reaches emax ≈ 0.661 (Remark 4). Extending it to 
+
+e = 0 .73 requires a periodic gain K(ν) or a variable Ts at periapsis; both are flagged in 6.5. 0.0 0.2 0.4 0.6 0.8 
+
+Orbital eccentricity e   
+
+> 010 20 30 40
+> Corridor half-width consumed by tube tightening (%)
+> Earth LEO Moon LLO Moon Frozen Mars MSRE Earth GTO
+> Figure 11: Tube tightening cost vs. orbital environment (medium tier). Each point shows the fraction of the cross-track corridor half-width consumed by the tube margin. Higher eccentricity increases the spectral radius ρ(|Acl |)and hence the tightening cost.
+
+5.3. Multi-Phase Operational Extension 
+
+Operational missions require sequential phases with different Ts, N , corridors, and weights Hartley et al. (2015). The controller extends to multi-phase by re-discretising the YA dynamics at each boundary, recomputing (K, P, α ) from DLQR/DARE at the new operating point, and re-propagating ¯emax from zero; 
+
+ν propagates continuously. Three supplementary scenarios validate this: Mars OSTG/INTG ( 3 phases, Hartley Hartley et al. (2015) gate structure), LEO Debris ( 5 phases with hold dwells), GEO Servicing ( 3
+
+phases, MEV-class). On 50-trial MC, Tube MPC reduces violations vs nominal by 9–11% (Mars), 33 –36% 
+
+(LEO), < 1% (GEO); fuel differences within ±5% . Residual violations at boundaries come from (i) the tube radius reset, which briefly leaves the previous-phase error outside the new ¯ej , and (ii) fallback steps when the QP is infeasible. 
+
+5.4. Operational Realism of the Three Disturbance Tiers 
+
+The extreme tier does not generalise to flight rendezvous; it stress-tests the failure mode. The light tier ( ¯wr = 5 m, ¯wv = 0 .05 m/s, ±2% mass) matches the 3σ navigation uncertainty Hartley et al. Hartley et al. (2015) reported on MSRE, sub-±5% proximity-ops mass changes Fehse (2003), and 1–2% thruster execution errors. The medium tier ( ¯wr = 20 m, ±5% mass) is a degraded but still flight-credible envelope 25 (degraded navigation cadence, long-campaign mass uncertainty, drifted thruster calibration), the budget an ESA/NASA mission designer would carry. The extreme tier ( ¯wr = 50 m, ±10% mass) exceeds Hartley’s 3σ
+
+navigation by nearly an order of magnitude; the box tube consumes ∼ 30% of the corridor, the QP becomes infeasible at ∼ 9 of 40 steps per trial, and the LQR fallback fires (Table 7). The 3% safety success Tube MPC retains there reflects trials where the random IC happens to land inside the feasible region, not a claim that the tube protects a ±10% -thrust mission. 
+
+5.5. Monte Carlo Visualisations 
+
+Figures 12 and 13 render the 95 /95 /3 vs 0/0/0 violation contrast and confirm no average fuel penalty across tiers. Light Medium Extreme PD LQR Nom. MPC Int. MPC Tube MPC 20.0 20.0 20.1 9.1 9.7 10.7 10.9 11.0 11.1 12.0 12.2 12.2 0.5 0.7 9.0 0510 15 20 
+
+> Mean violations per trial
+> Figure 12: Constraint violation heatmap: mean violations per trial across controllers and tiers. Tube MPC achieves near-zero violations at light and medium tiers. PD LQR Nom. MPC Int. MPC Tube MPC 25 50 75 100 125
+> ∑‖Δ v‖ [m/s]
+
+Light 
+
+> PD LQR Nom. MPC Int. MPC Tube MPC
+
+Medium 
+
+> PD LQR Nom. MPC Int. MPC Tube MPC
+
+Extreme 
+
+> Figure 13: Fuel consumption boxplots across controllers and disturbance tiers.
+
+6. Discussion 
+
+The discussion covers nonlinear J2 truth-model validation (6.1), prior-art positioning (6.2), compu-tational footprint (6.3), box vs polytopic/ellipsoidal/zonotopic conservatism (6.4), limitations (6.5), and reproducibility (6.6). MSRE design-point conservatism numbers are recorded inline in Remark 9 and 5.1.5. 26 6.1. Truth-Model Validation 
+
+The YA STM is exact for Keplerian relative motion; physical Mars orbits experience zonal-harmonic perturbations. A deterministic medium-tier trajectory is propagated through a nonlinear ECI truth model with J2 = 1 .96 × 10 −3 using RK4 at ∆t = 5 s; the controller plans with YA, only the plant sees J2. With 
+
+J2 = 0 , the truth-vs-YA peak deviation is 2.75 m over 60 steps, the expected second-order nonlinearity at 15 km offset. With J2 enabled, the chief-orbit deviation reaches ∼ 154 m/step ( 7.7× the medium-tier 
+
+¯wr = 20 m) and accumulates to ∼ 63 km. Tube MPC nevertheless maintains zero constraint violations with 
+
+9.5 m peak deviation from the YA-predicted path, while nominal MPC incurs 11 violations. The horizon-dependent tightening creates a 71 m cross-track and 86 m radial margin, and the feedback term K(x − z) steers the true state back toward the nominal at every sample, absorbing the J2 drift before it accumulates. The formal guarantee of Proposition 1 is still conditional on wk ∈ W ; a rigorous Mars-orbit certificate would require incorporating J2 into the disturbance budget or switching to an osculating-element formulation. 
+
+6.2. Comparison with Prior Tube MPC Approaches 
+
+Table 11 compares the key design choices and capabilities of this work with the three most closely related tube MPC frameworks for RPO. 
+
+Table 11: Comparison with prior tube MPC approaches for spacecraft proximity operations.                                                 
+
+> Feature This work Dong et al. Dong et al. (2020) Specht et al. Specht and Mooij (2023) Oestreich et al. Oestreich and Linares (2023) Dynamics model YA (LTV) CW (LTI) CW (LTI) CW (LTI) Orbit eccentricity Any e < e max e≈0e≈0e≈0
+> Tube shape Box (element-wise) Box (mRPI) Polytope (mRPI) Ellipsoid Time-varying tube Yes (horizon-dep.) No (constant) No (constant) Yes (online SDP) Tube starts at zero Yes No (mRPI width) No (mRPI width) No Output feedback No (full state) Yes (observer) No (full state) No (full state) Formal ISS proof Yes ( γISS explicit) No No No Online computation QP only QP only QP + Minkowski QP + SDP Commercial software No (OSQP) No MPT3 / YALMIP SDP solver
+
+Specht and Mooij Specht and Mooij (2023) use constant polytopic tubes computed offline via Minkowski sums. Oestreich and Linares Oestreich and Linares (2023) adapt ellipsoidal tube width online via a per-step SDP. The present framework avoids polytope operations and online SDPs: tightening is N matrix-vector products, the tube starts at zero width, the only online optimisation is the augmented QP. The closest direct comparator, Hartley-2012 Hartley et al. (2012), uses the identical MSRE scenario with an LP-equivalent 1-norm cost and nilpotent disturbance feedback Richards et al. (2002) as an empirical robustness mechanism but no formal bound on closed-loop error. The present paper retains the Hartley scenario and replaces only the controller, yielding γISS and ¯e∞ = ( I − ¯A)−1 ¯w∞ verifiable offline; the tiers (Table 4) are derived from Hartley’s Table 3 navigation uncertainties. 
+
+6.3. Computational Cost 
+
+The per-step computational budget is dominated by the OSQP solve. Table 12 reports the empirical statistics extracted from the 300-trial paired Monte Carlo at the medium tier. 
+
+Table 12: OSQP solve time for the tube MPC QP at N = 30 , medium tier ( NMC = 300 trials, 60 steps per trial, 18 ,000 solves), warm-started. The distribution is strongly right-skewed: the median is an order of magnitude below the mean, and the worst case is set by a small number of near-infeasible steps at the corridor boundary. 
+
+Quantity Mean (95% CI) Median Worst case Solve time 29.3 ms ( [28 .7, 29 .9] ) 4.0 ms 548.8 ms The condensed QP carries 3N = 90 decision variables and 276 linear inequalities at N = 30 , both linear in N , so the problem size scales benignly with the horizon. The offline cost is a single DLQR solve; per 27 step, building the N YA matrices costs ∼ 0.5 ms and the error-bound recursion adds 36 N multiply-adds, both negligible against the solve. Even the 548 .8 ms worst case is more than two orders of magnitude below 
+
+Ts = 200 s, and projecting onto a RAD750-class ∼ 200 MHz processor ( ∼ 17 × slower) leaves ∼ 9 s against a 200 s budget. A systematic timing study across horizon lengths was not instrumented for this campaign and is left to future work. 
+
+6.4. Conservatism: Box Tightening vs Polytopic / Ellipsoidal / Zonotopic 
+
+The box parameterisation was chosen for QP simplicity, not for tightness. Table 13 compares it against the standard LTV tube MPC alternatives. With 5.1.5 (horizon dependence) and Table 6 (mass-aware lifting), the three together form a contribution-by-contribution ablation.                            
+
+> Table 13: Cost-of-robustness comparison for four tube parameterisations on the MSRE medium tier. The box row is computed for this design; the remaining rows are order-of-magnitude estimates obtained by scaling it with conservatism factors reported in the cited literature, not by constructing those tubes here (this work uses no polytopic or SDP tooling). Online cost is per MPC step.
+> Parameterisation Tightening (m) Conservatism factor Online operation Software dependence Element-wise box (this work) 71 √6≈2.45 ×matrix-vector mult none (QP only) Polytopic mRPI Raković et al. (2005) 29 1.0×(reference) polyhedral intersection MPT3 or similar Ellipsoidal (offline LMI) Boyd et al. (1994) 41 1.41 ×SDP at design time SDP solver Ellipsoidal (online SDP) Oestreich and Linares (2023) 32 1.10 ×per-step SDP SDP solver Zonotopic Althoff (2013) 33 1.14 ×matrix-vector mult none (QP only)
+
+The box is up to √6 ≈ 2.45 × more conservative than the tightest polytopic mRPI per axis because it ignores inter-component correlations. At the MSRE medium tier ( ¯e∞,y ≈ 71 m vs polytopic ∼ 29 m) the over-approximation costs ∼ 8% of the ±500 m corridor, on top of the ∼ 6% that the tightest polytopic tube would consume anyway. Empirically this does not change the operational story (tube MPC still attains 95% safety success vs 0% for nominal MPC), and in exchange the construction avoids polytope vertex enumeration, online SDPs, and commercial software, which is the appropriate trade for embedded flight software. Ground-segment pre-planning, where compute is less constrained, can adopt polytopic or zonotopic tubes. 
+
+6.5. Limitations 
+
+Five limitations scope the present framework. 
+
+(i) Time-invariant tube gain. The gain K is designed once via DARE at the worst-case orbit phase and held constant. A periodic gain K(ν) following the orbit Mammarella and Capello (2020) would reduce 
+
+ρ(|Acl ,k |) more uniformly across the orbit, narrowing ¯e∞. The trade-off is loss of the single-Lyapunov-function argument used in Lemma 3; a periodic Lyapunov certificate would be required. 
+
+(ii) Box parameterisation. As quantified in 6.4, the element-wise box is up to √6 ≈ 2.45 × conservative relative to the tightest polytopic reachable set, and the multiplicative-to-additive conversion uses umax rather than the predicted control. Zonotopic or ellipsoidal tubes would reduce both forms of conservatism at the cost of an SDP solve or polytopic vertex enumeration. 
+
+(iii) Non-convex keep-out zones. The framework handles convex state constraints. Non-convex keep-out zones (inflated bounding-boxes around the chief, cone-with-apex-removed approach corridors) need either mixed-integer encoding Richards et al. (2002), sequential convex programming (SCP), or rotating-half-space convexification. All three interact with the tightening: the box ¯ej must be intersected with the linearised half-space, and the terminal ellipsoid Xf may straddle the linearisation point so Theorem 2 needs modification. SCP-with-tube is the most promising follow-up. 
+
+(iv) Recursive feasibility under terminal-constraint computation. Theorem 2 holds given the offline ellipsoid Xf from Appendix A, which requires (a) ρ( ¯A) < 1 (verified for e < e max ≈ 0.661 ), (b) λ⋆ < 1
+
+(MSRE: λ⋆ = 0 .94 ), and (c) αN > 0. If any fail at design time, Xf does not exist and the controller reverts to the unaugmented tube. All three hold across the light/medium tiers; (c) is violated at the extreme tier for N > 45 , providing the practitioner with a design knob. 28 (v) Truth-model assumptions. The YA dynamics assume a Keplerian chief orbit; J2 and higher zonal harmonics are absorbed into the additive disturbance ¯w. The truth-model validation of 6.1 confirms this is empirically adequate at MSRE eccentricity over the ∼ 12 ,000 s rendezvous time scale, but a rigorous Mars-orbit guarantee would require incorporating the secular J2 drift into the disturbance budget or switching to an osculating-element formulation. 
+
+6.6. Reproducibility 
+
+The eight-step controller implementation recipe (YA STM evaluation, tube gain via DLQR, mass-aware disturbance bound, error-bound propagation, constraint tightening, terminal cost, QP solve, sanity checks) and the complete parameter listing for the approach-corridor scenario (orbit, geometry, MPC tuning, success criteria, MC protocol) are provided in the open-source repository accompanying this paper. 1 Together with the seed protocol described in 4.6, every result in this paper is bit-reproducible. 
+
+7. Conclusion 
+
+Elliptical orbits introduce time-varying dynamics that invalidate the constant-matrix assumptions of standard tube MPC. The present paper specialises the LTV tube MPC framework Bumroongsri (2015); Yu and Cannon (2016); Köhler et al. (2020) to YA relative dynamics with four contributions: a Perron– Frobenius spectral-radius certificate yielding a closed-form eccentricity envelope ( emax ≈ 0.661 for MSRE, 
+
+3.23 × safety factor); a multiplicative-to-additive conversion that folds mass/thrust uncertainty into the same per-step recursion through the time-varying Bk; and an offline ellipsoidal RPI terminal set giving recursive feasibility (Theorem 2) and an explicit ISS gain γISS ≈ 1.16 .A 300-trial paired Monte Carlo at MSRE ( e = 0 .204 , ±500 m corridor) confirms tube MPC’s value as a safety-certification tool: 95% safety success vs 0% for every baseline at comparable fuel cost. The extreme tier signals infeasibility through the LQR fallback. Multi-phase scenarios and a nonlinear ECI +J2
+
+truth-model validation confirm operational generality despite J2 drift of 7.7× the assumed budget. Future work: a periodic gain K(ν) extending the envelope beyond e = 0 .66 , online disturbance identifi-cation to narrow the tube, and SCP-with-tube for non-convex keep-out zones. 
+
+Appendix A. Ellipsoidal Terminal Invariant Set: Construction and Proof 
+
+This appendix derives the level set α used in (19)–(20) and proves Lemma 3. The construction follows the standard quadratic-Lyapunov RPI argument adapted from Kolmanovsky and Gilbert Kolmanovsky and Gilbert (1998) to the LTV YA closed loop. 
+
+Appendix A.1. Setup 
+
+Let ζk := xk −xs denote the offset from the setpoint. The closed-loop dynamics under the static feedback 
+
+uk = Kζ k are 
+
+ζk+1 = Acl ,k ζk + wk, |wk| ≤ ¯w∞, (A.1) where ¯w∞ := ¯ w + δm, max max k |Bk| umax is the orbit-maximised additive disturbance bound. Let P ≻ 0 be the DARE solution at the worst-case orbit phase ν⋆:
+
+P = A⊤ 
+
+> ⋆
+
+P A ⋆ − A⊤ 
+
+> ⋆
+
+P B ⋆(RK + B⊤ 
+
+> ⋆
+
+P B ⋆)−1B⊤ 
+
+> ⋆
+
+P A ⋆ + QK + εI, (A.2) with A⋆ := A(ν⋆), B⋆ := B(ν⋆). The gain K is computed from the same DARE. Define the contraction-loss ratio 
+
+λ⋆ := max  
+
+> k
+
+λmax 
+
+
+
+P −1/2 A⊤
+
+> cl ,k
+
+P A cl ,k P −1/2
+
+. (A.3)  
+
+> 1The complete Python implementation, including the YA STM evaluator, the OSQP interface, the offline terminal-set construction, and the Monte Carlo seed protocol, will be released at https://github.com/iskender9961/2026-TubeBasedRVD
+> upon acceptance.
+
+29 Appendix A.2. Sufficient condition λ⋆ < 1
+
+The DARE solution at ν⋆ satisfies A⊤ 
+
+> ⋆
+
+P A ⋆ − P ⪯ − QK − εI ≺ 0, so P is a Lyapunov matrix for A⋆. For neighbouring orbit phases the LTV closed-loop matrix Acl ,k deviates continuously from A⋆; by continuity of 
+
+λmax , there exists a neighbourhood N⋆ of ν⋆ on which λmax (P −1/2A⊤
+
+> cl ,k
+
+P A cl ,k P −1/2) < 1. The construction of ν⋆ as the arg-max of this quantity over the orbit guarantees that the bound extends to all phases: by definition λ⋆ = max k(·) is the worst-case value, and the design ensures λ⋆ < 1. Numerically (MSRE design), 
+
+λ⋆ = 0 .016 , comfortably below unity. 
+
+Appendix A.3. Level-set choice 
+
+Given ζk with ζ⊤ 
+
+> k
+
+P ζ k ≤ α, the squared P -norm of the next state is 
+
+ζ⊤
+
+> k+1
+
+P ζ k+1 = ( Acl ,k ζk + wk)⊤P (Acl ,k ζk + wk).
+
+Expanding and applying Young’s inequality 2a⊤b ≤ ε∗ a⊤a + (1 /ε ∗) b⊤b to the cross term with weights determined by ε∗ > 0,
+
+ζ⊤
+
+> k+1
+
+P ζ k+1 ≤ (1 + ε∗) ζ⊤ 
+
+> k
+
+A⊤
+
+> cl ,k
+
+P A cl ,k ζk + (1 + 1 /ε ∗) w⊤ 
+
+> k
+
+P wk
+
+≤ (1 + ε∗)λ⋆ ζ⊤ 
+
+> k
+
+P ζ k + (1 + 1 /ε ∗) ¯ w⊤∞|P | ¯w∞.
+
+The element-wise absolute value in the disturbance term is necessary: |wk| ≤ ¯w∞ constrains wk to a box, and sup |w|≤ ¯w∞ w⊤P w = ¯ w⊤∞|P | ¯w∞, which exceeds ¯w⊤∞P ¯w∞ whenever P has negative entries. For the MSRE design the two agree to within 10 −8 relative, so the numerical value of α is unaffected. Requiring 
+
+ζ⊤
+
+> k+1
+
+P ζ k+1 ≤ α for any ζk with ζ⊤ 
+
+> k
+
+P ζ k ≤ α yields the sufficient condition 
+
+(1 + ε∗)λ⋆ α + (1 + 1 /ε ∗) ¯ w⊤∞|P | ¯w∞ ≤ α, 
+
+which, provided (1 + ε∗)λ⋆ < 1, rearranges to (20). 
+
+Optimal ε∗.. The right-hand side of (20) is minimised by setting the derivative w.r.t. ε∗ to zero, yielding 
+
+εopt  
+
+> ∗
+
+= λ−1/2 
+
+> ⋆
+
+− 1, (A.4) which is admissible for every λ⋆ ∈ (0 , 1) since λ−1/2 
+
+> ⋆
+
+− 1 < (1 − λ⋆)/λ ⋆ throughout that range. For the MSRE design ( λ⋆ = 0 .016 ) this gives ε∗ = 6 .90 and α ≈ 2.3 × 10 7 in QK -consistent units, matching the value returned by the offline routine of Algorithm 2. 
+
+Appendix A.4. Proof of Lemma 3 Proof. Take any ζk with ζ⊤ 
+
+> k
+
+P ζ k ≤ α and any wk with |wk| ≤ ¯w∞. The chain of inequalities above gives 
+
+ζ⊤
+
+> k+1
+
+P ζ k+1 ≤ α by the choice of α in (20). Therefore ζk+1 ∈ X f − xs, i.e. xk+1 ∈ X f . The argument holds for every k because the bound used in λ⋆ is the orbit-maximised quantity (A.3). 
+
+Appendix A.5. Tube deflation and shift consistency 
+
+The proof of Theorem 2 used ˜¯ej ≤ ¯ej+1 . This is a direct consequence of the recursion (11): when the QP at time k+1 reinitialises ˜¯e0 = 0, the new shifted matrix sequence {| Acl ,k +1+ j |} N −1 
+
+> j=0
+
+together with shifted 
+
+{ ¯wj+1 } produces a recursion whose j-th iterate is bounded by ¯ej+1 of the previous step (since the latter starts from ¯e1̸ = 0 rather than from 0). The shift bound ∥P 1/2(˜ zN −1 − xs)∥2 ≤ √αN −1 + ∥P 1/2¯eN −1∥2 used in the proof follows from the triangle inequality applied to ˜zN −1 = z⋆N + (˜ zN −1 − z⋆N ) and the realised-error bound |˜zN −1 − z⋆N | ≤ ¯eN −1 of Proposition 1. 
+
+Appendix A.6. Numerical recipe 
+
+The offline computation of (P, K, α ) is summarised in Algorithm 2. 30 Algorithm 2 Offline computation of the ellipsoidal terminal set Xf .
+
+Require: Orbit parameters (a, e, μ ), sampling Ts, QK , R K , ε, ¯w, δ m, max , u max  
+
+> 1:
+
+Build {Ak, B k} via YA STM on a 200 -point true-anomaly grid  
+
+> 2:
+
+For each k, compute Pk from DARE (Ak, B k, Q K +εI, R K ) and Kk from the same DARE  
+
+> 3:
+
+Find ν⋆ = arg max k λmax (P −1/2 
+
+> k
+
+A⊤
+
+> cl ,k
+
+PkAcl ,k P −1/2 
+
+> k
+
+) 
+
+> 4:
+
+Set P := Pν⋆ , K := Kν⋆ 
+
+> 5:
+
+λ⋆ ← max k λmax (P −1/2A⊤
+
+> cl ,k
+
+P A cl ,k P −1/2) (verify λ⋆ < 1) 
+
+> 6:
+
+¯w∞ ← ¯w + δm, max max k |Bk| umax  
+
+> 7:
+
+Choose ε∗ from (A.4) (or bisection minimisation of α(ε∗)) 
+
+> 8:
+
+α ← (1 + 1 /ε ∗) ¯ w⊤∞|P | ¯w∞
+
+1 − (1 + ε∗)λ⋆ 
+
+> 9:
+
+return (P, K, α )
+
+Appendix B. PD Baseline: Tuning Principle and Stability Analysis 
+
+The PD baseline in Table 3 uses Kp = 5 × 10 −5I3 and Kd = 3 × 10 −2I3. These values are not arbitrary; they follow from a closed-form impulsive-thrust pole-placement rule that the author derived for the YA-LTV plant at the design point ν0 = 0 . The derivation is recorded here so that the baseline can be reproduced and so that the comparison against MPC controllers is fair (i.e. the PD baseline is not deliberately handicapped). 
+
+Appendix B.1. Impulsive-thrust PD on relative dynamics 
+
+For an impulsive delta-v controller acting on the relative position/velocity state x = [ r; v], the per-axis closed-loop characteristic polynomial under the saturated PD law uk = sat( −Kprk − Kdvk) approximates (within saturation) a second-order discrete-time system with natural frequency ωn and damping ζ given by 
+
+ωn ≈
+
+q
+
+Kp/T s, ζ ≈ 12 Kd/pKpTs. (B.1) The target settling time over an approach corridor of length L ≈ 14 km at Ts = 200 s is approximately 
+
+25 Ts = 5000 s, which corresponds to ωnTs ≈ 0.1 rad/sample. Substituting ωnTs = 0 .1 and Ts = 200 s into (B.1) gives Kp = ( ωn)2Ts = (0 .1/200) 2 · 200 ≈ 5 × 10 −5,matching Table 3. The rate gain then sets the damping: Kd = 2 ζpKpTs, so the tabulated Kd = 3 × 10 −2
+
+corresponds to ζ = Kd/(2 pKpTs) = 0 .15 , a lightly damped design. A critically damped choice ζ = 0 .7
+
+would instead require Kd = 0 .14 .
+
+Appendix B.2. Stability check 
+
+In the unsaturated regime, the discrete closed-loop poles are z = 1 − KdTs ± p(KdTs)2 − 4KpT 2 
+
+> s
+
+in each axis (decoupled approximation). For the tabulated gains, KdTs = 6 and KpT 2 
+
+> s
+
+= 2 , giving z = −5 ± √28 ,that is z1 = 0 .29 and z2 = −10 .29 . The second pole lies well outside the unit circle: at Ts = 200 s the continuous-time tuning above is sampled far too coarsely, and the discrete loop is unstable. Because the position error never exceeds umax /K p = 100 km on the 15 km approach, the command never saturates, so nothing arrests the divergence. This is the mechanism behind the PD baseline’s behaviour in Table 6: it does not merely violate the corridor, it diverges to a terminal error above 49 km. The defect is the sampling rate, not the pole-placement rule: the same (Kp, K d) at Ts ≲ 30 s would place both poles inside the unit circle. A fixed-gain PD is retained here as the weakest, model-free reference point rather than as a competitively tuned baseline, and no claim is made that these gains are the best available static feedback at Ts = 200 s. 31 Appendix B.3. Why PD nevertheless fails the safety metric 
+
+Two effects compound. The loop is unstable at Ts = 200 s, as shown above, and it is also constraint-blind: it applies uk = −Kprk − Kdvk regardless of the cross-track corridor, so even a stable retuning would drift the deputy into the corridor wall under a perpendicular disturbance. Constraint-blindness is structural and cannot be tuned away; the instability can, at a faster sampling rate. The PD row of Table 6 should therefore be read as a floor, not as the best attainable static feedback. 
+
+References 
+
+Innocenti, L., et al., “ClearSpace-1: Europe’s First Active Debris Removal Mission,” Proceedings of the 8th European Conference on Space Debris , ESA/ESOC, Darmstadt, Germany, 2021. Forshaw, J. L., et al., “ELSA-d: An In-Orbit End-of-Life Demonstration Mission,” Acta Astronautica ,Vol. 198, 2022, pp. 297–310. doi: 10.1016/j.actaastro.2022.06.018 Fehse, W., Automated Rendezvous and Docking of Spacecraft , Cambridge Univ. Press, Cambridge, England, U.K., 2003. doi: 10.1017/CBO9780511543388 Clohessy, W. H., and Wiltshire, R. S., “Terminal Guidance System for Satellite Rendezvous,” Journal of the Aerospace Sciences , Vol. 27, No. 9, 1960, pp. 653–658. doi: 10.2514/8.8704 Weiss, A., Baldwin, M., Erwin, R. S., and Kolmanovsky, I., “Model Predictive Control for Spacecraft Rendezvous and Docking: Strategies for Handling Constraints and Case Studies,” Journal of Guidance, Control, and Dynamics , Vol. 38, No. 11, 2015, pp. 2158–2171. doi: 10.2514/1.G001117 Richards, A., Schouwenaars, T., How, J. P., and Feron, E., “Spacecraft Trajectory Planning with Avoidance Constraints Using Mixed-Integer Linear Programming,” Journal of Guidance, Control, and Dynamics ,Vol. 25, No. 4, 2002, pp. 755–764. doi: 10.2514/2.4943 Gavilán, F., Vázquez, R., and Camacho, E. F., “Chance-Constrained Model Predictive Control for Spacecraft Rendezvous with Disturbance Estimation,” Control Engineering Practice , Vol. 20, No. 2, 2012, pp. 111– 122. doi: 10.1016/j.conengprac.2011.09.006 Langson, W., Chryssochoos, I., Raković, S. V., and Mayne, D. Q., “Robust Model Predictive Control Using Tubes,” Automatica , Vol. 40, No. 1, 2004, pp. 125–133. doi: 10.1016/j.automatica.2003.08.009 Mayne, D. Q., Seron, M. M., and Raković, S. V., “Robust Model Predictive Control of Con-strained Linear Systems with Bounded Disturbances,” Automatica , Vol. 41, No. 2, 2005, pp. 219–224. 
+
+doi: 10.1016/j.automatica.2004.08.019 Raković, S. V., Kerrigan, E. C., Kouramas, K. I., and Mayne, D. Q., “Invariant Approximations of the Minimal Robust Positively Invariant Set,” IEEE Transactions on Automatic Control , Vol. 50, No. 3, 2005, pp. 406–410. doi: 10.1109/TAC.2005.843854 Specht, B., and Mooij, E., “Autonomous Rendezvous with Non-Cooperative Spacecraft Using Tube-Based Robust Model Predictive Control,” Journal of Guidance, Control, and Dynamics , Vol. 46, No. 7, 2023, pp. 1234–1250. doi: 10.2514/1.G007160 Oestreich, C. E., and Linares, R., “Autonomous Satellite Servicing with Tube-Based Model Predictive Con-trol and Uncertainty Identification,” Journal of Guidance, Control, and Dynamics , Vol. 46, No. 8, 2023, pp. 1510–1525. doi: 10.2514/1.G007337 Mammarella, M., Capello, E., and Romano, M., “Spacecraft Proximity Operations via Tube-Based Robust Model Predictive Control,” Proceedings of the 68th International Astronautical Congress , IAC-17-C1.7.3, Adelaide, Australia, 2017. 32 Mammarella, M., and Capello, E., “Tube-Based Robust Model Predictive Control for Spacecraft Proximity Operations in the Presence of Persistent Disturbance,” Aerospace Science and Technology , Vol. 104, 2020, p. 105940. doi: 10.1016/j.ast.2020.105940 Yamanaka, K., and Ankersen, F., “New State Transition Matrix for Relative Motion on an Arbitrary Elliptical Orbit,” Journal of Guidance, Control, and Dynamics , Vol. 25, No. 1, 2002, pp. 60–66. 
+
+doi: 10.2514/2.4875 Tschauner, J., and Hempel, P., “Rendezvous zu einem in elliptischer Bahn umlaufenden Ziel,” Acta Astro-nautica , Vol. 11, No. 2, 1965, pp. 104–109. Horn, R. A., and Johnson, C. R., Matrix Analysis , 2nd ed., Cambridge Univ. Press, Cambridge, England, U.K., 2013. Rawlings, J. B., Mayne, D. Q., and Diehl, M. M., Model Predictive Control: Theory, Computation, and Design , 2nd ed., Nob Hill Publishing, Madison, WI, 2017. Stellato, B., Banjac, G., Goulart, P., Bemporad, A., and Boyd, S., “OSQP: An Operator Splitting Solver for Quadratic Programs,” Mathematical Programming Computation , Vol. 12, 2020, pp. 637–672. 
+
+doi: 10.1007/s12532-020-00179-2 Hartley, E. N., Trodden, P. A., Richards, A. G., and Maciejowski, J. M., “Model Predictive Control System Design and Implementation for Spacecraft Rendezvous,” Control Engineering Practice , Vol. 20, No. 7, 2012, pp. 695–713. doi: 10.1016/j.conengprac.2012.03.009 Yu, S., and Cannon, M., “Robust Model Predictive Control for Linear Time-Varying Systems with Bounded Disturbances,” International Journal of Control, Automation and Systems , Vol. 14, No. 2, 2016, pp. 498– 504. Köhler, J., Müller, M. A., and Allgöwer, F., “A Nonlinear Tracking Model Predictive Control Scheme for Dynamic Target Signals,” Automatica , Vol. 118, 2020, 109030. doi: 10.1016/j.automatica.2020.109030 Iskender, O. B., and Redondo Gutierrez, J. L., “Slosh-Augmented Tube MPC for Spacecraft Proximity Operations: Coupled Dynamics and Partial Robustness Guarantees,” Acta Astronautica , 2026 (in review). Iskender, O. B., “Vibration-Aware Tube MPC for Flexible Spacecraft Rendezvous on Elliptical Orbits,” 
+
+Journal of Guidance, Control, and Dynamics , 2026 (in review). Iskender, O. B., and Ling, K. V., “Horizon-Dependent Tube MPC for Elliptical-Orbit Rendezvous Under Mass Uncertainty,” Proceedings of the 77th International Astronautical Congress , International Astronau-tical Federation, Antalya, Türkiye, 2026. Iskender, O. B., Model Predictive Control for Spacecraft Rendezvous and Docking with Uncooperative Targets ,Ph.D. dissertation, Nanyang Technological University, Singapore, 2020. Iskender, O. B., Ling, K.-V., Simonini, L., Schlotterer, M., Seelbinder, D., Theil, S., and Maciejowski, J. M., “Dual Quaternion Based Autonomous Rendezvous and Docking via Model Predictive Control,” Proceedings of the 70th International Astronautical Congress , International Astronautical Federation, 2019, pp. 1–16. Mayne, D. Q., “Model Predictive Control: Recent Developments and Future Promise,” Automatica , Vol. 50, No. 12, 2014, pp. 2967–2986. doi: 10.1016/j.automatica.2014.10.128 Sullivan, J., Grimberg, S., and D’Amico, S., “Comprehensive Survey and Assessment of Spacecraft Relative Motion Dynamics Models,” Journal of Guidance, Control, and Dynamics , Vol. 40, No. 8, 2017, pp. 1837– 1859. doi: 10.2514/1.G002309 33 Eren, U., Prach, A., Koçer, B. B., Raković, S. V., Kayacan, E., and Açıkmeşe, B., “Model Predictive Control in Aerospace Systems: Current State and Opportunities,” Journal of Guidance, Control, and Dynamics ,Vol. 40, No. 7, 2017, pp. 1541–1566. doi: 10.2514/1.G002507 Inalhan, G., Tillerson, M., and How, J. P., “Relative Dynamics and Control of Spacecraft Formations in Eccentric Orbits,” Journal of Guidance, Control, and Dynamics , Vol. 25, No. 1, 2002, pp. 48–59. 
+
+doi: 10.2514/2.4874 Hartley, E. N., Trodden, P. A., Richards, A. G., and Maciejowski, J. M., “Field Programmable Gate Ar-ray Based Predictive Control System for Spacecraft Rendezvous in Elliptical Orbits,” Optimal Control Applications and Methods , Vol. 36, No. 5, 2015, pp. 585–607. doi: 10.1002/oca.2117 Dong, K., Luo, J., Dang, Z., and Wei, L., “Tube-Based Robust Output Feedback Model Predictive Control for Autonomous Rendezvous and Docking with a Tumbling Target,” Advances in Space Research , Vol. 65, No. 4, 2020, pp. 1158–1181. doi: 10.1016/j.asr.2019.11.014 Dong, K., Luo, J., and Ni, Z., “A Robust Model Predictive Control Unified Framework for Autonomous Rendezvous and Docking with a Tumbling Target,” Advances in Space Research , Vol. 74, No. 5, 2024, pp. 2270–2287. doi: 10.1016/j.asr.2024.05.070 Zhu, S., Sun, R., Wang, J., Wang, J., and Shao, X., “Robust Model Predictive Control for Multi-Step Short Range Spacecraft Rendezvous,” Advances in Space Research , Vol. 62, No. 1, 2018, pp. 111–126. 
+
+doi: 10.1016/j.asr.2018.03.037 Kang, D.-E., Eun, Y., Cho, H., and Park, S.-Y., “Controller-Matching-Based Robust Model Predictive Control for Spacecraft Rendezvous and Docking,” Advances in Space Research , Vol. 76, No. 10, 2025, pp. 6355–6378. doi: 10.1016/j.asr.2025.08.039 Wang, X., Li, Y., Zhang, X., Zhang, R., and Yang, D., “Model Predictive Control for Close-Proximity Maneuvering of Spacecraft with Adaptive Convexification of Collision Avoidance Constraints,” Advances in Space Research , Vol. 71, No. 1, 2023, pp. 477–491. doi: 10.1016/j.asr.2022.08.089 Lim, Y., Jung, Y., and Bang, H., “Robust Model Predictive Control for Satellite Formation Keeping with Eccentricity/Inclination Vector Separation,” Advances in Space Research , Vol. 61, No. 10, 2018, pp. 2661– 2672. doi: 10.1016/j.asr.2018.02.036 Zheng, M., and Luo, J., “Robust Trajectory Planning for Non-Cooperative Target Rendezvous Based on Closed-Loop Uncertainty Analysis,” Advances in Space Research , Vol. 74, No. 4, 2024, pp. 1932–1949. 
+
+doi: 10.1016/j.asr.2024.05.040 Bumroongsri, P., “Tube-Based Robust MPC for Linear Time-Varying Systems with Bounded Distur-bances,” International Journal of Control, Automation and Systems , Vol. 13, No. 3, 2015, pp. 620–625. 
+
+doi: 10.1007/s12555-014-0182-5 Bokor, J., et al., “Robust Model Predictive Control for Spacecraft Rendezvous Under Sector-Bounded Non-linearities,” IEEE Control Systems Letters , 2025. ieeexplore.ieee.org/document/11245213 
+
+Kolmanovsky, I., and Gilbert, E. G., “Theory and Computation of Disturbance Invariant Sets for Discrete-Time Linear Systems,” Mathematical Problems in Engineering , Vol. 4, No. 4, 1998, pp. 317–367. 
+
+doi: 10.1155/S1024123X98000866 Boyd, S., El Ghaoui, L., Feron, E., and Balakrishnan, V., Linear Matrix Inequalities in System and Control Theory , SIAM, Philadelphia, PA, 1994. Althoff, M., “Reachability Analysis of Nonlinear Systems Using Conservative Polynomialization and Non-Convex Sets,” Proceedings of the 16th International Conference on Hybrid Systems: Computation and Control (HSCC) , ACM, Philadelphia, PA, 2013, pp. 173–182. doi: 10.1145/2461328.2461358 34
