@@ -6,71 +6,73 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-13
-- 运行时间：2026-08-13 21:21:37 UTC
+- 最新运行日期：2026-08-15
+- 运行时间：2026-08-15 19:38:07 UTC
 - 运行状态：成功
 - 本次总论文数：17
 - 精读区：6
 - 速读区：11
 
 ### 今日简报（AI）
-今日重点精读地球-月球限制性三体问题中的振荡运动与碰撞/逃逸机制，并速读小行星谐系数估计、卫星交会控制及月球冻结轨道星座设计。最值得关注的是地月三体动力学的长期复杂行为（9.0分），以及月面/近月轨道星座与自主导航的工程方案（8.0分）。建议普通读者先理解三体问题中“振荡轨道”的直观图像，再结合小行星导航与轨道设计的应用案例，体会基础力学与航天任务的关联。
-- 详情：[/202608/13/README](/202608/13/README)
+今日聚焦地月空间周期/准周期轨道追逃博弈与椭圆三体极值计算，共精读6篇、速读11篇。  
+最值关注：满分论文《Cislunar Pursuit-Evasion Game on Periodic and Quasi-Periodic Orbits》揭示周期性轨道上的追逃策略，以及9分《Universal Birkhoff Method》为椭圆三体问题提供通用极值求解方法。  
+建议普通读者可从速读中的《Estimating Harmonic Coefficients of Asteroids through LiAISON Navigation》入手，了解小行星探测中的自主导航新思路。
+- 详情：[/202608/15/README](/202608/15/README)
 
 ### 精读区论文标签
-1. [Oscillatory motion to collision and infinity in the Earth-Moon restricted three body problem](/202608/13/2608.05400v1-oscillatory-motion-to-collision-and-infinity-in-the-earth-moon-restricted-three-body-problem)  
+1. [Cislunar Pursuit-Evasion Game on Periodic and Quasi-Periodic Orbits](/202608/15/2608.08151v2-cislunar-pursuit-evasion-game-on-periodic-and-quasi-periodic-orbits)  
+   标签：评分：10.0/10、query:cislunar-dyn-nav
+   evidence：直接将地月空间追逃建模为圆型限制性三体问题，并控制周期/拟周期轨道
+2. [Universal Birkhoff Method for Computing Extremals in the Elliptic Restricted Three-Body Problem](/202608/15/2608.07815v1-universal-birkhoff-method-for-computing-extremals-in-the-elliptic-restricted-three-body-problem)  
    标签：评分：9.0/10、query:cislunar-dyn-nav
-   evidence：地月圆型限制性三体动力学中的振荡碰撞与逃逸运动研究
-2. [Oscillatory motion to collision and infinity in the Earth-Moon restricted three body problem](/202608/13/2608.05400v2-oscillatory-motion-to-collision-and-infinity-in-the-earth-moon-restricted-three-body-problem)  
+   evidence：在椭圆限制性三体问题中计算有限推力极值弧，并以近机器精度逼近平动点轨道
+3. [Cislunar Pursuit-Evasion Game on Periodic and Quasi-Periodic Orbit](/202608/15/2608.08151v1-cislunar-pursuit-evasion-game-on-periodic-and-quasi-periodic-orbit)  
    标签：评分：9.0/10、query:cislunar-dyn-nav
-   evidence：地月平面圆型限制性三体问题中振荡运动的计算机辅助证明
-3. [Universal Birkhoff Method for Computing Extremals in the Elliptic Restricted Three-Body Problem](/202608/13/2608.07815v1-universal-birkhoff-method-for-computing-extremals-in-the-elliptic-restricted-three-body-problem)  
+   evidence：圆型限制性三体问题中的地月空间追逐-规避博弈
+4. [LQR Design For Formation Flying Near Halo Orbits Exploiting Quasi-Periodic Symmetry In Toroidal Coordinates](/202608/15/2608.10726v1-lqr-design-for-formation-flying-near-halo-orbits-exploiting-quasi-periodic-symmetry-in-toroidal-coordinates)  
    标签：评分：9.0/10、query:cislunar-dyn-nav
-   evidence：椭圆限制性三体问题中的轨迹优化与平动点轨道计算
-4. [Cislunar Pursuit-Evasion Game on Periodic and Quasi-Periodic Orbit](/202608/13/2608.08151v1-cislunar-pursuit-evasion-game-on-periodic-and-quasi-periodic-orbit)  
-   标签：评分：9.0/10、query:cislunar-dyn-nav
-   evidence：圆型限制性三体问题中的地月空间追逐-规避微分博弈
-5. [Cislunar Pursuit-Evasion Game on Periodic and Quasi-Periodic Orbits](/202608/13/2608.08151v2-cislunar-pursuit-evasion-game-on-periodic-and-quasi-periodic-orbits)  
-   标签：评分：9.0/10、query:cislunar-dyn-nav
-   evidence：圆型限制性三体问题中的地月空间追逐-规避博弈，涉及周期与拟周期轨道
-6. [LQR Design For Formation Flying Near Halo Orbits Exploiting Quasi-Periodic Symmetry In Toroidal Coordinates](/202608/13/2608.10726v1-lqr-design-for-formation-flying-near-halo-orbits-exploiting-quasi-periodic-symmetry-in-toroidal-coordinates)  
-   标签：评分：9.0/10、query:cislunar-dyn-nav
-   evidence：基于圆形限制性三体问题的晕轨道附近编队飞行LQR控制
+   evidence：基于地月系CR3BP中L1 Halo轨道的LQR编队控制
+5. [Information-Aware Model Predictive Control for Satellite Inspection Missions](/202608/15/2608.07765v1-information-aware-model-predictive-control-for-satellite-inspection-missions)  
+   标签：评分：8.0/10、query:cislunar-dyn-nav
+   evidence：面向自主航天器抵近轨迹优化的信息感知模型预测控制
+6. [Information-Aware Model Predictive Control for Satellite Inspection](/202608/15/2608.07765v2-information-aware-model-predictive-control-for-satellite-inspection)  
+   标签：评分：8.0/10、query:cislunar-dyn-nav
+   evidence：嵌入协方差的信息感知MPC用于航天器自主巡检
 
 ### 速读区论文标签
-1. [Estimating Harmonic Coefficients of Asteroids through LiAISON Navigation](/202608/13/2608.06558v1-estimating-harmonic-coefficients-of-asteroids-through-liaison-navigation)  
+1. [Brehm-Wintner-Conley Dimension, Plücker Coordinates, and Generalized Dziobek-Williams Equations for Central Configurations](/202608/15/2608.07771v1-brehm-wintner-conley-dimension-plcker-coordinates-and-generalized-dziobek-williams-equations-for-central-configurations)  
    标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：LiAISON自主轨道导航在小行星重力扰动下的评估，并在地月多体环境已有应用证明，契合地月空间导航主题
-2. [Information-Aware Model Predictive Control for Satellite Inspection](/202608/13/2608.07765v2-information-aware-model-predictive-control-for-satellite-inspection)  
+   evidence：n体问题中心构型的代数框架，直接支撑拉格朗日点与圆型限制性三体问题理论
+2. [Elliptical Lunar Frozen Orbit Constellations: Torus-Based Design and Analysis](/202608/15/2608.10417v1-elliptical-lunar-frozen-orbit-constellations-torus-based-design-and-analysis)  
    标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：面向航天器近距操作的信息感知模型预测控制
-3. [Elliptical Lunar Frozen Orbit Constellations: Torus-Based Design and Analysis](/202608/13/2608.10417v1-elliptical-lunar-frozen-orbit-constellations-torus-based-design-and-analysis)  
-   标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：地月空间椭圆月球冻结轨道星座设计的环面频域框架
-4. [Nonlinear Stability, Resonances, and Singular Reduction in the Unequal-Mass Equilateral Restricted Four-Body Problem](/202608/13/2608.11494v1-nonlinear-stability-resonances-and-singular-reduction-in-the-unequal-mass-equilateral-restricted-four-body-problem)  
-   标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：受限四体问题中拉格朗日平衡点的非线性稳定性分析
-5. [Space-Time Information Interchangeability in Dynamical Systems: Conditions and Bounds for Replacing Spatial Sensors with Temporal Histories](/202608/13/2608.07728v1-space-time-information-interchangeability-in-dynamical-systems-conditions-and-bounds-for-replacing-spatial-sensors-with-temporal-histories)  
+   evidence：地月系统中的月球冻结轨道设计与分析
+3. [Estimating Harmonic Coefficients of Asteroids through LiAISON Navigation](/202608/15/2608.06558v1-estimating-harmonic-coefficients-of-asteroids-through-liaison-navigation)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：在动力系统中比较时间与空间传感器信息的理论框架
-6. [Horizon-Dependent Tube MPC for Spacecraft Rendezvous on Elliptical Orbits with Conditional Robust Constraint Satisfaction](/202608/13/2608.08921v1-horizon-dependent-tube-mpc-for-spacecraft-rendezvous-on-elliptical-orbits-with-conditional-robust-constraint-satisfaction)  
+   evidence：LiAISON自主导航方法在多体环境下验证并应用于小行星系统，结合MMAE/UKF估计状态与摄动
+4. [Space-Time Information Interchangeability in Dynamical Systems: Conditions and Bounds for Replacing Spatial Sensors with Temporal Histories](/202608/15/2608.07728v1-space-time-information-interchangeability-in-dynamical-systems-conditions-and-bounds-for-replacing-spatial-sensors-with-temporal-histories)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：椭圆轨道航天器交会中在导航噪声和推力不确定性下的管式模型预测控制
-7. [Data-Driven optimal control via Koopman operators and Hamilton-Jacobi-Bellman equations](/202608/13/2608.11808v1-data-driven-optimal-control-via-koopman-operators-and-hamilton-jacobi-bellman-equations)  
+   evidence：面向动力系统的信息论多源融合框架
+5. [Protection Levels for Vision-Based Pose Estimation](/202608/15/2608.10023v1-protection-levels-for-vision-based-pose-estimation)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：利用Koopman算子的数据驱动稳定流形方法，与低能转移中的不变流形分析直接相关
-8. [A Knowledge-Centric Communication For Autonomous Cislunar Networks](/202608/13/2608.04817v1-a-knowledge-centric-communication-for-autonomous-cislunar-networks)  
+   evidence：面向自主导航的视觉位姿估计与完整性保护界
+6. [Data-Driven optimal control via Koopman operators and Hamilton-Jacobi-Bellman equations](/202608/15/2608.11808v1-data-driven-optimal-control-via-koopman-operators-and-hamilton-jacobi-bellman-equations)  
+   标签：评分：7.0/10、query:cislunar-dyn-nav
+   evidence：基于Koopman与稳定流形的数据驱动最优控制
+7. [Free-Horizon Newton Method for Nonlinear Optimal Control](/202608/15/2608.07108v1-free-horizon-newton-method-for-nonlinear-optimal-control)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：地月空间自主网络，数字孪生融合延迟观测与不确定性量化
-9. [Spectral Distillation: From Nonlinear Dynamics to Linear State-Space Models](/202608/13/2608.05416v1-spectral-distillation-from-nonlinear-dynamics-to-linear-state-space-models)  
+   evidence：自由时域牛顿法用于非线性最优轨迹优化
+8. [Drone-Assisted UAV-UGV Collaboration for Autonomous Navigation in Snow-Covered Terrain](/202608/15/2608.07797v1-drone-assisted-uav-ugv-collaboration-for-autonomous-navigation-in-snow-covered-terrain)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：从非线性动力学学习紧凑线性状态空间模型的可证明方法
-10. [PathCover: A Fast Convex Decomposition along a Path via Randomized Iterative Space Partitioning (RISP) on Point Clouds](/202608/13/2608.05586v1-pathcover-a-fast-convex-decomposition-along-a-path-via-randomized-iterative-space-partitioning-risp-on-point-clouds)  
+   evidence：多传感器融合（GPS/IMU/EKF与视觉跟踪）用于自主导航
+9. [Kernel Localization and Whole-Trajectory Generalization for Linear Multistep Methods in Deep Learning-Based Discovery of Dynamical Systems](/202608/15/2608.08435v1-kernel-localization-and-whole-trajectory-generalization-for-linear-multistep-methods-in-deep-learning-based-discovery-of-dynamical-systems)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：面向自主机器人导航的快速凸分解方法，可迁移至月球近距操作轨迹规划
-11. [KILVO: Kinematic-Inertial-LiDAR-Visual Odometry with Robust Multimodal Adaptation for Humanoid Robots](/202608/13/2608.05647v1-kilvo-kinematic-inertial-lidar-visual-odometry-with-robust-multimodal-adaptation-for-humanoid-robots)  
+   evidence：基于轨迹数据学习动力学系统的控制方程
+10. [A Height-Constrained 2-Point Minimal Solver for Pose Estimation from Active LED Markers with Event Cameras](/202608/15/2608.09520v1-a-height-constrained-2-point-minimal-solver-for-pose-estimation-from-active-led-markers-with-event-cameras)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：融合惯性、激光、视觉与运动学测量的多传感器里程计
+   evidence：事件相机与LED标记的实时位姿估计方法，可支持月球邻近操作自主导航
+11. [A globally and superlinearly convergent QO-free method for nonlinear optimization on Riemannian manifolds](/202608/15/2608.09755v1-a-globally-and-superlinearly-convergent-qo-free-method-for-nonlinear-optimization-on-riemannian-manifolds)  
+   标签：评分：6.0/10、query:cislunar-dyn-nav
+   evidence：流形上的无二次优化子问题非线性优化方法，适用于约束轨迹优化
 
 
 <div class="dpr-home-promo-card">
