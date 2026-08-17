@@ -6,73 +6,59 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-16
-- 运行时间：2026-08-16 20:26:15 UTC
+- 最新运行日期：2026-08-17
+- 运行时间：2026-08-17 20:43:46 UTC
 - 运行状态：成功
-- 本次总论文数：17
-- 精读区：6
-- 速读区：11
+- 本次总论文数：13
+- 精读区：4
+- 速读区：9
 
 ### 今日简报（AI）
-今日扫描17篇论文，精读6篇、速读11篇，重点聚焦地月空间轨道博弈与编队控制。
-最值得关注的两篇满分论文，分别针对周期/准周期轨道上的地月追逐博弈，以及利用准周期对称性的Halo轨道编队LQR设计。
-建议优先精读这两篇论文，后续可跟进椭圆轨道MPC与四体稳定性研究，拓展轨道控制视野。
-- 详情：[/202608/16/README](/202608/16/README)
+今日精读4篇、速读9篇，聚焦轨道星座设计与自主导航。最值得关注的是9分精读：月球椭圆冻结轨道“环面星座”设计，以及Halo轨道附近利用准周期对称性的LQR编队控制。建议延伸速读中的视觉惯性导航与AUV相对位姿估计，可落地于无人机与水下协同场景。
+- 详情：[/202608/17/README](/202608/17/README)
 
 ### 精读区论文标签
-1. [Cislunar Pursuit-Evasion Game on Periodic and Quasi-Periodic Orbits](/202608/16/2608.08151v2-cislunar-pursuit-evasion-game-on-periodic-and-quasi-periodic-orbits)  
-   标签：评分：10.0/10、query:cislunar-dyn-nav
-   evidence：直接研究地月空间动力学，基于圆型限制性三体问题，涉及周期轨道上的轨迹优化与稳定性
-2. [LQR Design For Formation Flying Near Halo Orbits Exploiting Quasi-Periodic Symmetry In Toroidal Coordinates](/202608/16/2608.10726v1-lqr-design-for-formation-flying-near-halo-orbits-exploiting-quasi-periodic-symmetry-in-toroidal-coordinates)  
-   标签：评分：10.0/10、query:cislunar-dyn-nav
-   evidence：直接针对地月系CR3BP中的晕轨道，利用准周期对称性进行LQR控制器设计
-3. [Universal Birkhoff Method for Computing Extremals in the Elliptic Restricted Three-Body Problem](/202608/16/2608.07815v1-universal-birkhoff-method-for-computing-extremals-in-the-elliptic-restricted-three-body-problem)  
+1. [Elliptical Lunar Frozen Orbit Constellations: Torus-Based Design and Analysis](/202608/17/2608.10417v1-elliptical-lunar-frozen-orbit-constellations-torus-based-design-and-analysis)  
    标签：评分：9.0/10、query:cislunar-dyn-nav
-   evidence：直接研究椭圆限制性三体问题与平动点轨道优化
-4. [Cislunar Pursuit-Evasion Game on Periodic and Quasi-Periodic Orbit](/202608/16/2608.08151v1-cislunar-pursuit-evasion-game-on-periodic-and-quasi-periodic-orbit)  
+   evidence：椭圆月球冻结轨道星座设计与分析，属于地月空间动力学
+2. [LQR Design For Formation Flying Near Halo Orbits Exploiting Quasi-Periodic Symmetry In Toroidal Coordinates](/202608/17/2608.10726v1-lqr-design-for-formation-flying-near-halo-orbits-exploiting-quasi-periodic-symmetry-in-toroidal-coordinates)  
    标签：评分：9.0/10、query:cislunar-dyn-nav
-   evidence：圆型限制性三体问题中的地月空间追逃博弈
-5. [Elliptical Lunar Frozen Orbit Constellations: Torus-Based Design and Analysis](/202608/16/2608.10417v1-elliptical-lunar-frozen-orbit-constellations-torus-based-design-and-analysis)  
-   标签：评分：9.0/10、query:cislunar-dyn-nav
-   evidence：月球冻结轨道星座设计与分析，与地月空间动力学相关
-6. [Information-Aware Model Predictive Control for Satellite Inspection Missions](/202608/16/2608.07765v1-information-aware-model-predictive-control-for-satellite-inspection-missions)  
+   evidence：地月CR3BP中L1 Halo轨道附近编队飞行的LQR控制
+3. [WRAP: Wasserstein-Robust Adaptive Plug-in for Robot Localization](/202608/17/2608.09807v1-wrap-wasserstein-robust-adaptive-plug-in-for-robot-localization)  
    标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：面向航天器近距离操作的信息感知模型预测控制自主导航方法
+   evidence：通过Wasserstein鲁棒的EKF/ESKF插件实现鲁棒多传感器融合定位，适用于地月空间定位与授时。
+4. [Nonlinear Stability, Resonances, and Singular Reduction in the Unequal-Mass Equilateral Restricted Four-Body Problem](/202608/17/2608.11494v1-nonlinear-stability-resonances-and-singular-reduction-in-the-unequal-mass-equilateral-restricted-four-body-problem)  
+   标签：评分：8.0/10、query:cislunar-dyn-nav
+   evidence：研究受限四体问题中L3/L5/L6拉格朗日点的非线性稳定性，与平动点分析相关
 
 ### 速读区论文标签
-1. [Nonlinear Stability, Resonances, and Singular Reduction in the Unequal-Mass Equilateral Restricted Four-Body Problem](/202608/16/2608.11494v1-nonlinear-stability-resonances-and-singular-reduction-in-the-unequal-mass-equilateral-restricted-four-body-problem)  
-   标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：直接研究了限制四体问题中平衡点L3、L5、L6的非线性稳定性，与拉格朗日点分析直接相关。
-2. [Information-Aware Model Predictive Control for Satellite Inspection](/202608/16/2608.07765v2-information-aware-model-predictive-control-for-satellite-inspection)  
+1. [Tether-Inertial Localization for Planetary Drones](/202608/17/2608.09515v1-tether-inertial-localization-for-planetary-drones)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：面向航天器自主近距离操作的信息感知MPC与协方差控制
-3. [Horizon-Dependent Tube MPC for Spacecraft Rendezvous on Elliptical Orbits with Conditional Robust Constraint Satisfaction](/202608/16/2608.08921v1-horizon-dependent-tube-mpc-for-spacecraft-rendezvous-on-elliptical-orbits-with-conditional-robust-constraint-satisfaction)  
+   evidence：面向行星无人机的系绳-惯性定位新方法，适用于月球近距离操作
+2. [ASPIRE-VINS: Adaptive Spline-based Visual-inertial Navigation System With Robust 3D Measurement Residuals](/202608/17/2608.12840v1-aspire-vins-adaptive-spline-based-visual-inertial-navigation-system-with-robust-3d-measurement-residuals)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：椭圆轨道航天器交会中鲁棒管式MPC与约束收紧
-4. [A Height-Constrained 2-Point Minimal Solver for Pose Estimation from Active LED Markers with Event Cameras](/202608/16/2608.09520v1-a-height-constrained-2-point-minimal-solver-for-pose-estimation-from-active-led-markers-with-event-cameras)  
+   evidence：基于自适应样条的视觉惯性导航系统，是一种多传感器融合定位定姿方法。
+3. [AMR-Pose: An Active LED Marker-Based Relative Pose Estimation Framework With Probabilistic Switching PnP for Cooperative AUVs](/202608/17/2608.12866v1-amr-pose-an-active-led-marker-based-relative-pose-estimation-framework-with-probabilistic-switching-pnp-for-cooperative-auvs)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：基于主动LED标记与事件相机的实时位姿估计，可用于月球近距离操作自主相对导航
-5. [Protection Levels for Vision-Based Pose Estimation](/202608/16/2608.10023v1-protection-levels-for-vision-based-pose-estimation)  
-   标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：为非线性PnP视觉位姿估计推导保护级别，提供可迁移至航天器自主导航的完整性边界。
-6. [ASPIRE-VINS: Adaptive Spline-based Visual-inertial Navigation System With Robust 3D Measurement Residuals](/202608/16/2608.12840v1-aspire-vins-adaptive-spline-based-visual-inertial-navigation-system-with-robust-3d-measurement-residuals)  
-   标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：连续时间视觉惯性导航系统，采用自适应样条，可用于航天器自主导航。
-7. [Kernel Localization and Whole-Trajectory Generalization for Linear Multistep Methods in Deep Learning-Based Discovery of Dynamical Systems](/202608/16/2608.08435v1-kernel-localization-and-whole-trajectory-generalization-for-linear-multistep-methods-in-deep-learning-based-discovery-of-dynamical-systems)  
+   evidence：基于主动LED标记的相对位姿估计，可迁移至航天器近距离操作
+4. [Horizon-Dependent Tube MPC for Spacecraft Rendezvous on Elliptical Orbits with Conditional Robust Constraint Satisfaction](/202608/17/2608.08921v1-horizon-dependent-tube-mpc-for-spacecraft-rendezvous-on-elliptical-orbits-with-conditional-robust-constraint-satisfaction)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：从轨迹数据学习动力学系统控制向量场的方法
-8. [CRUISE: Vision-Language Model-Guided Uncertainty-Aware Cross-Modal Sensor Fusion for Robust Autonomous Driving](/202608/16/2608.09202v1-cruise-vision-language-model-guided-uncertainty-aware-cross-modal-sensor-fusion-for-robust-autonomous-driving)  
+   evidence：航天器交会鲁棒MPC，考虑导航噪声，可迁移至月球邻近操作
+5. [Protection Levels for Vision-Based Pose Estimation](/202608/17/2608.10023v1-protection-levels-for-vision-based-pose-estimation)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：不确定性感知跨模态融合方法，可迁移至地月空间多传感器定位与授时
-9. [WRAP: Wasserstein-Robust Adaptive Plug-in for Robot Localization](/202608/16/2608.09807v1-wrap-wasserstein-robust-adaptive-plug-in-for-robot-localization)  
+   evidence：基于视觉的位姿估计与完好性界，可迁移至自主导航
+6. [Risk-Aware Kinodynamic Motion Planning Under Uncertainty For Safe Navigation on Planetary Environments](/202608/17/2608.11175v1-risk-aware-kinodynamic-motion-planning-under-uncertainty-for-safe-navigation-on-planetary-environments)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：面向多传感器定位的鲁棒自适应滤波方法，可应用于地月空间定位与授时
-10. [GeoUniPR: A Geometry-Consistent Unified Framework for Cross-Modal Place Recognition](/202608/16/2608.11263v1-geounipr-a-geometry-consistent-unified-framework-for-cross-modal-place-recognition)  
+   evidence：面向行星环境安全运行的风险感知动力学运动规划自主导航算法。
+7. [Lightweight Single-Antenna Direction-of-Arrival Estimation for Curvilinear Trajectories in Mobile Embedded Systems](/202608/17/2608.12029v1-lightweight-single-antenna-direction-of-arrival-estimation-for-curvilinear-trajectories-in-mobile-embedded-systems)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：建立视觉与LiDAR间几何一致性关联，可用于月球自主导航中的地点识别。
-11. [Lightweight Single-Antenna Direction-of-Arrival Estimation for Curvilinear Trajectories in Mobile Embedded Systems](/202608/16/2608.12029v1-lightweight-single-antenna-direction-of-arrival-estimation-for-curvilinear-trajectories-in-mobile-embedded-systems)  
+   evidence：融合IMU航向与双向测距实现无GPS的方位估计，与地月空间多源融合定位授时直接相关
+8. [Relative Periodic Orbits in the Gutzwiller-type Anisotropic Kepler Problem and $n$-body Problem](/202608/17/2608.12901v1-relative-periodic-orbits-in-the-gutzwiller-type-anisotropic-kepler-problem-and-n-body-problem)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：利用IMU与双向测距测量在无GPS条件下估计到达方向，体现了多传感器融合定位的思路。
+   evidence：开普勒型问题中的相对周期轨道研究，与NRHO周期轨道分析在方法上相关
+9. [PILOT: Privileged Imitation Learning for End-to-End Motion Planning of Autonomous UAVs under Partial Observability](/202608/17/2608.14082v1-pilot-privileged-imitation-learning-for-end-to-end-motion-planning-of-autonomous-uavs-under-partial-observability)  
+   标签：评分：6.0/10、query:cislunar-dyn-nav
+   evidence：部分可观测下的端到端运动规划，与自主导航相关
 
 
 <div class="dpr-home-promo-card">
