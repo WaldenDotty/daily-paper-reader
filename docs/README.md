@@ -6,70 +6,65 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-18
-- 运行时间：2026-08-18 20:26:10 UTC
+- 最新运行日期：2026-08-20
+- 运行时间：2026-08-20 20:06:20 UTC
 - 运行状态：成功
-- 本次总论文数：16
-- 精读区：5
+- 本次总论文数：15
+- 精读区：4
 - 速读区：11
 
 ### 今日简报（AI）
-今日航天控制与导航领域16篇论文速览，聚焦编队飞行与行星探测器定位。  
-精读首选：基于环面坐标准周期对称性的Halo轨道编队LQR设计，以及行星无人机系绳惯性定位新方案。  
-建议优先从这两篇高分工作切入，再扩展阅读椭圆轨道交会鲁棒MPC等速读文章。
-- 详情：[/202608/18/README](/202608/18/README)
+今日精读聚焦不等质量四体问题非线性稳定性与GARATÉA-L轨道半解析设计，均为9分高价值成果；速读覆盖视觉惯性导航、AUV相对位姿及周期轨道方向。最值得关注四体共振与轨道设计结论，对编队或科学探测任务有直接参考。建议普通读者优先浏览两篇精读摘要，再按兴趣延伸至导航或位姿估计速读。
+- 详情：[/202608/20/README](/202608/20/README)
 
 ### 精读区论文标签
-1. [LQR Design For Formation Flying Near Halo Orbits Exploiting Quasi-Periodic Symmetry In Toroidal Coordinates](/202608/18/2608.10726v1-lqr-design-for-formation-flying-near-halo-orbits-exploiting-quasi-periodic-symmetry-in-toroidal-coordinates)  
+1. [Nonlinear Stability, Resonances, and Singular Reduction in the Unequal-Mass Equilateral Restricted Four-Body Problem](/202608/20/2608.11494v1-nonlinear-stability-resonances-and-singular-reduction-in-the-unequal-mass-equilateral-restricted-four-body-problem)  
    标签：评分：9.0/10、query:cislunar-dyn-nav
-   evidence：针对地月系CR3BP中L1晕轨道附近编队飞行的LQR控制设计
-2. [Tether-Inertial Localization for Planetary Drones](/202608/18/2608.09515v1-tether-inertial-localization-for-planetary-drones)  
+   evidence：直接研究等边受限四体问题中拉格朗日点的非线性稳定性与共振
+2. [A Semi-Analytical Theory for Improved Orbit Design of the GARATÉA-L](/202608/20/2608.17672v1-a-semi-analytical-theory-for-improved-orbit-design-of-the-garata-l)  
+   标签：评分：9.0/10、query:cislunar-dyn-nav
+   evidence：月球任务轨道设计，考虑地球第三体摄动
+3. [Improving Observability of Relative Orbit Estimation Using Bearing Measurements and Light Curves](/202608/20/2608.16135v1-improving-observability-of-relative-orbit-estimation-using-bearing-measurements-and-light-curves)  
    标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：行星无人机自主定位；支持月球近距作业
-3. [WRAP: Wasserstein-Robust Adaptive Plug-in for Robot Localization](/202608/18/2608.09807v1-wrap-wasserstein-robust-adaptive-plug-in-for-robot-localization)  
+   evidence：融合光变曲线的纯角度相对轨道估计方法，用于空间接近操作自主导航
+4. [Adaptive Nonlinear Control with Online Identification and Receding-Horizon Optimization](/202608/20/2608.18717v1-adaptive-nonlinear-control-with-online-identification-and-receding-horizon-optimization)  
    标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：面向多传感器融合定位的Wasserstein鲁棒自适应滤波插件，可用于地月空间定位与授时
-4. [Elliptical Lunar Frozen Orbit Constellations: Torus-Based Design and Analysis](/202608/18/2608.10417v1-elliptical-lunar-frozen-orbit-constellations-torus-based-design-and-analysis)  
-   标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：椭圆月球冻结轨道星座设计与稳定性分析，属于地月系统轨道力学
-5. [Target Localization and Self-Calibration in a Multistatic Radar System](/202608/18/2608.15501v1-target-localization-and-self-calibration-in-a-multistatic-radar-system)  
-   标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：多基地雷达目标定位与自校准，是多传感器定位的核心方法。
+   evidence：自主月球着陆器下降结合退域水平iLQR与在线辨识，直接支持月球自主导航
 
 ### 速读区论文标签
-1. [Horizon-Dependent Tube MPC for Spacecraft Rendezvous on Elliptical Orbits with Conditional Robust Constraint Satisfaction](/202608/18/2608.08921v1-horizon-dependent-tube-mpc-for-spacecraft-rendezvous-on-elliptical-orbits-with-conditional-robust-constraint-satisfaction)  
+1. [ASPIRE-VINS: Adaptive Spline-based Visual-inertial Navigation System With Robust 3D Measurement Residuals](/202608/20/2608.12840v1-aspire-vins-adaptive-spline-based-visual-inertial-navigation-system-with-robust-3d-measurement-residuals)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：椭圆轨道交会中考虑安全走廊与导航噪声的鲁棒管式模型预测控制
-2. [Satellite Trajectory Optimization via Proximal Policy Optimization for Space Debris Avoidance](/202608/18/2608.09628v1-satellite-trajectory-optimization-via-proximal-policy-optimization-for-space-debris-avoidance)  
+   evidence：自适应连续时间视觉惯性融合方法用于鲁棒六自由度运动估计，可应用于空间多传感器融合导航
+2. [AMR-Pose: An Active LED Marker-Based Relative Pose Estimation Framework With Probabilistic Switching PnP for Cooperative AUVs](/202608/20/2608.12866v1-amr-pose-an-active-led-marker-based-relative-pose-estimation-framework-with-probabilistic-switching-pnp-for-cooperative-auvs)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：利用PPO进行卫星轨迹避碰优化，展示了可迁移至地月空间轨迹优化的强化学习方法
-3. [Improving Observability of Relative Orbit Estimation Using Bearing Measurements and Light Curves](/202608/18/2608.16135v1-improving-observability-of-relative-orbit-estimation-using-bearing-measurements-and-light-curves)  
+   evidence：面向协同AUV的相对位姿估计方法，可应用于月球临近操作中的相对导航
+3. [Relative Periodic Orbits in the Gutzwiller-type Anisotropic Kepler Problem and $n$-body Problem](/202608/20/2608.12901v1-relative-periodic-orbits-in-the-gutzwiller-type-anisotropic-kepler-problem-and-n-body-problem)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：融合方位角测量与光变曲线的相对轨道估计，可支撑月球临近操作自主导航
-4. [Orbit-Planner: Towards Latent World Models for On-Orbit Obstacle Avoidance of Satellite Agents](/202608/18/2608.16651v1-orbit-planner-towards-latent-world-models-for-on-orbit-obstacle-avoidance-of-satellite-agents)  
+   evidence：研究n体问题中的相对周期轨道，与三体问题周期轨道分析相关。
+4. [Expected Free Energy-based Informative Path Planning for Robotic Mars Exploration](/202608/20/2608.14466v1-expected-free-energy-based-informative-path-planning-for-robotic-mars-exploration)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：通过学习航天器动力学进行在轨自主导航与避障
-5. [A Height-Constrained 2-Point Minimal Solver for Pose Estimation from Active LED Markers with Event Cameras](/202608/18/2608.09520v1-a-height-constrained-2-point-minimal-solver-for-pose-estimation-from-active-led-markers-with-event-cameras)  
+   evidence：基于期望自由能的有界信息路径规划，可应用于月球与地月空间自主探索
+5. [LAPF: LLM-Agent-Based Path Finder Using the UAVScenes Dataset](/202608/20/2608.15175v1-lapf-llm-agent-based-path-finder-using-the-uavscenes-dataset)  
+   标签：评分：7.0/10、query:cislunar-dyn-nav
+   evidence：面向不确定环境的LLM智能体路径搜索，可迁移至月球临近操作的自主规划
+6. [Target Localization and Self-Calibration in a Multistatic Radar System](/202608/20/2608.15501v1-target-localization-and-self-calibration-in-a-multistatic-radar-system)  
+   标签：评分：7.0/10、query:cislunar-dyn-nav
+   evidence：目标定位与自校正算法，可迁移至自主导航与多传感器融合。
+7. [Forward Trajectory Steering for Hamilton-Jacobi Reachability Analysis](/202608/20/2608.11480v1-forward-trajectory-steering-for-hamilton-jacobi-reachability-analysis)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：利用事件相机与LED标记的自主位姿估计，可应用于月球临近操作
-6. [A globally and superlinearly convergent QO-free method for nonlinear optimization on Riemannian manifolds](/202608/18/2608.09755v1-a-globally-and-superlinearly-convergent-qo-free-method-for-nonlinear-optimization-on-riemannian-manifolds)  
+   evidence：基于PINN的Hamilton-Jacobi可达性求解器，可应用于地月系统轨迹安全与稳定性分析
+8. [Data-Driven optimal control via Koopman operators and Hamilton-Jacobi-Bellman equations](/202608/20/2608.11808v1-data-driven-optimal-control-via-koopman-operators-and-hamilton-jacobi-bellman-equations)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：提出黎曼流形上全局超线性收敛的无二次优化方法，可直接用于约束轨迹优化问题。
-7. [Achievable Accuracy and Cramer Rao Bounds for SSB Based LEO Positioning in NR NTN](/202608/18/2608.10270v1-achievable-accuracy-and-cramer-rao-bounds-for-ssb-based-leo-positioning-in-nr-ntn)  
+   evidence：基于数据驱动的稳定流形最优控制方法，与不变流形及轨迹优化在概念上紧密相关
+9. [A stabilized sequential quadratic programming method for degenerate nonlinear optimization problems on Riemannian manifolds](/202608/20/2608.13298v1-a-stabilized-sequential-quadratic-programming-method-for-degenerate-nonlinear-optimization-problems-on-riemannian-manifolds)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：伪距与多普勒定位的克拉美-罗界推导，可直接迁移至地月定位与授时
-8. [Risk-Aware Kinodynamic Motion Planning Under Uncertainty For Safe Navigation on Planetary Environments](/202608/18/2608.11175v1-risk-aware-kinodynamic-motion-planning-under-uncertainty-for-safe-navigation-on-planetary-environments)  
+   evidence：提出黎曼流形上退化约束优化的稳定SQP算法，可直接用于天体动力学中的轨迹优化
+10. [SN-ASMO: Satellite-Navigation Array Spatial-Manifold Precise Observation Theory A Mathematical Foundation for Observation Formation, Unified U(1) Geometry, Intrinsic Information, and Preservation of the RTK Integer Structure](/202608/20/2608.13611v1-sn-asmo-satellite-navigation-array-spatial-manifold-precise-observation-theory-a-mathematical-foundation-for-observation-formation-unified-u1-geometry-intrinsic-information-and-preservation-of-the-rtk-integer-structure)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：面向行星环境的不确定性风险感知运动规划，为月球近距操作的自主导航提供方法基础
-9. [IoT-Enabled Autonomous Maritime Navigation in Smart Ports: A Curriculum-Guided Shared Policy Learning Framework](/202608/18/2608.11597v1-iot-enabled-autonomous-maritime-navigation-in-smart-ports-a-curriculum-guided-shared-policy-learning-framework)  
+   evidence：卫星导航阵列精确观测理论，可支撑地月空间定位授时
+11. [Moving Horizon Estimation for Underwater Target Tracking Based on Time-Difference-of-Arrival Measurements](/202608/20/2608.16024v1-moving-horizon-estimation-for-underwater-target-tracking-based-on-time-difference-of-arrival-measurements)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：自主航行决策算法，集中训练边缘执行，可迁移至月球近距操作
-10. [Data-Driven optimal control via Koopman operators and Hamilton-Jacobi-Bellman equations](/202608/18/2608.11808v1-data-driven-optimal-control-via-koopman-operators-and-hamilton-jacobi-bellman-equations)  
-   标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：数据驱动最优控制与稳定流形；可迁移至轨迹优化
-11. [Point Feature Descriptor via Directional Partition of Unity on Maps](/202608/18/2608.12794v1-point-feature-descriptor-via-directional-partition-of-unity-on-maps)  
-   标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：无GPS地图定位；可迁移至月球自主导航
+   evidence：移动时域估计用于非线性状态估计，可应用于自主导航算法
 
 
 <div class="dpr-home-promo-card">

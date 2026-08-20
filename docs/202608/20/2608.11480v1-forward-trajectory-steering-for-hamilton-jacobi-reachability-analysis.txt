@@ -1,0 +1,998 @@
+Title: Forward Trajectory Steering for Hamilton-Jacobi Reachability Analysis
+
+URL Source: https://arxiv.org/pdf/2608.11480v1
+
+Published Time: Thu, 13 Aug 2026 00:30:41 GMT
+
+Number of Pages: 11
+
+Markdown Content:
+# Forward Trajectory Steering for Hamilton-Jacobi Reachability Analysis 
+
+Sungje Park and Stephen Tu 
+
+Abstract — Hamilton-Jacobi (HJ) reachability provides amathematically rigorous framework for safe control of dy-namical systems, but its practical application is bottlenecked by the computational complexity of solving Hamilton-Jacobi-Isaacs variational inequality PDEs in high dimensions. Physics-informed neural networks (PINNs) have recently emerged as a promising alternative to classical mesh-based solvers, yet their performance is highly sensitive to the choice of collocation sampling. In order to learn accurate safety value functions, existing PINNs-based HJ reachability solvers must rely on complex training pipelines and auxiliary supervision. In this work, we propose S TEER 2R EACH (S2R), a PINNs-based HJ reachability solver that requires minimal modification on top of standard PINNs training. S2R’s key contribution is a lightweight, low-overhead adaptive collocation sampling distribution constructed by steering forward trajectories using a combination of the optimal control and disturbance signals induced by the current value function, with injected stochastic exploration noise. We demonstrate that despite its simplicity, S2R achieves competitive—and in some cases improved— performance on safety metrics while reducing relative L2 error across a range of reachability benchmarks compared with SoTA MPC-guided HJ reachability solvers, all without requiring multi-stage training or MPC-based supervision. 1
+
+I. I NTRODUCTION 
+
+As autonomous systems such as self-driving cars, un-manned aerial vehicles, and robotic assistants become more prevalent in society, the need for formal safety assurances is increasingly crucial. Hamilton-Jacobi (HJ) reachability analysis [1] is an appealing approach for addressing this need, providing an exact mathematical characterization of the safe operation regimes of a control system. Specifically, through the computation of a safety value function, HJ reach-ability identifies a safe controller that ensures the system avoids reaching unsafe states, even subject to adversarial disturbances that may arise during execution. Traditionally, HJ reachability requires computing a numer-ical solution to a Hamilton-Jacobi-Isaacs variational inequal-ity (HJI-VI), which describes the safety value function. Clas-sical numerical techniques solve the HJI-VI partial differen-tial equation (PDE) over a dense state space grid, and hence suffer from a curse of dimensionality as the state dimension grows [2]. This is a significant limitation for modern control systems—e.g., high DoF articulated manipulators, humanoid robots, and multi-agent systems—which often involve high-dimensional states. In recent years, inspired by the success    
+
+> This work was partially supported by the National Science Foundation through NSF CPS #2434460 and NSF GRFP (DGE-1842487). Authors are with the Ming Hsieh Department of Electrical and Computer Engineering, University of Southern California, Los Angeles, CA, USA. Corresponding E-mail: sungjepa@usc.edu.
+> 1Github repo: github.com/sungje-park/steer2reach.
+> (a) Trajectories at initialization. (b) Trajectories at convergence.
+
+Fig. 1: A plot of sample trajectories from the 2D vertical drone problem [7]. The green dotted lines represent the floor and ceiling that the system should avoid, the black line represents the learned safety value function zero-level contour, and the blue lines illustrate sampled trajectories. For each sample trajectory, the green and red dots represent the start and end points, respectively. 
+
+of physics-informed neural networks (PINNs) in machine learning and scientific computing [3], [4], PINNs-based methods are increasingly being used for reachability analysis. However, PINNs are not a silver bullet; direct application of PINNs to HJI-VI PDEs does not necessarily yield high-fidelity value functions [5]–[7], a trend that is also present in other domains such as fluid dynamics [8]. In order to over-come these challenges, recent state-of-the-art (SoTA) PINNs-based reachability solvers [5]–[7], [9], [10] incorporate both architectural improvements (e.g., periodic activation func-tions [11] and exact boundary constraints [10]), in addition to algorithmic techniques, including time-based curriculum learning [9], [12], linear semi-supervision [5], and MPC-guided sampling with multi-stage training pipelines [6], [7]. The result is a collection of complex algorithms that are non-trivial to implement and challenging to tune. A central theme that emerges from the existing literature is that the sampling distribution over collocation points plays a crucial role in the performance of PINNs-based solvers; moving away from uniform grid-based distributions towards problem-adaptive sampling is critical. However, designing a suitable adaptive sampling scheme can introduce substantial algorithmic complexity in PINNs methods. This motivates the central question of our work: 
+
+Q: Can one design a simple adaptive sampling strategy for PINNs-based HJ reachability analysis that achieves near SoTA performance on high-dimensional problems? 
+
+We provide an affirmative answer via S TEER 2R EACH (S2R), drawing inspiration from backward stochastic differential equation (SDE) methods for solving PDEs [13]–[16]. S2R constructs an adaptive sampling distribution (cf. Fig. 1) by (i) using the current value function to compute control and disturbance signals that guide trajectory rollouts, and (ii) arXiv:2608.11480v1 [eess.SY] 11 Aug 2026 injecting stochasticity around these trajectories by modeling the system as an SDE with a tunable noise parameter. We show that optimizing the PINNs loss under this sampling distribution is sufficient to achieve competitive performance across a range of HJ reachability benchmarks. Specifically, compared with the SoTA MPC-guided solver [7], S2R often matches and can even improve performance on safety metrics, while consistently achieving lower relative L2 error. Moreover, S2R is straightforward to implement, introduces minimal overhead beyond PINNs, and avoids the need for multi-stage training pipelines, curriculum learning, and aux-iliary supervision from MPC or linear approximations. Our paper is organized as follows. The problem formula-tion and HJ reachability framework is introduced in Sec. II, with Sec. III containing detailed discussion on existing PINNs-based HJ reachability solvers. Sec. IV-B introduces our S2R approach, Sec. V provides a detailed experimental evaluation, and Sec. VI concludes. II. P ROBLEM FORMULATION 
+
+Consider a dynamical system with state x ∈ Rn, control 
+
+u ∈ U , and disturbance d ∈ D , where the state evolves as: 
+
+˙x = f (x, u, d ), u ∈ U , d ∈ D . (1) In this work, we aim to compute the Backward Reachable Tube (BRT), denoted B, which contains the initial states for which the system (1) will inevitably enter a given failure set L under some worst-case disturbance within a time horizon I = [0 , T ], no matter what control actions are taken. Following standard convention, the BRT is defined as: 
+
+B = {x | ∀ u ∈ U, ∃d ∈ D, τ ∈ I s.t. Φu,d x,t (τ ) ∈ L} , (2) where Φu,d x,t (τ ) represents the state at time τ given initial state x(t) = x at time t ∈ I and applying the control 
+
+u(·) ∈ U and disturbance d(·) ∈ D over [t, τ ]. Here, the set U (resp. D) denotes the space of measurable functions mapping I 7 → U (resp. I 7 → D ). We assume that the failure set L = { x ∈ Rn | ℓ(x) ⩽ 0 } is described as the zero sub-level set of a Lipschitz-continuous function ℓ(x) : Rn 7 → R,which we typically take as a signed-distance function. In avoid problems, where the set L is composed of unsafe states, the BRT contains all states from which the system will inevitably enter the failure set despite best effort controls under worst case disturbance, and hence should be avoided. Conversely, in reach problems where the set L denotes the target set, we reverse the role of the disturbance and control, and consequently the BRT contains all states from which the system, acting optimally, will eventually reach the target set despite worse case disturbances. In addition to the BRT, we aim to find an optimal safe control policy, u∗(·) for states outside the BRT, which ensures the system avoids the target set despite worst case disturbances. 
+
+A. Hamilton-Jacobi-Isaacs Variational Inequality 
+
+The standard method for computing the BRT arises from Hamilton-Jacobi (HJ) reachability [1], [2], which we sum-marized the key ideas here. HJ reachability formulates B as the zero sub-level set of the value function, 
+
+V (x, t ) = max  
+
+> u∈U
+
+min  
+
+> d∈D
+
+J(x, t, u, d ), (3) where J(x, t, u, d ) = min τ ∈[t,T ] ℓ
+
+
+
+Φu,d x,t (τ )
+
+
+
+measures the minimum distance to the set L, measured via ℓ, along a trajectory (Φ u,d x,t (τ )) Tτ =t. The value function V (x, t ) can be computed as the viscosity solution to the Hamilton-Jacobi-isaacs Variational Inequality (HJI-VI), which is described by two key equations: 
+
+RV (x, t ) = min {∂tV (x, t ) + H(x, t ), ℓ (x) − V (x, t )}, (4) 
+
+H(x, t ) = max  
+
+> u∈U
+
+min 
+
+> d∈D
+
+⟨∇ xV (x, t ), f (x, u, d )⟩. (5) From HJI-VI, the value function V (x, t ) satisfies: 
+
+RV (x, t ) = 0 , V (x, T ) = ℓ(x), x ∈ Rn, t ∈ I . (6) Given a value function V (x, t ) satisfying (6), we compute the BRT, optimal control u∗, and optimal disturbance d∗, as: 
+
+B = { x ∈ Rn | V (x, 0) ⩽ 0 } ,u∗(x, t ) = argmax 
+
+> u∈U
+
+min 
+
+> d∈D
+
+⟨∇ V (x, t ), f (x, u, d )⟩, (7) 
+
+d∗(x, t ; u) = argmin 
+
+> d∈D
+
+⟨∇ V (x, t ), f (x, u (x, t ), d )⟩. (8) III. B ACKGROUND AND RELATED WORK : PINN S-BASED 
+
+HAMILTON -J ACOBI REACHABILITY SOLVERS 
+
+An exact solution to an HJI-VI equation is not computa-tionally tractable for systems where the number of states ex-ceeds a modest dimension. Consequently, recently machine learning methods, specifically physics-informed neural net-works (PINNs) [4], [9], have been used to learn approximate value functions. In this section, we outline these approaches, as they form the basis for our method. Specifically, we consider learning approximate solutions to the HJI-VI equation (6) over a compact domain Ω × I , with 
+
+Ω ⊆ Rn, by parameterizing the value function Vθ (x, t ) as an element of a rich function class V = { Vθ (x, t ) | θ ∈ Θ }
+
+(e.g., θ ∈ Θ represents the weights of a neural network). This parameterization induces two natural loss functions over the parameter space Θ:
+
+LVI (θ; μ) = E
+
+> (x,t )∼μ
+
+RVθ (x, t )2 , (9) 
+
+Lbnd (θ; μ′) = E
+
+> x∼μ′
+
+[( Vθ (x, T ) − ℓ(x)) 2]. (10) where μ and μ′ are measures over Ω×I and Ω, respectively. We remark here that while we utilize the square-loss in LVI 
+
+and Lbnd , other losses such as absolute value [9] or a robust adversarial loss [17] can also be used. 
+
+A. Basic PINNs Loss and the DeepReach Solver 
+
+With both (9) and (10) in place, we can now describe the basic PINNs loss: 
+
+LPINNs (θ; λ) = LVI (θ; U (Ω × I )) + λLbnd (θ; U (Ω)) , (11) where U (S) is the uniform measure over the set S.DeepReach [9] is an approach which builds on this PINNs loss (11), but proposes several modifications: (i) time-based curriculum: the network Vθ is first initialized minimizing the loss Lbnd , followed by optimizing the PINNs loss but with a curriculum of samples, i.e., using U (Ω × [ti, T ]) in the 
+
+LVI loss, where ti decays to 0 as the training progresses, (ii) sinusoidal networks: MLPs with sinusoidal activation functions [11] are used to parameterize Vθ . Recent follow up work [10] removes the Lbnd loss, and instead parameterizes 
+
+Vθ (x, t ) = ℓ(x) − (T − t)ϕθ (x, t ), where ϕθ (x, t ) is an unconstrained network. This satisfies Vθ (x, T ) = ℓ(x) by construction, and allows one to remove Lbnd .
+
+B. Residual Adaptive Distribution (RAD) 
+
+One of the issues with the standard PINNs loss (11) is that the sampling of collocation points (x, t ) is uniform over the domain Ω × I and non-adaptive. There is a large body of literature in the PINNs community on adaptive sampling schemes to overcome this issue [18], [19]. Here, we describe one canonical sampling method, as it will serve as an additional baseline. The residual-based adaptive distribution (RAD) method [19] focuses collocation sampling in areas with high PDE residuals by sampling points according to a probability density function μRAD  
+
+> θ
+
+(x, t ) proportional to the PDE residual. Defining εθ (x, t ) = |RVθ (x, t )|, we have 
+
+μRAD  
+
+> θ
+
+(x, t ) ∝ εkθ (x,t )   
+
+> E(x,t )∼μ0[εkθ(x,t )]
+
++ c, where k, c ⩾ 0 are two hyperparameters that affect the shape of μRAD  
+
+> θ
+
+, and μ0 is a base measure (e.g., uniform). We utilize the Monte-Carlo method of generating samples described in [19, Sec. 2.3.2] (also cf. Sec. A). 
+
+C. MPC-Guided DeepReach Solver 
+
+A recent state-of-the-art solver, MPC-guided Deep-Reach [7] (MPC-DeepReach), improves upon the original DeepReach work by leveraging MPC-guided sampling and supervised learning. Specifically, MPC-DeepReach utilizes a sampling-based MPC to generate a dataset of approxi-mate state/value pairs, which is then used in a three step optimization process involving: (i) a supervised pre-training phase, (ii) a joint curriculum training phase, and (iii) a fine-tuning phase to reduce false positives. In the supervised pre-training phase, the approximate value function generated via MPC is used to warm-start the neural network. Then, in the following curriculum training and fine-tuning phases, the PDE residual and MPC regression losses are jointly minimized using an adaptive weighting function, with the MPC-generated dataset periodically rebuilt from the most current value function. The fine-tuning phase utilizes an imbalanced regression loss that amplifies the false positive residuals to help reduce false positive predictions in the learned value function. MPC-DeepReach was later extended to two-player zero-sum games in [6]. We note that this technique of computing an approximate V (x, t ) to semi-supervise learning the safety value function is also explored in [5], where the Hopf formula is used to efficiently compute 
+
+V (x, t ) under Jacobian linearized dynamics. In addition to MPC-guided semi-supervision, MPC-DeepReach also uses the methods described in Sec. III-A, plus a gradient normal-ization method for loss weight balancing. IV. S TEER 2R EACH : F ORWARD TRAJECTORY STEERING FOR REACHABILITY ANALYSIS 
+
+While Sec. III describes a variety of PINNs-based ap-proaches to solving the HJI-VI problem, we see one crucial commonality shared among these approaches. In particular, whether through curriculum learning in DeepReach, adaptive sampling for RAD, or through MPC solutions in MPC-DeepReach, the core principle is to modify the sampling distribution over the collocation points away from the uni-form distribution on Ω × I . While this literature shows that non-uniform sampling is crucial for learning accurate value functions, state-of-the-art approaches for sampling are becoming increasingly complex to implement, involving several training phases that each need to be separately tuned for the best performance. In this section, we propose a natural non-uniform sampling approach—which we coin STEER 2R EACH —that is very simple to implement, while largely retaining the performance of existing approaches. Our approach is heavily inspired by the rich literature on backward stochastic differential equations (BSDE)-based techniques for solving PDEs [13]–[16]. The idea behind BSDE-based solvers is to first construct a pair of for-ward/backward SDEs derived from the target PDE, such that the value of the backward SDE encodes the PDE solution at a desired evaluation point. For HJI-VI PDEs, which are more complex than the standard semilinear parabolic PDEs that are typically considered in the BSDE literature, this is done via reflected BSDEs [20], [21]. 
+
+A. Reflected BSDEs for HJI-VI PDEs 
+
+To set the stage, we first start by extending the determin-istic dynamics (1) to an SDE driven by σ : Rn × U × D 7 → 
+
+Rn×q . Given an admissible (u, d ) ∈ U × D,2 for τ ∈ [t, T ]:
+
+dXt,x ;u,d τ = f (Xt,x ;u,d τ , u τ , d τ )d τ
+
++ σ(Xt,x ;u,d τ , u τ , d τ )d Wτ ,
+
+where Xt,x ;u,d t = x and (Wt)t⩾0 denotes standard Brownian motion in Rq . We then define the modified stochastic value function V σ (x, t ) as: 
+
+V σ (x, t ) = max  
+
+> u∈U
+
+min  
+
+> d∈D
+
+min  
+
+> τ∈T t
+
+E[ℓ(Xt,x ;u,d τ )] ,
+
+where Tt denotes the set of all stopping times contained in the interval [t, T ]. We note that under sufficient regu-larity we can interpret V σ → V as σ → 0. The results of [20], [21] combined state that for the forward pro-cess (Xt,x ;u,d τ )Tτ =t and the reflected upper obstacle BSDE 
+
+(Y t,x ;u,d τ , Z t,x ;u,d τ , K t,x ;u,d τ )Tτ =t:
+
+Y t,x ;u,d τ = ℓ
+
+
+
+Xt,x ;u,d T
+
+
+
+−
+
+Z Tτ
+
+Zt,x ;u,d s dWs
+
+−  Kt,x ;u,d T − Kt,x ;u,d τ
+
+,
+
+0 = 
+
+Z Tt
+
+ ℓ(Xt,x ;u,d s ) − Y t,x ;u,d s
+
+ dKt,x ;u,d s ,        
+
+> 2U,Dhere are overloaded as the set of signals u(t), d (t)that are progressively measurable w.r.t. (Ft)t⩾0, where Ft=σ(( Ws)ts=0 ).
+
+with τ ∈ [t, T ], Y t,x ;u,d τ ⩽ ℓ Xt,x ;u,d τ
+
+, Kt,x ;u,d t = 0
+
+and (Kt,x ;u,d τ )Tτ =t non-decreasing, we have the identity 
+
+V σ (x, t ) = max u∈U min d∈D Y t,x ;u,d t .Hence, the value function V σ can be recovered numeri-cally by finding a solution to the reflected BSDE. However, while various methods have been devised to solve reflected BSDEs [22]–[24], the reflected conditions arising from the variational inequality leads to complex algorithms. Hence, instead of directly trying to solve the reflected BSDE, we take inspiration from recent work [16] which shows that utilizing the forward SDE (X0,x ;u,d t )Tt=0 to steer PINNs op-timization via collocation point sampling yields competitive performance with SoTA Heun-based BSDE solvers, and is very simple to implement on top of existing PINNs solvers. 
+
+B. The STEER 2R EACH Loss Function and Optimization 
+
+We now present our main S TEER 2R EACH approach. In order to use the forward SDE as a sampling distribution, we need to choose an admissible pair (u, d ) ∈ U×D. To do this, we consider a family of pairs (uθ , d θ ) parameterized by the value function Vθ (x, t ). Specifically, we set (uθ , d θ ) to be the optimal control and disturbance assuming that V = Vθ .From (7) and (8), 
+
+uθ (x, t ) = argmax 
+
+> u∈U
+
+min 
+
+> d∈D
+
+⟨∇ Vθ (x, t ), f (x, u, d )⟩, (12) 
+
+dθ (x, t ) = argmin 
+
+> d∈D
+
+⟨∇ Vθ (x, t ), f (x, u θ (x, t ), d )⟩. (13) We then define Xx;θt ≡ X0,x ;uθ ,d θ 
+
+> t
+
+. We use this forward SDE to induce measures μθ (on Rn × I ) and μ′ 
+
+> θ
+
+(on Rn)as μθ = Law(( Xx;θt , t )) and μ′ 
+
+> θ
+
+= Law( Xx;θT ), where t ∼
+
+U (I), x ∼ μ0, and x ⊥ t. Here, μ0 is a fixed distribution over initial conditions. These measures then give rise to the STEER 2R EACH loss: 
+
+LS2R (θ; θsamp , λ ) = LVI (θ; μθsamp ) + λLbnd (θ; μ′ 
+
+> θsamp
+
+). (14) The S TEER 2R EACH loss is optimized by using the cur-rent value function parameters θt as the sampling parame-ters. Specifically, at optimization iteration t, we define the function LS2R ,t (θ) ≡ LS2R (θ; θt, λ ), and utilize gradients 
+
+∇L S2R ,t (θt) to update the parameters to θt+1 :
+
+θt+1 = UpdateRule( θt, ∇L S2R ,t (θ)) , (15) where UpdateRule is any gradient-based optimization rule such as gradient descent, L-BFGS, Adam, etc. This family of optimization problems, where the underlying distribution changes as a function of the current parameter value θt,is well-studied in the machine learning literature under the umbrella of performative prediction [25]. In this literature, the type of update scheme in (15) is known as repeated gradient descent (RGD) .An alternative to RGD (15) is to directly minimize the loss LS2R,full (θ) ≡ L S2R (θ; θ, λ ). In applications where the control and disturbance sets are e.g., box constraints, the gradients of uθ , d θ are zero almost everywhere, and hence in practice using gradient methods to minimize LS2R,full (θ)
+
+is functionally equivalent to (15). We further experimented with using direct minimization by adding extra regularization terms on u, d to (12), (13) that ensure the uθ , d θ would have non-zero gradients that could be used to guide optimization in the early stages. However, we found this direct minimiza-tion with regularization to be quite unstable to train; we leave effectively leveraging smoothed gradients w.r.t. the measures 
+
+μθ , μ ′ 
+
+> θ
+
+to future work. We summarize the full STEER 2R EACH algorithm in Alg. 1. We utilize the standard Euler-Maruyama (EM) integrator to rollout the forward SDE Xx;θt . We implement RGD updates by using a stop-gradient operator on the for-ward SDE trajectories. On top of the vanilla PINNs approach (11), S2R introduces two new hyperparameters surrounding the forward SDE: (a) the noise injection σ (we utilize the constant function σ(x, u, d ) ≡ σ · In), and (b) the integration timestep ∆t for EM integration. We study the sensitivity of S2R to both the noise injection parameter σ and the integration time ∆t in Sec. V-F. 
+
+Algorithm 1 The S TEER 2R EACH (S2R) Algorithm 
+
+Input: Initial θ, boundary loss weight λ, optimization iterations 
+
+Niter , forward SDE noise σ, forward SDE discretization ∆t,number of batched rollouts Btraj , loss batch size Bpde .
+
+Output: Value function parameters θ. 
+
+> 1:
+
+Set Ntraj = T / ∆t. // Assume evenly divides  
+
+> 2:
+
+for j = 0 , . . . , N iter − 1 do       
+
+> 3: /* Batched forward SDE rollout */
+> 4:
+
+Sample xi[0] i.i.d. 
+
+∼ U (Ω) , i = 1 , . . . , B traj . 
+
+> 5:
+
+Sample ξi[0 : Ntraj − 1] i.i.d. 
+
+∼ N(0 , I n). 
+
+> 6:
+
+Set ti = (∆ t · k)Ntraj 
+
+> k=0
+
+. 
+
+> 7:
+
+Define Fθ (x, t ) = f (x, u θ (x, t ), d θ (x, t )) .    
+
+> 8: /* Euler-Maruyama integration */
+> 9:
+
+for k = 0 , . . . , N traj − 1 do        
+
+> 10: /* Implement with e.g., jax.vmap */
+> 11:
+
+xi[k + 1] = xi[k] + ∆ t · Fθ (xi[k], t i[k]) + √∆tσξ i[k]. 
+
+> 12:
+
+end for  
+
+> 13:
+
+xi = stop grad (xi). // See Equation (15)      
+
+> 14: /* PINNs loss computation */
+> 15:
+
+Set xall = hstack ([ x1, . . . , x Btraj ]) . 
+
+> 16:
+
+Set tall = hstack ([ t1, . . . , t Btraj ]) . 
+
+> 17:
+
+Set (xb, t b) = rand permute (vstack ([ xall , t all ]))[0 : Bpde ]. 
+
+> 18:
+
+Set xbnd = rand permute ([ x1[T ], . . . , x Btraj [T ]])[0 : Bpde ]. 
+
+> 19:
+
+Define LVI (θ) = PBpde −1 
+
+> m=0
+
+R2 
+
+> Vθ
+
+(xb[m], t b[m]) . 
+
+> 20:
+
+Define Lbnd (θ) = PBpde −1 
+
+> m=0
+
+(ℓ(xbnd [m]) −Vθ (xbnd [m], T )) 2. 
+
+> 21:
+
+Define LS2R ,j (θ) = LVI (θj ) + λLbnd (θj ). 
+
+> 22:
+
+θj+1 ← UpdateRule( θj , ∇θ LS2R ,j (θj )) . 
+
+> 23:
+
+end for  
+
+> 24:
+
+Return: Parameters θNiter .
+
+C. Value Function Consistency Constraints 
+
+Finally, we describe our last technique, which draws inspiration from the work of [10], [26]. By the definition of 
+
+V (x, t ) in (3), it is immediate to verify that V (x, t ) ⩽ ℓ(x)
+
+holds for all x ∈ Rn. At the same time, we also have the terminal constraint V (x, T ) = ℓ(x) from (6). Hence, we propose to simultaneously encode these two constraints in our parameterization via: 
+
+Vθ (x, t ) = ℓ(x) − (T − t)ρ(ϕθ (x, t )) , (16) (a) Comparison plots of the learned safety value function Vθ (x, 0) for the 2D vertical drone problem. −4 −2 0 2 4                
+
+> vz
+> 0123
+> z
+> GT
+> −4 −2 024
+> vz
+> PINNs (0.4531)
+> −4 −2 024
+> vz
+> RAD-PINNs (0.8376)
+> −4 −2 024
+> vz
+> MPC-DeepReach (0.0416)
+> −4 −2 024
+> vz
+> Steer2Reach (0.0067)
+> −4 −3 −2 −1 01
+
+(b) Comparison plots of the learned safety value function Vθ (x, 0) for the 40D publisher-subscriber problem evaluated on the slice x = ( x0, x i, . . . , x i).−1.0 −0.5 0.0 0.5 1.0                 
+
+> x0
+> −1.0 −0.5 0.0 0.5 1.0
+> xi
+> GT
+> −1.0 −0.5 0.0 0.5 1.0
+> x0
+> PINNs (3.2629)
+> −1.0 −0.5 0.0 0.5 1.0
+> x0
+> RAD-PINNs (5.6828)
+> −1.0 −0.5 0.0 0.5 1.0
+> x0
+> MPC-DeepReach (0.3459)
+> −1.0 −0.5 0.0 0.5 1.0
+> x0
+> Steer2Reach (0.1365)
+> −2 02468
+
+Fig. 2: Comparison plots of the learned safety value function Vθ (x, t ) at t = 0 with the zero level set outlined as a black line. The green dotted line in (a) represent the floor and ceiling that the system should avoid and the white dotted line represents the ground truth zero level contour. We include the RL2 error of each method in the title for reference. 
+
+where ρ : R 7 → R⩾0 is a fixed (non-learnable) function with non-negative outputs (e.g. a quadratic ρ(x) = x2), and ϕθ (x, t ) is an unconstrained network. Note that this parameterization, in addition to removing the need for the boundary loss Lbnd in (14) and Alg. 1, also enforces value function consistency Vθ (x, t ) ⩽ ℓ(x) for all x ∈ Rn,excluding the possibility of representing solutions Vθ where the value grows as t moves away from the final time T .V. E XPERIMENTS 
+
+In this section, we compare S TEER 2R EACH against stan-dard PINNs, PINNs with RAD sampling [19], and MPC-DeepReach [7]. Specifically: (a) PINNs: The PINNs loss from (11) is minimized with the hard-constrained network described in Sec. IV-C. This method is most similar to DeepReach with exact boundary constraints [10], although we do not label it as such since we do not utilize DeepReach’s time-based curriculum and sinusoidal networks. (b) RAD-PINNs: We minimize the PINNs loss (11), utiliz-ing the RAD [19] measure μRAD  
+
+> θ
+
+described in Sec. III-B, with hyperparameters k = c = 1 .(c) MPC-DeepReach: We use the MPC-DeepReach (MPC-DR) codebase [27] to learn safety value functions with the method described in Sec. III-C. (d) STEER 2R EACH : Our approach as described in Sec. IV-B and Alg. 1. We evaluate these methods on five reachability bench-marks described in [7], [9]: 2D Vertical Drone, 3D Pursuit-Evade, 7D F1Tenth, 13D Quadrotor, and 40D Publisher-Subscriber. The dynamics and unsafe sets L for each problem are detailed in Sec. B. 
+
+A. Evaluation Metrics 
+
+We evaluate the different approaches on three main com-ponents: (i) safety: how well the resulting controller uθ (x, t )
+
+derived from the learned value function Vθ (x, t ) keeps the system safe, (ii) level-set accuracy: how well the (comple-ment of) the induced BRT Bθ = {x | Vθ (x, 0) ⩽ 0} captures the safe initial conditions of the system (under the controller 
+
+uθ ), and (iii) ground-truth residual error: how close Vθ (x, t )
+
+is to the ground truth V (x, t ) in MSE. Note for the subset of problems where the disturbance set is non-empty, we utilize the disturbance dθ (x, t ) that is optimal for the learned value function to approximate the optimal disturbance d∗(x, t ; uθ ).For quantifying (i) safety and (ii) level-set accuracy , we view Vθ as a binary classifier ˆhθ (x) = 1{Vθ (x, 0) > 0} that approximates the ground truth h∗ 
+
+> θ
+
+(x) = 1{J(x, 0, u θ , d θ ) >
+
+0}. For each method and problem we sample N = 10 6 initial conditions, count the number of true positives (TP: ˆhθ =
+
+h∗ 
+
+> θ
+
+= 1 ), false positives (FP: ˆhθ = 1 , h ∗ 
+
+> θ
+
+= 0 ), true negatives (TN: ˆhθ = h∗ 
+
+> θ
+
+= 0 ), and false negatives (FN: ˆhθ = 0 , h ∗ 
+
+> θ
+
+=1), and compute the following metrics: (a) Precision: The ratio of initial states which are correctly predicted as safe: Precision = TP TP + FN .
+
+(b) Intersection over Union (IoU): The ratio of the inter-section of predicted and actual safe sets over its union: IoU = TP TP + FP + FN .
+
+(c) Predicted Volume (PV): The percentage of initial states which are predicted to be safe: PV = TP + FP 
+
+N · 100 .
+
+(d) True Volume (TV): The percentage of initial states which are actually safe under uθ :TV = TP + FN 
+
+N · 100 .
+
+Here, TV gives us a measure of the true safety of the induced Problem Model Precision IOU TV RL2@ t=0 Runtime[m] 2D VerticalDrone PINNs 0.8328 ± 0.2799 0.8266 ± 0.2787 50 .8891 ± 12 .8575 0.3545 ± 0.4371 0.41 RAD-PINNs 0.8590 ± 0.2215 0.8506 ± 0.2187 52 .9285 ± 8.8048 0.4277 ± 0.3767 0.61 MPC-DR 0.9833 ± 0.0015 0.9688 ± 0.0039 57 .5331 ± 0.1758 0.1020 ± 0.0290 1.34 S2R 0.9780 ± 0.0039 0.9745 ± 0.0037 57 .4632 ± 0.2630 0.0497 ± 0.0014 1.04 PursuitEvade 3D PINNs 0.9999 ± 0.0001 0.9702 ± 0.0053 91 .7998 ± 0.0579 0.0617 ± 0.0071 1.11 RAD-PINNs 1.0000 ± 0.0000 0.9587 ± 0.0104 92 .3046 ± 0.0700 0.0699 ± 0.0168 1.90 MPC-DR 0.9995 ± 0.0000 0.9910 ± 0.0003 91 .9236 ± 0.0060 0.0360 ± 0.0087 6.30 S2R 1.0000 ± 0.0000 0.9854 ± 0.0005 91 .9665 ± 0.0082 0.0271 ± 0.0019 3.24 F1Tenth 7D PINNs 0.7058 ± 0.0742 0.7012 ± 0.0727 66 .8001 ± 6.7809 - 46.60 RAD-PINNs 0.4211 ± 0.0382 0.4166 ± 0.0378 40 .1880 ± 3.7511 - 52.65 MPC-DR 0.9794 ± 0.0011 0.9603 ± 0.0031 82 .0896 ± 0.1341 - 306.27 S2R 0.7500 ± 0.0220 0.7364 ± 0.0200 71 .8773 ± 2.0967 - 105.78 Quadrotor 13D PINNs 0.9141 ± 0.0071 0.9098 ± 0.0066 87 .2352 ± 0.6200 - 47.69 RAD-PINNs 0.8997 ± 0.0018 0.8955 ± 0.0019 86 .1629 ± 0.0674 - 52.98 MPC-DR 0.9896 ± 0.0001 0.9884 ± 0.0001 94 .6099 ± 0.0031 - 118.46 S2R 0.9773 ± 0.0191 0.9535 ± 0.0113 92 .3880 ± 1.6725 - 87.33 PublisherSubscriber 40D PINNs 0.0000 ± 0.0000 0.0000 ± 0.0000 38 .8330 ± 0.4232 1.7727 ± 0.0756 18.05 RAD-PINNs 0.0000 ± 0.0000 0.0000 ± 0.0000 23 .1759 ± 9.1214 2.2479 ± 0.0216 23.22 MPC-DR 0.9971 ± 0.0007 0.9831 ± 0.0013 39 .7366 ± 0.0018 0.5676 ± 0.1539 82.85 S2R 0.9979 ± 0.0000 0.9878 ± 0.0004 39 .9131 ± 0.0005 0.0983 ± 0.0266 50.63 
+
+TABLE I: A table of evaluation metrics averaged over three random initializations. Settings with no ground truth are denoted with - . In addition, we mark the highest performance for each problem/metric in bold and the runner up with an underline. In all cases, STEER 2R EACH utilizes σ = .01 and a ∆t such that Ntraj = 50 (cf. Alg. 1). 
+
+controller uθ , whereas both the precision and IoU provide a measure of the accuracy of Bcθ . In the literature, another common metric to report is the recovered volume [5], [7], [10], which corresponds to using split conformal prediction to compute a threshold γ such that the tightened classifier 
+
+ˆhγθ (x) = 1{Vθ (x, 0) > γ } has a false positive (FP) rate that is controlled at a fixed value (e.g., FP = 10 −3). To provide a more direct comparison of the various approaches, we choose to report Precision, IOU, and TV metrics of pre-calibrated ˆhθ (x); S TEER 2R EACH is of course compatible with any post-hoc calibration procedure. Finally, for evaluating (iii) ground truth residual error 
+
+when we have access to a ground truth V (x, t ), we sample a random set of initial conditions {X(i)0 }Ni=1 
+
+> i.i.d.
+
+∼ μ0 drawn from a base measure μ0 (which for each problem we take to be uniform over a fixed interval for each state coordinate), and compute the Relative L2 (RL2) metric: RL2 =
+
+vuuutPNi=1 
+
+
+
+V (X(i)0 , 0) − Vθ (X(i)0 , 0) 
+
+2
+
+PNi=1 V 2(X(i)0 , 0) , (17) where Vθ (x, t ) denotes the learned value function. 
+
+B. Implementation Details 
+
+For PINNs, RAD-PINNs, and S TEER 2R EACH , we match the model architecture and the total number of collocation points with the MPC-DeepReach models in [6], [7]. There-fore, we utilize a 4 layer neural network (NN) with 128 neurons per layer for the vertical drone and pursuit-evade problems and 512 neurons per layer for the F1tenth, quadro-tor, and publisher-subscriber problems. All models utilize 
+
+swish activation and boundary conditions are enforced via the parameterization (16) with quadratic constraint ρ on all cases except F1tenth, where we utilize a softplus constraint 
+
+ρ. For S2R, we use a trajectory batch size of Btraj = 512 and all methods utilize a base PDE batch size of Bpde = 4096 .We match the total number of collocation points by adjusting the number of iterations up to Niter = 400 k iterations, at which point the PDE batch size is increased to match MPC-DeepReach; this limits the computational overhead stemming from excessive iterations and instead allows for more effi-cient batch computing. We note that in all cases, we utilize comparable PINNs residual collocation points instead of the MPC regression data points and trajectory rollout data points. Since MPC-DeepReach employs a MPC regression loss alongside the PINNs residual, our methods are effectively under-sampled compared to MPC-DeepReach. All PINNs, RAD-PINNs, and S2R models, are trained using Adam with a multi-step learning-rate schedule of 10 −4, 5 · 10 −5, and 
+
+10 −5 for Ntraj /2, Ntraj /4, and Ntraj /4 iterations, respectively. We implement our algorithms in jax [28], and train on one NVIDIA H200 GPU using f64 precision; we also obtained similar results for S2R using f32 precision. For MPC-DeepReach, we utilize their open-source codebase [27] as-is to train models using their default architecture and algorithm hyperparameters. All code to reproduce the following results can be found online at github.com/sungje-park/steer2reach. 
+
+C. Main STEER 2R EACH Benchmark Results 
+
+In the first set of results, we compare S2R with the three other baselines. We solve each problem using three different initialization seeds for training and report the mean and standard deviation of our metrics in Table I. From Table I, we take away several key trends. First, both MPC-DeepReach and S2R match or outperform PINNs and RAD-PINNs across most cases; while RAD-PINNs offers some improvement over PINNs, its performance still falls short of both MPC-DeepReach and S2R especially on the three higher dimensional problems (7D F1Tenth, 13D Quadrotor, and 40D Pub-Sub). One exception is the pursuit-evade case 30 40 50 60 70 80 90 100    
+
+> Predicted Volume (%)
+> 30 40 50 60 70 80 90 100
+> True Volume (%)
+> Overly conservative (True > Predicted) Overly optimistic (Predicted > True) Problem VD PE QR PS Method PINNs RAD MPC-DR S2R Fig. 3: A plot of the predicted volume (PV) vs. true volume (TV) for each problem and model pair. The dashed black line represents the ideal TV =PV scaling.
+
+where RAD-PINNs achieves a better TV but a significant worse IOU and RL2 compared to MPC-DeepReach and S2R. We also see that both MPC-DeepReach and S2R have significantly more accurate level-sets than PINNs and RAD-PINNs (e.g., higher IOU) even without explicit post-hoc calibration (also see Fig. 3). More importantly, we see that S2R is able to be com-petitive with and can match the performance of MPC-DeepReach on most problems (with the exception of F1tenth, see Sec. V-D for a longer discussion) in the safety metrics (i.e., precision, IOU, and TV), while achieving a lower RL2 (ground truth residual error) by a factor of 1.3× for the pursuit-evade, 2× for the vertical drone, and 5.7× for the publisher-subscriber problem. One notable case is the publisher-subscriber problem, where S2R achieves the best precision, IOU, and TV metrics among all methods, outper-forming MPC-DeepReach. For the remaining non-F1tenth problems, S2R and MPC-DeepReach achieve comparable performance, although MPC-DeepReach sometimes has a slight advantage on safety metrics (e.g., for the quadrotor). We hypothesize that this advantage may be partly due to its final-stage fine-tuning procedure, which uses weighted regression to reduce false positives [7, Eq. 12]. We emphasize that S2R’s performance compared with MPC-DeepReach is achieved with a much simpler training procedure as detailed in Sec. IV-B—no multi-stage curriculum training pipelines and no MPC solutions are necessary. 
+
+D. F1Tenth Performance 
+
+We hypothesize that the performance discrepancy of S2R on the F1tenth problem stems from the hybrid dynamics which are piecewise nonlinear and numerically sensitive with a narrow operating region. While the low-speed kinematic dynamics (cf. (22)) are relatively benign, the high-speed dynamics (cf. (23)) introduces terms inversely proportional to v and v2 making the yaw and slip angle equations highly sensitive to discretization error. As a result, the trajectory rollouts are often unstable and produce trajectories that deviate significantly from the true system. This sensitivity is especially problematic for S2R since the trajectory rollouts are used as a proxy for the sampling measures μ. Therefore, any inaccuracies in the rollouts directly affect where the PDE residual is evaluated which can significantly degrade the quality of the training signal. In contrast, MPC-DeepReach, which also utilizes trajectory rollouts, mainly uses them to approximate regression targets which is much more tolerant to imperfect rollouts. We investigated various approaches to limit the collocation points to the defined prescribed state domain:  
+
+> •
+
+Clipping : Collocation points exceeding the state bounds are projected back into the domain after the rollouts.  
+
+> •
+
+Bounding : The state bounds are enforced throughout the rollout by projecting states back whenever they exceed the limits.  
+
+> •
+
+Filtering : All rollout states that fall outside the state bounds are discarded prior to computing the loss. However, these strategies introduced a critical sampling bias; clipping and bounding concentrate points near the limits of the admissible domain, while filtering removes later rollout states disproportionately, concentrating points around the initial portions of the trajectories. In both cases, the resulting collocation set is systematically biased and fails to provide an accurate approximation for the distribution induced by the true system dynamics. Overall, our observations suggest that the challenge is not merely numerical instability, but the interaction be-tween rollout errors and the induced collocation distribu-tion. While the proposed post-processing strategies mitigate invalid states, they do not preserve the dynamics-induced sampling distribution and therefore fail to recover training performance. Developing simple trajectory-based sampling methods that maintain both trajectory fidelity and unbiased sampling measures remains an important future direction. 
+
+E. Scalability of STEER 2R EACH to High Dimensions 
+
+Our next experiment studies the scalability of STEER 2R EACH as the state dimension of the problem increases. To do this, we utilize the publisher-subscriber problem, which can be adapted to any arbitrary input dimensions n > 2 by adjusting the number of subscribers, which we vary from n = 2 to n = 500 . In Fig. 4a, we observe that the performance of S2R in RL2 scales significantly better compared to the PINNs baseline as dimensions increases. This trend illustrates that S2R’s forward trajectory steering is able to effectively sampling the relevant portions of the state space for learning a safety value function even as the dimensionally increases. 
+
+F. Ablation Studies for STEER 2R EACH 
+
+Our next set of experiments study both the hard constraint technique (cf. Sec. IV-C), in addition to S2R’s performance sensitivity to its two hyperparameters: the noise parameter 
+
+σ, and the discretization time ∆t (cf. Alg. 1). We first study the effect of the hard constraints. We test four candidate constraint functions ρ for (16): quadratic, softplus, swish, and elu. We also consider removing the 2 5 10 20 50 100 200 500               
+
+> n
+> 10 −1
+> 10 0
+> 10 1
+> 10 2
+> 10 3
+> 10 4
+> RL2
+> PINNs S2R (a) RL2 vs. state dimension nfor the publisher-subscriber case. 00.0001 0.001 0.01 0.1 1.0
+> σ
+> 10 −2
+> 10 −1
+> RL2  Problem VD PE PS
+> (b) A plot of RL2 vs noise, σon problems with ground-truth solutions. 5e-3 1e-2 5e-2
+> Δt
+> 10 −2
+> 10 −1
+> RL2
+> VD PE PS
+> (c) A plot of RL2 vs discretization fineness on problems with ground-truth solutions.
+
+Fig. 4: Ablation study plots for S TEER 2R EACH . In (b) and (c), the outlined points represent the values used for S2R in Table I. 
+
+constraint (i.e., ρ(x) = x). Changing ρ in (16) does not affect the boundary constraint Vθ (x, T ) = ℓ(x), and hence this study focuses on the benefits of strictly enforcing the inequality constraint Vθ (x, t ) ⩽ ℓ(x) for all time. Note that the swish and elu functions allow some negative values and therefore do not strictly enforce the inequality constraint; however, both functions are bounded below and hence restrict how much Vθ (x, t ) can cross above ℓ(x). The results are shown in Table II. Here, we see that hard enforcement of the inequality constraint can lead to improved perfor-mance (measured by both TV and RL2) compared to the unconstrained parameterization, for both PINNs and S2R. However, there is not a clear trend as to which choice of 
+
+ρ is the best, and more importantly the gains in Table II are considerably less than those in Table I (which fixes a quadratic ρ) between different algorithms, further illustrating that the forward trajectory steering is the key component. We next turn to studying the influence of S2R’s two hyperparameters on its performance. Fig. 4b illustrates the effect of various values of the noise parameter σ on RL2 error, and Fig. 4c showcases the effect of various discretiza-                                                                                        
+
+> PINNs S2R problem constraint ρTV RL2 TV RL2 VD 2D none 46.0740 0.6513 55.8940 0.0150 quadratic 56.2202 0.3585 55.9976 0.0074
+> softplus 26.0273 0.7491 58.2206 0.0113 swish 38.3856 0.5382 55.8891 0.0160 elu 26.0215 0.7798 55.8472 0.0111 PE 3D none 92.1380 0.0865 92.0671 0.0112
+> quadratic 91.7807 0.1295 91.9540 0.0220 softplus 90.7737 0.1591 92.0171 0.0138 swish 90.8627 0.1213 92.0281 0.0260 elu 92.0754 0.0950 92.0936 0.0118 QR 13D none 85.2913 -92.3224 -quadratic 88.8795 -94.2542 -softplus 86.2966 -94.2726 -swish 87.3345 -93.7863 -elu 84.3953 -93.9070 -PS 40D none 0.0001 4.5099 39.7359 0.1472 quadratic 11.5185 2.7623 39.8605 0.1005
+> softplus 23.6384 2.7503 39.7568 0.1928 swish 21.6774 2.8584 39.7468 0.1915 elu 21.8202 3.1418 39.7333 0.1531
+
+TABLE II: Effect of varying the constraint function ρ in (16) on TV and RL2 metrics. 
+
+tion times ∆t also on RL2 error. Regarding the noise σ,Fig. 4b shows that RL2 error can be improved by tuning the noise, illustrating that the exploration induced by the forward trajectory SDE can be helpful for learning. However, the best choice of σ is heavily problem dependent. We emphasize that in our main experiments in Sec. V-C, we do not tune σ for each problem setting, but instead we fix σ = 0 .01 across all instances. Next, regarding the discretization time ∆t, in Fig. 4c we see that ∆t also impacts RL2 error in a problem-dependent way. Interestingly, we see that smaller ∆t does not necessarily lead to lower error despite more accurate SDE integration, a trend we leave investigating further to future work. As with σ, we do not tune ∆t for each problem setting in Table I, but instead we fix ∆t so that Ntraj = 50 for each problem (cf. Alg. 1). VI. C ONCLUSION AND FUTURE WORK 
+
+We propose STEER 2R EACH , a simple HJ reachability PINNs-based solver that utilizes forward SDE trajectory steering to adaptively sample collocation points. Through comparisons with various PINNs-based methods including SoTA methods such as MPC-DeepReach, we demonstrate that S2R achieves competitive safety performance and lower relative L2 error compared to SoTA solvers, while being much simpler to implement and not requiring multi-stage training pipelines or auxiliary semi-supervision. This work opens up some exciting future directions, for which we list a couple. First, while S2R is inspired by reflected BSDE algorithms and borrows its forward SDE sampling from BSDE methods, it is still a PINNs method that minimizes PDE residual. Designing reflected BSDE solvers that yield even higher quality safety value functions than S2R is hence an interesting future direction. Second, applying S2R to the visuomotor control setting for enabling scalable and accurate latent reachability analysis [29] is also another important direction. ACKNOWLEDGMENTS 
+
+Anthropic’s Claude Code [30] and OpenAI’s Codex [31] assisted with implementation, testing, and analysis of the ex-perimental code. All algorithmic design, numerical methods, and experimental validations were performed by the authors. OpenAI’s ChatGPT [32] assisted with writing portions of the manuscript, in addition to finding relevant literature and instantiating reflected BSDEs for HJI-VI problems. REFERENCES [1] I. Mitchell, A. Bayen, and C. Tomlin, “A time-dependent hamilton-jacobi formulation of reachable sets for continuous dynamic games,” 
+
+IEEE Trans. Autom. Control , vol. 50, no. 7, pp. 947–957, 2005. [2] S. Bansal, M. Chen, S. Herbert, and C. J. Tomlin, “Hamilton-jacobi reachability: A brief overview and recent advances,” in Proc. IEEE Conf. Decision and Control (CDC) , 2017. [3] J. Sirignano and K. Spiliopoulos, “Dgm: A deep learning algorithm for solving partial differential equations,” J. Comput. Phys. , vol. 375, pp. 1339–1364, 2018. [4] M. Raissi, P. Perdikaris, and G. E. Karniadakis, “Physics-informed neural networks: A deep learning framework for solving forward and inverse problems involving nonlinear partial differential equations,” 
+
+Journal of Computational Physics , vol. 378, pp. 686–707, 2019. [5] W. Sharpless, Z. Feng, S. Bansal, and S. Herbert, “Linear supervision for nonlinear, high-dimensional neural control and differential games,” in Proc. Learn. Dyn. Control Conf. (L4DC) , 2025. [6] R. Teoh, S. Tonkens, W. Sharpless, A. Yang, Z. Feng, S. Bansal, and S. Herbert, “Madr: Mpc-guided adversarial deepreach,” arXiv preprint arXiv:2510.18845 , 2025. [7] Z. Feng, L. Qiu, and S. Bansal, “Bridging model predictive control and deep learning for scalable reachability analysis,” arXiv preprint arXiv:2505.03830 , 2025. [8] P.-Y. Chuang and L. A. Barba, “Predictive limitations of physics-informed neural networks in vortex shedding,” arXiv preprint arXiv:2306.00230 , 2023. [9] S. Bansal and C. Tomlin, “DeepReach: A deep learning approach to high-dimensional reachability,” in Proc. IEEE Int. Conf. Robot. Autom. (ICRA) , 2021. [10] A. Singh, Z. Feng, and S. Bansal, “Exact imposition of safety boundary conditions in neural reachable tubes,” in Proc. IEEE Int. Conf. Robot. Autom. (ICRA) , 2025. [11] V. Sitzmann, J. Martel, A. Bergman, D. Lindell, and G. Wetzstein, “Implicit neural representations with periodic activation functions,” in 
+
+Adv. Neural Inf. Process. Syst. (NeurIPS) , 2020. [12] A. Krishnapriyan, A. Gholami, S. Zhe, R. Kirby, and M. W. Mahoney, “Characterizing possible failure modes in physics-informed neural networks,” in Adv. Neural Inf. Process. Syst. (NeurIPS) , 2021. [13] J. Han, A. Jentzen, and W. E, “Solving high-dimensional partial differential equations using deep learning,” Proc. Natl. Acad. Sci. U.S.A , vol. 115, no. 34, pp. 8505–8510, 2018. [14] M. Raissi, “Forward–backward stochastic neural networks: deep learn-ing of high-dimensional partial differential equations,” in Peter Carr Gedenkschrift, Res. Adv. Math. Finance , 2024, pp. 637–655. [15] N. N¨ usken and L. Richter, “Interpolating between bsdes and pinns: Deep learning for elliptic and parabolic boundary value problems,” J. Mach. Learn. , vol. 2, no. 1, pp. 31–64, 2023. [16] S. Park and S. Tu, “Integration matters for learning PDEs with backward SDEs,” in Adv. Neural Inf. Process. Syst. (NeurIPS) , 2025. [17] C. Wang, S. Li, D. He, and L. Wang, “Is l2 physics informed loss always suitable for training physics informed neural network?” in Adv. Neural Inf. Process. Syst. (NeurIPS) , 2022. [18] M. A. Nabian, R. J. Gladstone, and H. Meidani, “Efficient training of physics-informed neural networks via importance sampling,” Comput.-Aided Civ. Infrastruct. Eng. , vol. 36, no. 8, pp. 962–977, 2021. [19] C. Wu, M. Zhu, Q. Tan, Y. Kartha, and L. Lu, “A comprehensive study of non-adaptive and residual-based adaptive sampling for physics-informed neural networks,” Comput. Methods Appl. Mech. Eng. , vol. 403, p. 115671, 2023. [20] N. El Karoui, C. Kapoudjian, E. Pardoux, S. Peng, and M.-C. Quenez, “Reflected solutions of backward sde’s, and related obstacle problems for pde’s,” Ann. Probab. , vol. 25, no. 2, pp. 702–737, 1997. [21] R. Buckdahn and J. Li, “Stochastic differential games with reflection and related obstacle problems for isaacs equations,” Acta Math. Appl. Sin., Engl. Ser. , vol. 27, no. 4, pp. 647–678, 2011. [22] E. Gobet and J.-P. Lemor, “Numerical simulation of bsdes using empirical regression methods: theory and practice,” arXiv preprint arXiv:0806.4447 , 2008. [23] C. Bender, N. Schweizer, and J. Zhuo, “A primal–dual algorithm for bsdes,” Mathematical Finance , vol. 27, no. 3, pp. 866–901, 2017. [24] E. Bayraktar, Q. Feng, and Z. Zhang, “Deep signature algorithm for multidimensional path-dependent options,” SIAM J. Financial Math. ,vol. 15, no. 1, pp. 194–214, 2024. [25] J. Perdomo, T. Zrnic, C. Mendler-D¨ unner, and M. Hardt, “Performative prediction,” in Proc. Int. Conf. Mach. Learn. (ICML) , 2020. [26] J. J. Choi, D. Lee, B. Li et al. , “A forward reachability perspective on control barrier functions and discount factors in reachability analysis,” 
+
+arXiv preprint arXiv:2310.17180 , 2023. [27] A. Lin, Z. Feng, J. Borquez, and S. Bansal, “DeepReach Repository,” 2024. [Online]. Available: https://github.com/smlbansal/deepreach [28] J. Bradbury, R. Frostig, P. Hawkins et al. , “JAX: composable transformations of Python+NumPy programs,” 2018. [Online]. Available: http://github.com/jax-ml/jax [29] K. Nakamura, L. Peters, and A. Bajcsy, “Generalizing safety be-yond collision-avoidance via latent-space reachability analysis,” arXiv preprint arXiv:2502.00935 , 2025. [30] Anthropic, “Claude Code,” https://www.anthropic.com/, 2026. [31] OpenAI, “Codex,” https://openai.com/codex/, 2026. [32] OpenAI, “ChatGPT,” https://chatgpt.com/, 2026. 
+
+APPENDIX 
+
+A. RAD Algorithm 
+
+Algorithm 2 RAD Sampling [19] 
+
+Input: Vθ (x, t ), Bpde , Ncand , k, c
+
+Output: {(xb, t b)}Bpde 
+
+> b=1
+
+(xi, t i) ∼ U (Ω × [t0, t f ]) , i = 1 , . . . , N cand 
+
+ri = |RVθ (xi, t i)|
+
+qi = ( ri)k
+
+¯q = 1
+
+> Ncand
+
+PNcand  
+
+> m=1
+
+qm
+
+wi = qi 
+
+> ¯q
+
++ cpi = wi 
+
+> PNcand
+> j=1 wj
+
+{ib}Bpde  
+
+> b=1
+
+∼ SampleWithoutReplacement (( p1, . . . , p Ncand ), B pde )(xb, t b) = ( xib , t ib ), b = 1 , . . . , B pde 
+
+B. Problem Dynamics 
+
+In this section, we describe the five problems used in this work. The vertical drone, f1tenth, quadrotor, and publisher-subscriber cases are considered in [7] while the pursuit-evade case is considered in [9]. Unless stated otherwise, all cases are considered over the time horizon t ∈ [0 , 1] .
+
+2D Vertical Drone: We consider a drone moving vertically along the z-axis in time horizon t ∈ [0 , 1.2] with dynamics: 
+
+x =
+
+ zvz
+
+
+
+, ˙x =
+
+ vz
+
+Ku − g
+
+
+
+(18) where z ∈ [−.5, 3.5] denotes the height, vz ∈ [−4, 4] denotes vertical velocity, g = 9 .8 is gravitational acceleration, and 
+
+K = 12 is the constant control gain parameter. The control input u ∈ [−1, 1] represents the vertical acceleration effort. The failure set is given as, 
+
+L = { x | | z − 1.5| ⩾ 1.5 } (19) which represents the drone hitting the ground or ceiling. 
+
+3D Pursuit-Evade: We consider a collision avoidance prob-lem between two vehicles with dynamics, 
+
+x =
+
+x1
+
+x2
+
+x3
+
+ , ˙x =
+
+−ve + vp cos x3 + ωex2
+
+vp sin x3 − ωex1
+
+wp − we
+
+where x1, x 2 ∈ [−1, 1] denotes the relative position between vehicles, x3 ∈ [−π, π ] denotes the relative heading, and ve =
+
+vp = .75 are the linear velocity of the evader and pursuer. The control and disturbance ωe, ω p ∈ [−3, 3] represent the angular velocities of the evader and pursuer. The failure set for the problem is given as, 
+
+L = { x | ∥ (x1, x 2)∥ ⩽ .25 } (20) which represents the vehicles colliding. 
+
+7D F1tenth: We consider a hybrid vehicle dynamics system with a low-speed kinematic mode and a high-speed dynamic mode over the time horizon t ∈ [0 , 1] . The states for this system are given as x = px, p y , ϕ, v, θ yaw , ω yaw , β slip 
+
+ with hybrid dynamics, 
+
+˙x =
+
+(
+
+fkin (x, u ), |v| < . 5,fdyn (x, u ), |v| ⩾ .5, (21) where the low-speed kinematic dynamics are 
+
+fkin (x, u ) = 
+
+
+
+v cos( θyaw )
+
+v sin( θyaw )˙ϕavlr + lf
+
+tan( ϕ)
+
+alr + lf
+
+tan( ϕ) + v
+
+(lr + lf ) cos 2(ϕ) ˙ϕ
+
+0
+
+
+
+,
+
+(22) and the high-speed dynamic dynamics are 
+
+fdyn (x, u ) = 
+
+
+
+v cos( θyaw + βslip )
+
+v sin( θyaw + βslip )˙ϕaωyaw 
+
+− μm vI (lr + lf ) (l2 
+
+> f
+
+CSf (gl r − ah )+l2 
+
+> r
+
+CSr (gl f + ah )) ωyaw 
+
++ μm I(lr + lf ) (lr CSr (gl f + ah )
+
+−lf CSf (gl r − ah )) βslip 
+
++ μm I(lr + lf ) lf CSf (gl r − ah )ϕ, 
+
+h μv2(lr + lf ) (lr CSr (gl f + ah )
+
+−lf CSf (gl r − ah )) − 1
+
+i
+
+ωyaw 
+
+− μv(lr + lf ) (CSr (gl f + ah )+CSf (gl r − ah )) βslip 
+
++ μv(lr + lf ) CSf (gl r − ah )ϕ
+
+
+
+. (23) Here, px ∈ [0 , 62 .5] and py ∈ [0 , 50] denote the global position of the vehicle, ϕ ∈ [−.4189 , . 4189] denotes the front-wheel steering angle, v ∈ [0 , 8] denotes the vehicle speed, θyaw ∈ [−π, π ] denotes the yaw angle, ωyaw ∈ [−5, 5] 
+
+denotes the yaw rate, and βslip ∈ [−.8, . 8] denotes the slip angle at the vehicle center. The control inputs are defined as u =
+
+ ˙ϕa
+
+
+
+∈ [−3.2, 3.2] × [−9.51 , 9.51] , where ˙ϕ
+
+represents the steering rate and a represents the longitudinal acceleration. The longitudinal acceleration is further capped at high vehicle speeds. The vehicle parameters are defined as μ = 1 .0489 , CSf = 4 .718 , CSr = 5 .4562 , lf = .15875 ,
+
+lr = .17145 , h = .074 , m = 3.74 , I = .04712 , and 
+
+g = 9 .81 , representing the surface friction coefficient, front and rear cornering stiffness coefficients, distances from the center of gravity to the front and rear axles, center-of-gravity height, vehicle mass, moment of inertia about the vertical axis, and gravitational acceleration, respectively. The failure set for this system is defined as 
+
+L = { x | ltrack (px, p y ) ⩽ 0 } , (24) where ltrack (px, p y ) denotes the signed distance to the edge of the track. In this problem, the failure set represents the vehicle leaving the track and colliding with the curbs. 
+
+13D Quadrotor: We consider a quadrotor system with states x = px, p y , p z , q ω , q x, q y , q z , v x, v y , v z , ω x, ω y , ω z
+
+
+
+and dynamics, 
+
+˙x =
+
+
+
+vx
+
+vy
+
+vz
+
+−(ωx · qx)/2 − (ωy · qy )/2 − (ωz · qz )/2(ωx · qω )/2 + ( ωz · qy )/2 − (ωy · qz )/2(ωy · qω )/2 − (ωz · qx)/2 + ( ωx · qz )/2(ωz · qω )/2 + ( ωy · qx)/2 − (ωx · qy )/2
+
+CT · (2 · qω · qy + 2 · qx · qz )F/m CT · (−2 · qω · qx + 2 · qy · qz )F/m Gz − CT · (2 · q2 
+
+> x
+
++ 2 · q2 
+
+> y
+
+− 1) F/m αx − 59 ωy · ωz
+
+αy + 59 ωx · ωz
+
+αz
+
+
+
+(25) where px, p y , p z ∈ [−3, 3] denotes the position, vx, v y , v z ∈
+
+[−5, 5] denotes the linear velocities, qω , q x, q y , q z ∈ [−1, 1] 
+
+denotes the quaternion, and ωx, ω y , ω z ∈ [−5, 5] denotes the angular velocities. The control inputs are defined as 
+
+F, α x, α y , α z ∈ [−20 , 20] × [−8, 8] 2 × [−4, 4] . CT = 1 
+
+represents the lifting coefficient, m = 1 represents the mass, and Gz = −9.81 represents gravitational acceleration. The failure set for this system is defined as, 
+
+vn = q ⊗ eq 
+
+> 3
+
+⊗ ¯q
+
+dx = r2
+
+> a
+
+p2
+
+> x
+
+ν2
+
+> z
+
+p2
+
+> x
+
+ν2 
+
+> x
+
++ p2
+
+> x
+
+ν2 
+
+> z
+
++ 2 pxpy νxνy + p2 
+
+> y
+
+ν2 
+
+> y
+
++ p2 
+
+> y
+
+ν2
+
+> z
+
+dy = r2
+
+> a
+
+p2 
+
+> y
+
+ν2
+
+> z
+
+p2
+
+> x
+
+ν2 
+
+> x
+
++ p2
+
+> x
+
+ν2 
+
+> z
+
++ 2 pxpy νxνy + p2 
+
+> y
+
+ν2 
+
+> y
+
++ p2 
+
+> y
+
+ν2
+
+> z
+
+l(x) = max 
+
+p x2 + y2 − pdx + dy , 0
+
+
+
+− r0
+
+L = { x | l(x) ⩽ 0 }
+
+where q = qω +qx ·i+qy ·j+qz ·k, ¯q = qω −qx ·i−qy ·j−qz ·k,
+
+eq 
+
+> 3
+
+= 0 + 0 i + 0 j + 1 k, ra = .17 represents the radius of the quadrotor, and r0 = .5 represents the radius of the obstacle. In this problem, the failure set represents a collision between the quadrotor and a cylindrical obstacle with infinite length in the z axis. 
+
+40D Publisher-Subscriber: Finally, we consider a publisher-subscriber system with dynamics, 
+
+ ˙x0
+
+˙xi
+
+
+
+=
+
+ a 0
+
+−1 a
+
+  x0
+
+xi
+
+
+
++
+
+0
+
+b
+
+
+
+ui +
+
+α sin( x0)x20
+
+−βx 20xi
+
+
+
+(26) where x0 represents the publisher state and xi represents each subscriber state. We define a = −.5, b = .4, α = 0 ,and β = 20 and constrain the input to ui ∈ [−.5, 5] . This problem defines a target set as, 
+
+L =
+
+
+
+x | 12 (x20 + x2 
+
+> i
+
+− .5) ⩽ 0, ∀i = 1 , . . . , D − 1
+
+
+
+,
+
+where D represents the number of dimensions.
