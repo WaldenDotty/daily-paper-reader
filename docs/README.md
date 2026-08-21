@@ -6,65 +6,49 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-20
-- 运行时间：2026-08-20 20:06:20 UTC
+- 最新运行日期：2026-08-21
+- 运行时间：2026-08-21 20:54:21 UTC
 - 运行状态：成功
-- 本次总论文数：15
-- 精读区：4
-- 速读区：11
+- 本次总论文数：9
+- 精读区：2
+- 速读区：7
 
 ### 今日简报（AI）
-今日精读聚焦不等质量四体问题非线性稳定性与GARATÉA-L轨道半解析设计，均为9分高价值成果；速读覆盖视觉惯性导航、AUV相对位姿及周期轨道方向。最值得关注四体共振与轨道设计结论，对编队或科学探测任务有直接参考。建议普通读者优先浏览两篇精读摘要，再按兴趣延伸至导航或位姿估计速读。
-- 详情：[/202608/20/README](/202608/20/README)
+今日聚焦双星与多星系统轨道稳定性，兼及轨道设计新方法。  
+精读亮点：倾斜三星系统中环双星轨道稳定性分析，以及 GARATÉA-L 任务的半解析轨道设计理论，均获 8.0 高分。  
+建议普通读者优先关注邻近恒星双星（70 Oph、36 Oph、γ Leo）的行星稳定性与长期宜居性结论。
+- 详情：[/202608/21/README](/202608/21/README)
 
 ### 精读区论文标签
-1. [Nonlinear Stability, Resonances, and Singular Reduction in the Unequal-Mass Equilateral Restricted Four-Body Problem](/202608/20/2608.11494v1-nonlinear-stability-resonances-and-singular-reduction-in-the-unequal-mass-equilateral-restricted-four-body-problem)  
-   标签：评分：9.0/10、query:cislunar-dyn-nav
-   evidence：直接研究等边受限四体问题中拉格朗日点的非线性稳定性与共振
-2. [A Semi-Analytical Theory for Improved Orbit Design of the GARATÉA-L](/202608/20/2608.17672v1-a-semi-analytical-theory-for-improved-orbit-design-of-the-garata-l)  
-   标签：评分：9.0/10、query:cislunar-dyn-nav
-   evidence：月球任务轨道设计，考虑地球第三体摄动
-3. [Improving Observability of Relative Orbit Estimation Using Bearing Measurements and Light Curves](/202608/20/2608.16135v1-improving-observability-of-relative-orbit-estimation-using-bearing-measurements-and-light-curves)  
+1. [Stability of circumbinary orbits in misaligned triple star systems](/202608/21/2608.15316v1-stability-of-circumbinary-orbits-in-misaligned-triple-star-systems)  
    标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：融合光变曲线的纯角度相对轨道估计方法，用于空间接近操作自主导航
-4. [Adaptive Nonlinear Control with Online Identification and Receding-Horizon Optimization](/202608/20/2608.18717v1-adaptive-nonlinear-control-with-online-identification-and-receding-horizon-optimization)  
+   evidence：直接研究多重引力扰动下环双星轨道的稳定性，与地月系统中三体稳定性分析在概念上高度相似。
+2. [A Semi-Analytical Theory for Improved Orbit Design of the GARATÉA-L](/202608/21/2608.17672v1-a-semi-analytical-theory-for-improved-orbit-design-of-the-garata-l)  
    标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：自主月球着陆器下降结合退域水平iLQR与在线辨识，直接支持月球自主导航
+   evidence：面向月球任务的半解析轨道设计理论，考虑月球引力与地球三体摄动，直接涉及地月系统中的轨道优化与稳定性。
 
 ### 速读区论文标签
-1. [ASPIRE-VINS: Adaptive Spline-based Visual-inertial Navigation System With Robust 3D Measurement Residuals](/202608/20/2608.12840v1-aspire-vins-adaptive-spline-based-visual-inertial-navigation-system-with-robust-3d-measurement-residuals)  
+1. [Assessing Planetary Stability and Long-Term Habitability in Nearby Stellar Binaries: 70 Oph, 36 Oph, $γ$ Leo](/202608/21/2608.13243v1-assessing-planetary-stability-and-long-term-habitability-in-nearby-stellar-binaries-70-oph-36-oph--leo)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：自适应连续时间视觉惯性融合方法用于鲁棒六自由度运动估计，可应用于空间多传感器融合导航
-2. [AMR-Pose: An Active LED Marker-Based Relative Pose Estimation Framework With Probabilistic Switching PnP for Cooperative AUVs](/202608/20/2608.12866v1-amr-pose-an-active-led-marker-based-relative-pose-estimation-framework-with-probabilistic-switching-pnp-for-cooperative-auvs)  
+   evidence：对双星系统长期轨道稳定性的数值评估，可推广到地月轨道设计中的稳定性研究。
+2. [Stability Mapping of the New Uranian Moon S/2025 U1 with Updated Masses for Cordelia, Ophelia, and Cressida](/202608/21/2608.16078v1-stability-mapping-of-the-new-uranian-moon-s2025-u1-with-updated-masses-for-cordelia-ophelia-and-cressida)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：面向协同AUV的相对位姿估计方法，可应用于月球临近操作中的相对导航
-3. [Relative Periodic Orbits in the Gutzwiller-type Anisotropic Kepler Problem and $n$-body Problem](/202608/20/2608.12901v1-relative-periodic-orbits-in-the-gutzwiller-type-anisotropic-kepler-problem-and-n-body-problem)  
+   evidence：通过数值积分和频率分析进行轨道稳定性制图，可迁移到地月系统稳定性研究
+3. [Improving Observability of Relative Orbit Estimation Using Bearing Measurements and Light Curves](/202608/21/2608.16135v1-improving-observability-of-relative-orbit-estimation-using-bearing-measurements-and-light-curves)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：研究n体问题中的相对周期轨道，与三体问题周期轨道分析相关。
-4. [Expected Free Energy-based Informative Path Planning for Robotic Mars Exploration](/202608/20/2608.14466v1-expected-free-energy-based-informative-path-planning-for-robotic-mars-exploration)  
-   标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：基于期望自由能的有界信息路径规划，可应用于月球与地月空间自主探索
-5. [LAPF: LLM-Agent-Based Path Finder Using the UAVScenes Dataset](/202608/20/2608.15175v1-lapf-llm-agent-based-path-finder-using-the-uavscenes-dataset)  
-   标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：面向不确定环境的LLM智能体路径搜索，可迁移至月球临近操作的自主规划
-6. [Target Localization and Self-Calibration in a Multistatic Radar System](/202608/20/2608.15501v1-target-localization-and-self-calibration-in-a-multistatic-radar-system)  
-   标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：目标定位与自校正算法，可迁移至自主导航与多传感器融合。
-7. [Forward Trajectory Steering for Hamilton-Jacobi Reachability Analysis](/202608/20/2608.11480v1-forward-trajectory-steering-for-hamilton-jacobi-reachability-analysis)  
+   evidence：融合视线与光变曲线的相对轨道估计，直接适用于自主近距离导航
+4. [AMR-Pose: An Active LED Marker-Based Relative Pose Estimation Framework With Probabilistic Switching PnP for Cooperative AUVs](/202608/21/2608.12866v1-amr-pose-an-active-led-marker-based-relative-pose-estimation-framework-with-probabilistic-switching-pnp-for-cooperative-auvs)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：基于PINN的Hamilton-Jacobi可达性求解器，可应用于地月系统轨迹安全与稳定性分析
-8. [Data-Driven optimal control via Koopman operators and Hamilton-Jacobi-Bellman equations](/202608/20/2608.11808v1-data-driven-optimal-control-via-koopman-operators-and-hamilton-jacobi-bellman-equations)  
+   evidence：主动LED标记相对位姿估计框架，可迁移至月球近距操作
+5. [A stabilized sequential quadratic programming method for degenerate nonlinear optimization problems on Riemannian manifolds](/202608/21/2608.13298v1-a-stabilized-sequential-quadratic-programming-method-for-degenerate-nonlinear-optimization-problems-on-riemannian-manifolds)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：基于数据驱动的稳定流形最优控制方法，与不变流形及轨迹优化在概念上紧密相关
-9. [A stabilized sequential quadratic programming method for degenerate nonlinear optimization problems on Riemannian manifolds](/202608/20/2608.13298v1-a-stabilized-sequential-quadratic-programming-method-for-degenerate-nonlinear-optimization-problems-on-riemannian-manifolds)  
+   evidence：黎曼流形上的SQP方法可应用于航天轨迹优化，能在退化约束下保证收敛。
+6. [Orbit-Planner: Towards Latent World Models for On-Orbit Obstacle Avoidance of Satellite Agents](/202608/21/2608.16651v1-orbit-planner-towards-latent-world-models-for-on-orbit-obstacle-avoidance-of-satellite-agents)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：提出黎曼流形上退化约束优化的稳定SQP算法，可直接用于天体动力学中的轨迹优化
-10. [SN-ASMO: Satellite-Navigation Array Spatial-Manifold Precise Observation Theory A Mathematical Foundation for Observation Formation, Unified U(1) Geometry, Intrinsic Information, and Preservation of the RTK Integer Structure](/202608/20/2608.13611v1-sn-asmo-satellite-navigation-array-spatial-manifold-precise-observation-theory-a-mathematical-foundation-for-observation-formation-unified-u1-geometry-intrinsic-information-and-preservation-of-the-rtk-integer-structure)  
+   evidence：面向卫星在轨自主导航与避障，学习航天器动力学进行潜空间轨迹推演
+7. [Adaptive Nonlinear Control with Online Identification and Receding-Horizon Optimization](/202608/21/2608.18717v1-adaptive-nonlinear-control-with-online-identification-and-receding-horizon-optimization)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：卫星导航阵列精确观测理论，可支撑地月空间定位授时
-11. [Moving Horizon Estimation for Underwater Target Tracking Based on Time-Difference-of-Arrival Measurements](/202608/20/2608.16024v1-moving-horizon-estimation-for-underwater-target-tracking-based-on-time-difference-of-arrival-measurements)  
-   标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：移动时域估计用于非线性状态估计，可应用于自主导航算法
+   evidence：自适应非线性最优控制与滚动时域优化，在自主月球着陆下降中验证
 
 
 <div class="dpr-home-promo-card">
