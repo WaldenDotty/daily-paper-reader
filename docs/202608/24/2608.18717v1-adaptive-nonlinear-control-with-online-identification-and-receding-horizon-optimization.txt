@@ -1,0 +1,683 @@
+Title: Adaptive Nonlinear Control with Online Identification and Receding-Horizon Optimization
+
+URL Source: https://arxiv.org/pdf/2608.18717v1
+
+Published Time: Thu, 20 Aug 2026 00:40:59 GMT
+
+Number of Pages: 24
+
+Markdown Content:
+# Adaptive Nonlinear Control with Online Identification and Receding-Horizon Optimization 
+
+Igor Ladnik ∗
+
+Abstract 
+
+An adaptive nonlinear optimal-control scheme is developed by combining receding-horizon iLQR, state estimation, online parameter identification, and actuator constraints. AMIGO (Adaptive Model-based Intelligent Guidance and Orchestration) organizes the computation into three Time Phases: identification, planning, and closed-loop control. The nonlinear transition is evaluated by the fourth-order Runge–Kutta method (RK4), and model parameters are refined by the Levenberg–Marquardt method (LM). The method is illustrated by a Van der Pol oscillator, a quadcopter, and an autonomous lunar-lander descent. 
+
+Keywords: LQR, iLQR, MPC, adaptive control, parameter identification, EKF, nonlinear control, autonomous landing. 
+
+> ∗
+
+LinkedIn, email 
+
+1arXiv:2608.18717v1 [eess.SY] 19 Aug 2026 Adaptive Quadratic Control of Dynamic Systems Igor Ladnik 
+
+# Contents 
+
+1 Introduction 42 AMIGO and Time Phases 4
+
+2.1 Identification phase (TP1) . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 52.2 Planning phase (TP2) . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 52.3 Control phase (TP3) . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 5
+
+3 Problem formulation and discretization 54 Quadratic backbone and iLQR 65 Control constraints and active set 7
+
+5.1 Amplitude constraints . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 75.2 Control-rate limits . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 8
+
+6 State estimation and online identification 9
+
+6.1 State estimation . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 96.2 Online identification by LM . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 10 
+
+7 Receding horizon and computational execution 10 
+
+7.1 Local replanning . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 10 7.2 Optimizer computation budget . . . . . . . . . . . . . . . . . . . . . . . . . . . . 11 7.3 Cost of Jacobian evaluation . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 11 
+
+8 Examples 11 
+
+8.1 Van der Pol oscillator . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 11 8.2 Nonlinear quadcopter stabilization . . . . . . . . . . . . . . . . . . . . . . . . . . 12 8.3 Autonomous lunar-lander descent: a Beresheet-inspired scenario . . . . . . . . . . 17 
+
+9 Extensions of the quadratic scheme 22 10 Limitations and directions for development 22 11 Conclusion 23 
+
+2Adaptive Quadratic Control of Dynamic Systems Igor Ladnik 
+
+# Main abbreviations 
+
+AMIGO Adaptive Model-based Intelligent Guidance and Orchestration. 
+
+EKF Extended Kalman Filter. 
+
+iLQR iterative Linear Quadratic Regulator. 
+
+KF Kalman Filter. 
+
+LM Levenberg–Marquardt method. 
+
+LQR Linear Quadratic Regulator. 
+
+MPC Model Predictive Control. 
+
+RK4 fourth-order Runge–Kutta method. 
+
+TP Time Phase. 3Adaptive Quadratic Control of Dynamic Systems Igor Ladnik 
+
+# 1 Introduction 
+
+Quadratic optimal control provides a compact way to balance trajectory-tracking accuracy against control effort. For a linear finite-horizon model, the resulting policy is obtained by a backward dynamic-programming recursion. For a nonlinear model, iLQR repeatedly linearizes the discrete dynamics along a nominal trajectory and solves a sequence of local quadratic problems. Abaseline formulation in the notation used here is given in [1]; the classical iLQR construction is discussed in [2]. In an adaptive implementation, the optimizer must operate together with state estimation, parameter identification, actuator constraints, and finite computation time. Model parameters can differ from their nominal values, measurements contain noise, and a newly computed policy must be available before the corresponding control instant. AMIGO specifies the ordering of these operations and combines a long-horizon plan with local receding-horizon correction. 
+
+# 2 AMIGO and Time Phases 
+
+The abbreviation TP denotes a Time Phase . The three phases follow one another in physical time, while state estimation continues throughout the process. Figure 1 summarizes the computation.  
+
+> Figure 1: AMIGO computation organized into three Time Phases. State estimation continues throughout physical time.
+
+4Adaptive Quadratic Control of Dynamic Systems Igor Ladnik 
+
+2.1 Identification phase (TP1) 
+
+The plant evolves under a safe baseline control. If the natural motion is not sufficiently informative, a bounded deterministic excitation is added to selected inputs. Measurements are processed by the state estimator, and model parameters are periodically updated from the accumulated history. TP1 terminates when the identification quality is adequate; parameter convergence, residual magnitude, rank, conditioning, and excitation level can all be used in this decision. 
+
+2.2 Planning phase (TP2) 
+
+Physical motion continues during TP2. The identified model predicts the state at the start of TP3. From that predicted state, a long-horizon nominal trajectory is computed. Planning therefore proceeds while the plant is still moving, rather than after the plant reaches a hypothetical stationary handoff point. 
+
+2.3 Control phase (TP3) 
+
+The nominal trajectory becomes the reference for closed-loop control. A shorter local problem with horizon H is periodically solved from the current state estimate. The resulting policy corrects the corresponding segment of the nominal trajectory, and the previous local policy can be reused as a warm start for the next solve. 
+
+# 3 Problem formulation and discretization 
+
+Consider the autonomous continuous nonlinear model ˙x(t) = f (x(t), u(t), θ) , x ∈ Rn, u ∈ Rm, (3.1) where θ ∈ Rp contains unknown or imperfectly known parameters. One integration step of duration h defines the discrete transition 
+
+xk+1 = Fh(xk, uk, θ). (3.2) For trajectory tracking, the finite-horizon cost is written as 
+
+J = Φ( xN ) +  
+
+> N−1∑
+> k=0
+
+ℓk(xk+1 , uk, uk−1), (3.3) Throughout the theoretical development, N denotes the number of control intervals. The trajectory therefore contains N + 1 state samples, x0, . . . , xN , and N controls, u0, . . . , uN −1.When the control-rate term is used, u−1 denotes the known command applied immediately before the optimization horizon. with 
+
+ℓk = ( xk+1 − x⋆k+1 )TQk(xk+1 − x⋆k+1 ) + ( uk − u⋆k)TRk(uk − u⋆k)+ ( uk − uk−1)TSk(uk − uk−1), (3.4) and terminal penalty Φ( xN ) = ( xN − x⋆N )TQf (xN − x⋆N ). (3.5) The weighting matrices satisfy Qk ⪰ 0, Sk ⪰ 0, Qf ⪰ 0, and normally Rk ≻ 0. With the convention in (3.4), the final state xN already appears in the k = N − 1 stage cost. Thus Qf in (3.5) is an additional terminal penalty, so the final-state quadratic weight is effectively QN −1 + Qf .The actuator constraints are 
+
+umin ,k ≤ uk ≤ umax ,k , ∆umin ,k ≤ uk − uk−1 ≤ ∆umax ,k . (3.6) 5Adaptive Quadratic Control of Dynamic Systems Igor Ladnik 
+
+RK4. RK4 denotes the fourth-order Runge–Kutta method. Over each sampling interval, the right-hand side of (3.1) is evaluated at several intermediate points, and the next state is formed from their weighted combination. The same discrete map Fh is used in the nonlinear rollout and in the local linear model. iLQR requires the discrete Jacobians 
+
+Ak = ∂Fh
+
+∂x , Bk = ∂Fh
+
+∂u , (3.7) which may be evaluated numerically, analytically for the chosen discretization, or by automatic differentiation. 
+
+# 4 Quadratic backbone and iLQR 
+
+This section follows the reverse-horizon notation of [1]. It is useful here because the dependence of the current control on the remaining future trajectory becomes explicit. To keep the basic recursion transparent, the ∆ u term in (3.4) is temporarily omitted; Section 5.2 restores it through an augmented state. For the linear discrete model 
+
+xk+1 = Akxk + Bkuk, (4.1) let mN −k(xk) denote the minimum cost over the remaining N − k control steps. Bellman’s principle gives 
+
+mN −k(xk) = min 
+
+> uk
+
+[
+
+(xk+1 − x⋆k+1 )TQk(xk+1 − x⋆k+1 )+ ( uk − u⋆k)TRk(uk − u⋆k) + mN −(k+1) (xk+1 )
+
+]
+
+. (4.2) Assume that the remaining optimal cost can be written as 
+
+mN −k(xk) = xT 
+
+> k
+
+PN −kxk − 2vT 
+
+> N−k
+
+xk + aN −k, (4.3) where PN −k is symmetric, vN −k is a vector, and aN −k does not depend on xk. For the terminal penalty (3.5), the recursion starts from 
+
+P0 = Qf , v0 = Qf x⋆N . (4.4) These terminal conditions follow directly from the explicit terminal penalty (3.5). The corresponding constant term is a0 = ( x⋆N )TQf x⋆N , but it can be omitted because it does not affect the minimizing control. If no separate terminal penalty is used, then Qf = 0 and therefore 
+
+P0 = 0 and v0 = 0, which recovers the initialization implicit in the formulation of [1]. If the terminal target is zero but Qf̸ = 0, then v0 = 0 while P0 = Qf remains nonzero. Substitution of (4.1) and the value function for the remaining N − (k + 1) steps into (4.2), followed by minimization with respect to uk, gives 
+
+uk = cN −k − FN −kxk. (4.5) Here uk is the input applied to the open-loop plant. The vector cN −k is the state-independent feedforward part of the closed-loop controller, while FN −k is the feedback-gain matrix. Thus the optimizer does not replace the plant input by a different variable: it computes the plant input 
+
+uk as a feedforward term corrected by state feedback. Define 
+
+Ck = Qk + PN −(k+1) , dk = Qkx⋆k+1 + vN −(k+1) ,WN −k = BT 
+
+> k
+
+CkBk + Rk,
+
+cN −k = W −1 
+
+> N−k
+
+(
+
+BT 
+
+> k
+
+dk + Rku⋆k
+
+)
+
+,FN −k = W −1 
+
+> N−k
+
+BT 
+
+> k
+
+CkAk. (4.6) 6Adaptive Quadratic Control of Dynamic Systems Igor Ladnik 
+
+The inverse notation states the algebraic solution; numerically, the corresponding linear systems should normally be solved directly. Let 
+
+Zk = Ak − BkFN −k. (4.7) The value-function parameters one step earlier in physical time are then 
+
+PN −k = ZT 
+
+> k
+
+CkZk + F T 
+
+> N−k
+
+RkFN −k,
+
+vN −k = ZT 
+
+> k
+
+[dk − CkBkcN −k] + F T 
+
+> N−k
+
+Rk [cN −k − u⋆k] . (4.8) Equations (4.6)–(4.8) make the need for the backward pass explicit. The coefficients cN −k
+
+and FN −k at step k depend on PN −(k+1) and vN −(k+1) , which summarize the optimal cost of the future part of the trajectory. Computation therefore begins from the terminal conditions 
+
+P0, v0, produces the policy for k = N − 1, then for k = N − 2, and continues backward to k = 0. Only after this reverse sweep are the feedback/feedforward laws available for a forward rollout. For a nonlinear model, iLQR constructs a nominal trajectory { ¯xk, ¯uk} and linearizes the discrete transition along it: 
+
+δxk+1 ≃ Akδxk + Bkδuk, δxk = xk − ¯xk, δuk = uk − ¯uk. (4.9) The same reverse-horizon recursion is applied to this local quadratic model, giving 
+
+δuk = cN −k − FN −kδxk. (4.10) In this nonlinear iteration, the desired state and control entering the recursion are expressed relative to the current nominal trajectory. Thus the local stage targets are x⋆k+1 − ¯xk+1 and 
+
+u⋆k − ¯uk, and the terminal correction-coordinate initialization is 
+
+P0 = Qf , v0 = Qf (x⋆N − ¯xN ). (4.11) Consequently, cN −k in (4.10) is a feedforward correction , whereas (4.5) gives the absolute plant input in the linear tracking problem. If WN −k is poorly conditioned, regularization is introduced as 
+
+WN −k ← WN −k + λI, λ ≥ 0. (4.12) After a backward pass, the nonlinear dynamics must be rolled forward to test the new policy. A line search tries scaled feedforward corrections 
+
+u(α) 
+
+> k
+
+= ¯ uk + αcN −k − FN −k
+
+(x(α) 
+
+> k
+
+− ¯xk
+
+), 0 < α ≤ 1. (4.13) The coefficient α controls how large a step is taken from the current nominal policy toward the policy obtained in the backward pass. The first trial normally uses α = 1. If the resulting nonlinear rollout does not reduce the total cost, smaller values are tested. An accepted trial becomes the new nominal trajectory. If none of the tested values is acceptable, the regularization is increased and the backward pass is recomputed. 
+
+# 5 Control constraints and active set 
+
+5.1 Amplitude constraints 
+
+At one backward-pass step, the control correction is obtained from a box-constrained quadratic problem of the form min  
+
+> δu
+
+δuTWN −kδu + 2 gT 
+
+> k
+
+δu, lk ≤ δu ≤ rk. (5.1) 7Adaptive Quadratic Control of Dynamic Systems Igor Ladnik 
+
+The bounds are the physical actuator limits expressed in correction coordinates. The vector 
+
+gk is the linear term of the same local quadratic objective; without bounds its minimizer is 
+
+δu = −W −1 
+
+> N−k
+
+gk. It therefore contains the dependence on the current state deviation and on the future-cost vector vN −(k+1) .The active-set procedure starts from the unconstrained local solution. A control component that falls outside its admissible interval is fixed at the nearest bound and declared active . The other components remain free and are recomputed together. This recomputation matters because 
+
+WN −k is generally not diagonal: once one actuator is fixed, the best values of the others can change through the cross-coupling terms. The solver then checks whether the active bounds are consistent with local optimality. If the local derivative indicates that releasing an active variable can reduce the objective, that variable returns to the free set. Conversely, a free variable that reaches a limit becomes active. The add/release cycle continues until all free variables satisfy their unconstrained optimality equations and all active variables satisfy the proper bound conditions. With a fixed amplitude bound, an active input has no local feedback motion away from that bound, whereas the gains of the remaining free inputs are recomputed. When a bound itself depends on the augmented state, as happens for a control-rate limit, the active input follows that affine bound and therefore retains the corresponding bound-induced feedback term. The constrained value function is consequently piecewise quadratic, with each local quadratic piece associated with an active set. This is a compact way to impose box limits directly during the backward pass; a related control-limited formulation is given in [3]. 
+
+5.2 Control-rate limits 
+
+The penalty (uk − uk−1)TSk(uk − uk−1) (5.2) couples adjacent commands and discourages abrupt changes. Because this term contains the previous command, it introduces a state–control cross term and cannot be represented merely by increasing Rk.A convenient exact representation augments the state with the previous control, 
+
+zk = 
+
+> [
+
+xk
+
+uk−1
+
+> ]
+
+, E =
+
+> [
+
+0 I
+
+> ]
+
+, uk−1 = Ezk. (5.3) The corresponding nonlinear augmented transition is 
+
+zk+1 =
+
+> [
+
+Fh(xk, uk, θ)
+
+uk
+
+> ]
+
+. (5.4) Around a nominal trajectory { ¯xk, ¯uk}, define δzk = zk − ¯zk and δuk = uk − ¯uk, where ¯zk = [ ¯ xT 
+
+> k
+
+, ¯uT
+
+> k−1
+
+]T. The local augmented dynamics are 
+
+δzk+1 = Aakδzk + Bak δuk, Aak =
+
+> [
+
+Ak 00 0
+
+> ]
+
+, Bak =
+
+> [
+
+Bk
+
+I
+
+> ]
+
+. (5.5) The nominal command change ¯rk = ¯ uk − ¯uk−1 (5.6) must be retained in the local quadratic model. Indeed, uk − uk−1 = ¯ rk + δuk − Eδ zk. Define the local tracking targets 
+
+δu⋆k = u⋆k − ¯uk, δz⋆k+1 =
+
+> [
+
+x⋆k+1 − ¯xk+1 
+
+0
+
+> ]
+
+, ˜Qk =
+
+> [
+
+Qk 00 0
+
+> ]
+
+. (5.7) 8Adaptive Quadratic Control of Dynamic Systems Igor Ladnik 
+
+For the augmented correction coordinates, the terminal conditions are 
+
+P a 
+
+> 0
+
+=
+
+[Qf 00 0
+
+]
+
+, va 
+
+> 0
+
+=
+
+[Qf (x⋆N − ¯xN )0
+
+]
+
+. (5.8) Thus the previous-control component carries no separate terminal penalty. For a backward step, let 
+
+Cak = ˜Qk + P aN −(k+1) , dak = ˜Qkδz⋆k+1 + vaN −(k+1) . (5.9) Expanding the control-tracking and rate terms and minimizing with respect to δuk gives 
+
+W aN −k = ( Bak )TCak Bak + Rk + Sk,
+
+caN −k = ( W aN −k)−1 [
+
+(Bak )Tdak + Rkδu⋆k − Sk ¯rk
+
+]
+
+,F aN −k = ( W aN −k)−1 [
+
+(Bak )TCak Aak − SkE
+
+]
+
+. (5.10) The term −Sk ¯rk is essential in incremental iLQR coordinates: it accounts for the command change already present in the nominal trajectory. The feedback term −SkE expresses the coupling to the previous command. Neither term is recovered by the shortcut Rk ← Rk + Sk.With 
+
+Zak = Aak − Bak F aN −k, (5.11) the augmented value-function recursion is 
+
+P aN −k = ( Zak )TCak Zak + ( F aN −k)TRkF aN −k + ( F aN −k + E)TSk(F aN −k + E),
+
+vaN −k = ( Zak )T[dak − Cak Bak caN −k
+
+] + ( F aN −k)TRk
+
+(caN −k − δu⋆k
+
+)
+
++ ( F aN −k + E)TSk
+
+(caN −k + ¯ rk
+
+) . (5.12) Here P aN −k ∈ R(n+m)×(n+m) and vaN −k ∈ Rn+m. These equations preserve the same backward-pass logic as Section 4 while correctly retaining the coupling between successive controls. Hard rate limits are combined with amplitude limits. For the actually applied previous command, the componentwise admissible interval is max( umin ,k , uk−1 + ∆ umin ,k ) ≤ uk ≤ min( umax ,k , uk−1 + ∆ umax ,k ) . (5.13) In correction coordinates, these bounds are shifted by ¯ uk. During a backward pass the rate bounds are affine in the previous-control component of the augmented state, so an active-set solver should preserve that dependence rather than treating the active rate bound as a state-independent constant. During the forward rollout, the exact interval in (5.13) is evaluated from the previous applied command. 
+
+# 6 State estimation and online identification 
+
+6.1 State estimation 
+
+The state estimate is updated throughout TP1, TP2, and TP3. The model first predicts ˆx− 
+
+> k+1
+
+= Fh( ˆ x+ 
+
+> k
+
+, uk, ˆθk), (6.1) and the next measurement corrects this prediction, ˆx+ 
+
+> k+1
+
+= ˆ x− 
+
+> k+1
+
++ Kk+1 
+
+(yk+1 − ˆy−
+
+> k+1
+
+). (6.2) where ˆ y− 
+
+> k+1
+
+is the predicted measurement obtained from the measurement model. The gain Kk+1 
+
+sets the balance between model prediction and measurement according to their error covariances. For nonlinear dynamics, an EKF uses a local linearization of the discrete transition and, when necessary, of the measurement model; the underlying Kalman-filter principle is given in [5]. 9Adaptive Quadratic Control of Dynamic Systems Igor Ladnik 
+
+6.2 Online identification by LM 
+
+LM denotes the Levenberg–Marquardt method [6, 7]. When corrected full-state estimates are used for identification, a one-step model residual can be defined as 
+
+rk(θ) = ˆ x+ 
+
+> k+1
+
+− F h( ˆ x+ 
+
+> k
+
+, uk, θ), (6.3) and the parameter estimate is obtained from a bounded weighted least-squares problem, ˆθ = arg min 
+
+> θmin ≤θ≤θmax
+> ∑
+> k
+> ∥∥∥
+
+Ω1/2 
+
+> k
+
+rk(θ)
+
+> ∥∥∥2
+
+. (6.4) where Ω k ⪰ 0 is the residual-weight matrix; the symbol Ω k is used here to avoid confusion with the control matrix WN −k in the backward pass. LM uses the local sensitivity of the residual to the parameters and damps the update when the linear approximation is insufficiently reliable. During sequential identification, the data history grows while fit quality is checked on a recent validation interval. Residual magnitude, effective rank, conditioning, parameter stability, and excitation level provide useful acceptance diagnostics. With partial observation, a residual formed directly in measurement space is preferable whenever practical because it avoids treating model-generated unobserved state components as independent measurements. 
+
+# 7 Receding horizon and computational execution 
+
+7.1 Local replanning 
+
+During TP3, a global trajectory { ¯xgk, ¯ugk} provides the nominal reference. A local iLQR problem with prediction horizon H is periodically solved from the current state estimate. Its backward pass uses the same reverse-horizon logic. After line search accepts a local forward rollout, the accepted open-loop sequence already contains the feedforward update, including the accepted value of α. It should therefore not be scaled a second time when the stored policy is applied. When a control-rate penalty is present, define the estimated augmented state and its local nominal value as ˆzk = 
+
+> [
+
+ˆxk
+
+uapplied 
+
+> k−1
+> ]
+
+, ¯zℓj = 
+
+> [
+
+¯xℓj
+
+¯uℓj−1
+
+> ]
+
+. (7.1) For j = 0, ¯ uℓj−1 denotes the known command immediately preceding the local horizon. Aschematic applied command is then 
+
+uk = sat 
+
+> (
+
+¯uℓj − F aH−j ( ˆ zk − ¯zℓj )
+
+> )
+
+. (7.2) Writing F aH−j = [ Fx,H −j Fu,H −j ] makes the two feedback contributions explicit: 
+
+uk = sat 
+
+> (
+
+¯uℓj − Fx,H −j ( ˆ xk − ¯xℓj ) − Fu,H −j (uapplied  
+
+> k−1
+
+− ¯uℓj−1)
+
+> )
+
+. (7.3) If no control-rate state augmentation is used, the second feedback term is absent and the formula reduces to ordinary state feedback. Here sat( ·) denotes componentwise projection onto the currently admissible control interval; when rate limits are active, that interval is the intersection of the absolute actuator bounds and the interval reachable from the previous applied command. Consecutive local policies may be blended over a short interval so that a newly computed policy does not create an unnecessary command jump. 10 Adaptive Quadratic Control of Dynamic Systems Igor Ladnik 
+
+7.2 Optimizer computation budget 
+
+The optimizer computation budget is the maximum wall-clock time allowed for a solve. It is independent of the prediction horizon and of the maximum iteration count. A global planning solve can be assigned seconds, while a local update can be restricted to tens or hundreds of milliseconds. If the budget expires, optimization stops and the best trajectory or feedback policy already accepted is retained. The budget is therefore a direct limit on optimization delay. An iteration limit and an improvement tolerance are separate termination criteria: a solve may finish because further improvement is small, because the maximum number of iterations is reached, or because the time budget is exhausted. In online control, the result must also become available before it is needed; a policy completed later can only affect later control steps. 
+
+7.3 Cost of Jacobian evaluation 
+
+If Ak and Bk are evaluated by central finite differences, a model with n states and m inputs requires approximately 2( n + m) additional discrete transitions per trajectory step solely for Jacobian construction. Over a long horizon, this work can exceed the cost of the matrix algebra in the backward pass. Correct analytical Jacobians of the discrete transition can therefore provide a substantial computational gain by eliminating repeated perturbed rollouts. Automatic differentiation is another option. The actual speedup depends on model complexity and on the integration scheme, but it becomes particularly important for long MPC horizons and frequent replanning. Exact-transition caching, warm starts, and shorter local horizons complement this reduction in Jacobian cost. 
+
+# 8 Examples 
+
+The three examples illustrate one-parameter identification, multi-parameter stabilization, and a long-horizon landing problem with variable mass. Video visualizations of the quadcopter and lunar-lander examples are supplied with the arXiv submission as the ancillary files amigo_quadcopter.mp4 and amigo_lunar_landing.mp4 ,respectively. 
+
+8.1 Van der Pol oscillator 
+
+Consider the controlled oscillator ˙x = y, ˙y = μ(1 − x2)y − x + F. (8.1) The control input is the force F . The nominal model starts from μ0 = 1, whereas the simulated plant uses μ = 1 .4. 11 Adaptive Quadratic Control of Dynamic Systems Igor Ladnik  
+
+> Table 1: Main data for the Van der Pol example.
+
+Quantity Value Step, samples, and intervals h = 0 .1 s; 101 state samples; N = 100 control intervals Initial state (x0, y 0) = (1 , 0) Desired state (x⋆, y ⋆) = (0 , 0) Weights diag Q = (1 , 1), R = 1 Model parameter μ0 = 1, simulated μ = 1 .4Control limit −5 ≤ F ≤ 5Time Phases TP1: 0–2.0 s; TP2: 2.0–2.3 s; TP3: from 2.3 s The identification gives ˆ μ = 1 .40259, corresponding to an error of approximately 0 .185% relative to the simulated value. At the end of the horizon the state is approximately (1 .56 ×
+
+10 −3, −1.34 × 10 −2).  
+
+> Figure 2: Van der Pol oscillator. The phase strip above the plot marks TP1, TP2, and TP3.
+
+8.2 Nonlinear quadcopter stabilization 
+
+A 16-state simplified nonlinear quadcopter benchmark is used, with integrators in the actuator channels. The attitude states are the Euler angles ϕ, θ, ψ and three angle-rate states p, q, r ,propagated in this benchmark as ˙ϕ = p, ˙θ = q, and ˙ψ = r. For finite-angle rigid-body kinematics, the exact transformation between body angular velocity and Euler-angle rates should be used; the present form is a deliberate benchmark approximation. To keep the rotational dynamics dimensionally consistent, the angular actuator states are interpreted as virtual differential rotor-force channels fϕ, f θ, f ψ rather than as physical torques. With arm length l, the corresponding body moments are Mϕ = lf ϕ, Mθ = lf θ, and Mψ = lf ψ in this simplified model. The rotational equations therefore take the form ˙p = Jy − Jz
+
+Jx
+
+qr + lJx
+
+fϕ,
+
+˙q = Jz − Jx
+
+Jy
+
+pr + lJy
+
+fθ,
+
+˙r = Jx − Jy
+
+Jz
+
+pq + lJz
+
+fψ. (8.2) 12 Adaptive Quadratic Control of Dynamic Systems Igor Ladnik 
+
+The four optimization inputs are actuator rates, ˙T = uT , ˙fϕ = uϕ, ˙fθ = uθ, ˙fψ = uψ. (8.3) This interpretation preserves the benchmark dynamics while avoiding the dimensional inconsis-tency that would arise if fϕ, f θ, f ψ were labeled as torques in equations containing the factor 
+
+l/J .
+
+Table 2: Selected data for the quadcopter example. Quantity Value Step, samples, and intervals h = 0 .1 s; 61 state samples; N = 60 control intervals Initial angles and rate states (ϕ, p, θ, q, ψ, r ) = (0 .3, 0.1, −0.4, 0.1, 0.2, 0.1) Initial position and velocity (x, v x, y, v y , z, v z ) = (0 , 0.1, 0, 0.1, 0, −0.1) Initial actuator states T = 6 .3765 N, fϕ = fθ = fψ = 0 N Initial parameter estimates m = 0 .65 kg, Jx = Jy = 0 .0075, Jz = 0 .013 kg m 2
+
+Simulated parameters m = 0 .8 kg, Jx = 0 .009, Jy = 0 .0085, Jz = 0 .015 kg m 2
+
+Input limits uT ∈ [−12 , 12] N/s, uϕ, u θ , u ψ ∈ [−2, 2] N/s Time Phases TP1: 0–1.4 s; TP2: 1.4–2.6 s; TP3: from 2.6 s 
+
+Table 3: Identified quadcopter parameters. 
+
+Parameter Simulated value Estimate Relative error 
+
+m 0.800000 0.799991 −0.001% 
+
+Jx 0.009000 0.009022 0.239% 
+
+Jy 0.008500 0.008521 0.248% 
+
+Jz 0.015000 0.015061 0.403% The global solve requires about 1.10 s with a 1.2 s budget. During TP3, the local problems have a 100 ms budget and reuse the previous policy as a warm start. 13 Adaptive Quadratic Control of Dynamic Systems Igor Ladnik 
+
+Figure 3: Quadcopter position and Euler angles. The phase band is shown above each plot. 
+
+14 Adaptive Quadratic Control of Dynamic Systems Igor Ladnik 
+
+Figure 4: Quadcopter actuator-rate inputs: thrust-rate channel uT and differential-force rate channels 
+
+uϕ, u θ , u ψ .
+
+15 Adaptive Quadratic Control of Dynamic Systems Igor Ladnik  
+
+> Figure 5: Three representative states of the quadcopter motion: beginning, intermediate segment, and end of the horizon.
+
+Over the six-second horizon, the transient is not completely finished at the final sample; the residual vertical speed is approximately −0.092 m/s. The obtained trajectory corresponds to the stated finite-horizon weights and constraints. 16 Adaptive Quadratic Control of Dynamic Systems Igor Ladnik 
+
+8.3 Autonomous lunar-lander descent: a Beresheet-inspired scenario 
+
+Beresheet was an Israeli robotic lunar lander developed by SpaceIL with Israel Aerospace Industries. The Hebrew name Beresheet means “In the Beginning” and is the opening word of the Book of Genesis. The spacecraft reached lunar orbit and attempted a landing on April 11, 2019; contact was lost shortly before the expected touchdown [8]. The scenario uses public mission information to set the physical scale of the main propulsion system. Beresheet used a LEROS 2b engine. The manufacturer specifies a nominal thrust of 420 N and a typical specific impulse of 319.5 s [9]; these values are used for Tmax and Isp . The remaining terminal-descent quantities—attitude-control moments, inertia values, initial mass, and initial state—define the numerical control scenario. The 14-state vector is 
+
+x = [ x, v x, y, v y, z, v z , q w, q x, q y, q z , ω x, ω y, ω z , m ]T, (8.4) and the control vector is 
+
+u = [ T, τ roll , τ pitch , τ yaw ]T. (8.5) 
+
+Table 4: Selected data for the lunar-lander descent. Quantity Value Step, samples, and intervals h = 0 .1 s; 1707 state samples; N = 1706 control intervals Initial position (x, y, z ) = (25 , −20 , 800) m Initial velocity (vx, v y , v z ) = (4 , −3, −8) m/s Initial quaternion (qw, q x, q y , q z ) = (0 .90566 , 0.32498 , −0.15231 , 0.22579) Initial angular rates (ωx, ω y , ω z ) = (0 .02618 , −0.01745 , 0.01396) rad/s Initial mass m0 = 177 .1 kg Lunar gravity and main engine g = 1 .62 m/s 2, Tmax = 420 N, Isp = 319 .5 s Torque limits τroll , τ pitch ∈ [−30 , 30] N m, τyaw ∈ [−20 , 20] N m Time Phases TP1: 0–15 s; TP2: 15–25 s; TP3: from 25 s 
+
+During TP1, the efficiency factors of the main-thrust and three attitude-control channels are identified. 
+
+Table 5: Identification of actuator-efficiency factors. 
+
+Parameter Simulated value Estimate Error 
+
+ηT 0.940000 0.940316 0.034% 
+
+ηroll 1.030000 1.029683 −0.031% 
+
+ηpitch 0.900000 0.900052 0.006% 
+
+ηyaw 0.970000 0.970897 0.092% 17 Adaptive Quadratic Control of Dynamic Systems Igor Ladnik 
+
+Figure 6: Three representative states of the lunar descent: early segment, mid-trajectory, and approach to the surface. 
+
+18 Adaptive Quadratic Control of Dynamic Systems Igor Ladnik  
+
+> Figure 7: Lunar-lander position and translational velocity.
+
+The altitude decreases from 800 m to approximately 0.95 m, while the vertical speed reaches approximately −0.0582 m/s at the final sample. The final horizontal coordinates are approxi-mately x = 8 .54 m and y = −10 .60 m, with horizontal velocities about −0.245 m/s and 0 .305 m/s, respectively. The example demonstrates a controlled soft approach together with attitude stabilization. 19 Adaptive Quadratic Control of Dynamic Systems Igor Ladnik  
+
+> Figure 8: Lunar-lander Euler angles and angular rates. The optimized attitude itself is represented by a quaternion; Euler angles are shown for visualization.
+
+The attitude-control torques are initially large because the vehicle must reduce the initial attitude error and angular rates. After the main attitude transient, the angular channels provide smaller corrections that maintain the direction of the main thrust vector. 20 Adaptive Quadratic Control of Dynamic Systems Igor Ladnik     
+
+> Figure 9: All lunar-lander control inputs: main thrust Tand attitude-control torques τroll , τ pitch , τ yaw .
+
+The main thrust T provides vertical braking and compensates lunar gravity. The torques τroll ,
+
+τpitch , and τyaw control attitude and therefore the inertial direction of the thrust vector. Their larger initial amplitudes correspond to rapid attitude correction; the pronounced restructuring near 25–40 s accompanies the transition to the main TP3 trajectory. After approximately 50 s, the mean torque values are close to zero. A small residual high-frequency control ripple remains. Its amplitude is much smaller than the actuator bounds: after 100 s the roll and pitch torque standard deviations are approximately 0.17 and 0.18 N m, respectively, and their peak magnitudes remain below 0.65 N m versus the ±30 N m limits. Such ripple can result from discrete feedback updates, measurement noise, active constraints, and compensation of small residual state or model errors; the plotted trajectories do not by themselves identify the relative contribution of these mechanisms. In this simulation it does not produce growing angular deviations. If additional smoothing is required, it can be reduced by a stronger ∆ u penalty, a suitable deadband or filter, or a smoother control parameterization. 21 Adaptive Quadratic Control of Dynamic Systems Igor Ladnik 
+
+Figure 10: Lunar-lander mass decrease due to propellant consumption. 
+
+The mass decreases monotonically from 177.1 kg to approximately 160.62 kg. Preparation of the global TP3 policy requires about 9.53 s from a 10 s computation budget. In this run, the global solve retains its initial valid policy because no improving iLQR step is accepted. The global policy is used for almost the entire TP3 interval. A local policy is successfully prepared at step 1690 and becomes active from step 1691, so the final 15 control intervals use the local policy while it is gradually blended with the preceding global policy. 
+
+# 9 Extensions of the quadratic scheme 
+
+AMIGO retains the quadratic dynamic-programming backbone described above and adds the mechanisms required for adaptive execution: state estimation, parameter identification, actuator limits, phase scheduling, and local replanning. 
+
+Table 6: Main extensions of the baseline quadratic scheme. Aspect Quadratic backbone AMIGO Dynamics linear model or sequential linearization nonlinear RK4 transition and its Jacobians Constraints local quadratic problem box constraints, active set, and rate limits Measurements state assumed available continuous KF/EKF state estimation Parameters fixed model parameters bounded LM identification with diagnostics Execution optimization over a given horizon TP1–TP2–TP3 and local iLQR/MPC Solve time usually outside the mathematical statement explicit computation budget and use of the best available accepted policy 
+
+# 10 Limitations and directions for development 
+
+The present formulation has several general limitations that also suggest natural directions for further work. 1. Model uncertainty in the control objective. Identification quality is presently used mainly to decide whether an estimated model is sufficiently reliable for planning and control. A more complete formulation could propagate parameter uncertainty and structural model mismatch directly into the optimization criterion, for example through robust, stochastic, or risk-sensitive extensions. 22 Adaptive Quadratic Control of Dynamic Systems Igor Ladnik 
+
+2. Identifiability and excitation. Reliable online identification requires that the measured trajectory contain enough information about the unknown parameters. Poor excitation, strongly correlated parameters, or short observation windows can lead to weakly determined estimates even when the numerical residual is small. 3. Partial observation. When only part of the state is measured, parameter identification can become coupled to the state estimator. In such cases it may be preferable to formulate identification residuals in measurement space, or to estimate states and parameters jointly. 4. Local nature of iLQR. The method is based on local linearization and a local quadratic approximation of the cost. For strongly nonlinear or highly nonconvex problems, convergence can depend on the initial nominal trajectory, regularization, and line-search strategy, and convergence to the global optimum is not guaranteed. 5. General constraints. Box constraints and control-rate limits are handled explicitly, but more general state, path, and coupled nonlinear constraints require additional machinery. Their treatment should remain compatible with the backward–forward structure and with real-time computation requirements. 6. Finite computation time. Receding-horizon optimization is performed under a finite computation budget. The achievable horizon length, update rate, and number of nonlinear iterations therefore depend on model complexity and available computing resources. Apractical implementation should retain a valid previously accepted policy whenever a new optimization cannot be completed in time. 
+
+# 11 Conclusion 
+
+AMIGO combines a quadratic LQR/iLQR optimizer with state estimation, online LM parameter identification, actuator constraints, and receding-horizon control. TP1 collects informative data and updates the model, TP2 prepares a long-horizon plan while the plant continues to move, and TP3 tracks the plan while periodically recomputing a local policy. The reverse-horizon quantities PN −k and vN −k make the role of the backward pass explicit: every control law depends on the optimal cost of the future trajectory segment. The examples span a single identified parameter in the Van der Pol oscillator, several dynamic parameters in a quadcopter, and a variable-mass lunar-landing scenario with quaternion attitude and bounded thrust. A natural next step is to include model uncertainty directly in the control decision and to add explicit state and path constraints for safety-critical applications. 
+
+# Acknowledgment 
+
+ChatGPT (OpenAI) assisted with language editing and presentation of the manuscript. The author reviewed the technical content, calculations, and conclusions and remains responsible for them. 
+
+# References     
+
+> [1] I. Ladnik, “A Quadratic Control Framework for Dynamic Systems,” arXiv:2504.15396. arXiv:2504.15396. [2] W. Li and E. Todorov, “Iterative Linear Quadratic Regulator Design for Nonlinear Biological Movement Systems,” Proc. ICINCO , pp. 222–229, 2004. [3] Y. Tassa, N. Mansard, and E. Todorov, “Control-Limited Differential Dynamic Programming,” Proc. IEEE ICRA , pp. 1168–1175, 2014.
+
+23 Adaptive Quadratic Control of Dynamic Systems Igor Ladnik 
+
+[4] R. Bellman, Dynamic Programming . Princeton University Press, 1957. [5] R. E. Kalman, “A New Approach to Linear Filtering and Prediction Problems,” Journal of Basic Engineering ,82(1), 35–45, 1960. DOI: 10.1115/1.3662552. [6] K. Levenberg, “A Method for the Solution of Certain Non-Linear Problems in Least Squares,” Quarterly of Applied Mathematics , 2, 164–168, 1944. DOI: 10.1090/qam/10666. [7] D. W. Marquardt, “An Algorithm for Least-Squares Estimation of Nonlinear Parameters,” SIAM Journal on Applied Mathematics , 11(2), 431–441, 1963. DOI: 10.1137/0111030. [8] NASA Science, “Beresheet.” NASA Science mission page. [9] Nammo, “LEROS 2b Apogee Engine.” Nammo product page. 
+
+24

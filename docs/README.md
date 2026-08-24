@@ -6,71 +6,64 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-23
-- 运行时间：2026-08-23 19:30:24 UTC
+- 最新运行日期：2026-08-24
+- 运行时间：2026-08-24 20:32:28 UTC
 - 运行状态：成功
-- 本次总论文数：17
-- 精读区：6
+- 本次总论文数：14
+- 精读区：3
 - 速读区：11
 
 ### 今日简报（AI）
-今日精读6篇、速读11篇，共处理17篇论文，核心聚焦航天轨道设计与LiDAR SLAM技术；最值得关注的是GARATÉA-L半解析轨道设计理论（9.0分）和HP2-SLAM自适应混合ICP方法（8.0分），前者可提升轨道优化效率，后者在鲁棒性与算力间取得平衡；建议优先精读这两篇，并顺带浏览多基地雷达自标定与GNSS拒止环境下的地图校正论文。
-- 详情：[/202608/23/README](/202608/23/README)
+今日精读聚焦相对轨道估计与GARATÉA-L轨道设计，速读覆盖新天王星卫星稳定性及后牛顿N体方程。  
+最值得关注：利用测光曲线与视线测量提升相对轨道估计精度（8.0/10），以及半解析方法优化轨道设计（8.0/10）。  
+建议普通读者从这两篇高分论文入手，理解观测数据如何助力更精准的航天器轨道控制。
+- 详情：[/202608/24/README](/202608/24/README)
 
 ### 精读区论文标签
-1. [A Semi-Analytical Theory for Improved Orbit Design of the GARATÉA-L](/202608/23/2608.17672v1-a-semi-analytical-theory-for-improved-orbit-design-of-the-garata-l)  
-   标签：评分：9.0/10、query:cislunar-dyn-nav
-   evidence：月球轨道设计，包含月球引力谐波和地球三体摄动，属核心地月空间动力学
-2. [HP2-SLAM: Adaptive Hybrid ICP for Robust and Efficient LiDAR SLAM](/202608/23/2608.14996v1-hp2-slam-adaptive-hybrid-icp-for-robust-and-efficient-lidar-slam)  
+1. [Improving Observability of Relative Orbit Estimation Using Bearing Measurements and Light Curves](/202608/24/2608.16135v1-improving-observability-of-relative-orbit-estimation-using-bearing-measurements-and-light-curves)  
    标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：自适应混合ICP的鲁棒LiDAR SLAM，可直接用于月球近距自主定位与建图
-3. [Improving Observability of Relative Orbit Estimation Using Bearing Measurements and Light Curves](/202608/23/2608.16135v1-improving-observability-of-relative-orbit-estimation-using-bearing-measurements-and-light-curves)  
+   evidence：方位与光变曲线融合用于相对轨道估计
+2. [A Semi-Analytical Theory for Improved Orbit Design of the GARATÉA-L](/202608/24/2608.17672v1-a-semi-analytical-theory-for-improved-orbit-design-of-the-garata-l)  
    标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：融合方位测量与光变曲线进行相对轨道估计，支撑自主导航
-4. [Orbit-Planner: Towards Latent World Models for On-Orbit Obstacle Avoidance of Satellite Agents](/202608/23/2608.16651v1-orbit-planner-towards-latent-world-models-for-on-orbit-obstacle-avoidance-of-satellite-agents)  
+   evidence：月球任务轨道设计与稳定性分析；三体摄动与冻结轨道
+3. [Adaptive Nonlinear Control with Online Identification and Receding-Horizon Optimization](/202608/24/2608.18717v1-adaptive-nonlinear-control-with-online-identification-and-receding-horizon-optimization)  
    标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：用于卫星在轨自主避障的潜在世界模型，与月球近距离自主导航方法高度契合
-5. [Adaptive Nonlinear Control with Online Identification and Receding-Horizon Optimization](/202608/23/2608.18717v1-adaptive-nonlinear-control-with-online-identification-and-receding-horizon-optimization)  
-   标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：以自主月球着陆器下降为应用，涉及滚动时域轨迹优化与控制
-6. [Gravity-aware partially calibrated absolute pose estimation from affine- or rotation-covariant features](/202608/23/2608.20056v1-gravity-aware-partially-calibrated-absolute-pose-estimation-from-affine--or-rotation-covariant-features)  
-   标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：视觉-惯性融合与重力感知位姿估计，可迁移至地月空间定位与导航
+   evidence：月球着陆器自主下降的自适应滚动时域控制与状态估计
 
 ### 速读区论文标签
-1. [Target Localization and Self-Calibration in a Multistatic Radar System](/202608/23/2608.15501v1-target-localization-and-self-calibration-in-a-multistatic-radar-system)  
+1. [Stability Mapping of the New Uranian Moon S/2025 U1 with Updated Masses for Cordelia, Ophelia, and Cressida](/202608/24/2608.16078v1-stability-mapping-of-the-new-uranian-moon-s2025-u1-with-updated-masses-for-cordelia-ophelia-and-cressida)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：多基地雷达目标定位与自标定，联合加权最小二乘，适用于多传感器定位融合
-2. [Marker-Constrained Pose-Graph Correction for Cross-Platform Georeferencing in GNSS-Denied Environments](/202608/23/2608.16281v1-marker-constrained-pose-graph-correction-for-cross-platform-georeferencing-in-gnss-denied-environments)  
+   evidence：基于数值积分和频率图分析的轨道稳定性测绘，可迁移至地月系统稳定性研究。
+2. [Gravity-aware partially calibrated absolute pose estimation from affine- or rotation-covariant features](/202608/24/2608.20056v1-gravity-aware-partially-calibrated-absolute-pose-estimation-from-affine--or-rotation-covariant-features)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：利用标记约束的位姿图校正实现GNSS拒止环境下的地理参考，可应用于月球自主导航
-3. [Terrain-Aware Local Path Planning with Global DEM Data Integration for Autonomous UGV Navigation](/202608/23/2608.17038v1-terrain-aware-local-path-planning-with-global-dem-data-integration-for-autonomous-ugv-navigation)  
+   evidence：重力感知的视觉-惯性融合绝对位姿估计，是多传感器定位的核心方法
+3. [The 2PN Point-Mass N-Body Equations of Motion in Harmonic Gauge: A Computable Formulation](/202608/24/2608.20193v1-the-2pn-point-mass-n-body-equations-of-motion-in-harmonic-gauge-a-computable-formulation)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：融合全球DEM与LiDAR的地形感知路径规划，适用于月球近距作业的自主导航
-4. [CVSD-Reg: Cross-Modal Visual Semantic Prior Distillation for Robust LiDAR Registration](/202608/23/2608.19536v1-cvsd-reg-cross-modal-visual-semantic-prior-distillation-for-robust-lidar-registration)  
-   标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：通过跨模态视觉语义先验蒸馏提升LiDAR配准鲁棒性，适用于月球导航多传感器融合
-5. [Accelerating Mixed Discrete-Continuous Motion Planning via Neural Graphs of Convex Sets](/202608/23/2608.15440v1-accelerating-mixed-discrete-continuous-motion-planning-via-neural-graphs-of-convex-sets)  
+   evidence：可计算的2PN N体运动方程，适用于高精度多体动力学建模。
+4. [Target Localization and Self-Calibration in a Multistatic Radar System](/202608/24/2608.15501v1-target-localization-and-self-calibration-in-a-multistatic-radar-system)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：利用凸集图与图注意力网络加速混合离散-连续运动规划，可迁移至航天器轨迹优化
-6. [Condensed PIPG Sequential Convex Optimization for Reusable-Rocket Powered Landing with Strong Aerodynamics](/202608/23/2608.15582v1-condensed-pipg-sequential-convex-optimization-for-reusable-rocket-powered-landing-with-strong-aerodynamics)  
+   evidence：多基地雷达目标定位与自校准；面向定位的传感器-目标联合估计
+5. [An Inexact Riemannian Proximal Momentum Variance-Reduced Method: Complexity Bounds and KL Sequential Convergence](/202608/24/2608.16355v1-an-inexact-riemannian-proximal-momentum-variance-reduced-method-complexity-bounds-and-kl-sequential-convergence)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：凝聚序贯凸优化求解动力着陆轨迹，可迁移至地月系统轨迹优化
-7. [Adaptive Relative Orbit Control Considering Laser Ablation Uncertainty](/202608/23/2608.16173v1-adaptive-relative-orbit-control-considering-laser-ablation-uncertainty)  
+   evidence：面向流形上的非光滑复合优化，为地月转移轨迹优化提供收敛保证
+6. [Terrain-Aware Local Path Planning with Global DEM Data Integration for Autonomous UGV Navigation](/202608/24/2608.17038v1-terrain-aware-local-path-planning-with-global-dem-data-integration-for-autonomous-ugv-navigation)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：基于高斯过程的自适应相对轨道控制，适用于模型不确定下的近距离操作
-8. [DPNet: Efficient Dead-End Prediction and Avoidance for Vision-Based UAV Navigation](/202608/23/2608.16640v1-dpnet-efficient-dead-end-prediction-and-avoidance-for-vision-based-uav-navigation)  
+   evidence：融合全局高程与实时LiDAR的地形感知路径规划方法，可应用于星球表面巡视器
+7. [Evaluation of Image Matching Methods for Visual Odometry on UAVs](/202608/24/2608.18624v1-evaluation-of-image-matching-methods-for-visual-odometry-on-uavs)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：基于轻量神经网络的自主任航避障算法，可应用于月球近距离操作
-9. [Jetson-ORB-SLAM3: Accuracy-Preserving GPU Implementation for Edge Computing Devices](/202608/23/2608.17874v1-jetson-orb-slam3-accuracy-preserving-gpu-implementation-for-edge-computing-devices)  
+   evidence：面向GNSS拒止环境的无人机视觉里程计评估，与地月空间自主导航高度类比
+8. [Coordination of Ground-to-Space Reference Networks for High-Precision GNSS](/202608/24/2608.18636v1-coordination-of-ground-to-space-reference-networks-for-high-precision-gnss)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：边缘设备上的保精度ORB-SLAM3 GPU实现，支持GNSS拒止环境自主导航，可用于月球临近操作
-10. [Diffractive-Sail Single-Impulse Reachable Set for Interplanetary Transfer Design](/202608/23/2608.19654v1-diffractive-sail-single-impulse-reachable-set-for-interplanetary-transfer-design)  
+   evidence：利用LEO星座与星间链路增强GNSS空间参考网络，可迁移至地月空间定位授时
+9. [LF-GICP: Parameter-Free Degeneracy-Aware LiDAR Odometry via a Voxel-Normal Localizability Field](/202608/24/2608.19522v1-lf-gicp-parameter-free-degeneracy-aware-lidar-odometry-via-a-voxel-normal-localizability-field)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：面向星际转移设计的可达集计算方法，可迁移至地月系统轨迹优化
-11. [World-Model-Grounded LLM Planning for AUV and ASV Navigation Near Offshore Wind Farms](/202608/23/2608.19661v1-world-model-grounded-llm-planning-for-auv-and-asv-navigation-near-offshore-wind-farms)  
+   evidence：针对退化环境的无参数LiDAR里程计方法，可迁移至月球近区自主导航
+10. [CVSD-Reg: Cross-Modal Visual Semantic Prior Distillation for Robust LiDAR Registration](/202608/24/2608.19536v1-cvsd-reg-cross-modal-visual-semantic-prior-distillation-for-robust-lidar-registration)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：基于世界模型的LLM规划与MPC重规划用于自主导航，可迁移至地月空间抵近操作
+   evidence：跨模态视觉-LiDAR融合注册方法，可迁移至地月空间多传感器定位
+11. [Learning piecewise-smooth dynamical systems](/202608/24/2608.19785v1-learning-piecewise-smooth-dynamical-systems)  
+   标签：评分：6.0/10、query:cislunar-dyn-nav
+   evidence：从轨迹数据识别分段光滑动力学并检测切换超平面，可用于地月空间非光滑动力学建模
 
 
 <div class="dpr-home-promo-card">
