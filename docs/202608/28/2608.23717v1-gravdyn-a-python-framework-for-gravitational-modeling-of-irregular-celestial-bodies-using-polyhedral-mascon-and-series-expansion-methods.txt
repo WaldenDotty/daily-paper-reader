@@ -1,0 +1,488 @@
+Title: GravDyn: A Python Framework for Gravitational Modeling of Irregular Celestial Bodies Using Polyhedral, mascon, and Series Expansion Methods
+
+URL Source: https://arxiv.org/pdf/2608.23717v1
+
+Published Time: Wed, 26 Aug 2026 00:07:32 GMT
+
+Number of Pages: 11
+
+Markdown Content:
+# GravDyn: A Python Framework for Gravitational Model-ing of Irregular Celestial Bodies Using Polyhedral, mascon, and Series Expansion Methods 
+
+Safwan Aljbaae 1,* , valerio Carruba 2, 3 , Allan K. de Almeida Jr 4, Gabriel Antonio Carit´ a5, Antonio F. B. A. Prado 6, Marcelo L. Mota 7 Carlos E. Ferreira Lopes 7       
+
+> 1: Universidad de Atacama, Instituto de Astronom´ ıa y Ciencias Planetarias, Copayapu 485, Copiap´ o, Chile.
+> 2: School of Natural Sciences and Engineering, S˜ ao Paulo State University (UNESP), Guaratinguet´ a, SP 12516-410, Brazil
+> 3: Laborat´ orio Interinstitucional de e-Astronomia, Rio de Janeiro, RJ 20765-000, Brazil
+> 4: CFisUC, Departamento de F´ ısica, Universidade de Coimbra, Coimbra, 3004-516, Portugal
+> 5: S˜ ao Paulo State University (UNESP), Instituto de Geociˆ encias e Ciˆ encias Exatas, Rio Claro, SP 13506-900, Brazil
+> 6: Divis˜ ao de P´ os-Gradua¸ c˜ ao, Instituto Nacional de Pesquisas Espaciais (INPE), Avenida dos Astronautas, 515, S˜ ao Jos´ e dos Campos, 12227-310, S˜ ao Paulo, Brazil
+> 7: Federal Institute of S˜ ao Paulo, IFSP, Avenida Thereza Ana Cecon Breda, s/n - Vila S˜ ao Pedro, Hortolˆ andia, 13183-250, SP, Brazil.
+> ∗
+
+Corresponding author: safwan.aljbaae@uda.cl 
+
+# Abstract 
+
+GravDyn is an open-source Python package for computing gravitational potentials and acceler-ations around irregular celestial bodies. It implements three approaches within the same work-flow: the constant-density polyhedral method, a layered mascon approximation based on tetra-hedral decomposition, and the Potential Series Expansion Method (PSEM). The package handles shape-model preprocessing, builds the selected gravity representation, and evaluates potentials and accelerations efficiently. The three implemented methods serve different regimes: the poly-hedral model provides a reference solution near the surface, the mascon model supports layered internal density structures, and PSEM offers fast evaluation outside the Brillouin sphere once the polynomial coefficients have been generated. Validation tests against the polyhedral solution show that the mascon and PSEM models reproduce the reference potential with small relative errors while reducing evaluation costs. GravDyn is intended for mission design and studies of spacecraft motion, orbital stability, and gravitational modeling around asteroids and other small bodies. 
+
+# Keywords 
+
+celestial mechanics; asteroid dynamics; gravitational modeling; polyhedral gravity; mascon method; potential series expansion; celestial mechanics software; small-body environments 1arXiv:2608.23717v1 [astro-ph.EP] 24 Aug 2026 1 Overview 
+
+1.1 Introduction 
+
+Irregularly shaped small bodies do not settle into hydrostatic equilibrium [Dermott, 1979], so their gravity fields differ markedly from the simple point-mass picture. Those differences matter when we design spacecraft trajectories, assess orbital stability, or plan missions that will operate close to an asteroid [Scheeres, 2012, Hao et al., 2020, Ferrari et al., 2021, Bottiglieri et al., 2023]. Several approaches have been de-veloped to address this problem. The classical polyhedral method provides an accurate ana-lytical solution for the gravitational potential of a homogeneous body by transforming volume integrals into surface and line integrals, making it suitable for modeling the gravitational field near the surface of irregular bodies [Werner and Scheeres, 1996, Tsoulis and Petrovic, 2001]. Despite its accuracy, this method is computationally expensive, especially for high-resolution shape models, as the number of faces and edges directly impacts the evaluation cost. Alternatively, a different philosophy replaces the continuous mass with a collection of point masses distributed throughout the volume [Geissler et al., 1996]. Building on that, later research formalized mascons using tetrahedral decompositions of a polyhedron. By placing a point mass at each tetrahedron’s centroid, this approach preserves much of the original density field while reducing the computational load [Chanut et al., 2015, Aljbaae et al., 2017, 2021]. In addition, the method naturally allows the incorporation of layered internal structures with varying densities. More recently, the Potential Series Expansion Method (PSEM) has been proposed [Mota et al., 2023]. Here, the potential is expressed as a convergent polynomial series derived analytically from the tetrahedral elements. PSEM derives a polyno-mial expansion that provides a fast-to-evaluate approximation outside the Brillouin sphere. Although these formulations are well estab-lished, their implementations are often tied to individual studies. For instance, several tools for the polyhedral gravity model are available in different languages such as C++17 with Python interface 1 or Fortran 2. This isolation between different methods makes it difficult to reproduce previous calculations, compare methods under the same assumptions, or reuse common shape-processing steps across projects. GravDyn addresses this practical gap by placing polyhedral, mascon, and PSEM gravity models in a single Python package. Each method presents different advantages and limitations depending on the application. 
+
+GravDyn helps users determine which method is most appropriate for a given application. The package follows a common workflow. A user provides a triangular shape model and the physical parameters of the body. GravDyn 
+
+then verifies and rescales the geometry, builds the selected gravity representation, and evalu-ates the potential or acceleration at prescribed field points. This paper describes the structure of the package, the implemented models, and the validation tests used to compare them. 
+
+1.2 Implementation and archi-tecture 
+
+GravDyn is implemented in Python and is or-ganized into modular components. The pack-age provides tools for efficient numerical eval-uation of gravitational potentials and acceler-ations in small-body environments. As shown in Figure 1, the system consists of two pillars: a core computational library and an optional graphical user interface (GUI). The core lives in the gravdyn package and contains all numerical routines, data structures, and processing tools. The GUI offers a user-friendly interface for vi-sualization, parameter configuration and inter-action with the underlying models. The GUI is 
+
+> 1https://github.com/esa/polyhedral-gravity-model
+> 2https://github.com/a-amarante/minor-gravity/tree/v2.1
+
+2intentionally decoupled from the core computa-tional layer. This separation ensures that the scientific functionality remains independent of the interface, allowing the software to be used both programmatically and interactively.    
+
+> GravDyn Package Graphical User In-terface (optional)
+> Code repository
+> Tkinter-based interface
+> Shape Verification
+> shape verification.py Potential Calculation Polyhedral Expansion mascon
+> prepare werner model batched werner potential build potential derivatives pot expansion generate layered mascons batched pot mascon
+
+Figure 1: Structure of the GravDyn package. The software is organized into two main mod-ules: shape verification and potential calcula-tion. The potential calculation module includes polyhedral, expansion, and mascon-based ap-proaches. 
+
+1.2.1 Shape-model preprocessing 
+
+The implementation is essentially based on a functional decomposition which constitutes the standard workflow for gravitational modeling. The first step is geometry preprocessing, which is handled by the shape verification 
+
+module. This makes sure that the polyhedral shape model is geometrically and physically consistent before any gravitational analysis is performed. First the mesh is loaded and the body is aligned to its principal axes of inertia which is helpful to ensure that the following calculations are consistent with the physical structure of the object. The shape is then rescaled to match some reference volume derived from the specified mass and density and translated so that its center of mass coincides with the origin. Although these steps are standard from a scientific point of view, they are essential, as small inconsistencies at this stage can propagate into the dynamical results. The processed geometry is stored for later use, and a set of diagnostic plots is generated to verify that the preprocessing stage has been performed correctly. The second stage of the workflow is devoted to building the gravitational model and eval-uating the resulting field. In GravDyn , the polyhedral method, the mascon approach, and the PSEM are implemented within a single computational framework with a common interface. This design allows users to switch between gravity models, compare their perfor-mance and accuracy under the same conditions, and integrate different modeling strategies into the same dynamical workflow, rather than treating each method as a separate standalone implementation. 
+
+1.2.2 Polyhedral gravity model 
+
+The classical polyhedral method gives an exact analytical expression for the gravitational potential of a homoge-neous body. In GravDyn , this is done by combining the preprocessing routine 
+
+masconprepare werner model with the eval-uation function batched werner potential .The preprocessing step follows the work of Werner and Scheeres [1996], Scheeres [2012], to perform calculations characterizing the body, such as face and edge dyads, normal vectors, and other geometric coefficients. The polyhe-dral formulation generally provides the most accurate results, especially near the surface where the approximations are often not valid. The package implements the constant-density polyhedron formulation of Werner and Scheeres [1996], Scheeres [2012]. In this model, the body is described by a closed triangular mesh, and the gravitational potential is evaluated as a sum of edge and face contributions. For a field point 
+
+r, we define re as the vector from an arbitrary point on edge e to r, and rf as the vector from an arbitrary point on face f to r. Each tri-angular facet is specified by three ordered ver-tices, for example v1, v2, and v3, with associ-3ated edges E12 , E23 , and E31 , and an outward unit normal ˆ n123 . A schematic representation of these geometric quantities is shown in Fig. 2. 
+
+v1
+
+v2
+
+v3
+
+E12 
+
+E23 
+
+E31 
+
+ˆn123 
+
+xyz
+
+Figure 2: Redrawn schematic of the geomet-ric entities associated with a triangular facet in the polyhedral gravity model of Werner and Scheeres [1996], Scheeres [2012]. The facet is defined by the ordered vertices v1, v2, and v3,with edges E12 , E23 , and E31 , and outward unit normal ˆ n123 . The field point is represented in the body-fixed frame ( x, y, z ). The potential can then be written as         
+
+> U(r) = Gσ
+> 2
+> " X
+> e∈edges
+> reEereLe−X
+> f∈faces
+> rfFfrfωf
+> #
+
+(1) The corresponding first and second deriva-tives are              
+
+> ∇U(r) = −Gσ
+> " X
+> e∈edges
+> EereLe−X
+> f∈faces
+> Ffrfωf
+> #
+> ,
+> ∇2
+> rU(r) = Gσ
+> " X
+> e∈edges
+> EeLe−X
+> f∈faces
+> Ffωf
+> #
+> .
+
+(2) where G is the gravitational constant and σ
+
+is the bulk density. The matrices Ee and Ff
+
+are the edge and face dyads, respectively, while 
+
+Le is the logarithmic edge factor and ωf is the signed solid angle subtended by face f at the evaluation point. These quantities are defined as                                                
+
+> Ee=ˆnfˆnfe+ ˆ nf′ˆnf′
+> e,
+> Ff=ˆnfˆnf,Le=ln
+> re
+> 1+re
+> 2+ee
+> re
+> 1+re
+> 2−ee
+> 
+> ,ωf=2 arctan rf
+> 1·rf
+> 2·rf
+> 3
+> rf
+> 1rf
+> 2rf
+> 3+rf
+> 1rf
+> 2·rf
+> 3+rf
+> 2rf
+> 3·rf
+> 1+rf
+> 3rf
+> 1·rf
+> 2
+> !
+> .
+
+(3) Here f and f ′ are the two faces adjacent to edge e, ˆ nf and ˆ nf ′ are their outward unit nor-mals, and ˆnfe and ˆnf ′ 
+
+> e
+
+are the corresponding edge-normal unit vectors lying in each face and pointing outward from the face. The scalar ee
+
+is the length of edge e, while re 
+
+> 1
+
+and re 
+
+> 2
+
+are the distances from the evaluation point to the two vertices of that edge. Similarly, rf 
+
+> 1
+
+, rf 
+
+> 2
+
+, and rf
+
+> 3
+
+are the vectors from the evaluation point to the three vertices of face f , with rfi = ∥rfi ∥.In the preprocessing stage, GravDyn 
+
+therefore computes and stores the geometric quantities required by these sums: face normals, edge normals, face dyads, edge dyads, edge lengths, and the connectivity between adjacent faces and edges. During field evaluation, these precomputed quantities are reused so that only the point-dependent terms Le, ωf , re, and rf
+
+must be evaluated. This is also why the cost of the polyhedral method scales with the number of faces and edges in the mesh. The formulation is especially valuable near the surface because it remains valid down to the boundary of the body, unlike spherical-harmonic expansions, which may diverge close to or inside the circumscribing sphere. The numerical evaluation of closed-form polyhedral gravity models near singular geo-metrical configurations was analyzed by Tsoulis and Petrovic [2001]. Their work complements the formulation of Werner and Scheeres [1996] by treating the cases in which the orthogonal projection of the computation point onto a face lies inside the polygon, on an edge, or at a ver-tex. In such situations, apparent singularities arise in the line-integral expressions, although the potential and first-order derivatives remain well defined when appropriate limiting correc-tion terms are included. Incorporating this treatment would require additional geometrical tests and correction terms during the field evaluation, increasing the computational cost of the method. The present version of Grav-Dyn therefore keeps the Werner and Scheeres [1996] edge-face formulation as the baseline 4polyhedral model, while the explicit Tsoulis and Petrovic [2001] singularity treatment is left for a future implementation stage. 
+
+1.2.3 Layered mascon model 
+
+The mascon gravity model with a polyhe-dral source is implemented by the func-tions generate layered mascons and 
+
+batched pot mascon . As in Chanut et al. [2015], Aljbaae et al. [2017, 2021], we connect each face of the surface mesh to the body-fixed origin to form a tetrahedron. If the three vertices of a face are denoted by v1, v2, and 
+
+v3, then the signed volume of the associated tetrahedron is obtained as 
+
+VT = 16v1 · (v2 × v3) . (4) The tetrahedron is then subdivided radially ac-cording to the number of density layers provided by the user. For a model with Nℓ layers, the scaled vertices of the k-th radial boundary are written as 
+
+vj,k = λkvj , λk = kNℓ
+
+, j = 1 , 2, 3. (5) The cumulative volume enclosed by this scaled tetrahedron is 
+
+VT,k = 16v1,k · (v2,k × v3,k ) , (6) so that the volume assigned to layer k is ∆VT,k =
+
+(
+
+VT, 1, if k = 1 ,VT,k − VT,k −1, if k > 1. (7) The preliminary mass and gravitational param-eter of each mascon are then computed from the layer density as 
+
+m0 
+
+> T,k
+
+= ρk∆VT,k , μ0 
+
+> T,k
+
+= Gm 0
+
+> T,k
+
+. (8) The mascon position is assigned using the same approximation adopted in the original lay-ered implementation. For the innermost layer, the point mass is placed at 
+
+cT, 1 = v1,1 + v2,1 + v3,1
+
+4 , (9) while for the outer layers it is placed at the av-erage position of the three vertices of the outer and inner layer boundaries,                 
+
+> cT,k =v1,k +v2,k +v3,k +v1,k −1+v2,k −1+v3,k −1
+> 6,k > 1.
+
+(10) After all mascons have been generated, the total preliminary mass is compared with the prescribed asteroid mass M . If necessary, all masses are rescaled by a common factor, 
+
+α = M
+
+P 
+
+> i
+
+m0
+
+> i
+
+, mi = αm 0 
+
+> i
+
+, μi = Gm i. (11) This step conserves the total mass of the body, 
+
+X
+
+> i
+
+mi = M, (12) while preserving the relative mass distribution imposed by the selected density layers. The po-tential at a field point r is then approximated as 
+
+U (r) = 
+
+> Nm
+
+X
+
+> i=1
+
+μi
+
+ri
+
+, ri = ∥r − ci∥ , (13) where Nm is the total number of mascons. The function batched pot mascon evaluates these point-mass contributions for many field points simultaneously, making the method suitable for large grids and long orbital integrations. The main advantage of this implementation is that it keeps the geometry tied to the original poly-hedral shape, supports layered internal density models, and preserves the prescribed total mass. 
+
+1.2.4 Potential Series Expansion Method 
+
+The Potential Series Expansion Method (PSEM) is based on the analytical expansion of the Newtonian potential kernel 1 /r into a convergent power series of Legendre polynomi-als. Considering a field point r and a source point inside the body, the inverse distance can be written as 1
+
+r = 1
+
+ρ
+
+> ∞
+
+X
+
+> i=0
+
+Pi(u)
+
+ρ′
+
+ρ
+
+i
+
+, (14) 5where ρ = ∥r∥, ρ′ is the distance from the origin to the mass element, and u = cos γ, with γ being the angle between the vectors r (from the origin to the field point) and r′ (from the origin to the mass element). This angle satisfies cos γ = r · r′
+
+∥r∥ ∥ r′∥. (15) This expansion is uniformly convergent for points located outside the Brillouin sphere of the body. In PSEM, the irregular body is first repre-sented as a polyhedron and decomposed into tetrahedral elements, similarly to the classical polyhedral method. The total gravitational po-tential is then obtained by integrating the series term-by-term over each tetrahedron and sum-ming all contributions, yielding 
+
+U (r) = Gσ 
+
+> NT
+
+X
+
+> k=1
+> m
+
+X
+
+> i=0
+
+Z Z Z 
+
+> Qk
+
+Pi(u) ρ′i
+
+ρi+1 dV, (16) where Qk denotes each tetrahedral element, NT
+
+is the total number of tetrahedra, and m is the truncation order of the expansion. As shown in Mota et al. [2023], each term of the integrand becomes a polynomial function of the coordi-nates, allowing the volume integrals to be evalu-ated analytically using a coordinate transforma-tion to a reference tetrahedron. The resulting potential can be expressed as a finite polyno-mial expansion in Cartesian coordinates of the form 
+
+U (r) = 
+
+> m
+
+X
+
+> l=0
+
+X
+
+> i+j+k=l
+
+U li,j,k xiyj zk r−(2 l+1) /2
+
+∀ i, j, k, l ∈ N : i + j + k = l, 
+
+(17) which enables fast evaluation of the potential and its derivatives. In GravDyn , the function 
+
+build potential derivatives is used to obtain the PSEM coefficients. Deriving these coefficients symbolically becomes computation-ally expensive for high truncation orders and high-resolution shape models. The computa-tional cost depends strongly on the number of faces in the polyhedral shape model, the corresponding number of tetrahedral elements, and the selected truncation order. For some high-resolution asteroid models, the coefficient-generation stage may require several days of computation. For this reason, the current release of 
+
+GravDyn provides PSEM as a runtime evaluation tool based on precomputed and validated coefficient files. These polynomial expansions are generated offline on dedi-cated servers and stored in the GravDyn 
+
+repository for selected bodies. At runtime, 
+
+build potential derivatives loads the pre-computed expansion for the selected asteroid and returns both the symbolic expressions and optimized numerical callables, enabling very fast evaluation of the potential and its derivatives from Eq. (17). If a precomputed model is not yet available, the function notifies the user and provides instructions to request its generation. The generation of new coefficient sets is currently maintained as an offline preprocessing workflow by the authors, rather than as a standard user-facing routine, because each new model requires substantial symbolic computation and validation against reference solutions. Once generated and validated, the corresponding model can be added to the repository for future reuse by the community. 
+
+1.3 Quality control 
+
+1.3.1 Automated tests GravDyn includes automated tests written with pytest . These cover shape preprocessing, polyhedral precomputation, mascon genera-tion, PSEM model loading, plotting utilities, and point-mass evaluations against analytical solutions. The aim of the test suite is to verify 6that the implemented routines return consis-tent arrays, reuse cached data correctly, and reproduce reference values for representative cases. 
+
+1.3.2 Input checks 
+
+Input validation is applied before field evalu-ation. The package checks array dimensions, evaluation-point shapes, mass and density in-puts, and the availability of external data files, and it raises informative errors when a configu-ration is inconsistent. 
+
+1.3.3 Validation and performance GravDyn is validated through unit-level tests and also by comparing the gravitational modeling approaches against the classical poly-hedral solution, which is taken as the reference. The mascon and PSEM implementations are evaluated at varying distances from the body. Figure 3 compares the mascon and PSEM models against the polyhedral reference as a function of radial distance. Both approx-imations converge toward the reference in the external region, while Table 1 shows the expected cost trade-off: PSEM is fastest once its coefficients have been precomputed, whereas the mascon model remains useful when layered interiors must be represented explicitly. The results shown in Figure 3 and Table 1 refer specifically to asteroid (99942) Apophis, which is used here as an illustrative benchmark. Similar comparisons for other bodies, including (21) Lutetia and (87) Sylvia, have been per-formed in previous work [Mota et al., 2023]. The row labelled “Tsoulis” is included only as an external reference benchmark. It does not correspond to a released gravdyn module, but to a standalone Fortran implementation of the polyhedral gravity formulation following Tsoulis and Petrovi´ c [Tsoulis and Petrovic, 2001]. This implementation was not written using the vectorized, parallel, or JAX-based execution paths used in the Python routines. It is therefore not intended as a direct software-performance comparison with the released package, but as a reference point for a well-established and robust polyhedral formulation. Table 1: Performance comparison of gravita-tional modeling methods for asteroid (99942) Apophis. The test consists of evaluating the gravitational potential at 40,000 field points us-ing a shape model with 3,996 faces. Timings were obtained on a system equipped with an Intel(R) Core(TM) i7-14700 processor (20 phys-ical cores, 28 logical CPUs), with a maximum clock frequency of 5.4 GHz and 33 MiB of L3 cache.                    
+
+> Method Execution Time (s) Relative Speed Mean Relative Error (%)
+> Tsoulis 155.21 ×1Reference Werner 9.96 ×15 .6Reference Mascon (30) 20.14 ×7.76.86 ×10 −5
+> PSEM 1.50 ×103 .51.84 ×10 −4
+
+The “Mean Relative Error” reported in Table 1 is the average of the pointwise relative potential errors shown as a function of radial distance in Figure 3, computed with respect to the polyhedral reference solution over the 40,000 evaluation points. The PSEM evaluation is essentially the direct computation of an analytical polynomial, which makes it very fast and inexpensive to evaluate, even when higher orders are required. The mascon approach, by contrast, involves summing the contributions of a large number of discrete masses; this becomes increasingly demanding as the number of layers grows, particularly when a refined internal structure is modeled. Very close to the surface, the mascon formulation can behave more steadily provided the discretization is sufficiently fine, whereas PSEM becomes less reliable due to truncation effects and its formal validity being restricted to the region outside the Brillouin sphere 3. Even so, both methods reach a level of accuracy that is more than adequate from a        
+
+> 3The Brillouin sphere is defined as the smallest
+
+7dynamical perspective: the residual errors are small enough that they do not meaningfully affect the qualitative or quantitative evolution of orbital trajectories in practical short-term trajectory integrations. 
+
+Figure 3: Example comparison of relative error in the gravitational potential as a function of ra-dial distance r. The polyhedral method is used as a reference solution. The expansion method (green) and mascon approach (blue) show con-vergence toward the reference as the distance increases. The vertical red line indicates the approximate radius of the body. 
+
+1.3.4 Reproducibility and execution en-vironment 
+
+For general use, no special hardware is required. For computationally intensive applications, in particular for generating mascon models with multiple layered internal structure, it is ad-vantageous to have a system with sufficient memory (suggested ≥ 16 GB RAM) and multi-core CPU support. The generation of layered mascon distributions involves processing large polyhedral meshes and assigning mass elements  
+
+> sphere centered at the center of mass that completely encloses the body. Series expansions of the gravita-tional potential, such as spherical harmonics or PSEM, are guaranteed to converge only outside this sphere; in-side it, the series may diverge or lose accuracy (see, e.g., Heiskanen and Moritz [1967]).
+
+for multiple density layers, which can greatly increase memory usage and computational time. The required disk space depends on the size of the polyhedral shape model and associated data sets. Typically, less than 1 GB of space is required, but larger shape models and pre-computed data sets may require more. For typical use, GravDyn does not require specialized hardware. Larger layered-mascon calculations benefit from additional memory and multi-core CPUs. Detailed system require-ments are summarized in the Availability sec-tion. 
+
+# 2 Availability 
+
+2.1 Operating system 
+
+GravDyn is platform-independent and has been tested on Linux (Ubuntu 22.04 and later). The software is expected to run on macOS and Windows systems with a compatible Python environment. 
+
+2.2 Programming language 
+
+Python (version 3.9 or higher) 
+
+2.3 System requirements 
+
+For general use, no special hardware is required. For computationally intensive applications, in particular for generating mascon models with multiple layered internal structure, it is ad-vantageous to have a system with sufficient memory (suggested ≥ 16 GB RAM) and multi-core CPU support. The generation of layered mascon distributions involves processing large polyhedral meshes and assigning mass elements for multiple density layers, which can greatly increase memory usage and computational time. Disk space requirements depend on the 8size of the polyhedral shape model and the associated data sets. Typical use requires less than 1 GB of space, but larger shape models and precomputed data sets may require more. 
+
+2.4 Dependencies 
+
+GravDyn relies on the following core Python libraries: 
+
+• NumPy (numerical computations) 
+
+• SymPy (symbolic computation for PSEM) 
+
+• Matplotlib (visualization) 
+
+• Trimesh (geometry handling and mesh pro-cessing) Optional dependencies: 
+
+• JAX (accelerated computation and auto-matic differentiation) 
+
+• Pandas (data handling for mascon datasets) All dependencies can be installed via stan-dard package managers such as pip. 
+
+2.5 List of contributors 
+
+• Safwan Aljbaae 
+
+Conceived and led the project, developed the GravDyn software, and wrote the manuscript. 
+
+• Valerio Carruba 
+
+Contributed to testing and validation of the software, assisted in refining the imple-mentation, and contributed to the revision and improvement of the manuscript. 
+
+• Allan K. de Almeida Jr 
+
+Contributed to testing and validation of the software, assisted in refining the imple-mentation, and contributed to the revision and improvement of the manuscript. 
+
+• Gabriel Carit´ a
+
+Contributed to testing and validation of the software, assisted in refining the imple-mentation, and contributed to the revision and improvement of the manuscript. 
+
+• Antonio F. B. A. Prado 
+
+Contributed to testing and validation of the software, assisted in refining the imple-mentation, and contributed to the revision and improvement of the manuscript. 
+
+• Marcelo, L. Mota 
+
+Contributed to the theoretical develop-ment of the Potential Series Expansion Method (PSEM). 
+
+• Carlos E. Ferreira Lopes 
+
+Contributed to testing and validation of the software, assisted in refining the imple-mentation, and contributed to the revision and improvement of the manuscript. 
+
+2.6 Software location: 
+
+Archive Name: Zenodo. 
+
+Persistent identifier: 
+
+https://doi.org/10.5281/zenodo.20210316. 
+
+Licence: MIT License. 
+
+Publisher: Zenodo. 
+
+Version published: v0.1.2. 
+
+Date published: 15-07-2026. 
+
+Code repository Name: GravDyn .
+
+Identifier: https://github.com/safwanaljbaae/GravDyn.git 
+
+Licence: MIT License. 
+
+Date published: 2026-04-20. 9Project website 
+
+The official GravDyn website is available at 
+
+https://gravdyn.linea.org.br . The website is hosted by the Laborat´ orio Interinstitucional de e-Astronomia (LIneA). 
+
+Package distribution GravDyn is also distributed via the Python Package Index (PyPI) and can be installed us-ing: 
+
+pip install gravdyn 
+
+2.7 Language 
+
+All documentation is provided in English. 
+
+# 3 Reuse potential 
+
+GravDyn can be reused in studies that require gravitational fields for irregular small bodies. The most direct applications are spacecraft trajectory design, orbital stability analysis, equilibrium-point calculations, and close-proximity motion near asteroids. Because the same input shape can be used to build polyhedral, mascon, and PSEM models, the package is also useful for method comparison under common geometric and physical assump-tions. The layered mascon implementation is par-ticularly useful when internal structure matters. By assigning densities to radial layers, users can test how simplified heterogeneous inte-riors modify the potential and acceleration field. The PSEM implementation serves a different role. Once its coefficients have been generated and stored, the potential and its derivatives can be evaluated rapidly outside the Brillouin sphere. This makes the method useful for large grids of field points and repeated evaluations in long integrations. 
+
+GravDyn can also serve as a validation environment for new approximations, since the polyhedral model is available as a reference solution within the same workflow. Additional precomputed PSEM models may be added to the repository as they are generated and validated. Users can report bugs, request support, or suggest improvements through the GitHub issue tracker associated with the GravDyn repository. For scientific questions or collab-oration requests, users may also contact the corresponding author. 
+
+# Acknowledgements 
+
+The authors acknowledge the use of AI-based writing tools to assist with language editing and readability. All scientific content, results, and interpretations remain the responsibility of the authors. The official GravDyn project website ( https://gravdyn.linea.org.br )is hosted by the Laborat´ orio Interinstitucional de e-Astronomia (LIneA), whose infrastructure is supported by FINEP, CNPq, FAPERJ, and the INCT do e-Universo program. GAC is grateful to the S˜ ao Paulo Research Founda-tion (FAPESP), grant 2025/07596-3. AKAJ ac-knowledges support from project SPACE, ref. COMPETE2030-FEDER-00860300, funded by COMPETE 2030 and FCT, Portugal. 
+
+# Competing interests 
+
+The authors have no competing interests to de-clare. 
+
+# References 
+
+S. Aljbaae, T. G. G. Chanut, V. Carruba, J. Souchay, A. F. B. A. Prado, and A. Ama-rante. The dynamical environment of aster-oid 21 Lutetia according to different inter-10 nal models. MNRAS , 464:3552–3560, January 2017. doi: 10.1093/mnras/stw2619. S. Aljbaae, J. Souchay, V. Carruba, D. M. Sanchez, and A. F. B. A. Prado. Influence of Apophis’ spin axis variations on a spacecraft during the 2029 close approach with Earth. 
+
+Romanian Astronomical Journal , 31(3):317– 337, November 2021. Claudio Bottiglieri, Felice Piccolo, Carmine Giordano, Fabio Ferrari, and Francesco Top-puto. Applied trajectory design for cubesat close-proximity operations around asteroids: The milani case. Aerospace , 10:464, 05 2023. doi: 10.3390/aerospace10050464. T. G. G. Chanut, S. Aljbaae, and V. Carruba. Mascon gravitation model using a shaped polyhedral source. MNRAS , 450:3742–3749, July 2015. doi: 10.1093/mnras/stv845. Stanley F. Dermott. Shapes and gravitational moments of satellites and asteroids. Icarus ,37(3):575–586, 1979. ISSN 0019-1035. doi: https://doi.org/10.1016/0019-1035(79)90015 -0. URL https://www.sciencedirect.com/ science/article/pii/0019103579900150 .Fabio Ferrari, Vittorio Franzese, Mattia Pugli-atti, Carmine Giordano, and Francesco Top-puto. Trajectory Options for Hera’s Milani CubeSat Around (65803) Didymos. Journal of the Astronautical Sciences , 68(4):973–994, December 2021. doi: 10.1007/s40295-021-0 0282-z. Paul Geissler, J.-M Petit, Daniel Durda, Richard Greenberg, William Bottke, Michael Nolan, and Jeffrey Moore. Erosion and ejecta reaccretion on 243 ida and its moon. Icarus ,120:140–157, 03 1996. doi: 10.1006/icar.199 6.0042. Zhiwei Hao, Yi Zhao, Ying Chen, and Qi-uhua Zhang. Orbital maneuver strategy de-sign based on piecewise linear optimization for spacecraft soft landing on irregular as-teroids. Chinese Journal of Aeronautics , 33: 2694–2706, 2020. URL https://api.semant icscholar.org/CorpusID:213327572 .W. A. Heiskanen and H. Moritz. Physical Geodesy . W. H. Freeman, 1967. M. L. Mota, S. Aljbaae, and A. F. B. A. Prado. The potential series expansion method: appli-cation to the asteroid (87) Sylvia. European Physical Journal Special Topics , 232(18-19): 2961–2966, December 2023. doi: 10.1140/ep js/s11734-023-01026-w. D. Scheeres. Orbital motion in strongly perturbed environments. Orbital Motion in Strongly Perturbed Environments, by Scheeres, Daniel J. ISBN: 978-3-642-03255-4. Berlin: Springer, 2012 , 01 2012. doi: 10.1007/978-3-642-03256-1. Dimitrios Tsoulis and Sveto Petrovic. On the singularities of the gravity field of a homo-geneous polyhedral body. Geophysics , 66, 03 2001. doi: 10.1190/1.1444944. Robert Werner and D. Scheeres. Exterior gravi-tation of a polyhedron derived and compared with harmonic and mascon gravitation repre-sentations of asteroid 4769 castalia. Celestial Mechanics and Dynamical Astronomy , 65: 313–344, 09 1996. doi: 10.1007/BF00053511. 11
