@@ -6,58 +6,50 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-29
-- 运行时间：2026-08-29 21:29:24 UTC
+- 最新运行日期：2026-08-30
+- 运行时间：2026-08-30 21:37:35 UTC
 - 运行状态：成功
-- 本次总论文数：12
-- 精读区：1
-- 速读区：11
+- 本次总论文数：9
+- 精读区：0
+- 速读区：9
 
 ### 今日简报（AI）
-今日精读航天器交会鲁棒控制论文1篇，速读小行星跳跃、位姿估计与轨迹规划等3篇。  
-最值得关注：可认证显式MPC为扰动下交会提供严格安全保证，小行星跳跃引入贝叶斯优化加速求解。  
-建议普通读者从精读论文入手，重点理解鲁棒控制在工程可验证性上的优势。
-- 详情：[/202608/29/README](/202608/29/README)
+今日共速读9篇论文，其中重点筛查传感器融合、视觉惯性里程计与水下定位三篇，暂无精读。  
+最值得关注的是《Spectral Pre-Filtering》提出的FFT-GDCB四角色传感器融合框架，以及《KLTNet》对稀疏特征跟踪的稀疏学习方案，分别面向高 stakes决策系统与单目VIO鲁棒性。  
+建议普通读者优先浏览这两篇的摘要与图表，后续可深入精读其中一篇，或补充经典SLAM/滤波基础。
+- 详情：[/202608/30/README](/202608/30/README)
 
 ### 精读区论文标签
-1. [Certifiable Explicit Model Predictive Control for Spacecraft Rendezvous under Bounded Disturbances](/202608/29/2608.22458v1-certifiable-explicit-model-predictive-control-for-spacecraft-rendezvous-under-bounded-disturbances)  
-   标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：航天器交会的显式模型预测控制
+- 本次无精读推荐。
 
 ### 速读区论文标签
-1. [Physics-Informed Bayesian Optimization Warm-Starts for Sequential Convex Programming in Asteroid Surface Hopping](/202608/29/2608.20662v1-physics-informed-bayesian-optimization-warm-starts-for-sequential-convex-programming-in-asteroid-surface-hopping)  
+1. [Spectral Pre-Filtering for Context-Adaptive Sensor Fusion: A Four-Role FFT-GDCB Integration for High-Stakes Decision Systems](/202608/30/2608.22023v1-spectral-pre-filtering-for-context-adaptive-sensor-fusion-a-four-role-fft-gdcb-integration-for-high-stakes-decision-systems)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：不规则重力场下非凸最优控制的轨迹优化方法，可迁移至地月系统轨迹优化
-2. [Robust Validation to Geometric Perturbations for Autonomous Pose Estimation](/202608/29/2608.21066v1-robust-validation-to-geometric-perturbations-for-autonomous-pose-estimation)  
+   evidence：面向上下文自适应传感器融合的FFT预滤波与Kalman滤波
+2. [KLTNet: Learning Sparse Feature Tracking for Robust and Accurate Monocular Visual-Inertial Odometry](/202608/30/2608.24544v1-kltnet-learning-sparse-feature-tracking-for-robust-and-accurate-monocular-visual-inertial-odometry)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：面向自主着陆位姿估计的鲁棒验证方法
-3. [OpenSCvx: An Open-Source Modular and Extensible Nonlinear Trajectory Planning Package](/202608/29/2608.21631v1-openscvx-an-open-source-modular-and-extensible-nonlinear-trajectory-planning-package)  
+   evidence：用于视觉惯性里程计的鲁棒稀疏特征跟踪，可应用于自主近距导航
+3. [Contact-Aided Factor-Graph Localization for Underwater Sampling](/202608/30/2608.26932v1-contact-aided-factor-graph-localization-for-underwater-sampling)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：非线性轨迹规划工具，可用于地月系统轨迹设计
-4. [Spectral Pre-Filtering for Context-Adaptive Sensor Fusion: A Four-Role FFT-GDCB Integration for High-Stakes Decision Systems](/202608/29/2608.22023v1-spectral-pre-filtering-for-context-adaptive-sensor-fusion-a-four-role-fft-gdcb-integration-for-high-stakes-decision-systems)  
-   标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：面向卡尔曼滤波的传感器融合频谱预滤波
-5. [DECO: Depth-Guided Co-Visibility Reasoning for Low-Altitude UAV Visual Localization](/202608/29/2608.22289v1-deco-depth-guided-co-visibility-reasoning-for-low-altitude-uav-visual-localization)  
-   标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：面向无人机的GNSS拒止视觉定位，采用深度引导共视推理，与月球邻近自主导航相关
-6. [Automated Shape-Model-Based Astrometry of Phobos from Mars Express SRC Images](/202608/29/2608.22352v1-automated-shape-model-based-astrometry-of-phobos-from-mars-express-src-images)  
-   标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：基于形状模型的天体测量用于轨道精化，可迁移至月球邻近导航。
-7. [Obstacle-Aware Online Receiver Planning in Multistatic Ranging](/202608/29/2608.21013v1-obstacle-aware-online-receiver-planning-in-multistatic-ranging)  
+   evidence：融合接触、视觉与DVL的因子图定位，可迁移至地月空间多传感器定位
+4. [GCS-Bridging: Restoring Connectivity of Disconnected Convex Sets for Graph-of-Convex-Sets Motion Planning](/202608/30/2608.22326v1-gcs-bridging-restoring-connectivity-of-disconnected-convex-sets-for-graph-of-convex-sets-motion-planning)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：多基地测距接收机规划，用于传感器融合
-8. [The Coastline as a Structural Constraint: Harnessing Scene Geometry for Autonomous Surface Vessel Localization](/202608/29/2608.21276v1-the-coastline-as-a-structural-constraint-harnessing-scene-geometry-for-autonomous-surface-vessel-localization)  
+   evidence：图凸集轨迹优化的连通性恢复方法
+5. [Automated Shape-Model-Based Astrometry of Phobos from Mars Express SRC Images](/202608/30/2608.22352v1-automated-shape-model-based-astrometry-of-phobos-from-mars-express-src-images)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：GNSS拒止环境下的自主定位，利用几何结构线索，与月球邻近自主导航方法类似
-9. [GCS-Bridging: Restoring Connectivity of Disconnected Convex Sets for Graph-of-Convex-Sets Motion Planning](/202608/29/2608.22326v1-gcs-bridging-restoring-connectivity-of-disconnected-convex-sets-for-graph-of-convex-sets-motion-planning)  
+   evidence：基于形状模型的自动化天体测量管线，用于卫星轨道修正，类似月球近旁操作导航
+6. [Certifiable Explicit Model Predictive Control for Spacecraft Rendezvous under Bounded Disturbances](/202608/30/2608.22458v1-certifiable-explicit-model-predictive-control-for-spacecraft-rendezvous-under-bounded-disturbances)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：凸集图轨迹优化与连通性恢复
-10. [Variance-Guided Spatial Attention Fusion for Robust End-to-End Driving under Asymmetric Sensor Degradation](/202608/29/2608.24366v1-variance-guided-spatial-attention-fusion-for-robust-end-to-end-driving-under-asymmetric-sensor-degradation)  
+   evidence：面向有界扰动下航天器交会的可认证显式模型预测控制，可迁移至自主近距离操作
+7. [Velocity-coupled Representation Refinement for Satellite Orbit Prediction](/202608/30/2608.23728v1-velocity-coupled-representation-refinement-for-satellite-orbit-prediction)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：基于可靠性空间注意力的多模态传感器融合，可迁移至地月多源定位融合
-11. [KLTNet: Learning Sparse Feature Tracking for Robust and Accurate Monocular Visual-Inertial Odometry](/202608/29/2608.24544v1-kltnet-learning-sparse-feature-tracking-for-robust-and-accurate-monocular-visual-inertial-odometry)  
+   evidence：结合位置-速度耦合的卫星轨道预测
+8. [Trusted Polytopic Action Sets for Fast Planning in Underactuated Systems](/202608/30/2608.24019v1-trusted-polytopic-action-sets-for-fast-planning-in-underactuated-systems)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：视觉惯性里程计中的学习型稀疏特征跟踪，是自主导航与多源融合的关键组件，可支撑月球临近操作导航。
+   evidence：欠驱动系统轨迹流形上的凸运动规划方法，可迁移至地球-月球系统轨迹优化
+9. [Anytime Global Tensor Motion Planning](/202608/30/2608.25830v1-anytime-global-tensor-motion-planning)  
+   标签：评分：6.0/10、query:cislunar-dyn-nav
+   evidence：面向轨迹优化的张量运动规划与任意时间收敛策略
 
 
 <div class="dpr-home-promo-card">
