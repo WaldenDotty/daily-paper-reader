@@ -1,0 +1,611 @@
+Title: Anytime Global Tensor Motion Planning
+
+URL Source: https://arxiv.org/pdf/2608.25830v1
+
+Published Time: Thu, 27 Aug 2026 01:22:53 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# Anytime Global Tensor Motion Planning 
+
+Sai Coumar 1, An T. Le 2,3,∗, and Zachary Kingston 1,∗
+
+Abstract — Global Tensor Motion Planning (GTMP) solves motion planning with batched tensor operations over a layered multipartite graph. We generalize GTMP so that adjacent-layer edges are realized by any black-box local planner (e.g., linear interpolation, splines, sampling-based planning, trajectory optimization, or generative sampling). We provide two anytime policies on top of this generalization: Anytime GTMP with random restarts at a fixed budget, which covers every homotopy class almost surely, and AO-GTMP with informed expansion with growing budgets, which converges to the optimal cost. We prove that a single sampled graph covers every endpoint-fixed homotopy class admitting a δ-clear representative of bounded length. We also prove that additional samples per layer reduce the per-layer miss probability exponentially, whereas stronger local planners reduce the required layer count only sublinearly. On manipulation benchmarks the method matches state-of-the-art performance, and on 2D navigation it returns batches of topologically diverse solutions, while the informed baselines concentrate on one or two classes. 
+
+I. I NTRODUCTION 
+
+Motion planning in cluttered, high-dimensional spaces requires finding the connected components of the config-uration space and connecting configurations within them [1]. Classical sampling-based planners do both in one sequential search, which couples global exploration to local connection failure. When several routes exist, downstream applications need topologically diverse alternatives rather than one feasi-ble path: navigation selects among routes around obstacles, manipulation exploits distinct approach paths, and task-level planning reasons over the alternatives. Existing topological planners reason about homotopy classes through sequential roadmap construction [2–4], without coverage guarantees. Global Tensor Motion Planning (GTMP) [5] recasts sampling-based planning as two batch-parallel operations, sampling the intermediate vertex layers and realizing all adjacent-layer edges, so many candidate paths are evaluated at once. We generalize GTMP with black-box local planners 
+
+(LPs), admitting straight-line interpolation, sampling-based planners, trajectory optimizers, and generative samplers. We prove that this method covers every homotopy class admitting a δ-clear representative of bounded length. Our key insight is that a tube of clearance δ around a reference path guarantees coverage: the layer samples explore globally, the local planner connects locally, and any path that stays inside the tube lies in the reference’s homotopy class. Moreover, random restarts at 
+
+> ∗Equal contribution.
+> 1Department of Computer Science, Purdue University, USA.
+> 2College of Engineering and Computer Science, VinUniversity, Hanoi, Vietnam.
+> 3Intelligent Autonomous Systems Lab, TU Darmstadt, Germany.
+
+a fixed budget achieves almost-sure class coverage (Anytime-GTMP), and informed expansion with growing budgets gives almost-sure cost convergence (AO-GTMP). We validate multi-class coverage on 2D navigation bench-marks, where Anytime-GTMP returns batches of topologi-cally diverse solutions while the baselines return one path per query. Fig. 1 contrasts the two modes: random restart explores new corridors, while asymptotic optimality concen-trates samples in the shrinking informed set. On Motion-BenchMaker [6] with 6–8 degree-of-freedom (DoF) manip-ulators, our variants match state-of-the-art performance and attain the lowest mean path cost on 15 of 21 problems within 60 seconds. We release our code as open source at https: //github.com/commalab/anytime_gtmp.git .II. R ELATED WORK 
+
+Sampling-based planners randomly sample the configura-tion space and use a local planner to connect nearby config-urations [1]. Narrow passages are difficult as the probability of exploration decays exponentially with dimension, which motivates biased sampling [7–9]. The choice of local planner also affects performance [10]: prior work has put other planners [11, 12] and learned functions [13] in that role, but each choice is fixed inside the planner. We extend GTMP with black-box local planners and prove graph-level coverage and convergence guarantees that hold for any of them. To obtain almost-sure cost convergence, RRT* [14] rewires the search tree while planners like BIT* and AIT* [15, 16] search batches of samples ordered by potential solution quality within the informed set [17]. Unlike methods that densify the configuration-space approximation, the AO-x framework [18, 19] is a general recipe: any feasible planner can be made asymptotically optimal by iteratively tightening a cost bound in an augmented state-cost space, as AOR-RTC [20] does with RRT-Connect. AO-GTMP applies the same cost-bounding strategy to a layered DAG, replacing nearest-neighbor queries with a tensor value-iteration sweep. Sampling-based planners admit natural parallelism [21]. CPU planners exploit it by running independent in-stances [22], growing trees in parallel [23], maintaining forests [24, 25], and vectorizing collision checking [26], and GPU planners such as GMT [27], pRRTC [28], and cuRobo [29] parallelize similarly at scale. GTMP [5] in-stead parallelizes through tensor operations over a layered multipartite graph, enabling batch-parallel edge realization. When topologically distinct routes exist, downstream tasks benefit from a set of alternatives rather than one path. The h-signature [30] and persistent-homology descriptors [31] arXiv:2608.25830v1 [cs.RO] 26 Aug 2026 Fig. 1: Sampling density of Anytime-GTMP (left) and AO-GTMP (right) on the Shanghai map. 
+
+classify paths by homotopy, and several planners use these in-variants to construct diverse solutions: homotopy-preserving roadmaps [2], path-deformation methods [3], diverse-short-path algorithms [32, 33], convex-dissection approaches [34], CTopPRM [4], and topology-driven trajectory optimiza-tion [35, 36]. These methods build or search incrementally and give no coverage guarantee; the closest quantitative results are sample-complexity bounds for PRM connectivity via ε-nets [37], which do not distinguish homotopy classes. We guarantee that one graph covers every δ-clear class at once, and Anytime-GTMP makes coverage almost-sure. III. P ROBLEM DEFINITION 
+
+Let C ⊆ Rd be the configuration space, with open free space Cfree , obstacle region Ccoll = Rd \ Cfree , and start and goal configurations q0, q g ∈ Cfree . A continuous path is a map f : [0 , 1] → Cfree with f (0) = q0 and f (1) = qg ,and its image is Im( f ) = f ([0 , 1]) . A path f is δ-clear if 
+
+dist( f (t), C coll ) ≥ δ for all t ∈ [0 , 1] [14]; equivalently, 
+
+Nδ (Im( f )) ⊂ Cfree . A homotopy class is δ-clear if it admits a δ-clear representative. A path is rectifiable if it has finite Euclidean length. We write TV( f ) for that length. Two paths f, g : [0 , 1] → Cfree with the same endpoints are 
+
+homotopic relative to endpoints , written f ≃ g, if there exists a continuous map H : [0 , 1] × [0 , 1] → Cfree such that 
+
+H(·, 0) = f , H(·, 1) = g, H(0 , s ) = q0, and H(1 , s ) = qg
+
+for all s ∈ [0 , 1] . The homotopy class of f is denoted by [f ].
+
+A. Layered Sampling Model 
+
+Fix an integer M ≥ 0 and define the uniform grid on [0 , 1] 
+
+tm = mM + 1 , m = 0 , 1, . . . , M + 1 .
+
+For each intermediate layer m ∈ { 1, . . . , M }, let Cm ⊆ C
+
+be the sampling region of that layer: a measurable set with nonempty interior and finite volume. Let πm be a probability measure on Cm ∩Cfree with Lebesgue density at least am > 0
+
+there. Each of the N layer-m samples Xm, 1, . . . , X m,N is drawn by an independent fair coin: with probability 12 from 
+
+πm, independently of everything else, and otherwise from any heuristic sampler, which may depend on the history. The πm
+
+draws are mutually independent within and across layers, so a layer misses a measurable set A with probability at most 
+
+(1 − 12 πm(A)) N whatever the heuristic does. Every result below uses only the πm half of the mixture. Define the layer vertex sets by: 
+
+V0 = {q0}, VM +1 = {qg }, Vm = {Xm, 1, . . . , X m,N }.
+
+The GTMP candidate graph contains all ordered pairs (u, v )
+
+with u ∈ Vm and v ∈ Vm+1 for some m ∈ { 0, . . . , M }. The graph is complete between adjacent layers and contains no intra-layer or skip-layer edges. 
+
+B. Generalized GTMP Graph 
+
+A local planner (LP), denoted LP , is a randomized proce-dure LP (x, y ; s, ℓ ) that, given x, y ∈ Cfree , an effort budget 
+
+s ∈ N, and a limit ℓ > 0, either returns failure or returns a continuous collision-free path Γ : [0 , 1] → Cfree with 
+
+Γ(0) = x, Γ(1) = y, and image inside the query ellipsoid 
+
+E(x, y ; ℓ) = { z ∈ Cfree | ∥ z − x∥ + ∥z − y∥ ≤ ℓ }.ℓ is computable from the query alone, is enforced by rejecting samples and edges outside E, and is not restrictive: any path from x to y of length at most ℓ already lies in E, the segment [x, y ] included. The corresponding graph is denoted by GLP 
+
+> M,N,s
+
+. An edge (u, v ) is present in GLP  
+
+> M,N,s
+
+if and only if the call succeeds; the edge holds the returned local path 
+
+Γu,v and its cost. A chain in GLP  
+
+> M,N,s
+
+is a sequence of vertices: 
+
+v0 = q0, v 1, . . . , v M , v M +1 = qg ,
+
+with vm ∈ Vm and each adjacent pair (vm, v m+1 ) realized as an edge. If the realized edges carry local paths Γ0, . . . , ΓM ,then their concatenation P = Γ 0 ∗ · · · ∗ ΓM is a continuous collision-free path from q0 to qg .Let [f ] be an endpoint-fixed homotopy class from q0 to qg .We say that GLP  
+
+> M,N,s
+
+covers [f ] if it contains a chain whose concatenated path P satisfies P ≃ f . For a finite family of classes F = {[f (1) ], . . . , [f (K)]}, we say that GLP 
+
+> M,N,s
+
+covers F if it covers every class in the family, not necessarily via disjoint chains. Class membership of a returned path 
+
+P is recorded by a label κ(P ) that accumulates along the path, such as the h-signature [30] or a persistent-homology descriptor [31]; we write K for the finite set of labels realized by chains of a given graph. IV. M ETHOD 
+
+Two iteration policies run on the layered graph: Anytime-GTMP uses random restart with fixed budgets for homotopy-class diversity, and AO-GTMP grows budgets monotonically for asymptotic cost optimality. The local planner may be any point-to-point planner; the original GTMP is the straight-line special case. 
+
+A. Stagewise Graph Instantiation 
+
+At planning stage ν ∈ N, choose budgets (Mν , N ν , s ν )
+
+and instantiate the layered graph from Sec. III, yielding the realized graph GLP  
+
+> ν
+
+. Every call LP (u, v ; sν , ℓ ) uses the edge-length limit ℓ = ℓMν (r) of Sec. V, and on success assigns edge cost cν (u, v ) = cost(Γ u,v ); admissible costs are additive, at least path length, and Lipschitz in the endpoints of a straight-line edge (Thm. 3), which includes path length and weighted length. Per-stage cost is O(Mν N 2 
+
+> ν
+
+) local planner calls, which dominates the search except for the |K| factor of the class-augmented sweep (Sec. IV-B). 
+
+B. Graph Search on the Layered DAG 
+
+Because GTMP connects only adjacent layers, the realized graph is a directed acyclic graph ordered by layer index, so a shortest feasible chain follows from value iteration at cost 
+
+O(Mν N 2 
+
+> ν
+
+). Let Vν,m denote the vertices in layer m. Define the terminal cost-to-go by Jν,M ν +1 (qg ) = 0 , and for any vertex u ∈ V ν,m , m = Mν , . . . , 0,
+
+Jν,m (u) = min 
+
+> v∈V ν,m +1
+
+cν (u, v ) + Jν,m +1 (v).
+
+Algorithm 1: GTMP and our anytime variants  
+
+> 1
+
+Function gtmp (q0, G, s, Q, Vh)
+
+Data: Start q0, goals G ∈ R|G|× d, local planner budget 
+
+s, (optional) samples Q, value tensor Vh 
+
+> 2
+
+if Q ≡ ∅ then  
+
+> 3
+
+Uniformly sample Q ∈ RM ×N ×d 
+
+> 4
+
+Compute cost matrices Cs, Ch, Cl via local planner LP 
+
+with budget s as in GTMP [5]  
+
+> 5
+
+Init Vs ∈ R, Vg ∈ R|G| ; Vh ← 0 if Vh ≡ ∅ for 
+
+1 ≤ k ≤ M + 1 do  
+
+> 6
+
+Vh[M −1] ← min( Cl + Vg ); Vs ← min( Cs + Vh[0])  
+
+> 7
+
+foreach m < M −1 do Vh[m, u, κ uv χ] ←
+
+min v (Ch[m, u, v ] + Vh[m+1 , v, χ ])  
+
+> 8
+
+i ← argmin( Cs + V ∗ 
+
+> h
+
+[0]) ; P = {i} 
+
+> 9
+
+for 1 ≤ m ≤ M − 1 do 
+
+i ← argmin( Ch[m−1, i ] + V ∗ 
+
+> h
+
+[m]) , append Q[m, i ]
+
+to P 
+
+> 10
+
+i ← argmin( Cl[i] + Vg ) and append G[i] to P 
+
+> 11
+
+return Path P, value tensor Vh 
+
+> 12
+
+Function anytime-gtmp (M, N, s ) 
+
+> 13
+
+A ← ∅ // class-indexed archive  
+
+> 14
+
+repeat  
+
+> 15
+
+Πi ←gtmp (M, N, s ) with Vh ∈ RM ×N ×|K|  
+
+> 16
+
+foreach χ ∈ K with Πi[χ]̸ ≡ ∅ do  
+
+> 17
+
+if χ / ∈ A or c(Π i[χ]) < c (A[χ]) then 
+
+A[χ] ←simp (Π i[χ])  
+
+> 18
+
+until stop  
+
+> 19
+
+return A, argmin P∈A c(P) 
+
+> 20
+
+Function ao-gtmp (Mmin , M max , N min , N max , s ) 
+
+> 21
+
+Pbest ← ∅ ; cmin ← ∞  
+
+> 22
+
+M ← Mmin ; N ← Nmin  
+
+> 23
+
+Q ← ∅ ; Vh ← ∅  
+
+> 24
+
+repeat  
+
+> 25
+
+Q ←expand-samples (Q, M, N, c min ) 
+
+> 26
+
+Pi, Vh ←simp (gtmp (M, N, s, Q, Vh))  
+
+> 27
+
+if Pi̸ ≡ ∅ and c(Pi) < c min then  
+
+> 28
+
+Pbest ← P i 
+
+> 29
+
+cmin ← c(Pi) 
+
+> 30
+
+(M, N ) ←grow (M, N ) 
+
+> 31
+
+until stop or (M ≥ Mmax and N ≥ Nmax ) 
+
+> 32
+
+return Pbest  
+
+> 33
+
+Function expand-samples (Q, M, N, c best ) 
+
+> 34
+
+for layer m ∈ [M ], 1 ≤ j ≤ N − | Q[m]| do  
+
+> 35
+
+if cbest =∞ or Q[m±1]= ∅ or Bernoulli ( 12 ) then  
+
+> 36
+
+q ∼ U (Xf (cbest )) // uniform half  
+
+> 37
+
+else q ← 12 (u⋆+v⋆),
+
+(u⋆, v⋆)= argmin Q[m−1] ×Q[m+1] ∥u−v∥ 
+
+> 38
+
+Q[m] +
+
+← { q} 
+
+> 39
+
+return Q
+
+Any absent edge is treated as having infinite cost. Taking 
+
+σν,m (u) to be a minimizer above and applying it repeatedly from q0 recovers one minimum-cost feasible chain q0 →
+
+vν, 1 → · · · → vν,M ν → qg . Concatenating the local planner paths yields a continuous configuration-space path: 
+
+Pν = Γ q0,v ν, 1 ∗ Γvν, 1,v ν, 2 ∗ · · · ∗ Γvν,Mν ,q g .
+
+Anytime-GTMP augments the state with the class label, 
+
+Jν,m (u, χ ) over Vν,m × K , and sweeps the same recursion subject to χ = κ(Γ u,v ) · χ′, which returns a minimum-cost chain in every realized class for Θ( Mν N 2 
+
+> ν
+
+|K| ) work whenever the label accumulates along concatenation and tells the classes apart, as the h-signature does (Prop. 1). Each sweep is a single batched tensor contraction. 
+
+C. Two Iteration Policies 
+
+The two policies differ only in the budget schedule: Anytime-GTMP holds (M, N, s ) fixed and targets class diversity, while AO-GTMP holds s fixed, grows (Mν , N ν )
+
+monotonically to infinity, and targets cost optimality. Both proceed in two phases. Phase 1 (feasibility). Run GTMP from 
+
+(M1, N 1, s 1) until one feasible chain is found, yielding σ0
+
+and the initial bound c0 ← cost( σ0); with a probabilistically complete local planner this phase inherits the probabilistic completeness of GTMP. Phase 2 (anytime). Iterate under the chosen policy. Alg. 1 gives both policies and the shared gtmp () subrou-tine, which extends canonical GTMP with the local planner budget s and optional warm-start inputs Q and Vh. The first iteration returning a feasible path is Phase 1: it seeds the archive (Anytime-GTMP) or the cost bound cmin (AO-GTMP). Both policies cost Θ( Mν N 2 
+
+> ν
+
+) per stage, the 2Nν +(Mν −1) N 2 
+
+> ν
+
+candidate edges being dominated by inter-layer pairs. 
+
+D. Anytime-GTMP 
+
+Fix (M, N, s ) throughout. Each stage ν draws a fresh layered sample set, realizes edges with LP s, runs the class-augmented DP search, and inserts every solution into a class-indexed archive Aν that holds the lowest-cost path per homotopy class, updated by: 
+
+Aν [κ] ← argmin  
+
+> π∈A ν−1[κ]∪{ π′∈Πν|κ(π′)= κ}
+
+cost( π),
+
+with A0 ≡ ∅ , and the anytime output is the lowest-cost path across all classes. Any positive per-stage coverage probability yields almost-sure eventual class coverage (Thm. 2). 
+
+E. AO-GTMP 
+
+Fix s throughout; grow (Mν , N ν ) monotonically. This instantiates the AO-x meta-algorithm [18, 19] on the layered DAG. Let cν be the best cost found through stage ν and let Xf (c) = {x ∈ C | ∥ x − q0∥ + ∥x − qg ∥ ≤ c} be the informed set at cost bound c [17], the ellipsoid with foci 
+
+q0, q g , meeting Cfree in the query ellipsoid E(q0, q g ; c) of Sec. III. Stage ν samples against the bound available on entry, 
+
+cν−1, taking πν,m of Sec. III to be the uniform measure on 
+
+Xf (cν−1)∩Cν,m ∩Cfree , and the heuristic half of the mixture to be the midpoints of the closest layer-(m−1) and layer-
+
+(m+1) sample pairs. Because the uniform grid shifts when 
+
+M grows, AO-GTMP runs in epochs : within an epoch M
+
+is fixed and Nν increases until the per-layer hit probability saturates (the sample schedule of Thm. 3); a new epoch begins at larger M when triggered by the layer schedule: 
+
+Mν ≥
+
+ cν
+
+Λs(τ ) − 2r − ς
+
+
+
+− 1,
+
+where the reach Λs(τ ) = sup {ℓ > 0 | qs(ℓ) ≥ 1 − τ } is the longest edge the local planner solves with probability at least 
+
+1 − τ , for the success profile qs of Asm. 1. Cost convergence 
+
+cν → c∗ a.s. follows from Thm. 3. V. T HEORETICAL ANALYSIS 
+
+We use the fact that a chain inside a tube of radius δ around a reference path is homotopic to that reference. Coverage then reduces to two questions: did every layer sample near the reference, and did the local planner connect consecutive samples. Fix a reference path f : [0 , 1] → Cfree from q0 to 
+
+qg , rectifiable, parameterized at constant speed, of length 
+
+L = TV( f ) and clearance δ > 0, so Nδ (Im( f )) ⊂ Cfree .For a radius r ∈ (0 , δ ), the layer-m waypoint ball Am =
+
+Br (f (tm)) ∩Cm ∩Cfree , with Br (f (tm)) ⊂ Cm, collects the admissible layer-m waypoints; a single layer-m sample lands in it with probability at least pm = 12 πm(Am) ≥ 12 amλ(Br ),the factor 12 coming from the coin flip in the sampler (Sec. III). Consecutive waypoints are joined inside the tube by going in to the reference, along it, and back out, a path of length at most L/ (M + 1) + 2 r with clearance at least 
+
+δ − r, so the local planner is called with the length limit: 
+
+ℓM (r) = LM + 1 + 2 r + ς
+
+for a fixed margin ς > 0.
+
+Lemma 1 (δ-tube homotopy) . Let w0 = q0, wM +1 = qg ,
+
+wm ∈ Br (f (tm)) , and let Γm join wm to wm+1 inside 
+
+E(wm, w m+1 ; ℓM (r)) . If 
+
+32
+
+LM + 1 + 2 r + ς
+
+2 < δ, 
+
+then P = Γ 0 ∗ · · · ∗ ΓM satisfies P ≃ f rel. endpoints. If every Γm is the straight segment [wm, w m+1 ], the condition weakens to L/ (M + 1) + r < δ .Proof. Parameterize P at the reference speed, so that 
+
+P |[tm,t m+1 ] traverses Γm, and fix t ∈ [tm, t m+1 ] with z =
+
+P (t). A point of E(wm, w m+1 ; ℓM (r)) is within ℓM (r)/2
+
+of one focus, each focus wm lies within r of f (tm), and constant speed keeps f (t) within L/ (M + 1) of both, so 
+
+∥z−f (t)∥ ≤ ℓM (r)2 +r+ LM + 1 = 3L
+
+2( M + 1) +2 r+ ς
+
+2 < δ. 
+
+For the straight-line case, interpolating [wm, w m+1 ] affinely against [f (tm), f (tm+1 )] puts P (t) within r of that segment and the segment within L/ (M + 1) of f (t), so 
+
+∥P (t) − f (t)∥ ≤ r + LM + 1 .
+
+In either case the homotopy H(t, σ ) = (1 − σ)f (t) + σP (t)
+
+stays in Bδ (f (t)) ⊂ Cfree and fixes both endpoints. Assumption 1 (Local planner success profile) . Fix a clear-ance level ρ > 0. For each budget s there is a non-increasing 
+
+qs : (0 , ∞) → [0 , 1] with qs(ℓ) → 1 as s → ∞ such that, whenever x, y admit a ρ-clear path of length at most ℓ − ς,the call LP (x, y ; s, ℓ ) succeeds with probability at least qs(ℓ),conditionally on the sampling history and on the other calls. 
+
+The assumption asks only for success, since the length limit of Sec. III already confines the path to the query ellipsoid; the clearance level, ρ = δ −r below, is what keeps it meaningful, as no planner holds a uniform success rate over corridors of vanishing width. RRT-Connect confined to that ellipsoid qualifies, with failure decaying as exp( −βsη/ℓ ) [14, 38] for the planner step η and a constant β > 0, and is short-range exact : it tries the straight line first, so any collision-free straight-line edge is returned deterministically. 
+
+A. Coverage from One Sampled Graph 
+
+Theorem 1 (Coverage of one class) . Under Asm. 1, with 
+
+r, M as in Lem. 1 and every pm > 0,
+
+Pr GLP  
+
+> M,N,s
+
+covers [f ]
+
+≥ 1 −
+
+> M
+
+X
+
+> m=1
+
+(1 − pm)N − (M + 1)  1 − qs(ℓM (r)) ,
+
+and the right-hand side tends to 1 as N, s → ∞ for every fixed M .Proof. Layer m fails when none of its N samples lands in Am, which has probability at most (1 − pm)N ; a union bound over the M layers gives the first error term. Suppose instead every layer hits, and pick a waypoint wm ∈ Am in each. Consecutive waypoints are joined by [wm, f (tm)] , the reference subarc, and [f (tm+1 ), w m+1 ]: this path is collision-free, lies in the tube since r < δ , and has length at most 
+
+L/ (M + 1) + 2 r = ℓM (r) − ς, so it is (δ − r)-clear. Each of the M + 1 local planner calls therefore succeeds with probability at least qs(ℓM (r)) by Asm. 1, and a union bound over the edges gives the second term. When they all succeed, Lem. 1 places the realized chain in the tube, hence in [f ].The same waypoint construction covers every δ-clear class at once, since for a fixed clearance there are finitely many endpoint-fixed classes of bounded length. The reach Λs(τ )
+
+grows only sublinearly in the local budget, so past a point extra local effort adds little (Fig. 3). A planner able to reach across the whole query Λs(τ ) > L + 2 r + ς collapses the layered graph to a single call. 
+
+B. Anytime Policies 
+
+Coverage puts a chain of the target class in the graph; the search of Sec. IV-B then returns a minimum-cost chain in every realized class at once. 
+
+Proposition 1 (Class-augmented value iteration is exact) .
+
+Assume the class label (i) composes , κ(Γ ∗ Γ′) = κ(Γ) κ(Γ ′),as the h-signature does [30], and (ii) identifies classes : two start-to-goal paths share a label if and only if they are homotopic. Let Jm(v, χ ) be the least cost of a chain from 
+
+v ∈ Vm to qg with label χ, and K the finite set of labels such chains carry. Then value iteration over the state (v, χ ),
+
+Jm(v, χ ) = min     
+
+> {v′, χ ′|κ(Γ v,v ′)χ′=χ}
+
+c(v, v ′) + Jm+1 (v′, χ ′),
+
+from JM +1 (qg , e ) = 0 at the empty label e and +∞ at every other terminal label, computes J exactly, returning a minimum-cost chain in every class in Θ( M N 2|K| ) time. Proof. Costs add along a chain and, by (i), its label is the product of its edge labels, so any completion from layer m
+
+depends on the past only through v and the label χ so far. Backward induction over this state is therefore exact, and by (ii) grouping chains by label groups them by class. Each layer relaxes its N 2 edges against the |K| labels. 
+
+Theorem 2 (Anytime-GTMP class coverage) . Fix (M, N, s )
+
+with per-stage coverage pcov = Q
+
+> m
+
+(1 − (1 −
+
+pm)N ) qs(ℓM (r)) M +1 > 0. Then [f ] enters the archive almost surely, after at most 1/p cov stages in expectation, and simultaneously for every δ-clear class. Proof. Each stage draws fresh samples and indepen-dent local planner randomness, so the events Aν =
+
+{stage ν covers [f ]} are independent, and Thm. 1 gives 
+
+Pr( Aν ) ≥ pcov . As P 
+
+> ν
+
+Pr( Aν ) = ∞, the Borel–Cantelli lemma makes Aν occur infinitely often almost surely, and 
+
+Pr( T 
+
+> ν≤K
+
+¬Aν ) ≤ (1 − pcov )K bounds the first covering stage in expectation by 1/p cov . By Prop. 1 each graph yields an archive entry, and the archive is monotone, so [f ] stays covered; with finitely many δ-clear classes, intersecting these events covers them all at once. AO-GTMP instead fixes s and grows (Mν , N ν ) ↑ ∞ ,sampling each layer from the informed set Xf (cν−1) [17], an instance of AO-x on the layered DAG [18]; we state it for path length, but weighted lengths obey the same guarantee. 
+
+Theorem 3 (AO-GTMP cost convergence) . Assume a δ-clear optimal path of length c∗, a short-range-exact local planner, sampling regions containing Xf (c0), and a sample schedule under which the number ∆Nν of fresh samples at stage ν
+
+satisfies ∆Nν /(M dν log Mν ) → ∞ . Then the best path length 
+
+cν → c∗ almost surely. Proof. Fix ε, δ ′ > 0 and let γε be a δ′-clear path of length 
+
+Lε ≤ c∗ + ε [19], at constant speed. With M = Mν large enough that Lε/(M +1) ≤ δ′/2, take waypoint balls: 
+
+Bm = Br(M )(γε(tm)) , r(M ) = min 
+
+ δ′
+
+4 , ε
+
+2( M +1) 
+
+
+
+.
+
+While cν−1 > c ∗ + 2 ε, every y ∈ Bm has: 
+
+∥y − q0∥ + ∥y − qg ∥ ≤ Lε + 2 r(M ) ≤ c∗ + 2 ε < c ν−1,
+
+and r(M ) < δ ′ keeps Bm ⊂ Cfree , so Bm ⊂ X f (cν−1) ∩
+
+Cfree is samplable in every layer. Each segment [wm, w m+1 ]
+
+lies within r(M )+ Lε/ 2( M +1)  < δ ′ of γε, so short-range exactness realizes it deterministically—only ball-hitting is random—and the chain length is: 
+
+X
+
+> m
+
+∥wm − wm+1 ∥ ≤ Lε + 2( M +1) r(M ) ≤ c∗ + 2 ε. Fig. 2: Success rate eCDFs on a 60 second budget, log scale. Anytime-GTMP SEV iterates fast and a low local planner budget leaves room for global exploration. 
+
+Each ball is hit by a single sample with probability: 
+
+pM ≥ λ(Br(M ))2λ(Xf (c0)) ≥ cεM −d,
+
+so the chance some ball is unhit is at most (M +1)(1 −
+
+pM )∆Nν → 0 under the schedule. Hence, with T =T 
+
+> ν
+
+{cν > c ∗ + 2 ε}, the conditional Borel–Cantelli lemma forces Pr( T ) = 0 ; intersecting over ε = 1 /k with cν ≥ c∗
+
+gives cν → c∗ almost surely. VI. E XPERIMENTS 
+
+Experiments ran on an AMD Ryzen Threadripper PRO 5965WX 24-core CPU with 32 GB of RAM and an NVIDIA RTX 4090. We run each policy with two local planners: straight-line edges with collision checking (SEV) and RRT-Connect (RRTC). 
+
+A. Feasibility and Cost 
+
+We validate feasibility and cost on MotionBenchMaker [6] (Table I and Fig. 2). GTMP variants are not the fastest to a first solution: within one second AORRTC and FCIT succeed often, BIT* stays below 10% , and GTMP variants rarely return, which we attribute to the overhead of layered graph construction and local planner evaluation. Over the full time budget, Anytime-GTMP (SEV) matches FCIT’s final success rate of approximately 85% . On the common set solved by every reference planner, the variants match or beat the lowest mean path cost most often: AO-GTMP on 5/7 Panda, 7/7
+
+UR5, and 5/7 Fetch problems, and Anytime-GTMP on 4/7,
+
+3/7, and 1/7, against 6/7, 3/7, and 3/7 for AORRTC. Sec. V-A predicts that a strong enough local planner collapses the graph to a single call: fixing M = 6 layers, 
+
+N = 100 samples per layer, and an AORRTC budget of 1000 iterations, a complete start-to-goal path emerges near 250 iterations and approaches the optimal chain by 1000, as the graph approaches the connectivity of the continuous configuration space. Sweeping the per-edge budget in Fig. 3 shows diminishing returns: path cost improves until roughly 400 to 600 RRT-Connect iterations and then flattens, so under a fixed planning budget moderate local effort with more global sampling dominates heavy local effort. 
+
+B. Topological Diversity 
+
+We evaluate topological diversity (Figs. 4 and 5) on 2D street-view heightmaps from Sturtevant’s database [39], whose homotopy classes are visually verifiable; the baselines return one path per query and do not target class coverage. Over a 60 s budget we record a path event whenever a planner explores a start-to-goal path, returned or not, label each event with a homotopy invariant, and pre-cluster with Dynamic Time Warping, itself not a homotopy invariant. Anytime-GTMP covers the highest average number of classes, while aggressive cost bounding concentrates informed planners on a few near-optimal ones: on the Sydney map, AO-GTMP (RRTC) and FCIT each identify a single class. Fig. 5 plots the diversity of new AO-GTMP samples, the complement of mean cosine similarity, against the normalized cost bound: it spikes to 0.6 just after the first feasible solution, when the informed set is still large, then falls as cν tightens and Xf (cν ) contracts. The trade-off is empirical as well as theoretical: repetition gives diversity, and a shrinking informed set gives optimality. VII. C ONCLUSION 
+
+We have generalized GTMP [5] so that adjacent-layer edges are realized by any black-box local planner. We prove that one sampled graph covers each δ-clear homotopy class with high probability (Thm. 1), and every such class of bounded length simultaneously; that the longest edge a local planner connects reliably grows only sublinearly in its budget, while each additional sample per layer cuts the miss probability exponentially; and that two iteration policies yield distinct guarantees: random restart at a fixed budget achieves almost-sure class coverage (Thm. 2), while informed expansion with growing budgets drives cost to the optimum (Thm. 3). Empirically, the variants match FCIT’s success rate at competitive path cost on 6–8 DoF manipulation, and on 2D navigation Anytime-GTMP covers the most homotopy classes while AO-GTMP concentrates on near-optimal ones—the random-restart versus informed-expansion trade-off in practice. Future work includes lazy variants that realize only a subset of adjacent-layer pairs, scheduling that adapts (Mν , N ν , s ν )
+
+online from the measured local planner profile, dynamically-aware local planners that extend the same guarantees to dynamically feasible trajectories, and evaluating topological coverage on high-DoF manipulation, where homotopy classes are harder to verify than in the 2D navigation studied here. REFERENCES [1] A. Orthey, C. Chamzas, and L. E. Kavraki, “Sampling-based motion planning: A comparative review,” Annu. Rev. Control Robot. Auton. Syst. , vol. 7, no. 1, pp. 285–310, 2024. [2] E. Schmitzberger, J.-L. Bouchet, M. Dufaut, D. Wolf, and R. Husson, “Capture of homotopy classes with probabilistic road map,” in Proc. IEEE/RSJ Int. Conf. Intell. Robots Syst. , vol. 3, 2002, pp. 2317–2322. [3] L. Jaillet and T. Sim´ eon, “Path deformation roadmaps: Compact graphs with useful cycles for motion planning,” Int. J. Robot. Res. , vol. 27, no. 11-12, pp. 1175–1188, 2008. [4] M. Novosad, R. Penicka, and V. Vonasek, “CTopPRM: Clustering topo-logical PRM for planning multiple distinct paths in 3D environments,” 
+
+> IEEE Robot. Autom. Lett. , vol. 8, no. 11, pp. 7336–7343, 2023.
+
+Planner bookshelf small bookshelf tall bookshelf thin table pick table under pick box cage 
+
+> Panda
+
+FCIT* 100% (4.6) 100% (4.6) 100% (4.5) 99% (4.6) 100% (5.7) 100% (4.2) 99% (7.4) AORRTC 100% (4.2 ) 100% (4.4 ) 100% (4.2 ) 100% (4.4 ) 100% (4.7) 100% (3.9 ) 100% (4.9 )BIT* 0% ( −) 52% ( −) 98% ( −) 98% ( −) 100% (5.6) 1% ( −) 20% ( −)RRT* 32% ( −) 29% ( −) 34% ( −) 48% ( −) 37% ( −) 24% ( −) 0% ( −)AO-GTMP (SEV) 100% (4.4) 100% (4.5) 100% (4.4) 99% (4.5) 100% (5.8) 100% (4.2) 100% (6.8) AO-GTMP (RRTC) 92% (4.3) 97% ( 4.4 ) 100% (4.2 ) 100% (4.4 ) 100% (3.7 ) 100% (3.9 ) 96% (6.3) Anytime-GTMP (SEV) 100% (4.7) 100% (4.8) 100% (4.8) 99% (4.8) 100% (6.6) 100% (4.8) 100% (7.0) Anytime-GTMP (RRTC) 91% (4.3) 98% (4.5) 98% (4.4) 100% (4.4 ) 100% (3.7 ) 100% (3.9 ) 88% (6.8) Ur5 FCIT* 94% (6.3) 95% (6.5) 99% (6.2) 100% (5.9) 100% (6.2) 100% (4.6) 100% (7.0) AORRTC 96% (6.0) 98% (6.0 ) 99% (5.7) 100% (5.6) 100% (5.5) 100% (4.2 ) 100% (5.6 )BIT* 96% (6.4) 95% (6.6) 99% (6.3) 100% (5.9) 99% ( −) 100% (4.7) 48% ( −)RRT* 61% ( −) 44% ( −) 46% ( −) 45% ( −) 63% ( −) 67% ( −) 0% ( −)AO-GTMP (SEV) 96% (6.1) 95% (6.2) 99% (5.9) 100% (5.6) 100% (6.4) 100% (4.4) 100% (7.0) AO-GTMP (RRTC) 96% (5.9 ) 96% ( 6.0 ) 99% (5.6 ) 100% (5.5 ) 99% ( 4.8 ) 100% (4.2 ) 83% ( 5.8 )Anytime-GTMP (SEV) 96% (6.3) 95% (6.6) 99% (6.3) 100% (6.0) 100% (7.3) 100% (5.0) 100% (7.2) Anytime-GTMP (RRTC) 94% (6.0) 95% (6.3) 98% (5.8) 100% (5.6 ) 100% (4.8 ) 100% (4.2 ) 86% (7.7) Fetch FCIT* 43% (9.3) 47% (8.8) 25% (9.5) 96% (6.6) 100% (5.6) 98% (7.7) 88% (11.0) AORRTC 97% (7.2) 97% (6.8 ) 94% (5.7 ) 100% (5.4) 100% (3.7) 100% (6.4) 100% (6.2 )BIT* 5% ( −) 6% ( −) 3% ( −) 71% ( −) 70% ( −) 61% ( −) 14% ( −)RRT* 0% ( −) 1% ( −) 0% ( −) 24% ( −) 3% ( −) 10% ( −) 0% ( −)AO-GTMP (SEV) 53% (11.3) 40% (13.0) 66% (16.9) 100% (7.7) 100% (6.1) 99% (10.4) 64% (18.7) AO-GTMP (RRTC) 14% ( 5.9 ) 19% ( 6.1 ) 2% (9.4) 91% ( 4.9 ) 95% ( 2.9 ) 99% ( 5.6 ) 27% (12.9) Anytime-GTMP (SEV) 81% (9.0) 74% (8.7) 84% (9.7) 100% (7.7) 100% (6.9) 99% (9.0) 88% (13.0) Anytime-GTMP (RRTC) 15% (9.2) 20% (8.5) 4% (8.3) 82% (5.3) 89% (3.7) 97% ( 5.6 ) 16% (9.4) 
+
+TABLE I: Planner performance on the MotionBenchMaker (MBM) suite. Each planner is evaluated on 7 problems for the Panda, UR5, and Fetch robots. For every (planner, problem) pair, success rate and mean simplified path length (in paranthesis) is reported. As planners differ in which trials they solve, path cost is aggregated only over trials solved by every reference planner (FCIT, AORRTC, and GTMP) in that column, so reported costs compare planners on a common set of problem instances. A dash ( −) in the cost position indicates that the planner did not solve that whole common set, leaving no comparable cost. Each rate is over 100 trials per (planner, problem) pair. Within each robot block the highest success rate in a column is shown in bold .For path cost we bold the lowest mean cost together with every planner. On cost, AO-GTMP is bold on 5/7 Panda, 7/7 UR5, and 5/7 Fetch problems, and Anytime-GTMP on 4/7, 3/7, and 1/7, against 6/7, 3/7, and 3/7 for the strongest baseline, AORRTC. 
+
+Fig. 3: Per-edge local planner budget against (a) best path cost and (b) time to first solution, for Anytime-GTMP (yellow) and AO-GTMP (brown). Budget 1 is a straight-line local planner; 100–1000 are maximum RRT-Connect iterations per edge. Bands are means over solved problems with SEM. [5] A. T. Le, K. Pompetzki, J. Carvalho, J. Watson, J. Urain, A. Biess, G. Chalvatzaki, and J. Peters, “Global tensor motion planning,” IEEE Robot. Autom. Lett. , vol. 10, no. 7, pp. 7302–7309, 2025. [6] C. Chamzas, C. Quintero-Pe˜ na, Z. Kingston, A. Orthey, D. Rakita, M. Gleicher, M. Toussaint, and L. E. Kavraki, “Motionbenchmaker: A tool to generate and benchmark motion planning datasets,” IEEE Robot. Autom. Lett. , vol. 7, no. 2, pp. 882–889, Apr. 2022. [7] D. Hsu, T. Jiang, J. Reif, and Z. Sun, “The bridge test for sampling narrow passages with probabilistic roadmap planners,” in Proc. IEEE Int. Conf. Robot. Autom. , vol. 3, 2003, pp. 4420–4426. [8] A. H. Qureshi, Y. Miao, A. Simeonov, and M. C. Yip, “Motion planning networks: Bridging the gap between learning-based and classical motion planners,” IEEE Trans. Robot. , vol. 37, no. 1, pp. 48–66, 2021. [9] J. Carvalho, A. T. Le, M. Baierl, D. Koert, and J. Peters, “Motion planning diffusion: Learning and planning of robot motions with diffusion models,” in Proc. IEEE/RSJ Int. Conf. Intell. Robots Syst. ,2023, pp. 1916–1923. [10] N. M. Amato, O. B. Bayazit, L. K. Dale, C. Jones, and D. Vallejo, “Choosing good distance metrics and local planners for probabilistic roadmap methods,” in Proc. IEEE Int. Conf. Robot. Autom. , 1998, pp. 630–637. [11] C. L. Nielsen and L. E. Kavraki, “A two level fuzzy PRM for manipulation planning,” in Proc. IEEE/RSJ Int. Conf. Intell. Robots Syst. , vol. 3, 2000, pp. 1716–1721. [12] K. Hauser and V. Ng-Thow-Hing, “Randomized multi-modal motion planning for a humanoid robot manipulation task,” Int. J. Robot. Res. ,vol. 30, no. 6, pp. 678–698, 2011. [13] A. Faust, K. Oslund, O. Ramirez, A. G. Francis, L. Tapia, M. Fiser, and J. Davidson, “PRM-RL: Long-range robotic navigation tasks by combining reinforcement learning and sampling-based planning,” in Fig. 4: Homotopy-class coverage across the 2D maps: aggregate coverage (left) and per-planner classes on the Sydney map (right). Random restart keeps sampling new corridors, so Anytime-GTMP reaches the most distinct classes, whereas AO-GTMP concentrates samples in the shrinking informed set. 
+
+Fig. 5: As AO-GTMP’s cost bound shrinks, so does the sampling volume, and the diversity of new samples falls as search narrows to near optimal. 
+
+Proc. IEEE Int. Conf. Robot. Autom. , 2018, pp. 5113–5120. [14] S. Karaman and E. Frazzoli, “Sampling-based algorithms for optimal motion planning,” Int. J. Robot. Res. , vol. 30, no. 7, pp. 846–894, 2011. [15] J. D. Gammell, T. D. Barfoot, and S. S. Srinivasa, “Batch informed trees (BIT*): Informed asymptotically optimal anytime search,” Int. J. Robot. Res. , vol. 39, no. 5, pp. 543–567, 2020. [16] M. P. Strub and J. D. Gammell, “Adaptively informed trees (AIT*) and effort informed trees (EIT*): Asymmetric bidirectional sampling-based path planning,” Int. J. Robot. Res. , vol. 41, no. 4, pp. 390–417, 2022. [17] J. D. Gammell, T. D. Barfoot, and S. S. Srinivasa, “Informed sampling for asymptotically optimal path planning,” IEEE Trans. Robot. , vol. 34, no. 4, pp. 966–984, 2018. [18] K. Hauser and Y. Zhou, “Asymptotically optimal planning by feasible kinodynamic planning in a state-cost space,” IEEE Trans. Robot. ,vol. 32, no. 6, pp. 1431–1443, 2016. [19] M. Kleinbort, E. Granados, K. Solovey, R. Bonalli, K. E. Bekris, and D. Halperin, “Refined analysis of asymptotically-optimal kinodynamic planning in the state-cost space,” in Proc. IEEE Int. Conf. Robot. Autom. , 2020, pp. 6344–6350. [20] T. S. Wilson, W. Thomason, Z. Kingston, and J. D. Gammell, “AORRTC: Almost-surely asymptotically optimal planning with RRT-Connect,” IEEE Robot. Autom. Lett. , vol. 10, no. 12, pp. 13 375–13 382, Dec. 2025. [21] N. M. Amato and L. K. Dale, “Probabilistic roadmap methods are embarrassingly parallel,” in Proc. IEEE Int. Conf. Robot. Autom. ,vol. 1, 1999, pp. 688–694. [22] M. Otte and N. Correll, “C-FOREST: Parallel shortest path planning with superlinear speedup,” IEEE Trans. Robot. , vol. 29, no. 3, pp. 798–806, 2013. [23] J. Ichnowski and R. Alterovitz, “Parallel sampling-based motion plan-ning with superlinear speedup,” in Proc. IEEE/RSJ Int. Conf. Intell. Robots Syst. , Oct. 2012, pp. 1206–1212. [24] E. Plaku, K. E. Bekris, B. Y. Chen, A. M. Ladd, and L. E. Kavraki, “Sampling-based roadmap of trees for parallel motion planning,” IEEE Trans. Robot. , vol. 21, no. 4, pp. 597–608, 2005. [25] S. A. Jacobs, K. Manavi, J. Burgos, J. Denny, S. Thomas, and N. M. Amato, “A scalable method for parallelizing sampling-based motion planning algorithms,” in Proc. IEEE Int. Conf. Robot. Autom. , 2012, pp. 2529–2536. [26] W. Thomason, Z. Kingston, and L. E. Kavraki, “Motions in microsec-onds via vectorized sampling-based planning,” in Proc. IEEE Int. Conf. Robot. Autom. , 2024, pp. 8749–8756. [27] B. Ichter, E. Schmerling, and M. Pavone, “Group marching tree: Sampling-based approximately optimal motion planning on GPUs,” in Proc. IEEE Int. Conf. Robot. Comput. , 2017, pp. 219–226. [28] C. H. Huang, P. Jadhav, B. Plancher, and Z. Kingston, “pRRTC: GPU-parallel RRT-connect for fast, consistent, and low-cost motion planning,” in Proc. IEEE Int. Conf. Robot. Autom. , 2026. [29] B. Sundaralingam, S. K. S. Hari, A. Fishman, C. R. Garrett, K. Van Wyk, V. Blukis, A. Millane, H. Oleynikova, A. Handa, F. Ramos, N. D. Ratliff, and D. Fox, “CuRobo: Parallelized collision-free robot motion generation,” in Proc. IEEE Int. Conf. Robot. Autom. , 2023, pp. 8112–8119. [30] S. Bhattacharya, M. Likhachev, and V. Kumar, “Topological constraints in search-based robot path planning,” Auton. Robots , vol. 33, no. 3, pp. 273–290, 2012. [31] F. T. Pokorny, M. Hawasly, and S. Ramamoorthy, “Topological trajec-tory classification with filtrations of simplicial complexes and persistent homology,” Int. J. Robot. Res. , vol. 35, no. 1–3, pp. 204–223, 2016. [32] C. Voss, M. Moll, and L. E. Kavraki, “A heuristic approach to finding diverse short paths,” in Proc. IEEE Int. Conf. Robot. Autom. , 2015, pp. 4173–4179. [33] A. Orthey, B. Fr´ esz, and M. Toussaint, “Motion planning explorer: Visualizing local minima using a local-minima tree,” IEEE Robot. Autom. Lett. , vol. 5, no. 2, pp. 346–353, 2019. [34] J. Liu, M. Fu, A. Liu, W. Zhang, and B. Chen, “A homotopy invariant based on convex dissection topology and a distance optimal path planning algorithm,” IEEE Robot. Autom. Lett. , vol. 8, no. 11, pp. 7695–7702, 2023. [35] O. de Groot, L. Ferranti, D. M. Gavrila, and J. Alonso-Mora, “Topology-driven parallel trajectory optimization in dynamic environ-ments,” IEEE Trans. Robot. , vol. 41, pp. 110–126, 2024. [36] T. Osa, “Multimodal trajectory optimization for motion planning,” Int. J. Robot. Res. , vol. 39, no. 8, pp. 983–1001, 2020. [37] M. Tsao, K. Solovey, and M. Pavone, “Sample complexity of proba-bilistic roadmaps via ε-nets,” in Proc. IEEE Int. Conf. Robot. Autom. ,2020, pp. 2196–2202. [38] M. Kleinbort, K. Solovey, Z. Littlefield, K. E. Bekris, and D. Halperin, “Probabilistic completeness of RRT for geometric and kinodynamic planning with forward propagation,” IEEE Robot. Autom. Lett. , vol. 4, no. 2, pp. 277–283, 2019. [39] N. R. Sturtevant, “Benchmarks for grid-based pathfinding,” IEEE Trans. Comput. Intell. AI in Games , vol. 4, no. 2, pp. 144–148, 2012.
