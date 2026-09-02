@@ -1,0 +1,2554 @@
+Title: Real-Time Model Predictive Control Algorithms for Autonomous Spacecraft Guidance
+
+URL Source: https://arxiv.org/pdf/2609.00927v1
+
+Published Time: Wed, 02 Sep 2026 01:01:16 GMT
+
+Number of Pages: 56
+
+Markdown Content:
+# Summer Research Internship Thesis, Laboratoire Jacques-Louis Lions 
+
+# Real-Time Model Predictive Control Algorithms for Autonomous Spacecraft Guidance 
+
+# Author: Supervisor: 
+
+# Mohammed-Adnane GARAB Max Cerf 
+
+> Undergraduate Research Intern
+> Summer 2026 arXiv:2609.00927v1 [math.OC] 1 Sep 2026
+
+# Contents 
+
+1 Introduction 42 The Clohessy-Wiltshire-Hill Model 5
+
+2.1 Relative dynamics . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 52.2 Tracking objective . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 6
+
+3 MPC Algorithms for Spacecraft Guidance 6
+
+3.1 General formulation . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 63.2 Linear MPC . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 73.3 Tube MPC . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 93.4 Fast and Embedded MPC . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 12 3.5 Successive Convexification . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 13 
+
+4 Numerical Solvers 14 
+
+4.1 Overview . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 14 4.2 ADMM for Linear MPC and Tube MPC . . . . . . . . . . . . . . . . . . . . . 15 4.3 Nesterov accelerated projected gradient for Fast MPC . . . . . . . . . . . . . . 17 
+
+5 Numerical Results 18 
+
+5.1 Test problem . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 18 5.2 Comparison results . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 19 
+
+6 Standard Orbital Rendezvous Manoeuvres 21 
+
+6.1 Tube MPC recall and problem formulation . . . . . . . . . . . . . . . . . . . . 21 6.2 Standard rendezvous manoeuvres . . . . . . . . . . . . . . . . . . . . . . . . . 22 6.3 Simulation results . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 24 
+
+7 Reducing the Computational Cost of the Condensed Formulation 26 
+
+7.1 Simplifying the Condensed Matrices . . . . . . . . . . . . . . . . . . . . . . . . 27 7.2 Numerical Validation Across the Parameter Space . . . . . . . . . . . . . . . . 30 7.3 Cost and Validity of the Approximation . . . . . . . . . . . . . . . . . . . . . 31 7.4 The Fuel–Accuracy Trade-off Through Q and R . . . . . . . . . . . . . . . . . 31 7.5 A Closed-Form Estimate of the Maximum Tracking Error . . . . . . . . . . . . 33 
+
+8 Extension to an Arbitrary Reference Trajectory 38 
+
+8.1 Generating a Reference Trajectory Without a Closed Form . . . . . . . . . . . 38 8.2 Linearising the Dynamics Along the Trajectory . . . . . . . . . . . . . . . . . 39 8.3 A Time-Varying Tube MPC . . . . . . . . . . . . . . . . . . . . . . . . . . . . 41 8.4 Numerical Validation . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 42 
+
+9 Towards a Flight-Ready Application 43 
+
+9.1 Algorithm 1: Solving a Symmetric Positive-Definite Linear System . . . . . . . 43 9.2 Algorithm 2: Solving the Discrete Algebraic Riccati Equation . . . . . . . . . 45 9.3 Complexity and Memory of the Tube MPC / ADMM Pipeline . . . . . . . . . 48 
+
+10 Conclusion 51 
+
+2Acknowledgements 
+
+I would like to express my sincere gratitude to Max Cerf for his supervision throughout this internship, for the rigour and clarity of his guidance, and for the numerous discussions that greatly contributed to the direction and depth of this work. 
+
+31 Introduction 
+
+Spacecraft rendezvous and proximity operations are among the most technically demanding challenges in modern space mission design. The goal is to steer an active vehicle, the chaser ,towards a passive or semi-passive target in orbit around the Earth, and to dock with it at a prescribed relative configuration and velocity. Concrete examples include the resupply of the International Space Station, active debris removal campaigns, and the Mars Sample Return capture scenario currently studied by ESA and NASA. Since round-trip communication delays between the spacecraft and the ground can reach several minutes, fully autonomous onboard guidance is a strict operational requirement. The chaser must plan, replan, and execute its trajectory without any human supervision, while simultaneously satisfying a rich set of physical and safety constraints: bounded thrust, a line-of-sight cone imposed by the navigation sensors, a soft-docking velocity profile near the docking port, and collision avoidance margins in the event of a thruster failure. Traditional guidance architectures rely on pre-computed open-loop manoeuvre sequences with ad hoc error corrections. These approaches are straightforward to certify, but they are fundamentally limited in robustness: a single perturbation event, such as an unexpected atmospheric drag force or a thrust calibration error, can cause the chaser to drift from its planned path and compromise the mission. This has motivated, over the past two decades, a growing body of research on closed-loop, optimisation-based guidance laws that handle constraints explicitly and adapt online to perturbations. Among these, Model Predictive Control (MPC) has established itself as the reference framework, owing to its ability to com-bine systematic constraint handling, receding-horizon online replanning, and robust feedback in a single coherent formulation. Model predictive control has already been investigated extensively for spacecraft rendezvous, both in nominal and robust settings. Early works demonstrated safe and constraint-aware rendezvous trajectories [1], while later studies developed MPC guidance laws for rendezvous and proximity operations under disturbances [4]. Design and implementation studies fur-ther established practical MPC architectures for spacecraft rendezvous, including constrained thrust allocation and terminal capture strategies [46, 47]. Tutorial and implementation-oriented treatments further clarified the practical design choices involved in spacecraft ren-dezvous MPC [9]. More recent contributions extended the framework to tube-based robust rendezvous with uncertainty adaptation [19, 14] and to nonlinear guidance via successive convexification on more challenging orbital regimes [20]. The purpose of this work is to study and compare four families of MPC algorithms for autonomous spacecraft guidance: i) Linear MPC, ii) Tube MPC, 4iii) Fast and Embedded MPC, iv) Successive Convexification. We first introduce the Clohessy-Wiltshire-Hill relative-motion model, then describe the four MPC families and their numerical solvers, and report numerical results on a planar orbital rendezvous benchmark. Tube MPC stands out for its formal robustness guarantee at no extra online cost, and the remainder of this work focuses on it specifically. Its validity is assessed across five standard rendezvous manoeuvres under a single fixed controller configuration, before its condensed matrices are simplified through a polynomial approximation and the fuel-accuracy trade-off induced by the cost weights is examined, yielding a provably correct, closed-form bound on the worst-case tracking error. The framework is then extended beyond a fixed circular reference orbit to an arbitrary trajectory tracked through an online-recomputed linearisation. Finally, the feasibility of the resulting pipeline for onboard execution is assessed by re-implementing its core numerical routines from first principles, without reliance on external scientific libraries. 
+
+# 2 The Clohessy-Wiltshire-Hill Model 
+
+2.1 Relative dynamics 
+
+The dynamics of the chaser relative to the target, valid when the separation is small compared to the orbital radius, are captured by the linearised Clohessy-Wiltshire-Hill (CWH) equations [3]. Letting x = ( δx, δy, δ ˙x, δ ˙y)⊤ ∈ R4 denote the relative state in the Local Vertical Local Horizontal (LVLH) frame and u = ( ux, u y)⊤ ∈ R2 the control acceleration, the continuous-time model reads 
+
+˙x(t) = Ac x(t) + Bc u(t), (1) with 
+
+Ac =
+
+
+
+0 0 1 00 0 0 13n2 0 0 2n
+
+0 0 −2n 0
+
+ , Bc =
+
+
+
+0 00 01 00 1
+
+ , (2) where n = pμ/R 30 is the mean orbital rate, μ = 3 .986 × 10 14 m3/s 2 is Earth’s gravitational parameter, and R0 is the orbital radius of the target (at 500 km altitude, n = 1 .107 ×
+
+10 −3 rad/s). Discretised with sampling period Ts via a zero-order hold (meaning the control u is held constant over each interval [tk, t k+1 )), the model becomes 
+
+xk+1 = Ad xk + Bd uk, Ad = eAcTs , Bd =
+
+Z Ts
+
+> 0
+
+eAcτ Bc dτ. (3) 
+
+Derivation of Ad and Bd. The discrete matrices arise from solving the continuous ODE 5exactly over one sampling interval. Fix a step k and consider ˙x(t) = Ac x(t) + Bc u(t) on 
+
+[tk, t k+1 ]. Multiply both sides by the integrating factor e−Act:
+
+ddt
+
+e−Actx(t) = e−ActBc u(t). (4) Integrating from tk to tk+1 = tk + Ts and multiplying by eActk+1 :
+
+x(tk+1 ) = eAcTs x(tk) + eActk+1 
+
+Z tk+1 
+
+> tk
+
+e−Acτ Bc u(τ ) d τ. (5) Since u(τ ) = uk is constant (zero-order hold), setting s = tk+1 −τ gives eActk+1 
+
+R tk+1  
+
+> tk
+
+e−Acτ Bc dτ =
+
+R Ts 
+
+> 0
+
+eAcsBc ds, which yields exactly xk+1 = Adxk + Bduk. These are exact , not approxima-tions. Both are computed once offline using scipy.linalg.expm .In the presence of bounded disturbances (atmospheric drag, actuation errors), the real dy-namics are 
+
+xk+1 = Ad xk + Bd uk + ξk, ξk ∈ W , (6) where W ⊂ R4 is a compact convex set bounding the worst-case disturbance at each step. 
+
+2.2 Tracking objective 
+
+Given a nominal trajectory {xref  
+
+> k
+
+} pre-computed on the ground, the onboard guidance law must correct the control command in real time so that the chaser remains within a corridor 
+
+xk − xref  
+
+> k
+
+≤ ε while minimising a cost of the form ∥u∥ + ∥e∥, where e = x − xref is the tracking error. The parameter ε > 0 is the corridor width .
+
+# 3 MPC Algorithms for Spacecraft Guidance 
+
+3.1 General formulation 
+
+The general MPC optimisation solved at each time step k is 
+
+min  
+
+> {ui}k+N−1
+> i=k
+
+Vf (xk+N ) +  
+
+> k+N−1
+
+X
+
+> i=k
+
+ℓ(xi, ui) (7) subject to the dynamics (3), input constraints ui ∈ U , state constraints xi ∈ X , and a terminal constraint xk+N ∈ X f . The notation is as follows. • ℓ(xi, ui) is the stage cost : it penalises the tracking error and the control effort at each step i. A typical choice is ℓ = ( xi − xref  
+
+> i
+
+)⊤Q (xi − xref  
+
+> i
+
+) + u⊤ 
+
+> i
+
+R ui.• Vf (xk+N ) is the terminal cost : it penalises the final predicted state xk+N at the end of the horizon, chosen to compensate for the finite horizon and ensure stability. • N ≥ 1 is the prediction horizon : the number of future steps considered. 6• U = {u : ∥u∥∞ ≤ umax } is the input constraint set (thrust bound). • X is the corridor constraint set ( x − xref ≤ ε). • Xf is a small neighbourhood of the docking target, chosen to ensure the chaser is close enough to the goal at the end of the horizon. Only the first element u⋆k of the optimal sequence is applied; the optimisation is repeated at 
+
+k + 1 with updated state measurements. This receding-horizon strategy turns an open-loop plan into a closed-loop feedback law. Under standard terminal conditions on Vf and Xf , this scheme guarantees recursive feasibility and asymptotic stability of the nominal trajectory [12]. Table 1: Summary of MPC families for autonomous spacecraft guidance. 
+
+Method Core problem Robustness Comp. cost Corridor guarantee 
+
+Linear MPC QP Implicit (feedback) Low Nominal only Tube MPC QP (tightened) Formal ( ∀ξ ∈ W ) Low By design Fast MPC QP (optimised) Same as base Very low Inherited SCvx SOCP (iter.) Local High Nonlinear 
+
+3.2 Linear MPC 
+
+Take the quadratic stage cost 
+
+ℓ(xi, ui) = ( xi − xref  
+
+> i
+
+)⊤Q (xi − xref  
+
+> i
+
+) + u⊤ 
+
+> i
+
+R ui, (8) where Q ∈ R4×4, Q ⪰ 0 weights the tracking error and R ∈ R2×2, R ≻ 0 weights the control effort. Stack all N predicted states and controls into 
+
+X =
+
+
+
+xk+1 
+
+...
+
+xk+N
+
+ ∈ R4N , v =
+
+
+
+uk
+
+...
+
+uk+N −1
+
+ ∈ R2N . (9) Because the dynamics are linear, applying xi+1 = Adxi + Bdui repeatedly from ˆxk gives: 
+
+xk+1 = Ad ˆxk + Bduk,
+
+xk+2 = A2 
+
+> d
+
+ˆxk + AdBduk + Bduk+1 ,
+
+xk+3 = A3 
+
+> d
+
+ˆxk + A2
+
+> d
+
+Bduk + AdBduk+1 + Bduk+2 ,
+
+...7The pattern is clear: each step adds one more power of Ad. Collecting all N steps into the single matrix equation X = A ˆxk + Bv:
+
+A =
+
+
+
+Ad
+
+A2
+
+> d
+
+A3
+
+> d
+
+...
+
+ANd
+
+
+
+∈ R4N ×4, B =
+
+
+
+Bd 0 0 · · · 0
+
+AdBd Bd 0 · · · 0
+
+A2
+
+> d
+
+Bd AdBd Bd · · · 0
+
+... ... . . . . . . ...
+
+AN −1 
+
+> d
+
+Bd AN −2 
+
+> d
+
+Bd · · · AdBd Bd
+
+
+
+∈ R4N ×2N . (10) The (i, j )-th block of B is Ai−jd Bd for i ≥ j and 0 for i < j . Setting 
+
+c = A ˆxk − Xref ∈ R4N (11) (a constant vector for a given current state ˆxk and reference Xref ), the condensed relation reads X − Xref = Bv + c. Substituting into the stage-cost sum: 
+
+J = ( X − Xref )⊤ ¯Q (X − Xref ) + v⊤ ¯Rv
+
+= ( Bv + c)⊤ ¯Q (Bv + c) + v⊤ ¯Rv.
+
+Expanding the quadratic form (Bv + c)⊤ ¯Q(Bv + c) = v⊤B⊤ ¯QBv + 2 c⊤ ¯QBv + c⊤ ¯Qc and grouping terms in v:
+
+J = v⊤ (B⊤ ¯QB + ¯R)
+
+| {z }
+
+> H
+
+v + 2 ( B⊤ ¯Qc)⊤
+
+| {z } 
+
+> f⊤
+
+v + c⊤ ¯Qc
+
+| {z }  
+
+> constant in v
+
+. (12) where ¯Q = blkdiag( Q, . . . , Q, P ) ∈ R4N ×4N and ¯R = blkdiag( R, . . . , R ) ∈ R2N ×2N . Here 
+
+P ⪰ 0 is the terminal weight matrix , typically chosen as the solution of the discrete algebraic Riccati equation, which makes the terminal cost Vf (x) = x⊤P x equivalent to the infinite-horizon LQR cost and ensures closed-loop stability. Dropping the constant term, problem (7) reduces to the Quadratic Program (QP) :
+
+min  
+
+> v
+> 12
+
+v⊤Hv + f ⊤v subject to Gv ≤ g, (13) with 
+
+H = B⊤ ¯QB + ¯R ∈ R2N ×2N , f = B⊤ ¯Q A ˆxk − Xref  ∈ R2N . (14) The matrix G ∈ Rp×2N and the vector g ∈ Rp encode all linear inequality constraints: the input box ∥ui∥∞ ≤ umax and, rewritten via (10), the corridor constraint on X. Since R ≻ 0
+
+implies H ≻ 0, this QP is strictly convex and has a unique global minimiser. The matrices A,
+
+B, H, and G depend only on Ad, Bd, Q, R, P , and N , all fixed before the mission. They are computed once offline. At each guidance step, only f needs to be updated, since it depends linearly on ˆxk.8Remark 1. Because all eigenvalues of Ad have magnitude 1, the powers Ajd never shrink, so all columns of B stay large across all N steps. This causes the condition number κ(H) = 
+
+λmax (H)/λ min (H) to blow up: with N = 40 , λmax (Q) ≈ 3 × 10 5, and λmin (R) = 100 , one obtains κ(H) ≈ 1.4 × 10 7. This is a direct consequence of the marginal stability of CWH, and it explains why first-order solvers stall on this problem. Hartley [9] compared four cost structures for long-range rendezvous: the quadratic cost yields smooth trajectories, while the 1-norm cost promotes sparse bang-off-bang thrust profiles with better fuel efficiency. Di Cairano, Park and Kolmanovsky [4] validated Linear MPC in closed-loop simulation with disturbances up to 10% of maximum thrust, achieving docking errors below 1.2 cm. From a numerical optimisation viewpoint, the resulting online problem be-longs to the standard class of strictly convex quadratic programmes long studied in MPC, for which both active-set and interior-point methods provide reliable baseline solvers [26, 17]. The key limitation is the absence of a formal corridor guarantee: the receding-horizon feed-back corrects disturbances reactively, but nothing prevents ∥ek∥ ≤ ε from being temporarily violated. 
+
+3.3 Tube MPC 
+
+Tube MPC [13, 44] fixes the corridor guarantee problem at no extra online cost. The true state is split into two parts, 
+
+xk = zk + ek, (15) where zk ∈ R4 is a nominal state driven by a planned input vk, and ek = xk − zk is the error caused by disturbances. The actual thrust applied to the spacecraft is 
+
+uk = vk − Kek, (16) where K ∈ R2×4 is a pre-computed feedback gain and Kek is a real-time correction that pushes the chaser back towards the nominal trajectory whenever it drifts. The gain K ∈ R2×4 is found by solving the following minimisation problem, called the Linear Quadratic Regulator (LQR) : find the linear feedback uk = −Kek that minimises the total cost over an infinite horizon, 
+
+J∞ =
+
+> ∞
+
+X
+
+> k=0
+
+ e⊤ 
+
+> k
+
+Q ek + u⊤ 
+
+> k
+
+R uk
+
+, (17) subject to the error dynamics ek+1 = Adek + Bduk, where Ad ∈ R4×4 describes how the state evolves in one step without thrust, Bd ∈ R4×2 describes the effect of a thrust pulse on the state, Q ∈ R4×4 penalises position and velocity errors, and R ∈ R2×2 penalises thrust usage. To minimise J∞, we look for the optimal uk at each step k. At step k, the cost to pay from now until infinity can be written as two parts: the cost of this step, plus the cost of all future 9steps: 
+
+J∞ = e⊤ 
+
+> k
+
+Qek + u⊤ 
+
+> k
+
+Ruk
+
+| {z } 
+
+> cost at step k
+
++
+
+> ∞
+
+X
+
+> j=k+1
+
+ e⊤ 
+
+> j
+
+Qej + u⊤ 
+
+> j
+
+Ruj
+
+| {z }  
+
+> cost from step k+1 onwards
+
+. (18) The key observation is that the second part depends only on ek+1 , not on ek directly. We therefore minimise over uk by differentiating the cost of step k plus the cost from k + 1 
+
+onwards with respect to uk, and setting the result to zero. Substituting ek+1 = Adek + Bduk
+
+and carrying out the differentiation gives: 
+
+∂∂uk
+
+h
+
+u⊤ 
+
+> k
+
+Ruk + ( Adek + Bduk)⊤P (Adek + Bduk)
+
+i
+
+= 0 , (19) where P ∈ R4×4 summarises the optimal future cost: e⊤
+
+> k+1
+
+P ek+1 is the best achievable cost from step k + 1 onwards when starting from ek+1 . Computing the derivative and solving for 
+
+u⋆k:
+
+2Ruk + 2 B⊤ 
+
+> d
+
+P (Adek + Bduk) = 0 (R + B⊤ 
+
+> d
+
+P B d)uk = −B⊤ 
+
+> d
+
+P A dek
+
+u⋆k = − (R + B⊤ 
+
+> d
+
+P B d)−1B⊤ 
+
+> d
+
+P A d
+
+| {z }
+
+> K
+
+ek. (20) This gives the optimal gain directly: 
+
+K = ( R + B⊤ 
+
+> d
+
+P B d)−1B⊤ 
+
+> d
+
+P A d ∈ R2×4. (21) The matrix P is determined by a self-consistency argument. We assumed that the optimal cost from state ek has the quadratic form e⊤ 
+
+> k
+
+P ek. We split the total cost into the cost at step k and the cost from step k + 1 onwards: 
+
+J∞ = e⊤ 
+
+> k
+
+Qek + u⊤ 
+
+> k
+
+Ruk
+
+| {z } 
+
+> cost at step k
+
++
+
+> ∞
+
+X
+
+> j=k+1
+
+ e⊤ 
+
+> j
+
+Qej + u⊤ 
+
+> j
+
+Ruj
+
+| {z }   
+
+> =e⊤
+> k+1 Pek+1 by assumption
+
+. (22) Substituting the optimal feedback u⋆k = −Kek into the first term: 
+
+u⊤ 
+
+> k
+
+Ruk = ( −Kek)⊤R(−Kek) = e⊤ 
+
+> k
+
+K⊤RK ek. (23) Substituting ek+1 = Acl ek into the second term: 
+
+e⊤
+
+> k+1
+
+P ek+1 = ( Acl ek)⊤P (Acl ek) = e⊤ 
+
+> k
+
+A⊤ 
+
+> cl
+
+P A cl ek. (24) 10 The total cost from step k is therefore: 
+
+J∞ = e⊤
+
+> k
+
+ Q + K⊤RK + A⊤ 
+
+> cl
+
+P A cl 
+
+ek. (25) For this to equal e⊤ 
+
+> k
+
+P ek for all ek, the matrix inside the parentheses must equal P :
+
+P = Q + K⊤RK + A⊤ 
+
+> cl
+
+P A cl . (26) Substituting K = ( R + B⊤ 
+
+> d
+
+P B d)−1B⊤ 
+
+> d
+
+P A d and Acl = Ad − BdK and simplifying yields the equation that P must satisfy, known as the Discrete Algebraic Riccati Equation: 
+
+P = Q + A⊤ 
+
+> d
+
+P A d − A⊤ 
+
+> d
+
+P B d (R + B⊤ 
+
+> d
+
+P B d)−1B⊤ 
+
+> d
+
+P A d, (27) solved once offline using scipy.linalg.solve_discrete_are .
+
+Proposition 1 (Decoupling of nominal and error dynamics) . Under the control law (16) ,the nominal state zk and the error ek evolve independently: 
+
+zk+1 = Adzk + Bdvk, (28) 
+
+ek+1 = ( Ad − BdK)ek + ξk. (29) 
+
+Proof. Substitute xk = zk + ek and uk = vk − Kek into xk+1 = Adxk + Bduk + ξk:
+
+xk+1 = Ad(zk + ek) + Bd(vk − Kek) + ξk
+
+= ( Adzk + Bdvk)
+
+| {z }
+
+> zk+1
+
++ ( Ad − BdK)ek + ξk
+
+| {z }
+
+> ek+1
+
+.
+
+Reading off the two terms gives (28) and (29). Since Acl = Ad − BdK is stable, the error ek remains bounded regardless of the disturbances. More precisely, there exists a bounded set Z ⊂ R4, called the Robust Positively Invariant (RPI) set [45], such that if e0 ∈ Z , then ek ∈ Z for all k ≥ 0, whatever disturbances ξk ∈ W 
+
+occur. Intuitively, Z is the worst-case tube around the nominal trajectory that the error will never leave. Its radius ¯z is computed once offline. Since xk = zk + ek and ek is at most ¯z in every direction, keeping the true state inside the corridor ∥xk − xref  
+
+> k
+
+∥ ≤ ε for all possible disturbances reduces to keeping the nominal state inside a tightened corridor of half-width ε − ¯z:
+
+∥zk − xref  
+
+> k
+
+∥ ≤ ε − ¯z. (30) Similarly, the nominal control is restricted to a tightened input set ˜U of radius umax − ¯u,where ¯u = ∥K∥∞ ¯z accounts for the worst-case correction Kek.11 The Tube MPC algorithm then proceeds as follows at each step k:i) Measure the true state xk and compute the current error ek = xk − zk.ii) Solve the nominal MPC optimisation (13) with the tightened corridor (30) and tight-ened input set ˜U, to obtain the nominal control sequence {vk, . . . , v k+N −1}.iii) Apply the total control uk = vk − Kek to the spacecraft. iv) Advance the nominal state: zk+1 = Adzk + Bdvk.The tightening (30) is computed once offline. The online cost per step is identical to Linear MPC: same matrix H, same ADMM solver. The formal corridor guarantee ∥xk − xref  
+
+> k
+
+∥ ≤ ε
+
+holds for all realisations of the disturbance, at no additional computational cost. Specht, Bishnoi and Lampariello [19] applied Tube MPC to rendezvous with freely tumbling targets. Oestreich, Linares and Gondhalekar [14] proposed an adaptive variant that identifies W online from observed residuals, and Tranos, Russo and Proutiere [38] proposed a related self-tuning approach that adapts the tube itself online via least-squares estimation. While this work restricts to the linear CWH dynamics, the tube framework extends naturally to nonlinear systems [34, 33], where the fixed gain K is replaced by an ancillary nonlinear MPC controller enforcing the trajectory to remain within a tube around a nominal reference. Recent extensions replace the linear model by a globally linear Koopman representation to handle nonlinear dynamics within the same tube formulation [35], and extend the framework to systems with input delay [36], directly relevant to the communication delays discussed in the introduction. Recent extensions also address more structured uncertainty descriptions. In particular, tube-based guaranteed-cost MPC has been proposed for linear systems with parametric uncertainties [40], while scalable tube MPC constructions based on ellipsoidal sets provide a computationally efficient alternative for high-dimensional uncertain linear systems [41]. Tutorial expositions of tube-based robust MPC can be found in [10, 16], while simple output-feedback tube-MPC variants have also been proposed [11]. 
+
+3.4 Fast and Embedded MPC 
+
+Spacecraft guidance computers are slow and cannot run expensive matrix factorisations at each guidance step. Fast MPC avoids this by using first-order methods: algorithms that only require matrix-vector products of the form Hv, with no factorisation. This philosophy is central to real-time and embedded MPC, where the objective is not only to solve the QP accurately, but to do so within a certified and very small computation budget [24, 18]. The gradient of the objective J(v) = 12 v⊤Hv + f ⊤v is ∇J(v) = Hv + f , with Lipschitz constant L = λmax (H). The projected gradient step is 
+
+v(j+1) = Π U
+
+
+
+v(j) − 1
+
+L(Hv(j) + f )
+
+
+
+, (31) 12 where ΠU is the projection onto U: for a box constraint, this is simply an elementwise clip to [−umax , u max ].Nesterov acceleration replaces the step from v(j) by a step from an extrapolated point, 
+
+y(j) = v(j) + j − 1
+
+j + 2 
+
+ v(j) − v(j−1) , (32) lifting the convergence rate from O(1 /j ) to O(1 /j 2). For H ≻ 0, the suboptimality gap 
+
+J(v(j)) − J⋆ is multiplied at each iteration by the factor 
+
+ρ =
+
+pκ(H) − 1
+
+pκ(H) + 1 < 1. (33) The number of iterations to reach suboptimality δ satisfies [18]: 
+
+j ≤
+
+pκ(H) ln 2 J(v(0) )
+
+δ
+
+
+
+. (34) This bound is computable before the mission, guaranteeing that the solver finishes within a fixed number of matrix-vector products regardless of the specific problem instance. Bashnick and Ulrich [5] demonstrated sub-10 ms solve times for a rendezvous QP on an embedded processor. Breger and How [1] combined a fast LP solver with passive safety constraints, guaranteeing collision avoidance even in the event of a complete thruster fail-ure. Beyond the basic accelerated projected-gradient method, several fast variants have been proposed for real-time MPC, including dual fast-gradient schemes for distributed and em-bedded implementations [7, 8, 6] and proximal-gradient formulations tailored to constrained predictive control [15]. Related fast first-order schemes have also been developed for MPC problems with both input-rate and amplitude constraints [42]. At the hardware level, tailored embedded optimisation pipelines can reach extremely high update rates, up to the megahertz range in dedicated implementations [32, 25]. For explicit and parametric MPC implementations, software tools such as the Multi-Parametric Toolbox 3.0 provide a standard benchmark environment for controller synthesis and deployment [43]. 
+
+3.5 Successive Convexification 
+
+For highly elliptic orbits, large out-of-plane motion, or problems with non-convex thrust constraints such as ∥u∥ ≥ umin , the true dynamics are nonlinear: xk+1 = f (xk, uk). SCvx [20] solves a sequence of convex subproblems, each built from a local linear approximation of 
+
+f .13 At outer iteration j, define the deviations 
+
+δxk = xk − x(j) 
+
+> k
+
+∈ R4, δuk = uk − u(j) 
+
+> k
+
+∈ R2, (35) and linearise f around the current trajectory estimate: 
+
+f (xk, uk) ≈ f (x(j) 
+
+> k
+
+, u(j) 
+
+> k
+
+) + A(j) 
+
+> k
+
+δxk + B(j) 
+
+> k
+
+δuk, (36) where A(j) 
+
+> k
+
+= ∂f /∂ x (x(j)   
+
+> k,u(j)
+> k)
+
+∈ R4×4 and B(j) 
+
+> k
+
+= ∂f /∂ u (x(j)   
+
+> k,u(j)
+> k)
+
+∈ R4×2 are the Jacobians of f at the current guess. A trust-region penalty 
+
+η ∥δxk∥2 + ∥δuk∥2, η > 0, (37) is added to the subproblem to prevent the solution from moving too far from the linearisation point. The outer loop proceeds as follows: i) linearise f around the current trajectory to obtain A(j) 
+
+> k
+
+, B(j) 
+
+> k
+
+;ii) solve the convex subproblem with linearised dynamics (36) and trust-region penalty; iii) set the solution as the new trajectory estimate; iv) update η based on the ratio of actual to predicted cost reduction. When f (x, u) = Adx + Bdu (the CWH case), the Jacobians are constant and exact, so SCvx converges in a single outer iteration and gives exactly the same solution as Linear MPC. Its benefit appears only when f is genuinely nonlinear. SCvx was originally developed for planetary powered-descent guidance [39], before being extended to rendezvous problems. Szmuk, Acikmese and Reynolds [20] applied SCvx to rendezvous on near-rectilinear halo orbits, while Cavenago et al. [2] used sequential convex programming for multi-mode low-thrust spacecraft trajectory optimisation. More broadly, SCvx belongs to a wider family of sequential convexification and computation-ally tractable robust nonlinear MPC methods that seek to preserve the structure of convex optimisation while handling genuinely nonlinear dynamics and constraints. A related line of work formulates robust nonlinear MPC via difference-of-convex decompositions and sequen-tial convex programming [37], conceptually close to the successive convexification described above. 
+
+# 4 Numerical Solvers 
+
+4.1 Overview 
+
+All four MPC families rely on the same predictive-control model but use two different low-level solvers: 14 i) ADMM with Riccati recursion, for Linear MPC and Tube MPC; ii) Nesterov accelerated projected gradient, for Fast MPC and the inner loop of SCvx. This separation reflects a broader distinction in numerical MPC between operator-splitting and augmented-Lagrangian methods on the one hand, and first-order accelerated gradient methods on the other [23, 18, 17]. Classical interior-point methods remain an important benchmark for medium-scale MPC problems [26], but the present work focuses on methods better aligned with embedded implementation and repeated online solution. Table 2: Numerical solver used for each MPC family.                                      
+
+> MPC family Problem solved online Numerical solver Main idea
+> Linear MPC QP with linear dynamics and input bounds ADMM, with the quadratic subproblem solved by back-ward Riccati recursion Split the quadratic min-imisation and the bound en-forcement Tube MPC Tightened nominal QP, plus the real-time correction
+> uk=vk−Kek
+> Same ADMM solver, ap-plied to the tightened nomi-nal problem Same core as Linear MPC, ro-bustness added by tightening Fast MPC Condensed QP in the stacked control vector v
+> Nesterov accelerated pro-jected gradient Matrix-vector products and box projection only SCvx Sequence of convexified sub-problems Outer SCvx loop; each sub-problem solved by the Nes-terov solver Linearise, solve, update, and re-peat
+
+4.2 ADMM for Linear MPC and Tube MPC 
+
+Consider the condensed QP solved at one MPC step: 
+
+min  
+
+> v
+> 12
+
+v⊤Hv + f ⊤v subject to Gv ≤ g, (38) This problem has two parts: a quadratic cost (easy to minimise with linear algebra) and a box constraint (easy to enforce by clipping, but inconvenient to include directly in the quadratic solve). ADMM separates these two tasks by introducing an auxiliary variable z
+
+and rewriting the problem as 
+
+min 
+
+> v,z
+
+12v⊤Hv + f ⊤v + IU (z) subject to v − z = 0 , (39) 15 where IU (z) = 0 if z ∈ X and +∞ otherwise. With a scaled dual variable d and penalty 
+
+ρ > 0, the iterations are 
+
+v(m+1) = arg min 
+
+> v
+
+12v⊤Hv + f ⊤v + ρ
+
+2 v − z(m) + d(m) 2
+
+
+
+, (40) 
+
+z(m+1) = Π U
+
+ v(m+1) + d(m) , (41) 
+
+d(m+1) = d(m) + v(m+1) − z(m+1) . (42) The v-update (40) is a quadratic minimisation in v with no constraints. Since H ≻ 0 and 
+
+ρ > 0, the objective is strictly convex and the minimum is unique. Setting the gradient to zero: 
+
+Hv + f + ρ v − z(m) + d(m) = 0 . (43) Rearranging gives the linear system: 
+
+(H + ρI ) v(m+1) = −f + ρ z(m) − d(m), (44) where H + ρI ∈ R2N ×2N is symmetric positive definite and therefore invertible. The matrix 
+
+H + ρI does not depend on the current state ˆxk or on the ADMM iteration m: it is fixed for the entire mission and can be factorised once offline (e.g. by Cholesky decomposition). At each ADMM iteration, only the right-hand side −f +ρ(z(m) −d(m)) changes, so (44) is solved online by a single triangular back-substitution, at cost O((2 N )2). For large horizons N , a more efficient alternative is to exploit the block structure of H and solve (44) via a backward Riccati recursion, which reduces the cost to O(N ) operations of size 2 × 2 only [17]. 
+
+Remark 2. The choice of ρ is critical. To understand why, recall that the v-update reduces to solving the linear system (44) with matrix H + ρI . This matrix has eigenvalues λi(H) + ρ,and its condition number is: 
+
+κ(H + ρI ) = λmax (H) + ρλmin (H) + ρ . (45) The condition number measures how hard the system is to solve: the larger it is, the more ADMM iterations are needed to converge. If ρ is too small, the penalty term ρI is negligible compared to H, so H + ρI ≈ H. The ADMM iterations are then almost unconstrained: the v-update minimises the cost freely, far from the box constraint, while the z-update projects back onto the box. The two copies 
+
+v and z disagree strongly at each iteration and take many steps to converge to a common point. If ρ is too large, the penalty term ρI dominates H, so the v-update essentially minimises  
+
+> ρ
+> 2
+
+∥v − z(m) + d(m)∥2 and ignores the original cost. The two copies v and z agree quickly, but they converge to a point that satisfies the constraint while ignoring the cost: the solution is 16 feasible but far from optimal. The right balance is when ρ is of the same order as λmax (H), which is itself of order λmax (Q)
+
+since H = B⊤ ¯QB + ¯R and ¯Q is block-diagonal with Q on the diagonal. At this scale, the penalty is strong enough to enforce agreement between v and z, but not so strong that it overwhelms the cost. In this implementation, we set ρ = λmax (Q), computed once offline. From a broader optimisation viewpoint, this splitting strategy is closely related to the operator-splitting literature for structured convex programmes [23]. In practical MPC soft-ware, closely related approaches underlie modern QP solvers such as OSQP, which combine robustness, warm-starting and sparse linear algebra particularly well for repeated online so-lution [31]. Alternative augmented-Lagrangian implementations based on coordinate descent have also been proposed for fast MPC [21]. 
+
+4.3 Nesterov accelerated projected gradient for Fast MPC 
+
+Fast MPC solves the same condensed QP but replaces ADMM by the Nesterov accelerated projected-gradient scheme. Each iteration consists of three steps: i) compute the extrapolated point y(j) = v(j) + βj (v(j) − v(j−1) ), with βj = ( j − 1) /(j + 2) ;ii) apply one gradient step: ˜v = y(j) − 1 
+
+> L
+
+(Hy(j) + f );iii) project onto the box constraints: v(j+1) = Π U (˜ v).Each iteration requires only one matrix-vector product Hy(j) and one elementwise clip, with no matrix factorisation. The momentum coefficient βj has a simple interpretation: if the last two iterates moved in roughly the same direction, it is reasonable to continue a bit further before computing the next correction. SCvx adds an outer loop around the same fast inner solver. At each outer iteration the nonlinear dynamics are linearised, a convex subproblem is formed and solved by the Nesterov routine, and the trajectory is updated. SCvx thus does not introduce a different low-level solver: it adds an outer convexification loop on top of the same fast optimisation core. The practical appeal of this family of methods lies in its extremely small per-iteration cost: one matrix-vector product and one projection. This makes it attractive for hardware-constrained implementations, especially when the iteration budget can be certified offline [24, 18]. Related implementations and algorithmic refinements for fast MPC are discussed in [15, 25, 32]. 17 5 Numerical Results 
+
+5.1 Test problem Problem formulation 
+
+We consider a planar orbital rendezvous in the LVLH frame. The chaser starts at a relative distance of 15 km from the target and must reach 1 km, while remaining inside a safety corridor of half-width ε around a prescribed reference trajectory. The relative motion follows the CWH equations introduced in Section 2. The state vector is 
+
+xk = ( δx k, δy k, δ ˙xk, δ ˙yk)⊤ ∈ R4,
+
+where δx k and δy k are the radial and along-track separations (in metres), and δ ˙xk, δ ˙yk are the corresponding relative velocities (in m/s). The control input uk = ( ux,k , u y,k )⊤ ∈ R2 is the thrust acceleration vector (in m/s 2), left unconstrained in this study (no bound umax 
+
+is imposed on the commanded thrust). This choice is deliberate: removing the actuator saturation isolates the effect of the ill-conditioning discussed in Remark 1 from the effect of input clipping, so that the performance gap observed between the four MPC families in Section 5.2 can be attributed unambiguously to the conditioning of H rather than to differences in how each algorithm handles a bound that is not there. The corridor constraint requires the chaser to stay close to the reference xref  
+
+> k
+
+at every step: 
+
+∥xk − xref  
+
+> k
+
+∥ ≤ ε. (46) Disturbances ξk ∈ W model atmospheric drag and actuation errors. Position and velocity components are bounded separately: |ξk, pos | ≤ ¯wpos and |ξk, vel | ≤ ¯wvel at each step, with 
+
+¯wpos = 10 m and ¯wvel = 1 m/s. The continuous-time CWH model is discretised with a zero-order hold and sampling period 
+
+Ts = 10 s. This gives the discrete system 
+
+xk+1 = Ad xk + Bd uk + ξk, (47) with Ad = eAcTs ∈ R4×4 and Bd = R Ts 
+
+> 0
+
+eAcτ Bc dτ ∈ R4×2, computed once offline via 
+
+scipy.linalg.expm at orbital rate n = 1 .107 × 10 −3 rad/s (500 km altitude). The reference trajectory is a straight line in the along-track direction from δy 0 = 15 ,000 m to 
+
+δy f = 1 ,000 m at constant velocity, with zero radial displacement. The chaser starts exactly on the reference: x0 = xref 0 .18 MPC parameters and cost 
+
+The quadratic cost uses 
+
+Q = 3 × 10 3 diag(100 , 100 , 1, 1) ∈ R4×4, R = 100 I2 ∈ R2×2, P = Q. 
+
+The matrix Q penalises position errors 100 times more than velocity errors, reflecting the priority on spatial accuracy. The matrix R penalises thrust usage uniformly in both direc-tions. The terminal weight P is set equal to Q as a practical approximation; in the Tube MPC experiments, P is replaced by the exact DARE solution (27). The prediction horizon is N = 100 steps, corresponding to 1000 s of look-ahead. This much longer horizon than the original benchmark is deliberately used as a stress test of the conditioning discussed in Remark 1: with Ts = 10 s and N = 100 , the Hessian satisfies 
+
+κ(H) ≈ 3.2 × 10 11 — several orders of magnitude worse than the κ(H) ≈ 10 4–10 7 range con-sidered previously. This extreme conditioning is expected to strongly penalise the Nesterov-based Fast MPC solver while leaving the exact Cholesky-based solvers (Linear MPC, Tube MPC, SCvx) unaffected, as confirmed below. The safety corridor has half-width ε = 100 m around the reference trajectory at every step. For each MPC family, we report the average computation time per step (ms), the final tracking error, the maximum tracking error, and a qualitative estimate of the online memory footprint. 
+
+5.2 Comparison results 
+
+Table 3 summarises the performance of the four algorithms on the 15 km to 1 km rendezvous benchmark. We discuss the behaviour of each method in turn, supported by the convergence curves shown in Figure 1. Table 3: Comparison of the four MPC families on the 15 km to 1 km rendezvous test, with 
+
+N = 100 , Ts = 10 s, ε = 100 m, ¯wpos = 10 m, ¯wvel = 1 m/s, and no bound on the thrust command.                 
+
+> Algorithm Time /step Final er-ror Max er-ror
+> Linear MPC 2.42 ms 9.357 m 13.705 m Tube MPC 2.53 ms 12.655 m 15.122 m Fast MPC 2.60 ms 662.896 m 662.896 m SCvx 7.29 ms 11.709 m 14.297 m
+
+19 Figure 1: Tracking error normalised by the initial value e0, on a log scale, over the 60-step simulation ( Ts = 10 s), for the four MPC families under the new stress-test parameters (N = 100 , ε = 100 m, ¯wpos = 10 m, ¯wvel = 1 m/s, no thrust bound). 
+
+Linear MPC, Tube MPC and SCvx all achieve comparable, low tracking errors (9.4 m, 12.7 m and 11.7 m respectively), well inside the 100 m corridor. Their computation time per step remains low (2.4–7.3 ms), since all three rely on an exact linear solve (Cholesky factori-sation of the condensed Hessian) that is insensitive to the conditioning of H. Contrary to the original benchmark, Tube MPC does not markedly outperform Linear MPC here: without a bound on the thrust command, the LQR correction Kek is applied without saturation, which removes part of the distinctive advantage that the tightened-corridor formulation had under a bounded actuator. 
+
+Fast MPC collapses under this stress test, with a final and maximum error of 662.9 m — more than six times the corridor half-width. As Figure 1 shows, its normalised error grows by more than two orders of magnitude instead of decaying, in sharp contrast with the other three families, which remain close to their initial error throughout the simulation. 
+
+Remark 3 (Why does Fast MPC diverge) . The CWH dynamics are marginally stable, mean-ing the eigenvalues of Ad have modulus close to 1 and therefore never decay. As the prediction horizon N grows, the condensed Hessian H accumulates more and more of these non-decaying terms. This pushes λmax (H) upward, while λmin (H), which is essentially set by the control weight R, stays nearly constant. As a result, the condition number κ(H) = λmax (H)/λ min (H)
+
+grows sharply with N , following the same trend already noted in Remark 1: κ(H) ≈ 10 4
+
+at N = 5 , κ(H) ≈ 10 7 at N = 40 , and here κ(H) ≈ 1.4 × 10 13 at N = 100 . A larger 20 condition number slows the convergence rate of the Nesterov solver, so its fixed budget of 100 iterations is no longer sufficient to reach an accurate solution. Reducing the sampling period Ts helps mitigate this effect, since it limits how much the dynamics evolve at each step and therefore slows the growth of κ(H) with N . At N = 100 , lowering Ts from 100 s to 10 s brings the condition number down to κ(H) ≈ 3.2 × 10 11 , and Fast MPC’s tracking error improves accordingly, though it remains far from acceptable. 
+
+# 6 Standard Orbital Rendezvous Manoeuvres 
+
+6.1 Tube MPC recall and problem formulation 
+
+We briefly recall the Tube MPC framework introduced in Section 3.3, now applied to a three-dimensional CWH model. The state vector is 
+
+xk = ( δx k, δy k, δz k, δ ˙xk, δ ˙yk, δ ˙zk)⊤ ∈ R6,
+
+where δx k, δy k, δz k are the radial, along-track and cross-track separations in metres, and 
+
+δ ˙xk, δ ˙yk, δ ˙zk are the corresponding relative velocities in m/s. The control input is the thrust acceleration uk = ( ux, u y, u z )⊤ ∈ R3 (m/s 2), left unconstrained in this study. The discrete-time dynamics follow the three-dimensional CWH model [3, 27]: 
+
+xk+1 = Adxk + Bduk + ξk, ξk ∼ U (W), (48) where Ad = eAcTs ∈ R6×6 is the discrete state-transition matrix (how the satellite evolves naturally in one step without thrust), Bd = R Ts 
+
+> 0
+
+eAcτ Bc dτ ∈ R6×3 is the input matrix (the effect of a constant thrust pulse on the state), and ξk is the disturbance at step k, modelling atmospheric drag, solar radiation pressure, and actuation errors. The disturbances are drawn independently and uniformly from the bounded set W = [ − ¯w, ¯w]6 with 
+
+¯w = (10 , 10 , 10 , 1, 1, 1) ⊤,
+
+where the first three components (in m) bound the position perturbations and the last three (in m/s) bound the velocity perturbations. Both matrices Ad and Bd are computed once offline via matrix exponentiation and loaded into the onboard computer before the mission. At each step k, the nominal MPC solves the following quadratic programme [12, 17]: 
+
+min  
+
+> v0,...,v N−1
+> N
+
+X
+
+> j=1
+
+(xk+j − xref  
+
+> k+j
+
+)⊤Q (xk+j − xref  
+
+> k+j
+
+) + v⊤ 
+
+> j
+
+R v j (49) subject to the nominal dynamics xk+j+1 = Adxk+j + Bdvj , with no bound imposed on vj ,where: • Q = 3 × 10 3 diag(100 , 100 , 100 , 1, 1, 1) ∈ R6×6 is the state weight matrix, penalising 21 position errors 100 times more than velocity errors, reflecting the priority on spatial accuracy; • R = 100 I3 ∈ R3×3 is the control weight matrix, penalising thrust usage uniformly in all three directions; • N = 100 is the prediction horizon (1000 s of look-ahead); • Ts = 10 s is the sampling period; • n = 1 .107 × 10 −3 rad/s is the mean orbital rate at 500 km altitude. The terminal weight P ⪰ 0 is the solution of the Discrete Algebraic Riccati Equation (DARE) associated with (Ad, B d, Q, R ), and the LQR gain K = ( R + B⊤ 
+
+> d
+
+P B d)−1B⊤ 
+
+> d
+
+P A d ∈ R3×6 is computed once offline [13, 17]. The applied control is 
+
+uk = v⋆k − Ke k, ek = xk − xref  
+
+> k
+
+, (50) where v⋆k is the first element of the optimal sequence from (49) and −Ke k is the real-time LQR correction that actively counteracts the disturbance ξk between MPC steps. Two solvers are compared throughout this section [23, 18]. ADMM solves the condensed QP via an offline Cholesky factorisation of the (unconstrained, since no thrust bound is imposed) Hessian H; the absence of an input bound reduces the usual ADMM iteration to a single triangular back-substitution per step, which remains immune to the ill-conditioning of 
+
+H. Nesterov uses the accelerated projected gradient with step size 1/λ max (H), momentum 
+
+βj = ( j − 1) /(j + 2) , and 100 iterations per MPC step [18, 30]. All simulations use 30 independent Monte Carlo runs with disturbances drawn uniformly from W with independent seeds. 
+
+6.2 Standard rendezvous manoeuvres 
+
+Orbital proximity operations are structured as a sequence of standardised approach phases, each imposing a specific reference trajectory {xref  
+
+> k
+
+} in the LVLH frame [27, 1, 9]. The key claim studied here is that a single MPC controller with fixed Q, R, K, N can track the full sequence without any phase-specific tuning, demonstrating the genericity of the approach [4, 19, 22]. Five standard manoeuvre types are considered, covering the main proximity operation geometries used in practice and in the modern rendezvous literature [27, 28, 29, 14]. 
+
+Translation 
+
+A straight-line displacement between two points p0 = ( p0,x , p 0,y , p 0,z )⊤ and pf = ( pf,x , p f,y , p f,z )⊤
+
+at constant velocity [27]. This is the simplest manoeuvre, used as the initial approach to bring 22 the chaser into the proximity of the target: 
+
+xref  
+
+> k
+
+=
+
+
+
+p0,x + ( pf,x − p0,x ) k/T p0,y + ( pf,y − p0,y ) k/T p0,z + ( pf,z − p0,z ) k/T 
+
+(pf,x − p0,x )/(T T s)(pf,y − p0,y )/(T T s)(pf,z − p0,z )/(T T s)
+
+
+
+, (51) where T is the number of steps for the phase. The first three components are positions in metres and the last three are the constant velocities in m/s required to travel from p0 to pf
+
+in exactly T steps. 
+
+R-bar 
+
+The chaser approaches the target along the radial direction δx , from below or above, at constant radial velocity [27, 28]. This is the standard approach for docking with space stations, as it minimises collision risk in case of thruster failure. The parameter δx 0 (m) is the initial radial offset and −δx 0/(T T s) (m/s) is the constant approach velocity: 
+
+xref  
+
+> k
+
+=  δx 0(1 − k/T ), 0, 0, −δx 0/(T T s), 0, 0⊤. (52) 
+
+V-bar 
+
+The chaser approaches from behind along the along-track direction δy , parallel to the orbital velocity of the target [1, 4]. This is the approach used by cargo vehicles for final docking. The parameter δy 0 (m) is the initial along-track separation: 
+
+xref  
+
+> k
+
+=  0, δy 0(1 − k/T ), 0, 0, −δy 0/(T T s), 0⊤. (53) 
+
+NMC (Natural Motion Circumnavigation) 
+
+The chaser orbits the target along the 2:1 elliptical free-drift orbit given by the CWH free solution [29, 9]. This trajectory requires theoretically zero fuel because it follows the natural orbital dynamics without continuous thrust, and is used for inspection of the target satellite [14, 19]. The parameters are: A (m) the radial semi-axis, 2A the along-track semi-axis (the 2:1 ratio is fixed by the CWH equations and cannot be freely chosen), B (m) the out-of-plane amplitude, C (m) an along-track offset shifting the ellipse centre, and ϕ, ψ (rad) the initial 23 phases determining where on the ellipse the chaser starts: 
+
+δx ref  
+
+> k
+
+= A cos( nkT s + ϕ),δy ref  
+
+> k
+
+= −2A sin( nkT s + ϕ) + C, δz ref  
+
+> k
+
+= B sin( nkT s + ψ),δ ˙xref  
+
+> k
+
+= −An sin( nkT s + ϕ),δ ˙yref  
+
+> k
+
+= −2An cos( nkT s + ϕ),δ ˙zref  
+
+> k
+
+= Bn cos( nkT s + ψ). (54) The velocity components are obtained by analytically differentiating the position expressions. The NMC was used by Specht et al. [19] as the nominal trajectory for Tube MPC rendezvous with tumbling targets, and by Oestreich et al. [14] for adaptive tube MPC. 
+
+Corkscrew 
+
+A variant of the NMC in which the ellipse radius decreases linearly, causing the chaser to spiral towards the target [29, 22]. The parameters A0 (m), B0 (m) and C0 (m) are the initial values of the radial semi-axis, out-of-plane amplitude and along-track offset respectively: 
+
+A(k) = A0(1 − k/T ), B(k) = B0(1 − k/T ), C(k) = C0(1 − k/T ). (55) The position and velocity expressions are the same as the NMC with A, B, C replaced by 
+
+A(k), B(k), C(k). The chaser spirals in three dimensions and arrives at the origin at k = T .This approach provides a smooth, progressive closing while maintaining the circumnavigation geometry throughout the approach. 
+
+6.3 Simulation results 
+
+Figure 2 shows the tracking error norm ∥xk − xref  
+
+> k
+
+∥ as a function of time for the five ma-noeuvres, comparing ADMM (blue) and Nesterov (orange) under 30 Monte Carlo runs with bounded random disturbances ξk ∼ U (W), under the new stress-test parameters ( N = 100 ,
+
+Ts = 10 s, ¯wpos = 10 m, ¯wvel = 1 m/s, no thrust bound). The thin transparent lines show individual Monte Carlo runs, the bold line is the mean over 30 runs, and the shaded band represents one standard deviation. ADMM achieves lower and more concentrated error trajectories across all five manoeuvres, settling around 12–13 m with a comparatively narrow Monte Carlo spread. Nesterov displays both a higher mean error and a wider spread on Translation, R-bar and V-bar, and although it is no longer the closest to ADMM on the NMC manoeuvre as in the original benchmark, it remains the manoeuvre where the two solvers are closest in final error (17.5 m for Nesterov vs 12.6 m for ADMM), consistent with the smoother, better-conditioned sub-problem generated by the NMC’s periodic reference at each MPC step. 24 Figure 2: Tracking error ∥xk − xref  
+
+> k
+
+∥ as a function of time for the five standard rendezvous manoeuvres, comparing ADMM (blue) and Nesterov (orange), under the stress-test param-eters ( N = 100 , Ts = 10 s, ¯wpos = 10 m, ¯wvel = 1 m/s, no thrust bound). Thin lines: 30 individual Monte Carlo runs. Bold line: mean over 30 runs. Shaded band: one standard deviation. Table 4 summarises the quantitative results. ADMM achieves a final tracking error close to 12.6–12.7 m on all five manoeuvres, with a standard deviation around 2.8 m, confirming reliable performance across Monte Carlo runs. Nesterov is 1.4 to 2.3 times less accurate than ADMM depending on the manoeuvre, with the gap narrowest on the NMC (17.5 m vs 12.6 m) and widest on V-bar (29.5 m vs 12.7 m). This contrast is again a direct consequence of the ill-conditioning of the Hessian discussed for the 2D benchmark: with N = 100 and Ts = 10 s, κ(H) reaches the same extreme order of magnitude, so the Nesterov gradient method converges only partially within its fixed budget of 100 iterations, whereas the ADMM Cholesky factorisation remains immune to conditioning effects [23, 18, 17]. Unlike in the original benchmark, the two solvers now show comparable computation times per step (6.0–6.3 ms for Nesterov versus 6.6–7.1 ms for ADMM): the much longer horizon ( N = 100 instead of N = 5 ) makes even the Cholesky-based direct solve computationally significant, narrowing the speed advantage that Nesterov previously held. 25 Table 4: Comparison of ADMM and Nesterov on the five standard rendezvous manoeuvres. Results over 30 Monte Carlo runs with bounded uniform disturbances ξk ∼ U (W), ¯w =(10 , 10 , 10 , 1, 1, 1) ⊤, N = 100 , Ts = 10 s, no thrust bound. Bold values indicate the best result in each column.                                                                                
+
+> Manoeuvre Solver Final error (m) Max error (m) Time/step (ms)
+> Translation ADMM 12 .662 ±2.796 17 .923 ±1.612 7.066
+> Nesterov 27 .223 ±5.292 28 .778 ±4.049 6.322
+> R-bar ADMM 12 .655 ±2.806 17 .933 ±1.602 6.694
+> Nesterov 19 .923 ±5.284 22 .835 ±2.516 6.052
+> V-bar ADMM 12 .667 ±2.796 17 .923 ±1.613 6.620
+> Nesterov 29 .539 ±5.381 30 .914 ±4.264 6.021
+> NMC ADMM 12 .646 ±2.800 17 .925 ±1.606 6.900
+> Nesterov 17 .496 ±4.435 20 .898 ±2.024 6.274
+> Corkscrew ADMM 12 .625 ±2.797 17 .953 ±1.599 6.908
+> Nesterov 17 .777 ±4.950 23 .770 ±1.713 6.302
+
+These results confirm the key claim: a single MPC controller with fixed Q, R, K, N suc-cessfully tracks all five standard manoeuvre types without any phase-specific tuning. Under this much longer horizon and tighter sampling period, ADMM remains the clearly prefer-able solver when tracking accuracy is the priority, achieving errors 1.4 to 2.3 times smaller than Nesterov on every manoeuvre; Nesterov retains only a modest speed advantage (9–11% faster per step), which is markedly smaller than the 2.5 × speed-up observed in the original, shorter-horizon benchmark. 
+
+# 7 Reducing the Computational Cost of the Condensed Formulation 
+
+Motivation 
+
+The numerical experiments of Sections 5 and 6 are computationally expensive for large pre-diction horizons. For N = 100 , building the condensed matrices 
+
+A =
+
+
+
+Ad
+
+A2
+
+> d
+
+...
+
+ANd
+
+ , B =
+
+
+
+Bd 0 · · · 0
+
+AdBd Bd · · · 0
+
+... ... . . . ...
+
+AN −1 
+
+> d
+
+Bd AN −2 
+
+> d
+
+Bd · · · Bd
+
+ , ¯Q = blkdiag( Q, . . . , Q, P )
+
+requires computing N distinct powers of Ad, each obtained from the matrix exponential 
+
+Ad = eAcTs , and storing a dense 4N × 4N matrix ¯Q that literally repeats the same 4 × 4 block 
+
+Q a hundred times. Both the memory footprint and the computation time grow with N : for 
+
+N = 100 , ¯Q alone occupies 400 × 400 × 8 bytes, that is 1.28 megabytes, to store what is in fact a single 4 × 4 matrix repeated 99 times. In this section we simplify these three objects, 26 using a small parameter already present in the CWH dynamics, and we check numerically that the simplification changes nothing in the conclusions of Sections 5 and 6. 
+
+7.1 Simplifying the Condensed Matrices 
+
+The condensed formulation of Section 3.2 requires computing, for a horizon of length N ,all the powers A md for m = 0 , . . . , N − 1, and stacking them into the block matrix B. For large N this is computationally expensive and, as shown in the previous remark, numerically delicate because of the ill-conditioning it induces. We show here that the specific structure of the CWH matrix Ac allows this computation to be replaced by a much cheaper polynomial approximation, valid whenever the orbital rate n and the sampling period Ts satisfy nT s ≪ 1,which holds throughout this work, since n ≈ 1.107 × 10 −3 rad/s and Ts ∈ { 10 , 100 } s give 
+
+nT s ≈ 0.011 or 0.111 , both much smaller than 1. 
+
+Simplification of Ad
+
+Recall the continuous-time CWH matrix 
+
+Ac =
+
+
+
+0 0 1 00 0 0 13n2 0 0 2n
+
+0 0 −2n 0
+
+ .
+
+Every entry of Ac, other than the two structural 1’s coming from the kinematic relation 
+
+˙x = v, is proportional to the orbital rate n or to n2. With n ≈ 1.107 × 10 −3 rad/s, the quantity 
+
+θ = nT s
+
+is small for both sampling periods used in this work: θ ≈ 0.011 at Ts = 10 s and θ ≈ 0.111 
+
+at Ts = 100 s. By definition of the matrix exponential, 
+
+Ad = eAcTs = I + AcTs + (AcTs)2
+
+2! + (AcTs)3
+
+3! + · · · .
+
+Truncating this sum at order p defines the approximation 
+
+A(p) 
+
+> d
+
+=
+
+> p
+
+X
+
+> k=0
+
+(AcTs)k
+
+k! ,
+
+with remainder bounded by 
+
+Ad − A(p) 
+
+> d
+
+≤
+
+> ∞
+
+X
+
+> k=p+1
+
+∥AcTs∥k
+
+k! .
+
+27 Although ∥AcTs∥ itself is not small, its successive powers decay rapidly: numerically, ∥AcTs∥ ≈ 
+
+14 .1, but ∥(AcTs)2∥ ≈ 0.31 , ∥(AcTs)3∥ ≈ 5.1 × 10 −3, and ∥(AcTs)4∥ ≈ 3.8 × 10 −5, so the series converges quickly despite the first term being large. Taking p = 3 and Ts = 10 s gives explicitly 
+
+A(3)  
+
+> d
+
+=
+
+
+
+1.00018 0 9.99980 0.11070 
+
+−1.357 × 10 −6 1 −0.11070 9.99918 3.676 × 10 −5 0 0.99994 0.02214 
+
+−4.070 × 10 −7 0 −0.02214 0.99975 
+
+ .
+
+Compared with the exact value computed by scipy.linalg.expm , the difference is ∥Ad −
+
+A(3)  
+
+> d
+
+∥ ≈ 1.6×10 −6, six orders of magnitude smaller than the position disturbances ¯wpos = 10 mused throughout this work. 
+
+Simplification of Bd
+
+The input matrix is defined by the integral 
+
+Bd =
+
+Z Ts
+
+> 0
+
+eAcτ Bc dτ. 
+
+Expanding the matrix exponential inside the integral as a power series in τ ,
+
+eAcτ =
+
+> ∞
+
+X
+
+> k=0
+
+(Acτ )k
+
+k! = I + Acτ + (Acτ )2
+
+2! + (Acτ )3
+
+3! + · · · ,
+
+and substituting into the integral gives 
+
+Bd =
+
+Z Ts
+
+> 0
+> ∞
+
+X
+
+> k=0
+
+(Acτ )k
+
+k!
+
+!
+
+Bc dτ =
+
+> ∞
+
+X
+
+> k=0
+
+Akc Bc
+
+k!
+
+Z Ts
+
+> 0
+
+τ k dτ, 
+
+where the sum and the integral have been exchanged, and Akc and Bc have been taken out of the integral since they do not depend on τ . Each remaining integral is elementary, 
+
+Z Ts
+
+> 0
+
+τ k dτ = T k+1 
+
+> s
+
+k + 1 ,
+
+so that 
+
+Bd =
+
+> ∞
+
+X
+
+> k=0
+
+Akc Bc
+
+k! · T k+1 
+
+> s
+
+k + 1 =
+
+> ∞
+
+X
+
+> k=0
+
+T k+1 
+
+> s
+
+(k + 1)! Akc Bc,
+
+the same type of series as for Ad, but with the extra factor Ts/(k + 1) coming from the 28 integration. Truncating this series at order p defines the approximation 
+
+B(p) 
+
+> d
+
+=
+
+> p
+
+X
+
+> k=0
+
+T k+1 
+
+> s
+
+(k + 1)! Akc Bc.
+
+With p = 3 and Ts = 10 s, this gives explicitly 
+
+B(3)  
+
+> d
+
+=
+
+
+
+49 .999 0.369 
+
+−0.369 49 .998 9.9998 0.1107 
+
+−0.1107 9.9992 
+
+ ,
+
+differing from the exact value by ∥Bd − B(3)  
+
+> d
+
+∥ ≈ 3.2 × 10 −6, negligible compared with the entries of Bd itself, which are of order 10 to 50. 
+
+Simplification of ¯Q
+
+This simplification introduces no error at all. The matrix ¯Q = blkdiag( Q, . . . , Q, P ) ∈
+
+R4N ×4N contains nothing more than 99 literal copies of the 4 × 4 matrix Q, plus one copy of the terminal weight P . Let e = X − Xref ∈ R4N denote the stacked tracking error, partitioned into its N constituent 4-vectors 
+
+e =
+
+
+
+e1
+
+e2
+
+...
+
+eN
+
+ , ej = xk+j − xref  
+
+> k+j
+
+∈ R4.
+
+Because ¯Q is block-diagonal, the product ¯Qe acts on each block independently: 
+
+¯Qe =
+
+
+
+Qe1
+
+Qe2
+
+...
+
+P eN
+
+ .
+
+Computing the right-hand side by applying the 4 × 4 matrix Q (respectively P for the last block) to each 4-vector ej gives, term for term, exactly the same result as multiplying by the full 400 × 400 matrix ¯Q, at a fraction of the memory and computation cost. The same reasoning applies wherever ¯Q appears in the condensed cost, in particular in H = B⊤ ¯QB + ¯R
+
+and f = B⊤ ¯Qc.29 Summary of the Three Simplifications 
+
+Table 5: The three matrix simplifications, what they replace, and the accuracy loss incurred. 
+
+Simplification Replaces By Accuracy loss 
+
+1. Ad trun-cation matrix exponential degree-3 polynomial 1.6 × 10 −6
+
+2. Bd trun-cation matrix integral degree-3 polynomial 3.2 × 10 −6
+
+3. ¯Q block-wise 
+
+400 × 400 dense matrix 4 × 4 matrix, applied N times exact (zero) 
+
+7.2 Numerical Validation Across the Parameter Space 
+
+Simplifications 1 and 2 were applied together, with p = 3 , and substituted into every ex-periment of Sections 5 and 6, without any other change to the algorithms, disturbances, or horizon length. Since A, B and ¯Q enter the QP solved by both ADMM and Nesterov iden-tically, this test also checks that neither solver’s conclusions depend on how the dynamics matrices are computed. Table 6: Final tracking error, exact matrices ( expm ) versus simplified matrices (truncated series, p = 3 ), on the 2D rendezvous benchmark of Section 5 ( N = 100 , Ts = 10 s). 
+
+Algorithm Exact (m) Simplified (m) Difference 
+
+Linear MPC 9.356931 9.356931 6.8 × 10 −7
+
+Tube MPC 12 .654944 12 .654944 9.1 × 10 −8
+
+Fast MPC 662 .896186 662 .896199 1.3 × 10 −5
+
+SCvx 11 .708934 11 .708950 1.5 × 10 −5
+
+30 Table 7: Final tracking error (mean over 30 Monte Carlo runs), exact versus simplified matrices, on the five standard manoeuvres of Section 6 ( N = 100 , Ts = 10 s).                                                            
+
+> Manoeuvre Solver Exact (m) Simplified (m) Difference
+> Translation ADMM 12 .662384 12 .662385 5.7×10 −7
+> Nesterov 27 .223433 27 .223434 7.8×10 −7
+> R-bar ADMM 12 .654630 12 .654631 6.6×10 −7
+> Nesterov 19 .922696 19 .922696 3.0×10 −7
+> V-bar ADMM 12 .667129 12 .667130 5.6×10 −7
+> Nesterov 29 .538638 29 .538639 7.9×10 −7
+> NMC ADMM 12 .645880 12 .645880 6.1×10 −7
+> Nesterov 17 .496218 17 .496218 5.8×10 −7
+> Corkscrew ADMM 12 .624788 12 .624789 4.9×10 −7
+> Nesterov 17 .777034 17 .777034 2.5×10 −7
+
+7.3 Cost and Validity of the Approximation 
+
+Three things make this simplification worth adopting. First, it is accurate: the largest difference observed between exact and simplified matrices, across every algorithm and every manoeuvre tested, is 1.5 × 10 −5 m, at least six orders of magnitude smaller than the tracking errors themselves, which range from 9 m to 663 m. Second, it preserves the conditioning of the problem exactly: the condition number of the Hessian is unchanged to four significant figures, 
+
+κ(H) ≈ 3.216 × 10 11 in both cases, so the growth of κ(H) with N discussed in Remark 1, and the resulting divergence of Fast MPC, are confirmed to be properties of the underlying CWH dynamics itself, not artefacts of how Ad and Bd happen to be computed. Third, it is cheaper: the exact route requires one matrix exponential evaluation and N − 1 successive matrix multiplications to build A and B, plus a 400 × 400 matrix held in memory for ¯Q; the simplified route requires only a fixed polynomial of degree 3 in Ac, evaluated once, and a 4×4
+
+matrix Q applied block by block, reducing the memory needed for ¯Q from 1.28 megabytes to 
+
+128 bytes for N = 100 . Taken together, these three points show that the simplification can replace the exact matrix exponential and the dense block-diagonal cost matrix at no practical cost in accuracy, for either solver. 
+
+7.4 The Fuel–Accuracy Trade-off Through Q and R
+
+Throughout Sections 5 and 6, the weight matrices Q and R were kept fixed. It is natural to ask what happens when they are allowed to vary: does pushing Q higher relative to R
+
+genuinely buy extra tracking accuracy, and at what fuel cost? To investigate this, we ran the Tube MPC controller on the same 15 km to 1 km benchmark under five settings, ranging from a fuel-priority regime ( R ≫ Q) to a precision-priority regime ( Q ≫ R), all other parameters (horizon, disturbance, sampling period) held fixed across the five runs. 31 Figure 3: Radial (a) and along-track (b) tracking error over time, for the five Q/R settings tested. The five curves are nearly indistinguishable in both panels. The first thing to notice, in Figure 3, is that the five trajectories are almost impossible to tell apart. Whether Q dominates R by a factor of a thousand or the reverse, the radial and along-track error curves follow essentially the same path throughout the simulation. This was not the expected outcome: the usual intuition is that weighting position more heavily should pull the trajectory closer to the reference. 
+
+Figure 4: Total fuel consumption P 
+
+> k
+
+∥uk∥2 for the same five Q/R settings. Unlike the tracking error, fuel consumption responds clearly to the weighting, nearly doubling from the fuel-priority to the precision-priority end of the range. Fuel consumption tells a different story. As shown in Figure 4, it rises steadily as Q/R 
+
+increases, from roughly 46 to 81 (arbitrary units), nearly doubling across the range tested. 32 So the weighting is not inert: it clearly costs more fuel to push Q higher, without buying the accuracy one might expect in return, a conclusion Figure 3 already suggested and Figure 5 confirms from a different angle: the correction factor α settles into a proved interval once ρ is known, so beyond a certain point no further increase in Q can improve the guaranteed error bound. The explanation lies in how Tube MPC splits the control effort. The applied thrust is 
+
+uk = vk − Ke k, where vk is the nominal command shaped by Q and R, and −Ke k is the real-time LQR correction reacting to the error ek already measured onboard. Comparing the two terms over a representative run shows that ∥Ke k∥ is roughly five to ten times larger than ∥vk∥: the feedback correction does most of the work of keeping the chaser near the reference, largely independently of how Q and R are set. Pushing Q higher still increases the nominal command, and therefore the fuel bill, but the tracking error is already dominated by a mechanism that Q and R barely influence. 
+
+Remark 4. This behaviour is specific to the unconstrained regime studied throughout this benchmark, where no bound is imposed on the thrust command. Without a saturation limit, the LQR correction −Ke k is always free to apply whatever thrust K prescribes, fully com-pensating the disturbance regardless of how vk is tuned; this is precisely why the correction term dominates so consistently above. Under a bounded actuator, this would no longer hold: if ∥Ke k∥ exceeded umax , the correction would saturate, and the nominal command vk would then have to take over part of the disturbance rejection it plays no role in here. Weighting 
+
+Q more heavily could then plausibly buy back some of the accuracy sacrificed to satura-tion, so the conclusion reached here should be read as a property of the unconstrained case specifically, not of Tube MPC in general. For this benchmark, the practical takeaway is straightforward: within the regime studied here (Tube MPC, no bound on the thrust command), there is little to gain from weighting 
+
+Q heavily. A fuel-priority setting achieves essentially the same tracking performance at a noticeably lower cost, which is the opposite of what a naive reading of the cost function 
+
+ℓ = e⊤Qe + u⊤Ru might suggest. 
+
+7.5 A Closed-Form Estimate of the Maximum Tracking Error 
+
+We seek a simple relation between the weight matrices Q, R and the maximum position error ¯z that the Tube MPC controller can guarantee, without having to run a full closed-loop simulation for every candidate (Q, R ). The derivation starts from the closed-loop error dynamics already established in Proposition 1, 
+
+ek+1 = Acl ek + ξk, Acl = Ad − BdK, ∥ξk∥ ≤ ¯w, (56) where K is the LQR gain obtained from Q and R via the DARE (27) and the gain formula (21). 33 Consider first a one-dimensional version of this recursion, in which the error is a single number and Acl is replaced by a scalar ρ ∈ (0 , 1) : ek+1 = ρ e k +ξk, with |ξk| ≤ ¯w and e0 = 0 . Unrolling this recursion gives ek = Pk−1 
+
+> i=0
+
+ρ k−1−iξi, exactly as for the full error dynamics derived earlier. The worst case occurs when every perturbation takes its maximal value ¯w, aligned in the same direction; taking absolute values and letting k → ∞ ,
+
+|ek| ≤ ¯w
+
+> k−1
+
+X
+
+> i=0
+
+ρi −−−→ 
+
+> k→∞
+
+¯w
+
+> ∞
+
+X
+
+> i=0
+
+ρi = ¯w
+
+1 − ρ,
+
+using the geometric series identity, valid since 0 < ρ < 1. This bound is attained in the limit by choosing ξi = ¯ w for every i, so for the scalar case the worst-case error radius is exactly 
+
+¯zscalar = ¯ w/ (1 − ρ).The true error dynamics (56) are not scalar: ek ∈ Rn (n = 4 for the planar rendezvous of Section 5, n = 6 for the three-dimensional manoeuvres of Section 6) and Acl ∈ Rn×n. The scalar identity above still governs this vector case through the eigenvalues of Acl . A scalar 
+
+λ and a nonzero vector v form an eigenpair of Acl if Acl v = λv : along the direction v, the action of the full matrix reduces to multiplication by the single number λ, with no mixing into other directions. Intuitively, an eigenvalue is the factor by which the error is scaled along one particular direction of the state space at each step: a value close to 1 means the error barely shrinks along that direction, while a value close to 0 means it is corrected almost immediately. Decomposing the error along a basis of eigenvectors v1, . . . , v n with eigenvalues λ1, . . . , λ n,each coefficient evolves independently of the others, exactly according to the scalar recursion solved above, with ρ replaced by the corresponding λj .Since Acl is stable, every |λj | < 1, but they need not be equal. As k grows, the component associated with the largest eigenvalue in modulus decays the slowest, and eventually domi-nates every other mode, whose relative contribution vanishes geometrically. This is why the worst-case error is governed, on the timescales relevant to the mission, by a single number: the spectral radius 
+
+ρ = max  
+
+> j
+
+λj (Acl ) . (57) This reasoning relies on there being a well-separated dominant eigenvalue: the direction associated with ρ must decay sufficiently slower than every other direction for its contribution to eventually outweigh theirs. If several eigenvalues share a modulus close to ρ, no single direction dominates within the horizon of interest, and reducing the error dynamics to the scalar quantity ρ is no longer justified; the estimate below should then be expected to lose accuracy, exactly as observed in Remark 6 for small ratios Q/R . Under the assumption that 
+
+ρ is well separated from the rest of the spectrum, the estimate reads 
+
+¯z ≈ ¯w
+
+1 − ρ, (58) 34 with ρ now computed from the true n × n matrix Acl rather than a scalar, expressing ¯z
+
+entirely in terms of Q and R through the chain (Q, R ) → P → K → Acl → ρ, using only quantities already introduced in Section 3.3. This estimate is not exact for n > 1, for two reasons the scalar derivation cannot see: sub-dominant eigenvalues still contribute to ¯z at finite k, even as their relative contribution van-ishes asymptotically; and the eigenvectors of Acl are generally not orthogonal, so recombining the error along them can inflate the bound beyond the scalar prediction. Before correcting for these two effects, it is worth noting that the naive quantity ∥e∥∞ used implicitly above is not even dimensionally well posed: it mixes position components (in metres) with velocity components (in metres per second), so its numerical value depends on an arbitrary choice of units for the state. We remove this ambiguity by working in the disturbance-scaled error 
+
+˜e = D−1e, D = diag( ¯ w), (59) so that ∥D−1ξk∥∞ ≤ 1 for every admissible disturbance, and by writing the scaled closed-loop matrix ˜A = D−1Acl D. The scalar identity of the one-dimensional case above generalises directly to this scaled variable through its eigendecomposition ˜A = V ΛV −1, and the scaled margin is defined as 
+
+˜z = max 
+
+> j
+
+X
+
+> i≥0
+
+X
+
+> l
+
+[ ˜A i]jl , (60) which is dimensionless by construction, and from which the physical margin is recovered componentwise by ¯zj ≤ ¯wj ˜z.Rather than absorbing the two effects above into a single calibrated constant, they can be bounded exactly. 
+
+Proposition 2 (Two-sided bound) . Let ρ = ρ(Acl ) be the spectral radius of the closed-loop error matrix and let ˜A = V ΛV −1 be its scaled eigendecomposition. Then 
+
+11 − ρ ≤ ˜z ≤ κ∞(V )1 − ρ , κ∞(V ) = ∥V ∥∞ ∥V −1∥∞. (61) 
+
+Proof. Lower branch. The spectral radius of a matrix never exceeds any of its induced norms, so ∥ ˜A i∥∞ ≥ ρ( ˜A i) = ρi for every i. Summing over i,
+
+˜z = X
+
+> i≥0
+
+∥ ˜A i∥∞ ≥ X
+
+> i≥0
+
+ρi = 11 − ρ.
+
+Upper branch. Writing ˜A i = V ΛiV −1 and using submultiplicativity of the induced ∞-norm, 
+
+∥ ˜A i∥∞ = ∥V ΛiV −1∥∞ ≤ ∥ V ∥∞ ∥Λi∥∞ ∥V −1∥∞ = κ∞(V ) ρi,
+
+35 since Λ is diagonal with ∥Λi∥∞ = ρi. Summing the resulting geometric series gives 
+
+˜z ≤ κ∞(V ) X
+
+> i≥0
+
+ρi = κ∞(V )1 − ρ .
+
+Writing ˜z = α/ (1 − ρ), Proposition 2 states that 1 ≤ α ≤ κ∞(V ): rather than calibrating a single constant α against simulation data, as an earlier version of this estimate did, α is shown here to lie inside an interval computed exactly, on both sides, from Q and R alone, with no simulation and no fitting. In particular the lower bound α ≥ 1 is not an empirical observation but a proved consequence of ρ never exceeding an induced norm; any calibration returning α < 1 would in fact be diagnosing a units inconsistency in the uncorrected ∥e∥∞,not a property of the dynamics. Figure 5 verifies (61) on 1000 weight pairs (Q, R ) drawn independently over four orders of magnitude: every point falls inside the admissible band between the two proved branches, as it must. 10 0 10 1         
+
+> 1/(1 −ρ)
+> 10 0
+> 10 1
+> 10 2
+> scaled margin  ˜z
+> exact ˜z
+> lower bound 1/(1 −ρ)
+> upper bound ∞(V)/(1 −ρ)
+
+Figure 5: The two-sided bound, verified on every weight pair. Each point is the scaled margin 
+
+˜z computed exactly from the closed-loop error dynamics, for one of 1000 randomly drawn pairs (Q, R ), plotted against 1/(1 − ρ). Every point lies between the lower branch 1/(1 − ρ)
+
+(proved exact lower bound) and the upper branch κ∞(V )/(1 − ρ) (proved upper bound); no point can lie outside the shaded band by Proposition 2. 
+
+Remark 5 (What a single calibrated constant is still good for) . A fixed α calibrated once on this data set predicts ˜z to a few percent on average, but with a much larger worst-case error, so it remains at best an approximate surrogate, not a certified one; given that both exact branches of (61) are available at negligible extra cost, there is little reason to prefer it. Its practical value lies specifically in the lower branch, which requires only the spectral radius ρ
+
+and no eigendecomposition at all: if ¯wpos /(1 − ρ) > ε , the weighting is certifiably infeasible 36 and can be rejected immediately, without computing ¯z exactly. This makes the lower branch a cheap screening test for the (Q, R ) design loop, ahead of the exact evaluation of ¯z. As anticipated, an exact, closed-form value of ¯z turns out to exist and is developed in full below. 
+
+Large-scale validation 
+
+Formula (61) was tested against 1000 random (Q, R ) pairs, with Q and R each drawn inde-pendently over four orders of magnitude. For each pair, ρ, V and the exact scaled margin 
+
+˜z were obtained from the true closed-loop dynamics; unlike a calibrated point estimate, no constant is fitted here, so there is nothing to validate out of sample : the claim under test is simply that inequality (61) holds, which Proposition 2 already guarantees for every (Q, R ),including ratios far outside this sample. Table 8 summarises the results by regime. Table 8: Position of the exact ratio α = ˜ z(1 − ρ) inside the proved bracket [1 , κ ∞(V )] , over 1000 random (Q, R ) pairs, grouped by weight ratio Q/R . Unlike a calibrated point estimate, the bound is satisfied in every regime without exception, including Q/R < 0.1, the regime in which a fixed-α estimate degrades to a 49 .52% worst-case error. 
+
+Range of Q/R Points αmin αmax Violations 
+
+Q/R < 0.01 167 1.56 3.14 0/167 
+
+0.01 ≤ Q/R < 0.1 156 1.58 2.98 0/156 
+
+0.1 ≤ Q/R < 1 190 1.60 3.20 0/190 
+
+1 ≤ Q/R < 10 171 1.59 3.55 0/171 
+
+10 ≤ Q/R < 100 138 2.05 3.73 0/138 
+
+Q/R ≥ 100 178 1.23 3.73 0/178 The contrast with a calibrated point estimate is precisely the point. Fixing a single α ≈ 1.50 
+
+and using it for every ratio degrades sharply below Q/R = 0 .1, reaching a 49 .52% worst-case error, because a point estimate cannot track a quantity that genuinely moves with Q/R . The bound of Proposition 2 does not suffer from this: it does not claim a single value for α, only that α lies in [1 , κ ∞(V )] , and this claim is verified without exception across every regime in Table 8, including the small-ratio regime that breaks a fixed-α estimate. 
+
+Remark 6 (Why a fixed-α estimate degrades at small Q/R , and why the bound does not) .
+
+A point estimate of α rests on a single assumption: that one eigenvalue of Acl , the spectral radius ρ, dominates all the others strongly enough that the error dynamics behave, after a few steps, like the one-dimensional case, with a fixed multiplicative constant correcting for the departure from that ideal. When R heavily outweighs Q, the controller applies very little correction, several eigenvalues of Acl end up close to one another instead of one standing clearly apart, and the true value of α drifts, so a constant fitted elsewhere no longer applies. Table 8 shows this drift directly: α ranges from 1.23 to 3.73 depending on the regime, which is 37 exactly the variation a single calibrated constant cannot capture. The bound of Proposition 2 is unaffected by this drift because it was never a point estimate: κ∞(V ) is recomputed exactly for every (Q, R ) from the same eigendecomposition that gives ρ, so the upper branch moves together with α instead of being fixed in advance. In practice this drift is not a serious limitation for the lower branch, since Q/R < 0.1 corresponds to a controller that barely corrects the trajectory at all, a regime with little engineering interest. Given that a single evaluation of (61) requires only the eigendecomposition of the n×n matrix 
+
+Acl already computed to obtain ρ, against a full closed-loop simulation for the exact value, the bound gives, at essentially the same computational cost as a calibrated point estimate, a guarantee the point estimate could not offer: both branches hold for every (Q, R ), not only for the ratios on which a constant happened to be calibrated. In fact, the same closed-loop error recursion that gives the two-sided bound also admits a direct, exact solution, without any need for an inequality at all. 
+
+Remark 7 (Towards an exact margin) . Unrolling the error recursion (56) from e0 = 0 shows that ¯zj in fact has a closed form, 
+
+¯zj = X
+
+> i≥0
+
+X
+
+> l
+
+[A icl ]jl ¯wl, (62) a convergent series rather than an inequality, whose supremum is attained by a specific adversarial disturbance sequence. A Monte-Carlo sequence reproduces this exact sign pattern with probability zero, so the simulation-based estimate of ¯z used earlier in this section is, almost surely, a strict underestimate rather than a merely approximate one. With a certified bound on the truncation of the series, this exact value can be evaluated more cheaply than the DARE solve it depends on, which removes the practical motivation for using an approximate formula at all. The tube construction also imposes a second tightening, on the input rather than the corridor, not discussed here: the ancillary correction −Ke k must itself be reserved out of umax , and this reservation can be severe in practice, growing sharply with the sampling period. Both points are left for future work. 
+
+# 8 Extension to an Arbitrary Reference Trajectory 
+
+The sections above build the entire Tube MPC framework around a single fixed reference: a circular orbit, linearised once and for all into the CWH model. This section verifies that the same approach extends to an arbitrary reference trajectory, one that is no longer a fixed orbit but evolves in an unconstrained way over time, through a linearisation recomputed at every instant along the path. 
+
+8.1 Generating a Reference Trajectory Without a Closed Form 
+
+To obtain a reference trajectory with no simple analytical expression, we simulate a point mass subject to Earth’s gravity and to a constant-magnitude thrust whose direction rotates 38 over time: 
+
+¨r(t) = − μ
+
+∥r(t)∥3 r(t) + a0
+
+
+
+cos( ωt )sin( ωt ) cos ι
+
+sin( ωt ) sin ι
+
+ , r(t) = 
+
+
+
+x(t)
+
+y(t)
+
+z(t)
+
+ ∈ R3,
+
+where μ = 3 .986 × 10 14 m3/s 2 is Earth’s gravitational parameter, a0 = 0 .5g is the constant thrust magnitude, ω = 0 .1°/s is the angular rate at which the thrust direction rotates, and 
+
+ι = 25 ° is an inclination angle ensuring the thrust sweeps out of the initial orbital plane, producing a genuinely three-dimensional trajectory. This system is nonlinear (through the ∥r∥−3 term) and non-autonomous (the thrust depends explicitly on t), and therefore admits no closed-form solution. It is integrated numerically, starting from a circular orbit at 500 km altitude, producing a sequence of reference positions 
+
+rref 0 , rref 1 , . . . , rref  
+
+> k
+
+, . . . , tracing a spiral trajectory with no closed-form expression. 
+
+8.2 Linearising the Dynamics Along the Trajectory 
+
+Recall the dynamics under gravity alone, agrav (r) = −μr/∥r∥3, nonlinear in r. For CWH, this nonlinearity was handled once and for all by linearising around a fixed point of the circular reference orbit. Here, the reference rref  
+
+> k
+
+changes at every step k, so this linearisation must be recomputed at every instant, around the current reference point. We seek an affine approximation of agrav in the vicinity of a point r0:
+
+agrav (r0 + δr) ≈ agrav (r0) + Jg(r0) δr,
+
+where Jg(r0) ∈ R3×3 is the Jacobian of agrav , the matrix of partial derivatives (Jg)ij =
+
+∂a grav ,i /∂r j . Writing out the first component, agrav ,x = −μx/ ∥r∥3, by the quotient rule: 
+
+∂a grav ,x 
+
+∂x = − μ
+
+∥r∥3 + 3μx 2
+
+∥r∥5 , ∂a grav ,x 
+
+∂y = 3μ xy 
+
+∥r∥5 , ∂a grav ,x 
+
+∂z = 3μ xz 
+
+∥r∥5 .
+
+The same computation for the remaining components, by the symmetric roles of x, y, z in 
+
+∥r∥, gives 
+
+∂a grav ,y 
+
+∂y = − μ
+
+∥r∥3 + 3μy 2
+
+∥r∥5 , ∂a grav ,z 
+
+∂z = − μ
+
+∥r∥3 + 3μz 2
+
+∥r∥5 ,
+
+and, for every off-diagonal pair i̸ = j with i, j ∈ { x, y, z },
+
+∂a grav ,i 
+
+∂r j
+
+= 3μ r irj
+
+∥r∥5 .
+
+Collecting all nine partial derivatives into a single matrix, and writing r = ( x, y, z ) explicitly, 39 gives the gravity Jacobian in full: 
+
+Jg(r) = 
+
+
+
+− μ
+
+∥r∥3 + 3μx 2
+
+∥r∥5
+
+3μxy 
+
+∥r∥5
+
+3μxz 
+
+∥r∥5
+
+3μxy 
+
+∥r∥5 − μ
+
+∥r∥3 + 3μy 2
+
+∥r∥5
+
+3μyz 
+
+∥r∥5
+
+3μxz 
+
+∥r∥5
+
+3μyz 
+
+∥r∥5 − μ
+
+∥r∥3 + 3μz 2
+
+∥r∥5
+
+
+
+= − μ
+
+∥r∥3 I3 + 3μ
+
+∥r∥5 r r ⊤, (63) where I3 is the 3 × 3 identity and rr ⊤ is the outer product of r with itself, with entries 
+
+(rr ⊤)ij = rirj . This matrix is symmetric, a direct consequence of the symmetry of rr ⊤.The first term is isotropic, reflecting an identical variation of gravity in every direction; the second, proportional to rr ⊤, reinforces specifically the sensitivity along the radial direction. In practice, Jg must be re-evaluated at every step k, at the current reference point r = rref  
+
+> k
+
+.
+
+Assembling Ac(tk) and Bc
+
+Let η = ( r, v)⊤ ∈ R6 denote the full position-velocity state. Its evolution is governed by two relations: the kinematic identity ˙r = v, and the linearised dynamics ˙v ≈ Jg(rref  
+
+> k
+
+) δr+u, where 
+
+u is the thrust commanded by the controller. Writing ˙η = Ac(tk)η + Bcu and identifying each 3 × 3 block of Ac(tk) with the corresponding partial dependence: • the (r, r) block is 03, since ˙r = v does not depend on r;• the (r, v) block is I3, since ˙r = v depends on v with unit coefficient on each component; • the (v, r) block is Jg(rref  
+
+> k
+
+), the gravity Jacobian derived in (63); • the (v, v) block is 03, since the linearised gravity does not depend on velocity; gives, written out in full and by direct analogy with the construction of Ac for CWH, 
+
+Ac(tk) = 
+
+
+
+0 0 0 1 0 00 0 0 0 1 00 0 0 0 0 1(Jg)11 (Jg)12 (Jg)13 0 0 0(Jg)21 (Jg)22 (Jg)23 0 0 0(Jg)31 (Jg)32 (Jg)33 0 0 0
+
+
+
+∈ R6×6, (64) where each (Jg)ij is one of the nine explicit entries of (63), evaluated at r = rref  
+
+> k
+
+. The same reasoning applied to the input matrix Bc gives its two blocks: the commanded thrust u has no direct effect on position ( (r, u) block equal to 03), but acts directly as an acceleration, 40 one component at a time ( (v, u) block equal to I3), so that 
+
+Bc =
+
+
+
+0 0 00 0 00 0 01 0 00 1 00 0 1
+
+
+
+∈ R6×3. (65) Unlike CWH, where Ac depends only on the constant orbital rate n, every entry of Ac(tk)
+
+inherited from Jg depends explicitly on the current reference position rref  
+
+> k
+
+, so this produces a sequence of distinct matrices Ac(t0), A c(t1), . . . , one per step of the simulated trajectory, while Bc itself remains constant, since it does not depend on position. 
+
+Discretisation 
+
+Each pair (Ac(tk), B c) is discretised by the exact matrix exponential, as for CWH, but re-computed at every instant: 
+
+Ad(tk) = eAc(tk ) Ts , Bd(tk) = 
+
+Z Ts
+
+> 0
+
+eAc(tk )τ Bc dτ, (66) both obtained in a single matrix exponentiation of the augmented block Ac(tk) Bc
+
+0 0
+
+!
+
+,where Ts is the controller’s sampling period. Over the simulated trajectory this produces 361 distinct pairs (Ad(tk), B d(tk)) , one per step, in place of the single fixed pair used for CWH. 
+
+8.3 A Time-Varying Tube MPC 
+
+The Tube MPC gain, normally the unique solution of the DARE for a fixed dynamics matrix, 
+
+P = Q + A⊤ 
+
+> d
+
+P A d − A⊤ 
+
+> d
+
+P B d(R + B⊤ 
+
+> d
+
+P B d)−1B⊤ 
+
+> d
+
+P A d, K = ( R + B⊤ 
+
+> d
+
+P B d)−1B⊤ 
+
+> d
+
+P A d,
+
+must instead be solved locally at every step k, using (Ad(tk), B d(tk)) :
+
+Pk = Q+Ad(tk)⊤PkAd(tk)−Ad(tk)⊤PkBd(tk) R+Bd(tk)⊤PkBd(tk)−1Bd(tk)⊤PkAd(tk), (67) 
+
+K(tk) =  R + Bd(tk)⊤PkBd(tk)−1Bd(tk)⊤PkAd(tk), (68) producing a gain specific to every instant, solved 361 times rather than once. The applied control retains exactly the form of the time-invariant Tube MPC: 
+
+uk = vk − K(tk) ek, ek = xk − zk, (69) 41 where vk is the nominal control obtained from the condensed QP built locally from (Ad(tk), B d(tk)) 
+
+over a receding horizon of N steps. 
+
+8.4 Numerical Validation 
+
+We reuse the robustness test parameters already employed in Sections 5 and 6: horizon 
+
+N = 100 , sampling period Ts = 10 s, safety corridor ε = 100 m, and disturbance bounds 
+
+¯wpos = 10 m, ¯wvel = 1 m/s. Thirty Monte Carlo simulations, each with an independent disturbance realisation ξk ∼ U ([ − ¯w, ¯w]) , verify that ∥xk − xref  
+
+> k
+
+∥ ≤ ε at every step. 
+
+Figure 6: Position tracking error over time, 30 Monte Carlo runs, reference trajectory gen-erated by gravity and rotating thrust ( N = 100 , Ts = 10 s, ¯wpos = 10 m, ¯wvel = 1 m/s). Thin lines: individual runs. Bold line: mean over 30 runs. Shaded band: one standard deviation. The chaser starts with an initial offset of about 25.5 m from the reference and converges towards a steady-state tracking error, well inside the 100 m safety corridor throughout. Table 9: Tracking results over 30 Monte Carlo runs, reference trajectory generated by gravity and rotating thrust, N = 100 , Ts = 10 s, ε = 100 m. 
+
+Metric Value 
+
+Final error (mean ± std) 10 .34 ± 3.40 mMaximum error (mean ± std) 16 .04 ± 0.58 mMaximum error observed 17 .09 mCorridor violations (out of 30) 0 (0%) Across all 30 realisations, the chaser never leaves the safety corridor, with a comfortable margin: the largest observed error (17.09 m) represents only 17% of the allowed corridor. This confirms that the local linearisation approach, recomputed at every instant along an arbitrary reference trajectory, preserves the same robustness guarantee established for the standard CWH manoeuvres, without requiring any further reformulation of the controller. 42 9 Towards a Flight-Ready Application 
+
+All numerical results presented so far rely on numpy and scipy for the underlying linear algebra and numerical integration, a natural choice for the exploratory work carried out throughout this report. It does not, however, reflect the constraints under which real flight software is developed. In an embedded avionics context, as is standard practice at spacecraft manufacturers such as ArianeGroup, the onboard flight computer runs certified, resource-constrained software, and a general-purpose scientific library is almost never available on the target hardware: every line of code running on board must be reviewed and certified, and a library such as scipy is far too large and general to be certified as a whole. Every numerical routine actually used by the guidance software must therefore be written from scratch, typically in C or Ada, using only basic arithmetic and explicit loops. To assess how much of the Tube MPC + ADMM pipeline would need to be re-implemented under such constraints, every routine relying on numpy , scipy , or math was rewritten from first principles. None of the underlying numerical methods are new. In particular, the linear solver used throughout this section rests on the following classical result. 
+
+Theorem 1 (Cholesky, [48]) . Let A ∈ Rn×n be symmetric ( A⊤ = A) and positive definite (x⊤Ax > 0 for every nonzero x ∈ Rn). Then there exists a unique lower-triangular matrix 
+
+L ∈ Rn×n with strictly positive diagonal entries such that A = LL ⊤.
+
+Both hypotheses hold for every matrix factorised in this report: symmetry follows from the definitions of H, R and P (Sections 3.2 and 6.1), and positive definiteness from R ≻ 0, as established for the matrix M inside Algorithm 2 below. The Riccati iteration and Runge-Kutta integration used below are likewise textbook material, left unchanged from their stan-dard formulation: the purpose here is one of implementation, not algorithmic contribution, demonstrating that the pipeline can be made fully self-contained with traceable, line-by-line behaviour of the kind expected during flight software qualification. Not every rewritten routine required a genuine algorithm. Basic array operations, such as constructing a zero or identity matrix, transposing a matrix, or computing a matrix-vector product, are direct, mechanical applications of their definition and are omitted below for brevity. Three routines, by contrast, compute a quantity with no closed-form expression and require a genuine iterative process or factorisation; these are presented in detail in the remainder of this section. 
+
+9.1 Algorithm 1: Solving a Symmetric Positive-Definite Linear System 
+
+At every ADMM iteration (40), the v-update requires solving a linear system (H + ρI )v =
+
+b, where H + ρI is symmetric positive definite. This step replaces np.linalg.solve and 
+
+scipy.linalg.cho_factor / cho_solve . In the notation of Algorithm 1 below, A = H + ρI 
+
+is the matrix to factorise, b is the right-hand side −f + ρ(z(m) − d(m)), and x is the unknown 43 v(m+1) solved for at ADMM iteration m. Rather than inverting the matrix explicitly, the system is solved through a Cholesky factorisation A = LL ⊤, originally devised by André-Louis Cholesky for the solution of normal equations in geodetic triangulation and published posthumously by his colleague Commandant Benoît [49], followed by two triangular solves. 
+
+Algorithm 1 Cholesky factorisation and triangular solve 
+
+Require: Symmetric positive-definite matrix A ∈ Rn×n, right-hand side b ∈ Rn
+
+Ensure: Solution x of Ax = b 
+
+> 1:
+
+Compute the Cholesky factor L such that A = LL ⊤: 
+
+> 2:
+
+for i = 1 to n do  
+
+> 3:
+
+for j = 1 to i do  
+
+> 4:
+
+s ← Pj−1 
+
+> k=1
+
+Lik Ljk  
+
+> 5:
+
+if i = j then  
+
+> 6:
+
+Lii ← √Aii − s 
+
+> 7:
+
+else  
+
+> 8:
+
+Lij ← 1
+
+Ljj 
+
+ Aij − s 
+
+> 9:
+
+end if  
+
+> 10:
+
+end for  
+
+> 11:
+
+end for  
+
+> 12:
+
+Solve Ly = b by forward substitution:  
+
+> 13:
+
+for i = 1 to n do  
+
+> 14:
+
+yi ← 1
+
+Lii 
+
+
+
+bi − Pi−1 
+
+> k=1
+
+Lik yk
+
+ 
+
+> 15:
+
+end for  
+
+> 16:
+
+Solve L⊤x = y by backward substitution:  
+
+> 17:
+
+for i = n downto 1 do  
+
+> 18:
+
+xi ← 1
+
+Lii 
+
+
+
+yi − Pnk=i+1 Lki xk
+
+ 
+
+> 19:
+
+end for  
+
+> 20:
+
+return x
+
+To illustrate Algorithm 1 on a readable example, consider a symmetric positive-definite ma-trix A ∈ R6×6 (the same dimension as the CWH state) and a right-hand side b:
+
+A =
+
+
+
+9.87 1.59 −0.06 1.60 −1.18 0.04 1.59 10 .90 −1.03 4.35 0.17 −1.84 
+
+−0.06 −1.03 8.82 −0.05 4.31 −2.26 1.60 4.35 −0.05 15 .42 −0.07 −5.03 
+
+−1.18 0.17 4.31 −0.07 14 .78 −3.97 0.04 −1.84 −2.26 −5.03 −3.97 15 .42 
+
+
+
+, b =
+
+
+
+−1.204 1.462 1.766 
+
+−0.329 0.841 
+
+−0.180 
+
+
+
+.
+
+44 Step 1 of Algorithm 1 produces the lower-triangular factor 
+
+L =
+
+
+
+3.141 0 0 0 0 00.505 3.262 0 0 0 0
+
+−0.020 −0.313 2.953 0 0 00.510 1.253 0.119 3.685 0 0
+
+−0.374 0.111 1.469 −0.053 3.531 00.012 −0.564 −0.825 −1.148 −0.779 3.534 
+
+
+
+,
+
+which satisfies ∥LL ⊤ − A∥∞ = 1 .8 × 10 −15 , confirming the factorisation is correct up to floating-point round-off. Steps 2 and 3 then give the solution vector 
+
+xmanual =
+
+
+
+−0.147141 0.204653 0.239313 
+
+−0.054929 
+
+−0.020601 0.024896 
+
+
+
+, xexact (np.linalg.solve ) = 
+
+
+
+−0.147141 0.204653 0.239313 
+
+−0.054929 
+
+−0.020601 0.024896 
+
+
+
+,
+
+with ∥xmanual − xexact ∥∞ = 5 .6 × 10 −17 , that is, exact agreement up to machine precision. On the larger condensed system actually solved at every ADMM iteration ( N = 20 , n = 60 
+
+unknowns), the same agreement holds, at 1.4 × 10 −17 . Executing the factorisation and both substitutions in pure Python loops takes 19.9 ms on this n = 60 system, against 0.5 ms for 
+
+np.linalg.solve , a factor of roughly 39 that reflects the overhead of interpreted Python loops rather than any property of the algorithm itself; the same code compiled in C, as it would be onboard, closes this gap almost entirely. Algorithm 1 is exact and requires no tolerance: it terminates after a fixed, predictable number of operations ( O(n3) for the factorisation, O(n2) for each substitution), a property valued in flight software, where worst-case execution time must be bounded in advance. 
+
+9.2 Algorithm 2: Solving the Discrete Algebraic Riccati Equation 
+
+The routine scipy.linalg.solve_discrete_are is replaced here, since no closed-form ex-pression gives P directly from (27). Both Q and R are symmetric by construction (Sec-tion 3.2), and so is P at every stage of the iteration described below, a property that follows directly from the symmetry of Q and is preserved by the Riccati map at each step. Starting from P (0) = Q, the Riccati map is applied repeatedly until convergence, with each iteration relying on Algorithm 1 to evaluate the matrix inverse term, which itself requires a symmetric positive-definite matrix as input. 45 Algorithm 2 Riccati fixed-point iteration for the DARE 
+
+Require: System matrices Ad, B d, weight matrices Q ⪰ 0, R ≻ 0, tolerance ε, maximum iterations Imax 
+
+Ensure: Solution P of the DARE (27)  
+
+> 1:
+
+P ← Q 
+
+> 2:
+
+for i = 1 to Imax do  
+
+> 3:
+
+M ← R + B⊤ 
+
+> d
+
+P B d 
+
+> 4:
+
+Solve M K term = B⊤ 
+
+> d
+
+P A d for Kterm using Algorithm 1  
+
+> 5:
+
+Pnew ← Q + A⊤ 
+
+> d
+
+P A d − A⊤ 
+
+> d
+
+P B d Kterm  
+
+> 6:
+
+if ∥Pnew − P ∥∞ < ε then  
+
+> 7:
+
+return Pnew  
+
+> 8:
+
+end if  
+
+> 9:
+
+P ← Pnew  
+
+> 10:
+
+end for  
+
+> 11:
+
+return P
+
+Before applying Algorithm 1 inside the Riccati iteration, it is worth verifying that the matrix 
+
+M = R + B⊤ 
+
+> d
+
+P B d solved at each step does satisfy the required hypothesis, namely that M
+
+is symmetric positive definite. Symmetry follows directly from that of R and P : taking the transpose of M and using (B⊤ 
+
+> d
+
+P B d)⊤ = B⊤ 
+
+> d
+
+P ⊤Bd,
+
+M ⊤ = R⊤ + B⊤ 
+
+> d
+
+P ⊤Bd = R + B⊤ 
+
+> d
+
+P B d = M, 
+
+since R⊤ = R and P ⊤ = P by construction. Positive definiteness follows from R ≻ 0 together with B⊤ 
+
+> d
+
+P B d ⪰ 0 whenever P ⪰ 0, since for any nonzero x,
+
+x⊤M x = x⊤Rx| {z } 
+
+> >0
+
++ x⊤B⊤ 
+
+> d
+
+P B dx
+
+| {z }
+
+> ≥0
+
+> 0.
+
+Both properties are therefore guaranteed at every iteration, and Algorithm 1 can be applied to M without further justification. To illustrate Algorithm 2 concretely, consider a six-dimensional CWH system, with state weight Q = 3 × 10 2 diag(100 , 100 , 100 , 1, 1, 1) and control weight R = 100 I3. Starting from 
+
+P (0) = Q and iterating according to Algorithm 2 with tolerance ε = 10 −10 , the sequence P (i)
+
+converges after 366 steps to 
+
+Pmanual =
+
+
+
+30302 .0 0 0 1510 .0 5.6 00 30302 .0 0 −5.6 1510 .0 00 0 30302 .0 0 0 1510 .01510 .0 −5.6 0 7851 .7 0 05.6 1510 .0 0 0 7851 .9 00 0 1510 .0 0 0 7851 .9
+
+
+
+,
+
+46 to be compared with the reference value obtained from scipy.linalg.solve_discrete_are ,
+
+Pscipy =
+
+
+
+30302 .0 −0.001 0 1510 .0 5.6 0
+
+−0.001 30302 .0 0 −5.6 1510 .0 00 0 30302 .0 0 0 1510 .01510 .0 −5.6 0 7851 .7 −0.021 05.6 1510 .0 0 −0.021 7851 .9 00 0 1510 .0 0 0 7851 .9
+
+
+
+,
+
+which agree to within ∥Pmanual − Pscipy ∥∞ = 3 .6 × 10 −6, already six orders of magnitude below the entries of P . Note that this final gain K is distinct from the intermediate Kterm solved for at every iteration inside Algorithm 2: the latter is discarded once Pnew has been formed and is never reused, whereas K is computed only once, after convergence, by applying 
+
+K = ( R + B⊤ 
+
+> d
+
+P B d)−1B⊤ 
+
+> d
+
+P A d
+
+to the final value Pmanual rather than to an intermediate iterate. The gain K derived this way from P , which is the quantity actually used in the control law uk = vk − Ke k, agrees even more closely: comparing 
+
+Kmanual =
+
+
+
+0.0196 −0.0001 0 0.198 0.0007 00.0001 0.0196 0 −0.0007 0.198 00 0 0.0196 0 0 0.198 
+
+
+
+with 
+
+Kscipy =
+
+
+
+0.0196 −0.0001 0 0.198 0.0007 00.0001 0.0196 0 −0.0007 0.198 00 0 0.0196 0 0 0.198 
+
+
+
+gives ∥Kmanual − Kscipy ∥∞ = 8 .8 × 10 −13 , that is, agreement to thirteen significant digits. Table 10 reports how the error on P and the required number of iterations depend on the chosen tolerance ε.47 Table 10: Convergence of Algorithm 2 for different tolerances ε, on the six-dimensional CWH system. 
+
+Tolerance ε Iterations Error on P Comment 
+
+10 −6 261 1.5 × 10 −5 recommended : best accuracy-to-cost ratio 
+
+10 −8 318 3.7 × 10 −6 modest accuracy gain, 22% more iterations 
+
+10 −10 366 3.6 × 10 −6 marginal accuracy gain, 40% more iterations 
+
+10 −12 > 2000 3.6 × 10 −6 stagnates on floating-point round-off Tightening ε below 10 −6 brings only marginal improvement in accuracy: the error on P
+
+moves from 1.5 × 10 −5 to 3.7 × 10 −6 between ε = 10 −6 and ε = 10 −8, a modest gain paid for with 57 additional iterations, and stagnates entirely below ε = 10 −10 . Pushing further to ε = 10 −12 fails to converge within 2000 iterations, for no gain in accuracy on P at all. The recommended setting is therefore ε = 10 −6 with Imax = 500 , which converges in 261 iterations. Since P is only ever computed offline in the time-invariant case (Sections 5–7), or once per guidance step in the time-varying case of Section 8, this cost remains acceptable within the sampling period Ts. Algorithm 2 requires O(I · n3
+
+> x
+
+) operations, dominated by the three nx × nx matrix products performed at every iteration, with I the number of iterations to convergence; this cost is independent of the horizon N , since neither Ad, Bd, Q nor R scale with N .
+
+9.3 Complexity and Memory of the Tube MPC / ADMM Pipeline 
+
+Before presenting the complexity and memory tables, it is worth fixing precisely what each symbol below stands for, since several of them have already appeared with a slightly different scope earlier in this report. • nx : dimension of the state vector ( nx = 4 for the planar rendezvous of Section 5, 
+
+nx = 6 for the three-dimensional manoeuvres of Section 6.1 and the arbitrary trajectory of Section 8); • nu : dimension of the control input ( nu = 2 or nu = 3 respectively); • N : prediction horizon, the number of future steps considered at every MPC call; • M : number of ADMM iterations performed at every MPC step to solve the condensed QP online; • I : number of Riccati fixed-point iterations (Algorithm 2) required for the DARE solve to converge. The role played by I, and more generally the split between what is computed once and what is repeated at every guidance step, is not the same for the two settings studied in this report: • In the time-invariant CWH case (Sections 5 to 7), the dynamics matrices Ad, B d
+
+48 are fixed for the entire mission, so the condensed matrices A, B, H , the Cholesky factor 
+
+L, and the DARE solution P, K are all computed exactly once, before launch; only the ADMM loop and the control law genuinely repeat online, at every sampling period Ts.• In the time-varying case of Section 8, the reference trajectory rref  
+
+> k
+
+moves at every step, so Ad(tk), B d(tk) change as well, and with them A, B, H, L, P, K : every quantity that was computed once offline in the CWH case must instead be recomputed at every one of the 361 guidance steps used in this section’s validation. Table 11 and Table 12 report the two regimes separately for this reason. 
+
+Case 1: Time-invariant CWH dynamics Step Time Memory 
+
+Computed once, offline, before the mission 
+
+Ad, B d (degree-3 truncation) O(n3
+
+> x
+
+) O(n2
+
+> x
+
+)
+
+Condensed A (stack of Amd ) O(N n 3
+
+> x
+
+) O(N n 2
+
+> x
+
+)
+
+Condensed B (block lower-triangular) O(N 2n2
+
+> x
+
+nu) O(N 2nxnu)
+
+Hessian H = B⊤ ¯QB + ¯R O(n2
+
+> u
+
+nxN 3) O(n2
+
+> u
+
+N 2)
+
+Cholesky factorisation of H + ρI (Algo-rithm 1) 
+
+O(n3
+
+> u
+
+N 3) O(n2
+
+> u
+
+N 2)
+
+DARE solve, I Riccati iterations (Algo-rithm 2) 
+
+O(I n 3
+
+> x
+
+) O(n2
+
+> x
+
+)
+
+Repeated online, at every guidance step k
+
+Per-step vector f O(nunxN 2) O(nuN )
+
+ADMM loop, M iterations (Cholesky fac-tor L reused) 
+
+O(M n 2
+
+> u
+
+N 2) O(nuN )
+
+Control law uk = v0 − Kek, state update O(n2
+
+> x
+
+) O(nx)
+
+Total per MPC step (online) O N 2(nunx + M n 2
+
+> u
+
+) O(n2
+
+> u
+
+N 2)
+
+Table 11: Time-invariant CWH case: time complexity and memory footprint of every step of the dependency-free Tube MPC + ADMM pipeline. All six offline quantities are computed once, before the mission, and reused unchanged at every guidance step. In this regime, the online cost is dominated by the two triangular solves inside the ADMM 
+
+v-update, since the Cholesky factorisation of H + ρI , the single most expensive step in the entire offline pipeline at O(n3
+
+> u
+
+N 3), is performed once and its factor L is simply reused at every ADMM iteration and at every MPC step: this is precisely why the online cost, O(M n 2
+
+> u
+
+N 2),is one full power of N cheaper than the O(n3
+
+> u
+
+N 3) factorisation it relies on. For the largest configuration used in this report ( nx = 6 , nu = 3 , N = 100 , M = 100 ), this gives an online cost per MPC step of 9.0 × 10 6 elementary operations, against 2.7 × 10 7 operations if the factorisation were, incorrectly, repeated at every ADMM iteration instead of being reused: 49 a factor of 300 in this configuration. The online memory footprint is likewise dominated by L, which must remain resident onboard between MPC steps: storing only its nonzero lower-triangular entries, nuN (nuN +1) 2 scalars, requires 352 .7 KB at nx = 6 , nu = 3 , N = 100 
+
+(double precision), against 703 .1 KB for a dense nuN ×nuN matrix that ignores the triangular structure, a further factor of two saved at no implementation cost, on top of the block-wise application of ¯Q already discussed in Section 7. 
+
+Case 2: Time-varying, nonlinear reference trajectory Step (repeated at every guidance step k) Time Memory 
+
+Gravity Jacobian Jg(rref  
+
+> k
+
+) (nine explicit entries) O(1) O(1) 
+
+Ad(tk), B d(tk) (matrix exponential of aug-mented block) 
+
+O(n3
+
+> x
+
+) O(n2
+
+> x
+
+)
+
+Condensed A(tk), B(tk) (rebuilt from scratch) O(N 2n2
+
+> x
+
+nu) O(N 2nxnu)
+
+Hessian H(tk) (rebuilt from scratch) O(n2
+
+> u
+
+nxN 3) O(n2
+
+> u
+
+N 2)
+
+Cholesky refactorisation of H(tk) + ρI O(n3
+
+> u
+
+N 3) O(n2
+
+> u
+
+N 2)
+
+DARE re-solve, I Riccati iterations, for 
+
+Pk, K (tk)
+
+O(I n 3
+
+> x
+
+) O(n2
+
+> x
+
+)
+
+ADMM loop, M iterations, using the freshly refactored LO(M n 2
+
+> u
+
+N 2) O(nuN )
+
+Control law uk = vk − K(tk)ek, state update O(n2
+
+> x
+
+) O(nx)
+
+Total per guidance step O(n2
+
+> u
+
+N 3(nx + nu)) O(n2
+
+> u
+
+N 2)
+
+Table 12: Time-varying, nonlinear case: time complexity and memory footprint of every step of the pipeline, all of which are now repeated at every one of the 361 guidance steps used in the validation of this section, since the reference trajectory changes at every step and none of the offline reuse of Table 11 is available. Compared with the CWH case, the change is structural rather than a difference in the asymptotic exponents themselves: the first six rows of Table 11, computed once for the whole mission, must now be recomputed at every one of the 361 guidance steps, so the online cost is dominated by the O(n2
+
+> u
+
+N 3(nx + nu)) cost of rebuilding the Hessian and refactorising it via Cholesky, both O(N 3) and therefore negligible only when amortised over an entire mission, as in the CWH case. Numerically, this gives roughly 8.1 × 10 7 operations per step (of which 5.4 × 10 7 from building H and 2.7 × 10 7 from the Cholesky refactorisation) against 
+
+9.0 × 10 6 in the CWH case: about nine times more expensive per step, consistent with the observation, already made in Section 9.3, that none of the offline reuse available in the time-invariant case survives once the reference trajectory itself is time-varying, even though both settings share the same asymptotic building blocks. The memory footprint stays the same order, O(n2
+
+> u
+
+N 2) dominated by L, but is now overwritten at every step rather than loaded once for the mission. 50 10 Conclusion 
+
+This report set out to build and stress-test a family of real-time MPC controllers for au-tonomous spacecraft rendezvous. Among the four algorithmic families studied, Tube MPC consistently stood out: it delivered the most accurate and robust tracking on the original benchmark, handled all five standard rendezvous manoeuvres with a single fixed configura-tion, and kept performing reliably even once the horizon was pushed far beyond what the original design anticipated. Lengthening the prediction horizon exposed a real weakness in gradient-based solvers such as Fast MPC: the marginal stability of the CWH dynamics makes the underlying optimisation problem increasingly ill-conditioned as the horizon grows, and solvers relying on exact linear algebra, ADMM in particular, are simply immune to this ef-fect while Nesterov’s method is not. This distinction, first observed as a numerical curiosity, explains a large part of the behaviour seen throughout the report. The remainder of the work builds on that understanding. A polynomial approximation of the dynamics matrices made the long-horizon regime computationally affordable without compromising accuracy, confirmed across a thousand random test cases. A systematic look at the cost weights showed that fuel consumption responds strongly to how they are tuned while tracking accuracy barely moves, and a two-sided, provably correct bound was derived to bracket the worst-case tracking error directly from these weights, together with a first characterisation of the exact closed form that the bound approximates. The framework was then pushed past its original assumption of a fixed circular orbit: a reference trajectory with no closed-form description was tracked reliably once the underlying linearisation was recomputed along the way, with the safety guarantee holding throughout. Taken together, these results make a strong case for Tube MPC as the most dependable option among those considered, combining a real robustness guarantee with a computational cost realistic for onboard, real-time use. Finally, the report asked whether this pipeline could actually run on the hardware it is designed for. The two routines relying on numpy or scipy inside the real-time loop were re-implemented from first principles, using only elementary arithmetic and explicit loops, demonstrating that the Tube MPC + ADMM pipeline can be made fully self-contained, with traceable, line-by-line numerical behaviour, at a modest computational cost. A complexity and memory analysis of the full pipeline showed that the two settings studied here behave very differently: in the time-invariant CWH case, the most expensive steps are computed once offline and amortised over the entire mission, leaving an online cost per guidance step that scales as O(N 2(nunx + M n 2
+
+> u
+
+)) ; in the time-varying case, every one of these steps must be recomputed at each guidance step, pushing the online cost to O(n2
+
+> u
+
+N 3(nx + nu)) , roughly nine times higher in the configuration tested here. This gap is not a flaw but a direct and quantified consequence of tracking a reference that changes at every step, and it is precisely the kind of figure a flight software budget needs before committing to either regime. 51 The extension to time-varying reference trajectories was tested on a single scenario, and a broader sweep across orbital regimes would help confirm how general the conclusion is. A natural next step would also be to profile the dependency-free implementation directly on embedded-class hardware, to confirm that the predicted operation counts translate into the expected execution times once compiled. The most natural continuation of this work, however, would be to consolidate the dependency-free pipeline of Section 9 into a portable implementation in C or Ada, and to deploy it on a real embedded platform, so that the Tube MPC / ADMM controller can be tested against an actual physical system rather than a software simulator. This would close the loop between the theoretical guarantees established here and the operational constraints of a real guidance computer, and represents the clearest path from the present report towards a flight-ready application. All the code developed for this report is available at https://github.com/adnanegrb/ MPC-spacecraft-guidance : the MPC families and solvers, and the dependency-free im-plementations of Section 9. 52 References 
+
+[1] L. Breger and J. P. How. Safe trajectories for autonomous rendezvous of spacecraft. 
+
+Journal of Guidance, Control, and Dynamics , pages 1478–1489, 2008. [2] F. Cavenago, P. Di Lizia, M. Massari and A. Wittig. Sequential convex programming for multimode spacecraft trajectory optimisation. In AIAA/AAS Astrodynamics Specialist Conference , 2019. [3] W. H. Clohessy and R. S. Wiltshire. Terminal guidance system for satellite rendezvous. 
+
+Journal of the Aerospace Sciences , pages 653–658, 1960. [4] S. Di Cairano, H. Park and I. Kolmanovsky. Model predictive control approach for guidance of spacecraft rendezvous and proximity maneuvering. International Journal of Robust and Nonlinear Control , pages 1398–1427, 2012. [5] C. Bashnick and S. Ulrich. Fast model predictive control for spacecraft rendezvous and docking with obstacle avoidance. Journal of Guidance, Control, and Dynamics , 2023. [6] L. Ferranti and T. Keviczky. A parallel dual fast gradient method for MPC applications. arXiv:1503.06330, 2015. [7] P. Giselsson. Improving fast dual ascent for MPC – part I: the distributed case. arXiv:1312.3012, 2013. [8] P. Giselsson. Improving fast dual ascent for MPC – part II: the embedded case. arXiv:1312.3013, 2013. [9] E. N. Hartley. A tutorial on model predictive control for spacecraft rendezvous. In 
+
+European Control Conference , 2015. [10] M. Herceg, M. Kvasnica, C. N. Jones and M. Morari. Tube-based robust model predictive control. Tutorial notes, 2015. [11] J. Lorenzetti and M. Pavone. A simple and efficient tube-based robust output feedback model predictive control scheme. arXiv:1911.07360, 2019. [12] D. Q. Mayne, J. B. Rawlings, C. V. Rao and P. O. M. Scokaert. Constrained model predictive control: stability and optimality. Automatica , pages 789–814, 2000. [13] D. Q. Mayne, M. M. Seron and S. V. Raković. Robust model predictive control of constrained linear systems with bounded disturbances. Automatica , pages 219–224, 2005. [14] C. E. Oestreich, R. Linares and R. Gondhalekar. Tube-based model predictive con-trol with uncertainty identification for autonomous spacecraft maneuvers. Journal of Guidance, Control, and Dynamics , pages 1–15, 2023. 53 [15] N. Patrinos and A. Bemporad. Proximal gradient methods for MPC. Lecture notes, IMT Lucca, 2016. [16] S. V. Raković. Tube based model predictive control. Tutorial slides, 2008. [17] J. B. Rawlings, D. Q. Mayne and M. Diehl. Model Predictive Control: Theory, Compu-tation, and Design . Nob Hill Publishing, 2nd edition, 2017. [18] S. Richter, C. N. Jones and M. Morari. Computational complexity certification for real-time MPC with input constraints based on the fast gradient method. IEEE Transactions on Automatic Control , pages 1391–1403, 2012. [19] C. Specht, A. Bishnoi and R. Lampariello. Autonomous spacecraft rendezvous using tube-based model predictive control: design and application. Journal of Guidance, Control, and Dynamics , pages 1243–1261, 2023. [20] M. Szmuk, B. Açıkmeşe and A. W. Reynolds. Successive convexification for passively-safe spacecraft rendezvous on near rectilinear halo orbit. arXiv:2505.17251, 2025. [21] L. Wu and A. Bemporad. A simple and fast coordinate-descent augmented-Lagrangian solver for model predictive control. arXiv:2109.10205, 2021. [22] D. Zamblera. Tube model predictive control for robust close-range relative motion. Master’s thesis, Politecnico di Milano, 2023. [23] S. Boyd, N. Parikh, E. Chu, B. Peleato and J. Eckstein. Distributed optimization and statistical learning via the alternating direction method of multipliers. Foundations and Trends in Machine Learning , pages 1–122, 2011. [24] S. Richter, C. N. Jones and M. Morari. Real-time input-constrained MPC using fast gradient methods. In Proceedings of the 48th IEEE Conference on Decision and Control ,pages 7387–7393, 2009. [25] G. Frison. Algorithms and Methods for Fast Model Predictive Control . PhD thesis, Technical University of Denmark, 2016. [26] C. V. Rao, S. J. Wright and J. B. Rawlings. Application of interior-point methods to model predictive control. Journal of Optimization Theory and Applications , pages 723–757, 1998. [27] W. Fehse. Automated Rendezvous and Docking of Spacecraft. Cambridge Aerospace Series. Cambridge University Press, 2003. [28] G. Gaias, J.-S. Ardaens and O. Montenbruck. Model of J2 perturbed satellite relative motion with time-varying differential drag. Celestial Mechanics and Dynamical Astron-omy , pages 411–433, 2015. 54 [29] T. A. Lovell and S. C. Tragesser. Guidance for relative motion of low Earth orbit spacecraft based on relative orbit elements. In AIAA/AAS Astrodynamics Specialist Conference , 2004. [30] Y. Nesterov. A method of solving a convex programming problem with convergence rate 
+
+O(1 /k 2). Soviet Mathematics Doklady , pages 372–376, 1983. [31] B. Stellato, G. Banjac, P. Goulart, A. Bemporad and S. Boyd. OSQP: an operator splitting solver for quadratic programs. Mathematical Programming Computation , pages 637–672, 2020. [32] J. L. Jerez, P. J. Goulart, S. Richter, G. A. Constantinides, E. C. Kerrigan and M. Morari. Embedded online optimization for model predictive control at megahertz rates. IEEE Transactions on Automatic Control , pages 3238–3251, 2014. [33] D. Q. Mayne, E. C. Kerrigan, E. J. van Wyk and P. Falugi. Tube-based robust nonlinear model predictive control. International Journal of Robust and Nonlinear Control , pages 1341–1353, 2011. [34] D. Q. Mayne and E. C. Kerrigan. Tube-based nonlinear model predictive control. IFAC Proceedings Volumes , pages 36–41, 2007. 7th IFAC Symposium on Nonlinear Control Systems, Pretoria, South Africa. [35] X. Zhang, W. Pan, R. Scattolini, S. Yu and X. Xu. Robust tube-based model predictive control with Koopman operators. Automatica , article 110114, 2022. [36] L. Zhou, S. Ma, L. Cen, J. Ma and T. Peng. Tube-based model predictive control for linear systems with bounded disturbances and input delay. ISA Transactions , pages 56–66, 2024. [37] M. Doff-Sotta, Z. A-Rahman and M. Cannon. Computationally tractable robust non-linear model predictive control using DC programming. arXiv:2602.01164, 2026. [38] D. Tranos, A. Russo and A. Proutiere. Self-tuning tube-based model predictive control. arXiv:2210.00502, 2022. [39] M. Szmuk and B. Açıkmeşe. Successive convexification for 6-DoF Mars rocket powered landing with free-final-time. In AIAA Guidance, Navigation, and Control Conference ,2018. [40] C. M. Massera, M. H. Terra and D. F. Wolf. Tube-based guaranteed cost ro-bust model predictive control for linear systems subject to parametric uncertainties. arXiv:2012.05349, 2020. 55 [41] A. Parsi, A. Iannelli and R. S. Smith. Scalable tube model predictive control of uncertain linear systems using ellipsoidal sets. International Journal of Robust and Nonlinear Control , 2022. [42] I. Kempf, P. Goulart and S. Duncan. Fast gradient method for model predictive control with input rate and amplitude constraints. IFAC-PapersOnLine , pages 6542–6547, 2020. 21st IFAC World Congress. [43] M. Herceg, M. Kvasnica, C. N. Jones and M. Morari. Multi-parametric toolbox 3.0. In 
+
+European Control Conference (ECC) , pages 502–510, 2013. [44] W. Langson, I. Chryssochoos, S. V. Raković and D. Q. Mayne. Robust model predictive control using tubes. Automatica , pages 125–133, 2004. [45] S. V. Raković, E. C. Kerrigan, K. I. Kouramas and D. Q. Mayne. Invariant approxima-tions of the minimal robust positively invariant set. IEEE Transactions on Automatic Control , pages 406–410, 2005. [46] E. N. Hartley, J. M. Maciejowski, H. Cervantes and L. Kondiakos. Model predictive con-trol system design and implementation for spacecraft rendezvous. Control Engineering Practice , pages 695–713, 2012. [47] E. N. Hartley, M. Gallieri and J. M. Maciejowski. Terminal spacecraft rendezvous and capture with LASSO model predictive control. International Journal of Control , pages 2104–2113, 2013. [48] G. H. Golub and C. F. Van Loan. Matrix Computations. Johns Hopkins University Press, 3rd edition, 1996. [49] Commandant Benoît. Note sur une méthode de résolution des équations normales provenant de l’application de la méthode des moindres carrés aux problèmes de tri-angulation. Bulletin Géodésique , 1924. 56
