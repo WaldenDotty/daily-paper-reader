@@ -1,0 +1,663 @@
+Title: Horizon-Dependent Tube MPC for Elliptical-Orbit Rendezvous Under Mass Uncertainty
+
+URL Source: https://arxiv.org/pdf/2608.27659v1
+
+Published Time: Mon, 31 Aug 2026 00:11:10 GMT
+
+Number of Pages: 19
+
+Markdown Content:
+# Horizon-Dependent Tube MPC for Elliptical-Orbit Rendezvous Under Mass Uncertainty 
+
+Omer Burak Iskender a,* , Keck-Voon Ling aa School of Electrical and Electronic Engineering, Nanyang Technological University, Singapore. E-mail: iske0001@e.ntu.edu.sg, ekvling@ntu.edu.sg  
+
+> *
+
+Corresponding author 
+
+Accepted for publication. 77th International Astronautical Congress (IAC 2026), Antalya, Türkiye, 5–9 October 2026; paper IAC-26,C1,4,9,x108305. This is the accepted version (the authors’ preprint) and not the version of record. 
+
+Abstract 
+
+A spacecraft closing on a target from three hundred kilometres to contact flies one guidance law across five orders of magnitude of range, and a controller that is provably safe at close range can lose that guarantee completely at long range while continuing to fly as though nothing were wrong. This paper derives the range at which the guarantee lapses and uses it as a design rule. The bound compares the prediction model’s own linearisation error against the disturbance set the controller was built to reject, and needs only the sampling period, the orbit and that disturbance bound, so it can be evaluated before any simulation. On a Mars Sample Return approach it disqualifies the homing phase, where most of the propellant is spent, and clears the other two. Re-posing the disqualified phase in relative orbital elements restores the guarantee; re-posing a phase the rule already clears, in a frame two orders of magnitude more accurate, changes propellant by under a tenth of one per cent, and it is that second prediction that makes the rule falsifiable rather than descriptive. The constraint tightening also ties the prediction horizon to feasibility, so the horizon search limit becomes a mission parameter rather than a solver setting. Against a reimplementation of a published benchmark that reproduces its propellant to within one per cent, over five hundred dispersed Monte Carlo transfers per case on matched seeds, the controller saves 29% of the propellant on a circular target orbit and 40% on an eccentric one, docking inside the 0 .20 m capture requirement on essentially every draw at a median miss near 5 cm. Two results run the other way: the saving is bought with time of flight and computation, and it comes from what the guarantee demanded of the terminal condition rather than from better disturbance rejection. Recursive feasibility and asymptotic stability are not claimed. 
+
+Keywords: tube MPC, Yamanaka–Ankersen, eccentric orbit, mass uncertainty, spectral radius, phased rendezvous, robust guidance 
+
+Nomenclature 
+
+𝐴 𝑘 , 𝐵 𝑘 YA discrete state-space matrices 
+
+𝐴 cl ,𝑘 𝐴 𝑘 + 𝐵 𝑘 𝐾 , closed loop ¯𝐴 max 𝑘 | 𝐴 cl ,𝑘 |, element-wise ¯e 𝑗 horizon-dependent error bound ¯w𝑘 per-step disturbance bound 
+
+𝛿𝑚 max fractional mass uncertainty bound 
+
+𝐾 ancillary feedback gain 
+
+𝑄, 𝑅 MPC stage cost weights 
+
+𝑃, 𝛼 terminal cost and terminal-set scaling 
+
+𝜌 (·) spectral radius 
+
+𝑒, 𝜈 orbital eccentricity, true anomaly 
+
+𝑒 ★ certified eccentricity threshold 
+
+𝑇 𝑠 , 𝑁 sampling period, prediction horizon 
+
+𝑠 ★ predictor validity limit on separation 
+
+Acronyms/Abbreviations 
+
+ADR: active debris removal CW: Clohessy–Wiltshire DARE: discrete algebraic Riccati equation GTO: geostationary transfer orbit LOS: line of sight LP: linear program LVLH: local vertical local horizontal MC: Monte Carlo MIB: minimum impulse bit MPC: model predictive control MSR: Mars Sample Return QP: quadratic program RPI: robust positively invariant TH: Tschauner–Hempel YA: Yamanaka–Ankersen 
+
+# 1 Introduction 
+
+Rendezvous on an eccentric orbit combines two robustness challenges that the standard tube MPC formulations were not built to handle jointly. The prediction dynamics are linear time-varying: the Clohessy–Wiltshire equations are inadmissible because true anomaly does not advance uni-1arXiv:2608.27659v1 [eess.SY] 27 Aug 2026 formly, and the Yamanaka–Ankersen (YA) state transition matrix [1, 2] is the natural replacement. The input matrix 
+
+𝐵 𝑘 also depends on spacecraft mass, which drops through propellant depletion (typically 5–10% over a rendezvous campaign) and steps through payload exchange in ADR or OOS missions [3,4]. The combination breaks the constant-matrix assumptions behind rigid-tube MPC for spacecraft. Hartley et al. [5] set the template for an implementable MPC rendezvous system by partitioning the manoeuvre into a small number of guidance phases, each with its own sampling period, horizon, and constraint corridor. We adopt that phase architecture for the Mars Sample Return elliptical orbit and replace the per-phase nominal MPC with a horizon-dependent tube MPC, so the same guid-ance schedule now carries a robustness certificate rather than a fixed back-off. The figures in this paper deliber-ately mirror the diagnostics a rendezvous study is read for (phase-by-phase fuel, trajectory and capture plots, and sen-sitivity sweeps), computed here for the eccentric-orbit tube formulation. 
+
+# Tube MPC foundations and the LTV gap 
+
+Tube-based MPC originated as a robust extension of nom-inal MPC for constrained linear time-invariant systems [6, 7]. The construction splits the controlled state into a nominal trajectory tracked by an inner-loop MPC and an error bounded by a robust positively invariant set: classi-cally a minimal RPI (mRPI) approximation [8], computed once and held fixed across the horizon. Both the general survey of Mayne [9] and the aerospace-focused one of Eren et al. [10] treat this LTI construction; neither addresses the time-varying closed loop, which is where a single worst-case width becomes wasteful. Step-by-step tightening pre-dates the tube formulation itself, in the restricted-constraint MPC of Chisci et al. [11], and was carried to generic LTV and uncertain nonlinear systems by Bumroongsri [12] and Köhler et al. [13], in each case replacing the single mRPI evaluation with a propagated sequence. Constraint tight-ening has been applied to rendezvous before [14], though on circular-orbit dynamics and without a convergence cer-tificate for the tightening itself. This paper specialises that machinery to the YA model and folds mass uncertainty into the same recursion. 
+
+# Robust MPC for spacecraft proximity opera-tions 
+
+Closed-loop MPC for rendezvous and docking has been demonstrated at LEO [15], in elliptical orbits [5, 16], on air-bearing testbeds [17, 18], and in dual-quaternion form for coupled translation–attitude docking with an uncoop-erative target [19, 20]. Its spacecraft record is not confined to proximity operations: predictive detumbling of Cube-Sats has been benchmarked against the classical B-dot law under time-varying magnetic torque authority [21]. Tube-based variants for spacecraft have used constant polytopic tubes [17, 22], tubes resized online from an identified dis-turbance bound [23], and sector-bounded-nonlinearity for-mulations [24]. Each retains either an LTI assumption or a worst-case constant tube width, leaving the orbit-phase-specific tightening of the YA dynamics unexploited. The companion journal paper [25] establishes the formal theory on this same YA model (recursive feasibility, ellipsoidal terminal set, ISS); augmented-dynamics extensions to fuel slosh [26, 27] and structural flexibility [28] are developed separately. 
+
+# Contribution 
+
+What the paper proposes is a horizon-dependent tube MPC for the phased rendezvous of Ref. [5]: the constraint tight-ening grows with the prediction step instead of being fixed at a worst-case constant, so the horizon the guidance se-lects and the robustness margin it is left with are decided inside one enumeration rather than in sequence. Every-thing around it is the benchmark’s and stays that way. The phase schedule, the sampling periods, the horizon objective and its 𝑤 𝑢 are adopted unchanged, so what the comparison isolates is the tightening and the cost form it makes afford-able. Three results follow, and the first is what makes the other two more than bookkeeping. A box-tightened tube is certifiable only while the predictor’s own linearisation residual stays inside the disturbance bound the tube was built against, which for the Yamanaka–Ankersen model bounds separation at √︁ ¯𝑤𝑎 /𝐶 /( 𝑛𝑇 𝑠 ): 26 .4 km at a 300 s period, and 13 .2 km at the 600 s period the homing phase is actually sampled at. That phase opens at 300 km, 23 times outside its own limit, and its worst one-step residual overruns ¯ 𝑤 by factors of 497 and 852; moving it to element space restores the certificate with 15 to 28% margin. The bound is what makes this predictive rather than anecdotal: it says in advance which reformulations can pay, and both directions were measured. Re-posing the closing phase in a cylindrical frame that is 128 times more accurate buys 0.09% of propellant, because that phase already sits inside the bound. Second, the horizon and the robustness margin are cho-sen together. The variable horizon is not ours: the bench-mark’s guidance already minimises 𝐽 = 𝑁 + 𝑤 𝑢 ∥u∥1 over 
+
+𝑁 ≤ 𝑁 max , and we take that functional and its 𝑤 𝑢 un-changed (Section 6). What the tube changes is the set the search runs against, because the terminal tolerance left at horizon 𝑁 is tol 𝑗 − ¯𝑒 𝑗 (𝑁 ) and shrinks as 𝑁 grows, so reach and margin are traded inside one enumeration instead of in sequence. The consequence is measurable and was found by chasing a single stalled draw rather than by tuning: at a cap of 25 steps, 11 of 21 stress cells flew the approach and one Monte Carlo draw in twenty-five stopped 908 km out having spent nothing; at 50, all 21 flew, and the longer cap 2was 15 .8 m/s cheaper on the eleven cells both flew. The failure boundary is a joint condition on semi-major-axis er-ror and target true anomaly, which is why no single-variable sweep located it. Third, the resulting controller closes the approach for 24 .1 and 31 .4 kg less than the best replication of the bench-mark, paired seed by seed, while arriving inside the re-quirement more often rather than less. Two tests have to be kept apart here and the earlier drafts of this paper welded them together. The free drift after blinding either crosses the target plane or it does not, and a crossing either falls inside the 0 .20 m requirement or it does not; a draw can do the first and fail the second. Over 500 dispersed transfers per scenario at full fidelity the proposed form arrives in-side the requirement on 499 of 500 circular draws and 500 of 500 elliptical ones, where the three replication variants manage 468, 463 and 452 of 500 on the elliptical scenario, intervals that do not reach 100% (Section 8). The tail splits the same way and the paper claims no more than that: the 95th-percentile miss is 10 .39 cm elliptical against 32 .55, a factor of 3 .1, but 10 .73 cm circular against 10 .18. Solving translation and pointing in one program is what buys the tail: on a 25-draw paired ablation, dropping the coupling costs 0 .02 kg and opens the same percentile from 8 .70 and 7.94 cm to 10 .87 and 12 .18. The eccentricity certificate that earlier work reported as a scalar is the fourth result, and it is negative. It is insensitive to where the ancillary gain is designed and to the design weights, but it runs from 0 .851 at 𝑇 𝑠 = 50 s to 0 .249 at 900 s (Section 4), so it must be quoted with the sampling period attached. Full formulations for every controller, plant and dispersion term summarised here are collected in a companion reference [25], transcribed from the implementation rather than from this manuscript. 
+
+# 2 Relative Dynamics on an Eccentric Orbit 
+
+# Frames and the YA model 
+
+The chaser state is expressed in the target Local-Vertical Local-Horizontal (LVLH) frame, with V-bar along-track, H-bar cross-track, and R-bar radial (Fig. 1). Because the target follows a Keplerian ellipse, the natural independent variable is the true anomaly 𝜈 , which advances per Kepler’s second law ¤𝜈 (𝜈 ) = 𝑛 (1 + 𝑒 cos 𝜈 )2/( 1 − 𝑒 2)3/2 with mean motion 𝑛 =√︁ 𝜇 /𝑎 3. Let x𝑘 ∈ R6 denote the relative state at 𝑡 𝑘 . Under the YA state transition matrix at sampling period 𝑇 𝑠 [1], the prediction model is 
+
+x𝑘 +1 = 𝐴 𝑘 x𝑘 + 𝐵 𝑘 u𝑘 + w𝑘 , (1) where u𝑘 ∈ R3 is the impulsive Δ𝑣 applied at the start of the interval (hence 𝐵 𝑘 = 𝐴 𝑘 [03; 𝐼 3], with [03; 𝐼 3] ∈ R6×3
+
+the stacked zero and identity blocks, depends on 𝑘 through 
+
+𝐴 𝑘 ) and |w𝑘 | ≤ ¯w element-wise. The matrices 𝐴 𝑘 depend on 𝜈 𝑘 and are not constant. Two features of Fig. 1 carry into everything that follows. The radial and along-track directions are separated from the local horizontal by the flight path angle, which reaches 11 .7◦ at 𝜈 = 105 ◦ on this orbit, so a frame built on the position vector and one built on the velocity vector do not coincide and the distinction has to be carried in the model. And the orbit arc drawn in panel (b) is schematic: across the width of that panel the true orbit sags by 0 .72 m, three hundredths of one per cent of the panel height, so at close range the target’s path really is a straight line to the accuracy anything here cares about. That smallness is what lets a linearised relative model work at all, and its failure at long range is the subject of Section 5. The cost of ignoring eccentricity is direct, and it is what forces the YA matrices rather than a preference for them. Propagating a free-drift relative state under a nonlinear two-body integration, under the YA matrices and under the constant-coefficient CW approximation on one semi-major axis separates the two approximations only when 
+
+𝑒 > 0. On a circular orbit the YA and CW errors against the nonlinear truth are identical at about 7 m, second order in the 0 .5 km offset. On the MSRE orbit YA tracks the truth to 30 m over one orbit while CW diverges to 8 .6 km, a factor of 280, so at this eccentricity CW is inadmissible as a prediction model whatever controller is wrapped around it. 
+
+# Mass-uncertain input matrix 
+
+Mass changes through propellant depletion and payload exchange. We model the resulting input-matrix uncertainty as a multiplicative scalar, 
+
+𝐵 true  
+
+> 𝑘
+
+= (1 + 𝛿 𝑚 )𝐵 𝑘 , |𝛿 𝑚 | ≤ 𝛿𝑚 max , (2) with 𝛿𝑚 max ∈ [ 0.02 , 0.10 ] across the disturbance tiers. The uncertainty is persistent within a manoeuvre (a cali-bration error, not per-step noise) and unknown to the con-troller. One disclosure belongs with the model rather than with a limitations list at the end. The frozen 500-draw campaign of Section 8 was flown with this lifting switched off, mass_err_max = 0 at the sole construction site, with no cost specification overriding it and no mass channel at all in the element-space homing controller, so every tight-ening reported below is the additive bound ¯ w alone and (2) is a design-time statement this campaign does not exercise. Runs with the term active are the obvious next campaign and are not claimed as completed. 
+
+# Constraints and tube decomposition 
+
+State and input satisfy element-wise box constraints, 
+
+x ≤ x𝑘 ≤ ¯x, |u𝑘 | ≤ umax , (3) 3periapsis apoapsis 
+
+R-bar V-bar target 
+
+> 2000 km
+
+target 
+
+V-bar R-bar H-bar  
+
+> target orbit
+> ±500 m corridor
+
+chaser r
+
+> 1 km
+
+(a) target orbit, e = 0.204 , a = 4643 km (b) relative frame, magnified 10 3Fig. 1: The target orbit and the frame it carries. (a) The MSRE ellipse to scale against Mars. (b) The same geometry three orders of magnitude closer. specifying the corridor half-width and per-axis Δ𝑣 enve-lope. Tube MPC decomposes the state as x𝑘 = z𝑘 + e𝑘 : the nominal trajectory z𝑘 obeys the disturbance-free recursion, while the error e𝑘 collects the closed-loop response to w𝑘 
+
+and 𝛿 𝑚 under the ancillary law u𝑘 = v𝑘 + 𝐾 e𝑘 . The nom-inal trajectory is reset to the measurement at every step, 
+
+z0 = x𝑘 , so e0 = 0 and the applied control is u𝑘 = v★
+
+> 0
+
+exactly: the ancillary term vanishes at the step that is ex-ecuted. What 𝐾 determines is 𝐴 cl ,𝑘 = 𝐴 𝑘 + 𝐵 𝑘 𝐾 , and through it the tightening recursion and the input back-off 
+
+|𝐾 |¯e 𝑗 . The error dynamics are 
+
+e𝑘 +1 = 𝐴 cl ,𝑘 e𝑘 + weff  
+
+> 𝑘
+
+, weff  
+
+> 𝑘
+
+= w𝑘 + 𝛿 𝑚 𝐵 𝑘 u𝑘 , (4) with 𝐴 cl ,𝑘 = 𝐴 𝑘 + 𝐵 𝑘 𝐾 . The second term is the multiplicative-to-additive lifting: it bounds the input-matrix uncertainty by a per-step additive contribution scaled by |𝐵 𝑘 | and the actuator envelope. 
+
+# 3 Phased Rendezvous Mission De-sign 
+
+Phasing precedes the scenario studied here: two phasing orbits consume the phase angle and the chaser transfers to the target orbit, after which far-range rendezvous begins. The campaign of Section 8 starts at that point, with the chaser already near the target orbit and 300 km behind it, so everything earlier is context rather than part of the problem posed here. The approach runs on the Hartley scenario [5] as specified there, rather than on a ladder of our own, so that every controller reported here can be mea-sured against a published baseline on identical geometry. Three guidance phases divide it, each run by the tube MPC of Section 4, and Fig. 2 places them inside the standard rendezvous sequence [20, 29]. Homing closes the bulk of the along-track gap from 300 km at a 600 s period; closing 
+
+takes the hand-over near 10 km down to a 100 m target approach point at 300 s; the final approach completes the Table 1: Phased schedule, with the admissibility each phase inherits from its own sampling period. 𝑒 ★ is the threshold of (9) at that 𝑇 𝑠 .Phase Range 𝑇 𝑠 𝑁 𝑢 max 𝑒 ★ 𝜌 marg. [s] [m/s] (𝑇 𝑠 ) 𝑒 ★/𝑒                   
+
+> Homing 300 →30–10 km 600 8–50 5.3875 0.362 0.472 1.77 Closing 30–10 km →100 m 300 8–50 2.6937 0.552 0.205 2.70 Final 100 m →cont. 315 0.0269 0.972 0.012 4.75
+
+run to contact at a 3 s period. One correspondence is in-exact and it is the interesting one: homing in the standard sequence closes range under relative navigation, whereas the homing phase here additionally drives inclination, right ascension and the eccentricity vector to zero, which that se-quence assigns to phasing. That straddle is why this phase, and only this phase, is re-posed in relative elements in Sec-tion 5. Only the final approach carries a fixed horizon. The two long-range phases re-select 𝑁 at every guidance call by enumerating [𝑛 min , 𝑛 max ] = [8, 50 ] and scoring each candidate, which is the benchmark’s own construction [5] rather than a departure from it; Section 6 states what the tightening adds to that rule and what it costs. Table 1 gives the schedule together with the admissibility each phase in-herits from its own sampling period, and those last two columns are the reason the schedule cannot be separated from the certificate. Reading Table 1 down the 𝑒 ★ column is the clearest argument against quoting the threshold as one number. The same vehicle on the same orbit is certified with a margin of 1.77 at the homing period and with essentially unlimited margin at the terminal period, because 𝑒 ★ falls as 𝑇 𝑠 rises. MSRE clears every row, but an orbit at 𝑒 = 0.5 would be certified by a headline figure of 0 .66 and would fail outright at the 600 s period, where the true threshold is 0 .362. The sampling period is therefore not a free implementation choice; it is part of what is being certified. The three phases do not partition range, and reading Table 1 as though they did produces an apparent 30 to 10 km gap that does not exist. Hand-over from homing is a 4Launch Phasing Homing Closing Final Approach Close-Range Rendezvous R-Bar Mars Docking Target Automated Control Ground Control Chaser (a) automated control ground control 
+
+this paper 
+
+Docking Final approach Closing Homing Phasing Launch              
+
+> Final approach
+> 100 mcontact
+> 3sClosing
+> 10 km 100 m
+> 300 sHoming
+> 300 10 km
+> Ts= 600 s
+> also matches
+> i,,e
+
+(b) 
+
+Fig. 2: The standard rendezvous sequence and the three guidance phases used here. conjunction: the in-track separation must lie in [10 , 30 ] km 
+
+and the orbit-match residual of the five non-along-track element rows, expressed as an equivalent length, must fall below 𝑅 ℎ = 2000 m. The band is where the two conditions become satisfiable at once. What the conjunction protects is the synchronisation the homing terminal rows bought, since the Yamanaka–Ankersen model that closing predicts with is a local relative description and cannot recover an inclination error at all. The remaining hand-overs are pure range tests: at 𝜌 = 100 m the guidance switches model and sampling period together, and at 𝜌 = 3 m control stops and the vehicle coasts to the interface, so the last gate marks the end of actuation rather than a change of controller. That coast is why every capture number in Section 8 is scored on a free-drift crossing of the target plane and not on a commanded state. A rotating keep-out constraint is not part of the Mars approach as flown, and saying so plainly is worth more than a figure of one that is not enforced. The state box the campaign carries is inert at ±10 9 m, so the tube acts through the terminal element tolerance (12) and the in-put box alone. Nothing in Section 8 should be read as a corridor being consumed, and the corridor diagnostic the tightening is more usually sold on, together with the cross-body envelope and the geostationary co-location study, is carried in the companion journal treatment [25] rather than compressed into this paper. 
+
+# 4 Horizon-Dependent Tube MPC and the Eccentricity Certificate 
+
+# Tightened-constraint QP 
+
+At each instant 𝑘 the controller solves min  
+
+> z,v
+> 𝑁 −1
+
+∑︁ 
+
+> 𝑗 =0
+
+
+
+∥z 𝑗 − zref  
+
+> 𝑗
+
+∥2 
+
+> 𝑄
+
++ ∥ v 𝑗 ∥2
+
+> 𝑅
+
+
+
++ ∥ z𝑁 − zref  
+
+> 𝑁
+
+∥2
+
+> 𝑃
+
+s.t. z 𝑗 +1 = 𝐴 𝑘 + 𝑗 z 𝑗 + 𝐵 𝑘 + 𝑗 v 𝑗 , z0 = x𝑘 ,
+
+x + ¯e 𝑗 ≤ z 𝑗 ≤ ¯x − ¯e 𝑗 ,
+
+|v 𝑗 | ≤ umax − | 𝐾 |¯e 𝑗 ,
+
+(5) where zref  
+
+> 𝑗
+
+is the per-phase glide-slope reference, 𝑄 ⪰ 0, 
+
+𝑅 ≻ 0, and 𝑃 is the terminal cost from the DARE. Every constraint in (5) is linear, so the problem is a quadratic program and OSQP [30] solves it directly; the condensed form carries 3 𝑁 variables. The horizon-dependent tight-ening propagates one step at a time, ¯e 𝑗 +1 = | 𝐴 cl ,𝑘 + 𝑗 | ¯e 𝑗 + ¯w 𝑗 , ¯e0 = 0, (6) with the per-step disturbance bound ¯w 𝑗 = ¯w + 𝛿𝑚 max |𝐵 𝑘 + 𝑗 | umax . (7) 5Additive noise and mass uncertainty enter (6)–(7) as a sin-gle box, propagated step by step with element-wise arith-metic and no set computation. Which of the two dominates is a scheduling question rather than a modelling one. The mass term carries the sampling period twice, once through 
+
+𝐵 𝑘 = 𝐴 𝑘 [03; 𝐼 3] and once through 𝑢 max = 𝑇 𝑠 𝐹 max /𝑚 , so it grows as 𝑇 2 
+
+> 𝑠
+
+: at the homing period it is 2 .8 times the addi-tive bound and at the FINAL period only a third of it, which is a property of (7) as designed rather than of the campaign, since the runs reported here carry the mass term switched off as Section 2 records. What follows for (5) is robust con-straint satisfaction, and nothing beyond it. If the tightened program is feasible and |e 𝑗 | ≤ ¯e 𝑗 element-wise for every 
+
+𝑗 ≤ 𝑁 , then x 𝑗 = z 𝑗 +e 𝑗 meets the original box row by row, and so does u 𝑗 , by the triangle inequality applied to each row [25, Theorem 1]. The cost appears nowhere in that ar-gument, which is why the guarantee is indifferent to which objective form Section 8 compares. Asymptotic stability is not claimed here: 𝑃 solves the DARE and supplies the un-constrained infinite-horizon cost, but with no terminal set it is not a Lyapunov function for the constrained problem. Recursive feasibility is a separate matter, and (5) does not deliver it. The proof in [25, Theorem 2] needs a terminal ingredient: an ellipsoidal robust positively invariant set 
+
+X𝑓 = {x : (x − x𝑠 )⊤ 𝑃 (x − x𝑠 ) ≤ 𝛼 } built offline at the worst-case orbit phase, enforced as 
+
+(z𝑁 − zref  
+
+> 𝑁
+
+)⊤ 𝑃 (z𝑁 − zref  
+
+> 𝑁
+
+) ≤ 𝛼 𝑁 ,𝛼 𝑁 =
+
+√𝛼 − |𝑃 1/2 | ¯e𝑁 2
+
+2
+
+, (8) where the level is deflated by the tube radius at 𝑗 = 𝑁 so that the true terminal state, not merely the nominal one, lands in 
+
+X𝑓 ; the element-wise |𝑃 1/2 | keeps that bound valid for ev-ery error inside the box ¯ e𝑁 . What that costs is easy to state and hard to pay. Sizing 𝛼 as the largest level whose ellip-soid still fits the final-approach state box gives √𝛼 = 2.82, and a ¯ 𝑤 pos = 20 m, 𝛿𝑚 max = 5% design deflates it by 2 .06, so 73% of the terminal radius is spent on the tube before the nominal is allowed anywhere. Adding (8) also changes the problem class: the constraint is quadratic, so (5) be-comes a quadratically constrained program rather than a QP, and OSQP cannot accept it. Replacing the ellipsoid by the axis-aligned box |( z𝑁 − zref  
+
+> 𝑁
+
+)𝑖 | ≤ √︁ 𝛼 𝑁 /𝑃 𝑖𝑖 keeps the problem a QP but circumscribes the ellipsoid, which relaxes the constraint instead of enforcing it and does not transfer the theorem. A solver with native second-order-cone support, or an inscribed polytope, would be needed for that. The campaigns reported here run (5) as printed, without any terminal constraint, so recursive feasibility is a design result this paper does not exercise. The recursion differs from the constant mRPI width it converges to by less than one might expect, and the companion journal pa-per [25] plots the two profiles against each other: because 
+
+𝜌 (| 𝐴 cl ,𝑘 |) is small on this orbit, the recursion reaches the mRPI width within a single step, and from 𝑗 = 1 onward the two profiles agree to between 1 and 16%. The whole of the difference sits at 𝑗 = 0, where ¯ e0 = 0 leaves the corridor and the actuator envelope untightened. That step is the one that matters operationally, because the applied control is u𝑘 = v★ 
+
+> 0
+
+: the recursion hands the controller the full ±5 m/s per axis at the executed step, against 3 .36 m/s for the constant-width tube. 
+
+# Spectral stability certificate 
+
+The error recursion (6) is guaranteed to stay bounded when the worst-case element-wise closed-loop matrix ¯𝐴 = max 𝑘 | 𝐴 cl ,𝑘 | satisfies 𝜌 ( ¯𝐴 ) < 1. The condition is suf-ficient, not necessary: ¯𝐴 majorises every | 𝐴 cl ,𝑘 | element-wise, so a time-varying sequence can converge even where 
+
+𝜌 ( ¯𝐴 ) ≥ 1. It is also strictly stronger than 𝜌 (| 𝐴 cl ,𝑘 |) < 1holding at each 𝑘 separately, and must be checked in its own right; for the MSRE design the two are 0 .129 and 0.128 [25]. We design the ancillary gain 𝐾 at 𝜈 𝑑 = 0(periapsis), where the dynamics are most active so the gain pre-compensates the largest single-step magnitudes; the sensitivity to this choice is quantified below. With 
+
+𝑄 𝐾 = diag (10 3, 10 3, 10 3, 10 , 10 , 10 ), 𝑅 𝐾 = 𝐼 3 on the MSRE orbit, the periapsis-designed gain is near-deadbeat at its design point and least matched at apoapsis: 𝜌 (| 𝐴 cl ,𝑘 |) 
+
+is minimal at periapsis ( ≈ 2×10 −4) and peaks at apoapsis (0 .128), a profile the companion journal paper [25] plots over the orbit. Under the PF condition the steady-state tightening obeys ¯ e∞ ≤ ( 𝐼 − ¯𝐴 )−1 ¯w∞ element-wise, so the limit is finite and the tube exists; the right-hand side is an upper bound, not the realised width, because it substitutes the orbit-worst-case ¯ 𝐴 for the actual | 𝐴 cl ,𝑘 + 𝑗 | at every step. 
+
+# Eccentricity threshold 
+
+The threshold is recovered by bisecting 𝜌 ( ¯𝐴 (𝑒 )) = 1 over 
+
+𝑒 ∈ [ 0, 1):
+
+𝑒 ★ = sup {𝑒 : 𝜌 ( ¯𝐴 (𝑒 )) < 1}, (9) which evaluates to 𝑒 ★ = 0.6455 for the MSRE configura-tion at a 200 s sampling period. The qualifier is not deco-ration. Bisecting (9) at each period gives 0 .8514 at 50 s, 0.7686 at 100 s, 0 .6455 at 200 s, 0 .5517 at 300 s, 0 .3617 at 600 s and 0 .2492 at 900 s, so the threshold falls by a factor of 3 .4 across the range a phased approach schedules, and a single reported number is admissible only alongside the period it was computed at. Two conditions must also be kept apart: 𝜌 ( ¯𝐴 ) < 1, which is what (6) needs, returns 0.6455, whereas maximising 𝜌 (| 𝐴 cl ,𝑘 |) over anomaly sepa-rately returns 0 .6609 and is the weaker test. Figure 3 plots the threshold against the period. The underlying curve 
+
+𝜌 ( ¯𝐴 ; 𝑒 ) inherits the structural form 𝜌 ∝ (( 1 + 𝑒 )/( 1 − 𝑒 )) 2
+
+from Kepler’s second law applied to the YA matrices: the periapsis-to-apoapsis rate ratio is 1 .004 at LEO, 2 .30 at Mars, and 42 at GTO, and the threshold is in effect the 6inverse of this asymmetry. Mars ( 𝑒 = 0.204) clears the condition at every period tested, though the margin is not uniform: 𝜌 ( ¯𝐴 ) at that eccentricity runs from 0 .029 at 50 s to 0 .791 at 900 s, so a phase sampled slowly enough sits close to losing the certificate on an orbit the headline num-ber calls comfortable. An orbit at 𝑒 = 0.5 is a sharper illustration, because it holds the certificate up to 368 s and loses it above, which places it on the wrong side of the homing period and the right side of the closing one in the same mission. 
+
+# Design-point sensitivity 
+
+A natural concern is whether 𝑒 ★ is an artefact of design-ing 𝐾 at periapsis. Sweeping the design true anomaly 𝜈 𝑑 
+
+over six points around the orbit and recovering 𝑒 ★(𝜈 𝑑 ) by bisection at each gives an envelope of [0.635 , 0.664 ], a span of 4 .4%, with the periapsis design least conservative and the apoapsis design most. Replacing the state and in-put weights outright, from diag (10 3, 10 3, 10 3, 10 , 10 , 10 )
+
+with 𝑅 𝐾 = 𝐼 to diag (10 2, 10 2, 10 2, 1, 1, 1) with 𝑅 𝐾 = 10 𝐼 ,leaves the threshold unchanged to four decimals at every period tested, so the insensitivity extends past the design anomaly to the weights themselves. What 𝑒 ★ is not invari-ant to is the sampling period, which moves it by a factor of 3 .4 over the same span; the certificate is a property of the discretised design rather than of the orbit alone, and it must be quoted with the period attached. 
+
+# 5 Where the Tube Is Valid, and What Follows 
+
+The certificate of Section 4 bounds the tightening recur-sion, but it says nothing about whether the model the re-cursion is built on describes the vehicle. Box tightening treats every departure from the nominal prediction as a dis-turbance inside ¯ w, so it is sound only while the predictor’s own linearisation residual stays inside that bound. On the YA model the residual over one step grows with the square of separation, 𝜀 ≈ 0.866 𝑛 2𝑇 2 
+
+> 𝑠
+
+𝑠 2/𝑎 , and inverting it for 𝑠 
+
+gives the range over which the tube may be trusted, 
+
+𝑠 ≤ 1
+
+𝑛𝑇 𝑠 √︂ 
+
+¯𝑤 𝑎 𝐶 , (10) which is 26 .4 km at the 300 s closing period and, because the limit falls as 1 /𝑇 𝑠 , only 13 .2 km at the 600 s period homing runs at (Fig. 4). Each phase must be measured against its own period, not against a headline one, and the 26 km figure quoted in the abstract belongs to the closing phase. The bound is cheap to evaluate and it is the only statement here that constrains where the machinery of Section 4 may be applied at all. Measured against (10), the homing phase is not marginal, it is disqualified. It opens at 300 km against a limit of 13 .2 km, a factor of 23, and the residual that follows is worse than the ratio suggests because it grows quadrati-cally: the Cartesian predictor errs by 2486 m on the ellipti-cal scenario and 4260 m on the circular one against a ¯ 𝑤 of 5 m, so the worst one-step residual overruns its own bound by factors of 497 and 852. Earlier reports of this work quoted 4759 and 6350 for the same comparison; those fig-ures are not the quotients of the residuals beside them and are withdrawn here rather than reconstructed. A certificate exceeded by two orders of magnitude is not conservative; it is void, and no amount of tuning inside the recursion recovers it. Re-posing that phase in relative orbital elements, with the terminal condition written as equalities on five elements rather than as a position box, brings the same ratio to 0.856 and 0 .716, satisfied with 15 to 28% margin. The mechanism is the terminal condition rather than the change of coordinates: a position-only box at 20 km is satisfied by the free drift itself, so the phase was burning 670 kg to enforce a constraint that was never active. The same bound predicts where such a reformulation cannot help, and that prediction was tested rather than assumed. The closing phase hands over near 10 km and its worst one-step residual anywhere the controller actually flies is 1 .46 m circular and 1 .65 m elliptical, comfortably inside ¯𝑤 . Re-posing it in the cylindrical relative frame, which is 11 to 128 times more accurate over that range, changes propellant by 0 .09%. The frame removes an error that never bound. Taken together the two experiments make (10) a design rule: reformulate the phases that violate it and leave the others alone, because inside the bound the tube cannot tell the difference. What that rule is worth, and what ignoring it costs, are different sizes. Table 2 prices both on the same mission. Keeping the Cartesian predictor in the phase that violates the bound is not a small penalty paid for a simpler formu-lation: the quadratic form spends 1185 kg on the circular scenario against 108 in element space, a factor of eleven, and 264 against 92 on the elliptical one, and it fails to reach the target approach point on one draw in five where the el-ement form reaches it on every draw. The 1-norm form behaves the same way, 1158 against 69 kg. A mission that ignores the bound does not fly worse; on this scenario it does not fly. The same rule, applied where the bound is satisfied, returns nothing, and that is the half that makes it predictive rather than a slogan: the cylindrical frame is 11 to 128 times more accurate over the closing phase and changes propellant by 0 .09%. Terminal accuracy is deliberately absent from Table 2. The Cartesian cells reach the interface on fewer draws, so their miss statistics are taken over a different and easier subset, and at five draws per cell the comparison would not be worth making even if the subsets matched. Where accuracy is bought in this paper is the attitude coupling of Section 8, not the certificate. 710 2 10 3
+
+sampling period Ts [s] 
+
+0.0 0.2 0.4 0.6 0.8 1.0    
+
+> certified eccentricity  e
+> homing closing
+> Perron-Frobenius pointwise (weaker) MSRE, e= 0.204
+> e= 0.5
+
+Fig. 3: 𝑒 ★(𝑇 𝑠 ) under the Perron–Frobenius condition (9), against the weaker pointwise condition earlier work reported. 10 1 10 2 10 3
+
+sampling period Ts [s] 
+
+10 2
+
+10 1
+
+10 0
+
+10 1
+
+10 2
+
+10 3
+
+10 4       
+
+> separation [km]
+> admissible below, w= 5 m
+> admissible below, w= 0.05 m
+> homing, 23 ×outside closing, inside final appr., inside
+
+Fig. 4: The separation limit (10) against sampling period, each phase at its own period and opening range. Table 2: What the validity bound is worth. Five draws per cell, medians, at the simulator of Table 4. Reached counts draws that arrived at the target approach point. 
+
+Treatment Form kg Reached 
+
+Homing, 497 –852 × outside the bound 
+
+Cartesian, ignored QP 1185 4/5Elements, followed QP 108 5/5
+
+Cartesian, ignored 1-norm 1158 2/5Elements, followed 1-norm 69 4/5
+
+Closing, inside the bound 
+
+Cartesian, followed QP reference Cylindrical, wasted QP −0.09% 
+
+# 6 Horizon Selection and the Tight-ened Terminal Set 
+
+The variable horizon is not a contribution of this work. The benchmark’s guidance already solves, at every call, 
+
+𝑁 ★ = arg min    
+
+> 𝑁 ∈ [ 𝑛 min ,𝑛 max ]
+
+𝐽 (𝑁 ), 𝐽 (𝑁 ) = 𝑁 + 𝑤 𝑢 ∥u★(𝑁 )∥ 1,
+
+(11) so that each extra step of manoeuvre time costs one unit and has to repay it in propellant [5, §4.2]. We adopt (11) unchanged, including the benchmark’s own 𝑤 𝑢 rather than a retuned one, and apply the same rule to both objective forms compared below, so that the forms differ in what is minimised at fixed 𝑁 and never in how 𝑁 is chosen. One difference of implementation is worth recording: at each candidate 𝑁 the benchmark solves a linear program, the 1-norm being its objective, whereas the inner problem here is the quadratic program (5) and (11) scores its solution. What the tube changes is the set the search runs against. In the benchmark the constraint set seen at every candidate is the nominal one and does not depend on 𝑁 , so a longer horizon is strictly more reachable and the only price is the 
+
++1. Under (6) the terminal row available at horizon 𝑁 is 
+
+|𝛿𝑒 𝑁 ( 𝑗 )| ≤ tol 𝑗 − ¯𝑒 𝑗 (𝑁 ), (12) whose right-hand side is eroded as 𝑁 grows, and the in-track acceptance window is closed from both sides by the tube’s own position uncertainty: 2 .5 km of closure at 𝑁 = 8against 20 .3 km at 𝑁 = 25, on a half-window of 10 km. Feasibility therefore occupies an interval 𝑁 ∈ [ 𝑁 (𝛿 e), 𝑁 ]
+
+rather than a half-line. Too short cannot reach, and too long is tightened out of existence. Horizon selection and robustness margin are solved together in (11), which is the sense in which the tightening here is horizon-dependent; the horizon being variable is inherited, the horizon being an argument of the margin is not. 
+
+# What the cap was silently deciding 
+
+The lower end 𝑁 rises with the dispersion, so a cap chosen for compute can remove a draw from the campaign alto-gether. One Monte Carlo draw in twenty-five did exactly that at 𝑛 max = 25: every candidate horizon was infeasi-ble, the untightened fallback was infeasible as well, the solver returned nothing nine times in succession, and the run abandoned 908 km out having spent no propellant. That is not a tuning failure and not an authority failure. From the Gauss variational equation a tangential impulse changes semi-major axis by 𝛿𝑎 = 2𝑎 2𝑣 Δ𝑣 𝑡 /𝜇 , which at 
+
+𝑢 max = 3 m/s removes up to 9 .2 km of 𝛿𝑎 per burn on the elliptical scenario, so pure authority would need only six to eight steps. What binds is phasing: a semi-major-axis error is an in-track drift rate ¤𝑥 1 = − 32 𝑛 𝛿𝑎 , and the largest error that can be flown into a 𝑊 = 20 km window within one sample is 
+
+𝛿𝑎 ★ = 2𝑊 
+
+3𝑛𝑇 𝑠 
+
+= 34 km (elliptical) , 26 km (circular) .
+
+(13) 80 120 240 
+
+target true anomaly [deg] 
+
+30 40 50 60 70    
+
+> semi-major-axis error  a [km]
+> a= 34 km
+> flew at both stalled at nmax = 25
+
+Fig. 5: The 21 stress cells at full fidelity. Open markers spent nothing at 𝑛 max = 25 and flew at 50. Above 𝛿𝑎 ★ a single step of drift overshoots the whole win-dow, so the drift rate must first be bled down, and where the vehicle ends up while it is being bled depends on where it started. The failure boundary is a joint condition on 
+
+(𝛿𝑎, 𝛿𝜈 ), not a threshold on either. That prediction is what the stress grid of Fig. 5 tests, on cells clustered where the controller broke rather than sampled at random, because a random draw puts almost no mass at the top of the dispersion range. Semi-major-axis errors from 35 to 70 km crossed with three target true anomalies give 21 cells at full fidelity: 𝑛 max = 25 flew 11 of them and 𝑛 max = 50 flew all 21, with no cell made worse. A stalled cell is one that spent no propellant at all, having found no feasible horizon at any candidate, which is a different and more visible failure than arriving badly. The boundary is the staircase the argument above predicts, holding through 60 km at 𝛿𝜈 = 0 and breaking from 45 km at 𝛿𝜈 = 240 ◦, against the 34 km of (13); the gap is the few steps of bleeding a longer horizon can afford. On the eleven cells both caps flew, the longer one is 15 .8 m/s cheaper paired and cheaper on all eleven, so the short cap was not only refusing hard problems but forcing worse plans on ones it could still solve. The only cost is 2 .5 times the wall clock (Table 8). The cap remains binding at 50, and the selection history says so rather than the argument asserting it. Logged at every one of the 71 398 guidance calls of the 1000 dispersed transfers of Section 8, the selected horizon has a median of 23 steps but sits within one step of the cap on 22% of them, and the pile-up is heavier on the circular scenario (25%) than the elliptical one (20%). The guidance is not choosing 50; it is limited to 50. Whether 75 would help further has not been flown. Table 3: The replication reproduces the published propel-lant on both scopes. One undispersed transfer from the Table 1 elements of Ref. [5]. Form Scen. Hom. +Clos. vs Ref. full vs Ref. [kg] text [kg] curve HARVD [5] C – – 136.53 1.301 Reference MPC [5] C 102.96 1.000 104.92 1.000                                                   
+
+> Reference impl. C102.27 0.993 104.83 0.999
+> Reference impl. (Kep.) C85.92 0.834 88.63 0.845 Reference impl. (GVE) C74.85 0.727 77.69 0.740
+> Proposed C76.04 0.739 77.58 0.739 HARVD [5] E––130.53 1.427 Reference MPC [5] E89.29 1.000 91.47 1.000
+> Reference impl. E93.98 1.053 96.55 1.056
+> Reference impl. (Kep.) E62.09 0.695 64.94 0.710 Reference impl. (GVE) E59.40 0.665 61.90 0.677
+> Proposed E55.61 0.623 57.69 0.631
+
+# 7 Simulation Setup 
+
+# How faithful the benchmark is 
+
+Every comparison below is made against a reimplementa-tion of Hartley’s controller rather than against the published propellant, and the reason is reproducibility rather than dis-agreement. Reimplemented faithfully, with the reference 
+
+𝐽 2-modified GVE predictor and the initial hold applied before the first burn, the replication returns 102 .27 kg of homing and closing propellant against the reference 102 .96 on the circular scenario and 93 .98 against 89 .29 on the el-liptical one, ratios of 0 .993 and 1 .053 (Table 3). Measured instead against the digitised reference full-mission curve the same runs give 0 .999 and 1 .056, so the match does not depend on which of the two scopes is used, and that agreement is the licence for every comparison that follows. Both pieces of the reference controller have to be present for it. Dropping the initial hold alone takes the circular ra-tio from 0 .993 to 0 .727, and dropping the GVE predictor as well moves it back to 0 .834, which is a partial cancellation of two omissions rather than a recovery; an earlier draft measured the no-hold variant, read 0 .82, and concluded the replication had failed, when what it had done was leave out a piece of the reference controller. Quoting the reimplementation as the ruler, rather than the published propellant, keeps the plant, the frames, the phase ladder, the thruster model and the assumed specific impulse identical on both sides of every comparison, which is the only arrangement under which a difference can be attributed to the controller. It also means the comparison inherits whatever the reference controller does well: the replication is not a straw baseline chosen to be beaten, it is a reconstruction that lands on the published value and is then flown against ours on the same seeds. The shortfall is understood well enough to be stated rather than merely disclosed, and it is not a defect of the objective. The program class matches the reference class in every phase: a linear program for the two long-range 9phases and a quadratic program for the last hundred me-tres, switching once at the target approach point, exactly as specified in [5, §8]. Nor is it a weighting. Sweeping the fuel weight across six decades saturates above 𝑤 𝑢 ≈ 300, and the saturated limit is a greedy minimum-fuel policy that still costs 85 .7 kg against the published 102 .96: a weight can move a solution along its own Pareto front but cannot push it above its own fuel optimum. What remains is the constraint set. The reference passive-safety half-spaces, the reference drift condition and the reference one-sample computational delay are all absent from the reimplemen-tation because the safety radius 𝑅 𝑆 (𝑡 ) that parameterises them is never published, and every one of them can only raise the optimum of the program actually solved. The gap therefore has the sign the omissions predict, on both scenarios and in both long-range phases. One consequence is visible in the trajectories and is worth stating because it looks like an error and is not. The published tracks spend 86% of their length at positive in-track and reach +154 km, while the reimplementation ap-proaches monotonically and never crosses the target. The initial condition carries a large natural drift, closing 296 km unaided within two thirds of an orbit, and the reference first burn falls where that drift delivers the chaser rather than where a schedule places it. A hold that releases when coasting stops closing the range faster than the thrusters could reproduces both the reference epoch and the refer-ence geometry, at a cost of 19% more propellant on the circular scenario and 51% on the elliptical one. That the faithful variant is the expensive one is the clearest evidence that the missing constraints, and not the tuning, separate the two implementations. 
+
+# Truth-plant fidelity ladder and reproducibil-ity boundary 
+
+Every transfer campaign in Section 8 is flown on the simu-lator of Table 4, with every environment term switched on and vehicle parameters redrawn per seed, and against the error model of Table 6. The configuration is recorded in the metadata of every output record, and all 5000 records be-hind Section 8 carry it, so no result in this paper mixes con-figurations. Truth fidelity is also distinct from the model inside the optimizer: changing the propagation does not turn a YA or element-space controller into nonlinear MPC. The full translational truth of the V2 rungs is 
+
+¤v = a50 𝑐 + a3𝐵 + aSRP + a𝐷 , (14) where the complete normalized degree/order-50 Mars50c potential is evaluated in a rotating Mars-fixed frame and transformed back to inertial coordinates. Solar third-body gravity is differential, SRP includes cylindrical eclipse, and drag uses a co-rotating exponential atmosphere. The attitude rung adds 𝐼 ¤𝝎 = 𝝉 −𝝎 ×𝐼 𝝎 and quaternion kinemat-ics, with gravity-gradient, SRP and drag torques. Which of these numbers the reference publishes and which are ours is marked term by term in the last column of Table 4, so the boundary between reproduction and assumption is visible without consulting the source. Table 6 states the navigation model in the units it is drawn in rather than as a citation: the published 3 𝜎 bounds divided by three, split per component, and interpolated lin-early in range between 100 m and 5 km. One entry needed interpretation, because the source labels every column a percentage of range and that is dimensionally impossible for velocity; beyond 5 km the velocity figure is therefore read as the absolute value printed. The simulator sends ev-ery command through one physical actuator path that limits net support to 20 N, allocates the assumed eight-thruster block, applies the 1 s pulse train, MIB, quantisation and on-time error, realizes the state impulse and charges the same individual on-times. This removes the V1 separation between an ideal state jump and a fuel-only derating. The reference scenario is the MSRE approach of Ta-ble 1, driven by one configuration shared by the simula-tions, Monte Carlo runs, and figures. Table 5 lists the orbit and vehicle parameters and Table 6 every error act-ing on them. Initial elements are uniform on their ranges, 
+
+𝛿𝑎 ∈ [− 50 , 50 ] km and 𝛿𝑖, 𝛿 Ω, 𝛿𝜛 ∈ [− 0.3, 0.3]◦ for the chaser, 𝛿𝑎 ∈ [− 10 , 10 ] km and 𝛿𝜈 ∈ [ 0, 320 ]◦ for the tar-get. The tube itself is designed against the per-step bounds ¯wtr = [5 m ×3, 5 × 10 −3 m/s×3] in the transfer phases and ¯wfin = [0.05 , 5 × 10 −4] in the final one, rescaled with 𝑇 𝑠 
+
+as (𝑇 𝑠 /𝑇 ref  
+
+> 𝑠
+
+)2 on position and (𝑇 𝑠 /𝑇 ref  
+
+> 𝑠
+
+) on velocity, since a bounded acceleration error moves velocity linearly in the step and position quadratically. Holding the width fixed while shortening 𝑇 𝑠 empties the tightened input box and the vehicle free-drifts, so the rescaling is not optional. Draws are paired: for a given seed every controller sees the same dispersion, the same navigation stream and the same actuator execution error, so a comparison is a median of per-trial differences rather than a difference of medians between independent samples. 
+
+# Sharing one actuator between translation and pointing 
+
+Thrust acts through the centre of mass, so a burn produces no torque and the two channels do not compete for momen-tum. They compete for on-time. Charging attitude work through the same propellant budget at Δ𝑣 𝑎𝑡𝑡 = 𝑐 ∥𝝉 ∥, with 
+
+𝑐 = 2𝑡 burn /( ℓ𝑚 ) set by the lever arm and the pulse length, makes that competition explicit and lets it be written as one constraint per step, 
+
+|𝑣 𝑘,𝑖 | + 𝑐 ∥𝝉 𝑘 ∥1 ≤ 𝑢 tight ,𝑖,𝑘 , (15) added to the final-phase program alongside pointing terms 
+
+q⊤ 
+
+> 𝑣,𝑘
+
+𝑄 𝑞 q𝑣,𝑘 + 𝝎 ⊤ 
+
+> 𝑘
+
+𝑄 𝜔 𝝎 𝑘 in the cost and ∥𝝉 𝑘 ∥∞ ≤ 𝜏 lim /√3. The 1-norm in (15) upper-bounds the 2-norm the charge is taken on, so the reservation never under-books. The 10 Table 4: The truth simulator every campaign is flown on. The last column separates what Ref. [5] publishes from what we assume.                                                                                    
+
+> Effect Model Parameters Provenance Central gravity point mass 𝜇 M=4.283465 ×10 13 m3s−2Mars50c Non-spherical grav-ity normalised 50 ×50 field, evalu-ated Mars-fixed and rotated back
+> 𝑅 M=3396 .19 km, 𝐽 2=
+> 1.960454 ×10 −3,𝜔 M=
+> 7.0882 ×10 −5rad s −1
+> Mars50c; prime-meridian epoch assumed 0 ◦
+> Third body Sun, differential 𝜇 ⊙=1.327124 ×10 20 m3s−2,
+> 𝑎 M=1.5237 AU, 𝑒 M=0.0934 standard Solar radiation pres-sure cannonball with cylindrical shadow, so eclipse entry and exit are modelled
+> 𝑆 1AU =1361 W m −2,𝐴 =
+> 10 m 2,𝐶 𝑟 =1.3
+> 𝐴 ,𝐶 𝑟 assumed Atmospheric drag co-rotating exponential atmo-sphere
+> 𝜌 0=0.020 kg m −3at the sur-face, 𝐻 =11 .1 km, 𝐶 𝑑 =2.2,
+> 𝐴 =10 m 2
+> assumed Attitude rigid body, 𝐼 ¤𝝎 =𝝉 −𝝎 ×𝐼 𝝎 ,with quaternion kinematics gravity-gradient, SRP and drag torques; centre-of-pressure off-sets ±0.05 m on body 𝑥
+> inertia published; offsets assumed Actuation 8×22 N block, 20 N guaranteed net translation, 1 s pulse train minimum impulse bit 0 .068 s, on-time quantisation 0 .01 s, on-time error 1 𝜎 =0.01 s published Integration RK4 10 smaximum translational step, 2 s attitude step —
+
+Table 5: Scenario and vehicle parameters. The state box is inert as flown. Parameter Value Semi-major axis 𝑎 4 643 km Eccentricity 𝑒 0.204 Orbit period 2.67 h Chaser mass 1 575 kg Guaranteed net thrust 𝐹 𝑐 20 N Thruster block 8 × 22 N, MIB 0.068 s Approach 300 km → contact State box (as flown) inert, ±10 9 mCapture requirement √︁ 𝑦 2 + 𝑧 2 < 0.20 m Blinding range 𝑑 𝑏 3 m, then free drift attitude prediction that goes with it is linear: with 𝝃 =
+
+[q𝑒,𝑣 ; 𝝎 𝑒 ] the small-angle kinematics give a nilpotent 𝐴 𝑐 ,for which forward Euler and the matrix exponential coin-cide, and the gyroscopic term 𝝎 × 𝐽 𝝎 vanishes to first order about 𝝎 𝑒 = 0. Only the predictor is linear. The plant in-tegrates the full nonlinear rigid body with gravity-gradient and radiation-pressure torques, so the linearisation is a modelling error the loop absorbs rather than a change to the physics. The alternative form, labelled Proposed (uncou-pled) below, runs the identical translation guidance with an uncoupled quaternion-feedback PD, 𝝉 = −𝑘 𝑝 q𝑒 − 𝑘 𝑑 𝝎 𝑒 
+
+saturated at 𝜏 lim , executed after the translation program has already committed the interval so that neither sees the other. 
+
+# 8 Results 
+
+# Two tests, and why they must be reported apart 
+
+Every comparison in this section is a full transfer from 300 km to capture on the simulator of Table 4, 500 dis-persed draws per scenario per form, seeds paired across forms by construction. Control stops at 𝜌 = 3 m and the vehicle coasts, so the arrival is scored on a free-drift cross-ing of the target plane rather than on a commanded state, and that scoring involves two questions which earlier drafts of this paper welded into one phrase. The first is whether the coast crosses the plane at all. The second is whether the crossing falls inside the 0 .20 m requirement circle. A draw can pass the first and fail the second, and on the elliptical scenario up to 48 draws in 500 do exactly that, so Table 7 prints the two counts in separate columns and no sentence below merges them. Requirement compliance is where the result is strongest and it is eccentricity-specific. On the circular scenario ev-ery form is at or within one draw of 500 of 500, and noth-ing separates them. On the elliptical scenario the proposed form is at 500 of 500 and the three replication variants are at 468, 463 and 452, that is 93 .6, 92 .6 and 90 .4%, with Wilson intervals of [91 .1, 95 .4], [90 .0, 94 .6] and [87 .5, 92 .7]%that reach nowhere near the proposed form’s [99 .2, 100 ].Roughly one elliptical transfer in eleven arrives outside the requirement under the reimplemented benchmark, and none does under the tube. Three of the replication misses sit within a millimetre of the boundary and would flip under a looser reading of it, which changes no interval materially. 11 Table 6: Every error the vehicle sees. Navigation and execution act at every guidance call; the mismatch scales are drawn once per seed.                                                                         
+
+> Source 1𝜎 , per axis worst realised
+> Navigation, zero mean, redrawn every guidance call
+> range <100 m 8.25 ×10 −3m; (3.00 ,2.33 ,2.33 ) × 10 −3m/s —100 m to 5 km linear in range to 0 .577 m; 1 .92 ×10 −2m/s —range >5 km 1.92 ×10 −4𝜌 ; 5 .77 ×10 −4m/s —
+> Thruster execution, on every command
+> minimum impulse bit 0.068 s =9.50 ×10 −4m/s, below which a command is dropped —on-time quantisation 0.01 s =1.40 ×10 −4m/s —on-time error 0.01 s =1.40 ×10 −4m/s —
+> Parameter mismatch, multiplicative, one draw per seed
+> Area 0.10 25 .4% Drag coefficient 𝐶 𝑑 0.10 24 .5% Reflectivity 𝐶 𝑟 0.10 21 .6% Mass 0.05 17 .9% Inertia 0.05 11 .1% Thrust 0.02 4.6% Gravitational 𝜇 10 −5—Initial pointing 2◦about the pointing solution 5.3◦
+> Initial body rate 0.05 ◦/s —
+
+# Propellant, paired seed by seed 
+
+Propellant separates in both scenarios and by a margin the unpaired statistics would hide. The per-draw standard deviation is 17 to 30 kg against differences of 24 to 33 kg, so a difference of means is nearly uninformative while the paired difference is decisive. Against the best replication the proposed form is 24 .05 kg cheaper on the circular scenario, winning 472 of 500 matched seeds, and 31 .39 kg cheaper on the elliptical one, winning 497 of 500 (Table 7, Fig. 8). Expressed against the baseline those are savings of 29 .2 and 39 .6%; the same numbers read the other way round, as the baseline spending more than the proposed form does, are 41 .3 and 65 .4%, and the two differ only in the denominator. Mean totals are 58 .18 and 47 .97 kg against 82 .23 and 79 .37. The ranking is unchanged across all three replication variants, which span 81 .85 to 85 .56 kg circular and 79 .37 to 80 .94 elliptical, so the comparison does not rest on picking a convenient baseline. Nothing about this is free. The proposed form flies 15 .41 and 9 .03 orbits against 5 .55 and 4 .47, factors of 2 .8and 2 .0, and a mission that cannot spend the extra time cannot spend the saving either. The replication front-loads its correction and is finished inside six orbits; the tube spreads the same correction over a longer coast and never reaches the replication’s level. 
+
+# The tail, and the one draw that runs the other way 
+
+The tail splits by scenario in the same direction the re-quirement compliance does. On the elliptical scenario the proposed form holds a 95th-percentile miss of 10 .39 cm against 32 .55 for the best replication and 43 .97 for the faithful reimplementation, factors of 3 .1 and 4 .2, and a worst case of 16 .69 cm against 170 .01 and 185 .33. On the circular scenario the ordering reverses and the margin is small, 10 .73 cm against 10 .18 and 9 .82, and the medians are within 0 .2 cm across every cell, so median accuracy discriminates nothing and is not claimed to. Figure 10 draws the two clouds against the requirement. A draw that misses widely leaves the frame rather than landing at its edge: one proposed draw does so on the circular scenario and none of the reference, and on the elliptical one 29 ref-erence draws do so and no proposed one. The diamonds are the same guidance flown to the interface under control instead of released at 3 m, read as the lateral offset where control ends, because a vehicle still being controlled has no drift to score; over the 25 and 20 cases of the arrival bank the medians are 2 .22 against 3 .36 cm circular and 1 .42 against 5 .77 cm elliptical, so the accuracy floor is set by the uncontrolled last three metres and not by the guidance. One circular draw reaches 179 .17 cm and is reported rather than trimmed. It is the only proposed-form arrival outside the requirement in 1000 draws, and it does not originate in the final approach: its hand-over lateral rate is 13 times the 99 .8th percentile of the same campaign, and across the 500 circular draws that rate correlates with the eventual miss at 𝑟 = 0.963. Excluding it the circular worst case is 16 .16 cm. The draw arrives at the final approach already broken, which is a hand-over gate question rather than a guidance one, and the gate that would catch it is the in-track and orbit-match conjunction of Section 3 rather than anything inside (5). Isolating the attitude coupling makes the tail argument concrete, and it is a smaller experiment than the rest of this 12 40 50 60 70 80 90 
+
+mean propellant [kg] 
+
+010 20 30 40 50 
+
+> capture miss [cm]
+
+## Circular 
+
+> Reference impl. Reference impl., GVE Reference impl., GVE + hold Proposed Proposed, held
+
+40 50 60 70 80 90 
+
+mean propellant [kg] 
+
+010 20 30 40 50 
+
+> requirement
+
+## Elliptical Fig. 6: The ten cells of Table 7, propellant against capture accuracy. Marker at the median miss, whisker to the 95th percentile. The reimplementation family collapses onto a single propellant cluster under dispersion on both scenarios, and its eccentric tails cross the requirement while neither proposed cell does. section. Proposed (uncoupled) is the identical guidance with the uncoupled attitude PD of Section 7, run against Proposed on 25 paired draws per scenario at the same fi-delity, and the two must be read only against each other because 25 draws will not support a comparison with the 500-draw cells above. On those draws the coupling costs 0.02 kg, which is nothing, and moves the 95th-percentile miss from 10 .87 to 8 .70 cm circular and from 12 .18 to 7.94 cm elliptical while leaving the median half a centime-tre worse. Solving translation and pointing in one program buys the tail and nothing else, which is what (15) predicts, since attitude is one to three per cent of the phase charge and that fraction is the ceiling on what the coupling can be worth in propellant. 
+
+# How much of the margin is the head start 
+
+The faithful reimplementation reaches the published value partly because it holds its homing command before the first burn, so a reader is entitled to ask how much of the proposed form’s margin is the controller and how much is firing earlier. Holding the proposed form to the same epoch answers it. The hold is commanded as a duration and released at the first guidance call at or after it, so the epoch flown is not the epoch asked for: against the measured ref-erence release of 0 .570 orbits circular and 0 .687 elliptical, the homing command grid of one call per 600 s releases at 0 .651 and 0 .687, the circular case landing 14 .2% late and the elliptical one happening to fall on its commanded value. What follows is therefore a slightly longer hold than intended on the circular scenario, and since a longer hold costs more, the cost quoted below is an upper bound on the cost of the epoch that was meant. The answer then depends on how many draws the question is asked over. On one nominal case the hold costs 31% circular and 20% elliptical, which would leave almost nothing of the circular margin. Over 500 dispersed draws it costs 9 .7 and 14 .2%, and the held form still spends 63 .84 and 54 .78 kg against 81 .85 to 85 .56 and 79 .37 to 80 .94 for the replications. The reversal is the point rather than an inconvenience: a single-seed experiment put the head start at a third of the effect and the dispersed one puts it at a tenth, and the two disagree by more than either is worth. Figure 11 draws both on one axes. The hold also removes the circular outlier, taking the worst case from 179 .17 to 16 .01 cm, at the price of a worse elliptical worst case, 36 .73 against 16 .69. 
+
+# Where the propellant goes, and against what floor 
+
+The phase split decides how much any of this can be worth, and it is lopsided. Over the 500 captured draws of the pro-posed form, homing takes 50 .04 kg of a charged 58 .46 on the circular scenario and 40 .93 of 48 .16 on the el-liptical one, the closing 6 .70 and 5 .38 kg, and the final approach 1 .72 and 1 .85. In percentages that is 86 /11 /3and 85 /11 /4, and Fig. 12 shows the split holds trial by trial rather than only on the mean, with a median homing share of 85 and 84% and an interquartile range of four to ten points. Two consequences follow directly. Any claim that a final-approach retuning delivers a large propellant saving is bounded above by about 2 kg whatever the tuning does, and the 15 .8 m/s the horizon change of Section 6 recovered can only have come from homing, which is the phase whose horizon is being chosen. An absolute yardstick keeps the comparison honest in the other direction. The idealised two-impulse transfer for the circular scenario, a Hohmann-class correction of the 50 km semi-major-axis error plus the 0 .3◦ plane change, costs 38 .9 m/s, of which the plane change alone is 17 .4. 13 Table 7: Propellant separates in both scenarios; compliance and the tail only in the elliptical one. 500 dispersed draws per cell on paired seeds. The last two columns are the paired comparison against the proposed form: a positive median difference means the baseline spends more on the median seed, and cheaper counts the seeds on which it does. Form Scen. Cross Within miss [cm] propellant paired vs prop. /500 /500 med p95 worst [kg] vs ref. vs prop. med Δ cheaper Ref. impl. (Kep.) C 500 500 5.14 10.18 17.25 82.23 – +41 .3 +25 .20 472/500 Ref. impl. (GVE) C 500 500 4.67 9.47 14.45 81.85 −0.5 +40 .7 +24 .82 471/500 Ref. impl. (GVE, held) C 500 500 4.63 9.82 14.45 85.56 +4.0 +47 .0 +28 .87 479/500 
+
+Proposed C 500 499 5.15 10.73 179.17 58.18 −29 .2 – – –Proposed (held) C 500 500 5.11 10.63 16.01 63.84 −22 .4 +9.7 +5.46 395/500 Ref. impl. (Kep.) E 499 468 5.31 32.55 170.01 79.37 – +65 .4 +33 .62 497/500 Ref. impl. (GVE) E 500 463 4.82 31.17 185.33 79.58 +0.3 +65 .9 +34 .19 495/500 Ref. impl. (GVE, held) E 500 452 5.19 43.97 185.33 80.94 +2.0 +68 .7 +34 .93 499/500 
+
+Proposed E 500 500 5.10 10.39 16.69 47.97 −39 .6 – – –Proposed (held) E 500 499 5.48 11.13 36.73 54.78 −31 .0 +14 .2 +5.28 405/500 Table 8: What the horizon enumeration costs, on the 21-cell stress grid. Quantity 𝑛 max = 25 𝑛 max = 50 Stress cells flown 11/21 21/21 Median Δ𝑣 , cells both flew [m/s] 141.7 122.1 Median wall clock per cell [s] 168 423 Wall clock, paired ratio 1.00 2.53 The proposed form charges a mean 81 .4 m/s over the 500 draws, a factor of 2 .1 above that floor, and the replication 116 .1 m/s, a factor of 3 .0. Neither is close to optimal and neither should be, since the floor assumes perfect knowl-edge, instantaneous impulses and no acceptance window while both controllers fly a dispersed vehicle through nav-igation error to a 20 cm interface. Quoting it establishes that a third saved is a third off a number that still has room in it, not a claim of optimality. 
+
+# Computational cost 
+
+The enumeration in (11) is what the horizon rule costs, and Table 8 prices it on the stress grid where the two caps can be compared cell by cell. Doubling the cap from 25 to 50 candidates multiplies the wall clock per cell by 2 .53 and buys ten cells that were previously unflyable together with 15 .8 m/s on the eleven that were. That cost is paid in a phase sampled at 600 s, so it is not a real-time constraint; the final approach, which is sampled at 3 s, solves a fixed 15-step horizon on six states with no enumeration at all. OSQP median solve times for the tightened program run a few milliseconds and the tightened bounds add about a millisecond to the median, with a long right tail from cold starts. 
+
+# 9 Discussion 
+
+The divergence at 𝑒 ★ is kinematic. Kepler’s second law fixes the periapsis-to-apoapsis rate ratio at (( 1 + 𝑒 )/( 1 −
+
+𝑒 )) 2; uniform-period sampling gives each step the same wall-clock duration, but a periapsis step covers a much larger true-anomaly arc. The YA matrices inherit this asymmetry, and as 𝑒 grows the worst-case step dominates ¯𝐴 . The same asymmetry that makes the YA model neces-sary, namely the failure of CW on eccentric orbits, is what eventually bounds the tube built on it. Operationally the threshold partitions the design space, but only once the sampling period is fixed with it. At 
+
+𝑇 𝑠 = 200 s the constant-gain LTV tube is admissible up to 
+
+𝑒 ≈ 0.65, which covers planetary capture, Moon-class and Earth LEO operations and leaves Mars a 3 .2× margin; at the 600 s homing period the same design certifies only to 0.362, and at 900 s to 0 .249, so an orbit at 𝑒 = 0.5 passes at the fast rate and fails at the slow one. GTO at 𝑒 = 0.73 is outside the envelope at every period tested here and de-mands a review of the disturbance budget before flight. Eccentricities approaching 0 .7 are the natural domain of a richer ancillary formulation, such as a periodic gain 𝐾 (𝜈 )
+
+following the orbit or variable-rate sampling that short-ens 𝑇 𝑠 at periapsis, and the certificate identifies exactly where that extra complexity begins to earn its cost. The underlying question, whether a fixed gain survives control authority that varies periodically along the orbit, recurs outside rendezvous: magnetic detumbling faces the same structure, with the achievable torque direction set by the local field rather than by true anomaly [21]. Two limitations bound how far any of this generalises. The threshold is sufficient and not tight, since it assumes a constant ancillary 𝐾 , a uniform 𝑇 𝑠 and an additive box disturbance bound, and richer formulations such as a 𝜈 -scheduled gain or an ellipsoidal tube should extend the envelope by a body-dependent constant without changing the structural form of the recursion. The propellant result, 14 −200 0 200 
+
+in-track xtof [km] 
+
+−20 020 40 60 
+
+> radial  ztof  [km]
+
+## Circular 
+
+−400 −200 0 200 
+
+in-track xtof [km] 
+
+050 100 
+
+## Elliptical 
+
+> HARVD MPC, reference proposed proposed, held
+
+0 10 20 30 
+
+time [h] 
+
+0 5 10 15 
+
+time [orbits] 
+
+025 50 75 100 125 
+
+> propellant [kg]
+
+0 10 20 30 
+
+time [h] 
+
+0 2 4 6 8 10 
+
+time [orbits] 
+
+020 40 60 80 100 120 Fig. 7: The Fig. 12 conditions of Ref. [5], both scenarios, undispersed. Track above, charged propellant below, on the layout the reference uses. The held variant releases at the reference’s own first-burn epoch and recovers the published geometry the released law does not, crossing to positive in-track and looping back instead of approaching monotonically; that detour is what its extra propellant buys, 101 .8 against 77 .6 kg circular and 69 .0 against 57 .7 kg elliptical. meanwhile, is bought with time of flight at a factor of two to three, so it belongs to a mission that can spend orbits rather than to one on a fixed arrival window. The corridor diag-nostic that would show the tightening removing constraint violations, the cross-body envelope and the geostationary co-location study are all carried in the companion journal treatment [25], where the scenarios that exercise them can be given the space to be described properly. 
+
+# 10 Conclusion 
+
+A box-tightened tube is sound only while the predictor it is built on errs by less than the disturbance bound it was certified against, and (10) makes that condition a number that depends on the sampling period as much as on the orbit: 26 .4 km of separation at 300 s, 13 .2 km at 600 s. The bound earns its place by predicting rather than describing. It says that the homing phase, which opens 23 times outside its own limit and overruns ¯ 𝑤 by factors of 497 and 852, must be re-posed, and that the closing phase, which sits a factor of 15 40      
+
+> 20
+> 020
+> [kg] at the 75 kg median baseline
+> 0100 200 300 400 500
+
+trial, ranked by difference 
+
+> 60
+> 40
+> 20
+> 020 40
+> Proposed  Reference impl. [%]
+> circular, 472/500 cheaper elliptical, 497/500 cheaper
+
+Fig. 8: Per-trial propellant difference against the best repli-cation, sorted, as a percentage of that trial’s own baseline. The right axis converts at one number and is a reading aid. 2.6 inside it, cannot benefit from the same treatment. Both were then measured: element space restored the certificate to 15 to 28% margin, while a cylindrical frame 128 times more accurate over the closing phase changed propellant by 0 .09%. Tightening also makes the prediction horizon part of what is certified, and that coupling is where the second result comes from. The variable horizon itself is the benchmark’s, adopted here with its own weight and its own selection functional; what changes is that the terminal tolerance available at horizon 𝑁 is eroded by a tightening that grows with 𝑁 , so reach and margin are traded inside one enumeration. Raising the search cap from 25 to 50 steps took a 21-cell stress grid from 11 flown approaches to 21, cost 2 .5 times the wall clock, and was 15 .8 m/s cheaper on the eleven cells both caps flew. The failure it removed was invisible in a twenty-draw campaign and to-tal in the twenty-fifth, and its boundary is a joint condition on semi-major-axis error and target true anomaly, so no single-variable sweep would have located it. The cap is still binding at 50: over 71 398 guidance calls the selected horizon sits within one step of it 22% of the time. Over 500 dispersed transfers per scenario from 300 km to capture, at 50 × 50 Mars gravity with third-body, radiation-pressure, drag and attitude terms and per-seed parame-ter mismatch, the attitude-coupled form arrives inside the 0.20 m requirement on 499 and 500 of 500 draws, against 452 to 468 of 500 for the three replication variants on the elliptical scenario, and spends 24 .1 and 31 .4 kg less on 472 and 497 of 500 matched seeds. Requirement compliance, the tail and the propellant margin all split by eccentricity rather than uniformly: the 95th-percentile miss is 10 .39 cm elliptical against 32 .55, but 10 .73 against 10 .18 circular, so what is claimed is propellant in both scenarios and com-pliance and tail in the elliptical one. Solving translation and pointing in one program is what buys the tail, since on a 25-draw paired ablation the uncoupled pointing loop costs 0 .02 kg and opens the same percentile from 8 .70 and 7.94 cm to 10 .87 and 12 .18. The saving costs 2 .8 and 2.0 times the time of flight, and set against an idealised two-impulse floor of 38 .9 m/s for the circular case the pro-posed form charges 81 .4 m/s, 2 .1 times the floor, against the replication’s 116 .1. Two results run the other way and one experiment re-verses itself under dispersion. The eccentricity certificate is not the single scalar earlier work took it for: it is in-sensitive to where the ancillary gain is designed and to the design weights, but it falls by a factor of 3 .4 across the sampling periods a phased approach schedules, so quoting it without a period would certify an 𝑒 = 0.5 orbit that loses the certificate above 368 s. The tightening is also not where the propellant is, since 85 to 86% of the budget is spent in homing and under 4% in the final approach, so what the tube buys on this scenario is the horizon rule of Section 6 rather than a corridor margin the inert state box never asks for. And the head-start ablation measured at one seed put the initial hold at a third of the propellant difference where five hundred dispersed draws put it at a tenth, which is a re-minder that a nominal case can rank two designs the wrong way round. Robust constraint satisfaction is the only guar-antee proved here. Recursive feasibility is not, because the terminal ellipsoid that would deliver it makes the program a QCQP the solver cannot accept and the campaigns run without any terminal constraint at all, and asymptotic sta-bility is not, because with no terminal set the DARE cost is not a Lyapunov function. What carried the result was the reformulation the validity bound pointed to, the horizon it is chosen against, and the cost form. 
+
+# Acknowledgements 
+
+The authors thank the OSQP developers [30], whose solver underpins every result reported here. 
+
+# References 
+
+[1] K. Yamanaka and F. Ankersen. New state transition matrix for relative motion on an arbitrary elliptical orbit. Journal of Guidance, Control, and Dynamics ,25(1):60–66, 2002. [2] J. Tschauner and P. Hempel. Rendezvous zu einem in elliptischer bahn umlaufenden ziel. Astronautica Acta , 11(2):104–109, 1965. [3] R. Biesbroek, S. Aziz, A. Wolahan, S. F. Cipolla, M. Richard-Noca, and L. Piguet. The ClearSpace-1 mission: ESA and ClearSpace team up to remove debris. In 8th European Conference on Space Debris ,Darmstadt, Germany, 2021. ESA/ESOC. 16 1000 500 0
+
+along-track [km] 
+
+100 
+
+0100 200 300 
+
+> radial [km]
+> circular (100) elliptical (100) (a) trajectories
+
+0 2 4 6
+
+time [orbits] 
+
+025 50 75 100 125 150 175  
+
+> cumulative propellant [kg]
+> circular (100) elliptical (100) (b) propellant
+
+Fig. 9: The initial-condition ensemble of Ref. [5], 224 cases per scenario, of which 100 are drawn at an even stride. (b) is against orbits, not seconds. 20 10 0 10 20 
+
+cross-track miss [cm] 
+
+20 
+
+10 
+
+010 20 
+
+> radial miss [cm]
+> (a) circular
+
+20 10 0 10 20 
+
+cross-track miss [cm] 
+
+20 
+
+10 
+
+010 20  
+
+> radial miss [cm] (b) elliptical Proposed, circular Proposed, elliptical Reference impl. 0.20 m requirement 0.10 m controlled to contact, both scenarios
+
+Fig. 10: Free-drift crossings of the target plane, 500 draws per scenario, against the 0 .20 m requirement and a 0 .10 m inner ring. Both panels share the key beneath them. [4] J. Forshaw, R. Lopez, A. Okamoto, C. Blackerby, and N. Okada. The ELSA-d end-of-life debris re-moval mission: Mission overview, CONOPS, and launch preparations. In Advanced Maui Optical and Space Surveillance Technologies Conference (AMOS) , Maui, HI, 2019. [5] E. N. Hartley, P. A. Trodden, A. G. Richards, and J. M. Maciejowski. Model predictive control system design and implementation for spacecraft rendezvous. Con-trol Engineering Practice , 20(7):695–713, 2012. [6] W. Langson, I. Chryssochoos, S. V. Rakovic, and D. Q. Mayne. Robust model predictive control using tubes. Automatica , 40(1):125–133, 2004. [7] D. Q. Mayne, M. M. Seron, and S. V. Rakovic. Robust model predictive control of constrained lin-ear systems with bounded disturbances. Automatica ,41(2):219–224, 2005. [8] S. V. Raković, E. C. Kerrigan, K. I. Kouramas, and D. Q. Mayne. Invariant approximations of the mini-mal robust positively invariant set. IEEE Transactions on Automatic Control , 50(3):406–410, 2005. 17 0.0 0.2 0.4 0.6 0.8 1.0 
+
+hold released at [orbits] 
+
+> 50 60 70 80 90 100
+> propellant [kg]
+> circular elliptical one nominal draw 500-draw mean reference release epoch
+
+Fig. 11: Propellant against the epoch at which the hold releases. The abscissa is the released epoch, not the com-manded one. circular elliptical 50 60 70 80 90 100 
+
+> homing [% of charged propellant]
+> circular 84.8 % elliptical 83.7 % 85 % reference
+
+Fig. 12: Homing share of charged propellant, per trial, 500 draws per scenario. [9] D. Q. Mayne. Model predictive control: Re-cent developments and future promise. Automatica ,50(12):2967–2986, 2014. [10] U. Eren, A. Prach, B. B. Koçer, S. V. Rakovi’c, E. Kayacan, and B. Açıkmeşe. Model predictive con-trol in aerospace systems: Current state and opportu-nities. Journal of Guidance, Control, and Dynamics ,40(7):1541–1566, 2017. [11] L. Chisci, J. A. Rossiter, and G. Zappa. Systems with persistent disturbances: Predictive control with restricted constraints. Automatica , 37(7):1019–1028, 2001. [12] P. Bumroongsri. Tube-based robust MPC for linear time-varying systems with bounded disturbances. In-ternational Journal of Control, Automation and Sys-tems , 13(3):620–625, 2015. [13] J. Köhler, R. Soloperto, M. A. Müller, and F. All-göwer. A computationally efficient robust model predictive control framework for uncertain nonlinear systems. IEEE Transactions on Automatic Control ,66(2):794–801, 2021. [14] O. B. Iskender, K. V. Ling, and V. Dubanchet. Con-straints tightening approach towards model predictive control based rendezvous and docking with uncoop-erative targets. In Proceedings of the 2018 European Control Conference (ECC) , pages 380–385, 2018. [15] A. Weiss, M. Baldwin, R. S. Erwin, and I. Kol-manovsky. Model predictive control for spacecraft rendezvous and docking: Strategies for handling con-straints and case studies. IEEE Transactions on Con-trol Systems Technology , 23(4):1638–1647, 2015. [16] E. N. Hartley. A tutorial on model predictive control for spacecraft rendezvous. In 2015 European Control Conference (ECC) , pages 1355–1361, Linz, Austria, 2015. [17] M. Mammarella, E. Capello, H. Park, G. Guglieri, and M. Romano. Tube-based robust model predic-tive control for spacecraft proximity operations in the presence of persistent disturbance. Aerospace Sci-ence and Technology , 77:585–594, 2018. [18] C. Buckner and R. Lampariello. Tube-based model predictive control for the approach manoeuvre of a spacecraft to a free-tumbling target satellite. In Pro-ceedings of the 2018 American Control Conference ,pages 5690–5697, 2018. [19] O. B. Iskender, K. V. Ling, L. Simonini, M. Schlot-terer, D. Seelbinder, S. Theil, and J. M. Maciejowski. Dual quaternion based autonomous rendezvous and docking via model predictive control. In Proc. 70th Int. Astronautical Congr. Int. Astronautical Federa-tion , 2019. [20] O. B. Iskender. Model Predictive Control for Space-craft Rendezvous and Docking with Uncooperative Targets . PhD thesis, Nanyang Technological Univer-sity, Singapore, 2020. [21] O. B. Iskender. From B-dot to predictive control: A comparative study of detumbling algorithms for CubeSats under time-varying magnetic torque au-thority. Aerospace Science and Technology , page 112649, 2026. 18 [22] C. Specht, A. Bishnoi, and R. Lampariello. Au-tonomous spacecraft rendezvous using tube-based model predictive control: Design and applica-tion. Journal of Guidance, Control, and Dynamics ,46(7):1243–1261, 2023. [23] C. E. Oestreich, R. Linares, and R. Gondhalekar. Tube-based model predictive control with uncer-tainty identification for autonomous spacecraft ma-neuvers. Journal of Guidance, Control, and Dynam-ics , 46(1):6–20, 2023. [24] Á. M. Bokor, F. Biertümpfel, P. Seiler, and R. Tóth. Robust model predictive control for spacecraft ren-dezvous under sector-bounded nonlinearities. IEEE Control Systems Letters , 9:2567–2572, 2025. [25] O. B. Iskender. Horizon-dependent tube MPC for spacecraft rendezvous on elliptical orbits with con-ditional robust constraint satisfaction. Advances in Space Research , 2026. https://doi.org/10. 1016/j.asr.2026.08.008 .[26] O. B. Iskender and J. L. Redondo Gutierrez. Slosh-augmented tube MPC for spacecraft proximity op-erations: Coupled dynamics and partial robustness guarantees. Acta Astronautica, under review, 2026. [27] O. B. Iskender, J. L. Redondo Gutiérrez, and K. V. Ling. Sloshing aware tube MPC with partial tighten-ing for spacecraft proximity operations. In Proc. 77th Int. Astronautical Congr. Int. Astronautical Federa-tion , 2026. [28] O. B. Iskender. Vibration-aware tube MPC for flexible spacecraft rendezvous on elliptical orbits. Journal of Guidance, Control, and Dynamics, under review, 2026. [29] W. Fehse. Automated Rendezvous and Docking of Spacecraft , volume 16 of Cambridge Aerospace Se-ries . Cambridge University Press, Cambridge, UK, 2003. [30] B. Stellato, G. Banjac, P. Goulart, A. Bemporad, and S. Boyd. OSQP: An operator splitting solver for quadratic programs. Mathematical Programming Computation , 12(4):637–672, 2020. 19
