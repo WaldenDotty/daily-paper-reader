@@ -6,65 +6,65 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-09-03
-- 运行时间：2026-09-03 22:43:25 UTC
+- 最新运行日期：2026-09-05
+- 运行时间：2026-09-05 22:09:41 UTC
 - 运行状态：成功
 - 本次总论文数：15
-- 精读区：4
-- 速读区：11
+- 精读区：5
+- 速读区：10
 
 ### 今日简报（AI）
-今日推荐15篇论文，精读与速读并行，核心亮点集中在轨道转移与三体问题航天器动力学。最值得看的是两篇9.0分精读：周期轨道族内多次变轨低推力转移，以及Nechvile变换下的推进剂计算与3-body动力学；速读方向则覆盖实时MPC、CCOD传感器融合与月球高度估计。建议优先精读这两篇9.0分论文，后续可延伸探索自主控制与多体动力学结合。
-- 详情：[/202609/03/README](/202609/03/README)
+今日精读5篇、速读10篇，聚焦航天轨道力学与自主导航控制。最值得关注周期性轨道族中的多圈低推力转移设计，以及三体问题下基于Nechvile变换的推进剂计算。建议进一步了解实时模型预测控制与滑窗滤波在航天器自主制导中的应用。
+- 详情：[/202609/05/README](/202609/05/README)
 
 ### 精读区论文标签
-1. [Many-Revolution Low-Thrust Transfers within Periodic Orbit Families](/202609/03/2608.27849v1-many-revolution-low-thrust-transfers-within-periodic-orbit-families)  
+1. [Many-Revolution Low-Thrust Transfers within Periodic Orbit Families](/202609/05/2608.27849v1-many-revolution-low-thrust-transfers-within-periodic-orbit-families)  
    标签：评分：9.0/10、query:cislunar-dyn-nav
-   evidence：涉及三体周期轨道族与平动点轨道转移
-2. [Nechvile-Transformed Spacecraft Dynamics and Propellant Computation in the 3-Body Problem](/202609/03/2608.29271v1-nechvile-transformed-spacecraft-dynamics-and-propellant-computation-in-the-3-body-problem)  
-   标签：评分：9.0/10、query:cislunar-dyn-nav
-   evidence：直接研究限制性三体问题中Nechvile变换下的航天器动力学与推进剂计算
-3. [Low-Thrust Trajectory Optimization with Quantum Computing and Sequential Convex Programming](/202609/03/2609.00861v1-low-thrust-trajectory-optimization-with-quantum-computing-and-sequential-convex-programming)  
+   evidence：针对平动点三体周期轨道族的多圈小推力转移优化，符合地月轨迹设计与稳定性研究主题
+2. [Nechvile-Transformed Spacecraft Dynamics and Propellant Computation in the 3-Body Problem](/202609/05/2608.29271v1-nechvile-transformed-spacecraft-dynamics-and-propellant-computation-in-the-3-body-problem)  
    标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：低推力轨迹优化方法可用于地月系统转移设计
-4. [Families of relative periodic orbits in the planar three-body problem via consecutive alignments](/202609/03/2609.01585v1-families-of-relative-periodic-orbits-in-the-planar-three-body-problem-via-consecutive-alignments)  
+   evidence：直接研究限制性三体问题中的航天器动力学建模与推进剂计算，属于CR3BP相关理论
+3. [Low-Thrust Trajectory Optimization with Quantum Computing and Sequential Convex Programming](/202609/05/2609.00861v1-low-thrust-trajectory-optimization-with-quantum-computing-and-sequential-convex-programming)  
    标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：研究平面三体问题中的相对周期轨道族与延拓方法，与三体问题及CR3BP轨道研究直接相关
+   evidence：面向行星际低推力轨迹优化的序列凸规划与量子求解方法，适合地月转移轨迹设计
+4. [Families of relative periodic orbits in the planar three-body problem via consecutive alignments](/202609/05/2609.01585v1-families-of-relative-periodic-orbits-in-the-planar-three-body-problem-via-consecutive-alignments)  
+   标签：评分：8.0/10、query:cislunar-dyn-nav
+   evidence：直接研究三体问题相对周期轨道族及稳定性数值延拓，对CR3BP周期轨道分析具有参考价值。
+5. [Transversality Conditions for Boundary Constraints Defined by Differential Equations](/202609/05/2609.04084v1-transversality-conditions-for-boundary-constraints-defined-by-differential-equations)  
+   标签：评分：8.0/10、query:cislunar-dyn-nav
+   evidence：面向N体系统轨迹优化的最优控制横截性条件，可用于地月空间转移问题
 
 ### 速读区论文标签
-1. [Real-Time Model Predictive Control Algorithms for Autonomous Spacecraft Guidance](/202609/03/2609.00927v1-real-time-model-predictive-control-algorithms-for-autonomous-spacecraft-guidance)  
+1. [Pixel-wise Geo-registration of Drone and Satellite Images](/202609/05/2608.28891v1-pixel-wise-geo-registration-of-drone-and-satellite-images)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：研究自主航天器交会制导的实时MPC算法，可迁移至月球近距离操作场景
-2. [Efficient Sensor Fusion Through Covariance-Constrained Observation Decimation (CCOD)](/202609/03/2609.02010v1-efficient-sensor-fusion-through-covariance-constrained-observation-decimation-ccod)  
+   evidence：像素级跨视角地理配准提供稠密定位信息，是月球着陆或近距操作地形相对导航的关键使能技术
+2. [A Sliding Window Filter on the Galilean Group for Consistent Aided Inertial Navigation with Unknown Measurement Delays](/202609/05/2608.29514v1-a-sliding-window-filter-on-the-galilean-group-for-consistent-aided-inertial-navigation-with-unknown-measurement-delays)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：高效传感器融合与观测抽取协方差预测可用于多传感器定位中的测量调度
-3. [Adapting a Foundation Model for Lunar Surface Height Estimation](/202609/03/2609.02448v1-adapting-a-foundation-model-for-lunar-surface-height-estimation)  
+   evidence：面向辅助惯性导航的未知延迟滑动窗口滤波，可直接迁移到地月空间多传感器定位授时融合
+3. [Real-Time Model Predictive Control Algorithms for Autonomous Spacecraft Guidance](/202609/05/2609.00927v1-real-time-model-predictive-control-algorithms-for-autonomous-spacecraft-guidance)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：月球表面高度估计服务着陆危险探测
-4. [SUPER ODOMETRY 2.0: Resilient Odometry via Hierarchical Adaptation](/202609/03/2608.25427v1-super-odometry-20-resilient-odometry-via-hierarchical-adaptation)  
+   evidence：面向自主航天器交会的实时轨迹优化与求解器稳定性方法，可迁移至近月接近操作。
+4. [Low-energy ring particle accretion as the origin of Pan's equatorial ridge](/202609/05/2609.03060v1-low-energy-ring-particle-accretion-as-the-origin-of-pans-equatorial-ridge)  
+   标签：评分：7.0/10、query:cislunar-dyn-nav
+   evidence：采用圆型限制性三体模型（CR3BP）并分析穿越L1/L2颈区的低能量轨道
+5. [Can Julia land on the Moon? On the development of a GNC simulation framework for the Argonaut lunar lander](/202609/05/2609.03843v1-can-julia-land-on-the-moon-on-the-development-of-a-gnc-simulation-framework-for-the-argonaut-lunar-lander)  
+   标签：评分：7.0/10、query:cislunar-dyn-nav
+   evidence：月球着陆GNC仿真框架，直接支持月球接近与着陆导航算法验证
+6. [HorizonNet for visual terrain navigation](/202609/05/2608.30471v1-horizonnet-for-visual-terrain-navigation)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：分层自适应的弹性里程计传感器融合框架，可服务于多源融合导航
-5. [Anytime Global Tensor Motion Planning](/202609/03/2608.25830v1-anytime-global-tensor-motion-planning)  
+   evidence：利用地平线与数字高程模型相关进行视觉定位，方法可迁移至地月空间地形相对导航
+7. [Vision-Based Leader-Follower Formation Control for Cooperative UAVs in GPS-Degraded Environments](/202609/05/2609.01420v1-vision-based-leader-follower-formation-control-for-cooperative-uavs-in-gps-degraded-environments)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：通用运动规划框架可将轨迹优化作为局部规划器，为地月空间轨迹规划提供方法支撑
-6. [Stability Analysis and Data-driven Verification via Recurrent Lyapunov Functions](/202609/03/2608.26447v1-stability-analysis-and-data-driven-verification-via-recurrent-lyapunov-functions)  
+   evidence：GPS退化环境下的视觉相对定位与编队控制方法，可转用于月球邻近任务的自主导航。
+8. [Efficient Sensor Fusion Through Covariance-Constrained Observation Decimation (CCOD)](/202609/05/2609.02010v1-efficient-sensor-fusion-through-covariance-constrained-observation-decimation-ccod)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：非线性稳定性验证方法可迁移到轨道稳定性分析
-7. [Contact-Aided Factor-Graph Localization for Underwater Sampling](/202609/03/2608.26932v1-contact-aided-factor-graph-localization-for-underwater-sampling)  
+   evidence：面向多传感器融合估计的降采样协方差分析方法，可服务于地月空间定位授时滤波器设计。
+9. [Hardware-Accelerated Instance Segmentation for Resource-Constrained Space Robotics with Criticality Analysis](/202609/05/2609.02219v1-hardware-accelerated-instance-segmentation-for-resource-constrained-space-robotics-with-criticality-analysis)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：面向定位的多传感器因子图融合方法，适合迁移至地月空间多源导航
-8. [Horizon-Dependent Tube MPC for Elliptical-Orbit Rendezvous Under Mass Uncertainty](/202609/03/2608.27659v1-horizon-dependent-tube-mpc-for-elliptical-orbit-rendezvous-under-mass-uncertainty)  
+   evidence：面向资源受限月球自主任务的感知与硬件加速分割，可支撑月面近距操作导航
+10. [Introducing SINFONIA: Symplectic, slimplectic and Magnusian (Neural) Flows for Orbital Numerical Integration and Acceleration](/202609/05/2609.03329v1-introducing-sinfonia-symplectic-slimplectic-and-magnusian-neural-flows-for-orbital-numerical-integration-and-acceleration)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：面向轨道交会的管式模型预测控制与安全距离判据，可迁移用于地月空间交会轨迹优化与稳定性分析
-9. [A Sliding Window Filter on the Galilean Group for Consistent Aided Inertial Navigation with Unknown Measurement Delays](/202609/03/2608.29514v1-a-sliding-window-filter-on-the-galilean-group-for-consistent-aided-inertial-navigation-with-unknown-measurement-delays)  
-   标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：辅助惯性导航与未知传感器时延估计，与地月空间多源融合定位授时方法相关。
-10. [HorizonNet for visual terrain navigation](/202609/03/2608.30471v1-horizonnet-for-visual-terrain-navigation)  
-   标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：基于地平线与DEM相关的地形视觉导航，可用于月球近距操作的自主定位
-11. [Scalable Rao-Blackwellized Online Planning for High-Dimensional POMDPs](/202609/03/2609.01351v1-scalable-rao-blackwellized-online-planning-for-high-dimensional-pomdps)  
-   标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：高维部分可观测在线规划是可迁移到月球近距自主导航决策的通用方法，但缺少地月场景
+   evidence：结构保持的轨道数值积分神经网络流，可为地月空间长期轨道传播与稳定性分析提供工具
 
 
 <div class="dpr-home-promo-card">
