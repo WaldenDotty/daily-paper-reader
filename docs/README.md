@@ -6,59 +6,63 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-09-06
-- 运行时间：2026-09-06 21:59:51 UTC
+- 最新运行日期：2026-09-07
+- 运行时间：2026-09-07 22:35:51 UTC
 - 运行状态：成功
 - 本次总论文数：13
 - 精读区：4
 - 速读区：9
 
 ### 今日简报（AI）
-今日精读13篇，聚焦三体问题航天器动力学与低推力轨迹优化，另有传感器融合及月球高程估计等速读内容。最值得关注的是N体问题推进剂计算新方法（9.0分），以及量子计算结合凸优化求解低推力轨迹（8.0分）。若想入门，建议优先浏览评分9.0的三体问题论文，其对深空任务设计有直接参考价值。
-- 详情：[/202609/06/README](/202609/06/README)
+今日精读2篇、速读3篇，聚焦三体周期轨道与微分方程边界约束理论。
+
+最值得关注：平面三体问题中连续共线构型衍生相对周期轨道族（8.0分）；以及微分方程边界约束的横截性条件新框架（9.0分）。
+
+建议普通读者优先浏览高分精读摘要，速读中量子计算与低推力轨迹优化、潘星脊成因等主题也颇具启发性。
+- 详情：[/202609/07/README](/202609/07/README)
 
 ### 精读区论文标签
-1. [Nechvile-Transformed Spacecraft Dynamics and Propellant Computation in the 3-Body Problem](/202609/06/2608.29271v1-nechvile-transformed-spacecraft-dynamics-and-propellant-computation-in-the-3-body-problem)  
+1. [Transversality Conditions for Boundary Constraints Defined by Differential Equations](/202609/07/2609.04084v1-transversality-conditions-for-boundary-constraints-defined-by-differential-equations)  
    标签：评分：9.0/10、query:cislunar-dyn-nav
-   evidence：研究限制性三体问题中的Nechvile变换航天器动力学，并给出加力与推进剂计算修正，直接对应CR3BP需求。
-2. [Low-Thrust Trajectory Optimization with Quantum Computing and Sequential Convex Programming](/202609/06/2609.00861v1-low-thrust-trajectory-optimization-with-quantum-computing-and-sequential-convex-programming)  
+   evidence：以N体系统轨迹优化为动机推导最优控制横截性条件，适用于地月系统轨迹优化
+2. [Families of relative periodic orbits in the planar three-body problem via consecutive alignments](/202609/07/2609.01585v1-families-of-relative-periodic-orbits-in-the-planar-three-body-problem-via-consecutive-alignments)  
    标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：使用序列凸规划与量子QUBO重构求解低推力轨迹优化，可迁移至地月系统轨迹优化
-3. [Families of relative periodic orbits in the planar three-body problem via consecutive alignments](/202609/06/2609.01585v1-families-of-relative-periodic-orbits-in-the-planar-three-body-problem-via-consecutive-alignments)  
+   evidence：三体问题中的相对周期轨道族与稳定性
+3. [GPU-Accelerated Astrodynamics World Models for Spacecraft Rendezvous and Proximity Operations](/202609/07/2609.03067v1-gpu-accelerated-astrodynamics-world-models-for-spacecraft-rendezvous-and-proximity-operations)  
    标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：提出三体问题相对周期轨道族数值计算与稳定性分析，可为地月系统周期轨道与NRHO研究提供方法论支撑
-4. [Low-energy ring particle accretion as the origin of Pan's equatorial ridge](/202609/06/2609.03060v1-low-energy-ring-particle-accretion-as-the-origin-of-pans-equatorial-ridge)  
+   evidence：将世界模型用于航天器交会与近距操作并用GPU加速轨道动力学仿真，直接对应近距离自主导航与规划需求
+4. [Can Julia land on the Moon? On the development of a GNC simulation framework for the Argonaut lunar lander](/202609/07/2609.03843v1-can-julia-land-on-the-moon-on-the-development-of-a-gnc-simulation-framework-for-the-argonaut-lunar-lander)  
    标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：使用CR3BP并分析L1与L2颈部穿越的低能吸积轨道，与低能转移和不变流形需求相关。
+   evidence：面向月球着陆下降段的GNC仿真框架，支撑近月自主导航与控制算法设计验证
 
 ### 速读区论文标签
-1. [A Sliding Window Filter on the Galilean Group for Consistent Aided Inertial Navigation with Unknown Measurement Delays](/202609/06/2608.29514v1-a-sliding-window-filter-on-the-galilean-group-for-consistent-aided-inertial-navigation-with-unknown-measurement-delays)  
+1. [A Sliding Window Filter on the Galilean Group for Consistent Aided Inertial Navigation with Unknown Measurement Delays](/202609/07/2608.29514v1-a-sliding-window-filter-on-the-galilean-group-for-consistent-aided-inertial-navigation-with-unknown-measurement-delays)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：伽利略群滑动窗滤波联合估计导航状态与未知传感器时延，可支撑地月空间多传感器融合定位授时。
-2. [Efficient Sensor Fusion Through Covariance-Constrained Observation Decimation (CCOD)](/202609/06/2609.02010v1-efficient-sensor-fusion-through-covariance-constrained-observation-decimation-ccod)  
+   evidence：未知测量延迟下的辅助惯性导航与多传感器融合/授时
+2. [Low-Thrust Trajectory Optimization with Quantum Computing and Sequential Convex Programming](/202609/07/2609.00861v1-low-thrust-trajectory-optimization-with-quantum-computing-and-sequential-convex-programming)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：利用协方差约束观测抽取实现高效传感器融合
-3. [Adapting a Foundation Model for Lunar Surface Height Estimation](/202609/06/2609.02448v1-adapting-a-foundation-model-for-lunar-surface-height-estimation)  
+   evidence：面向星际任务的低推力轨迹优化方法
+3. [Low-energy ring particle accretion as the origin of Pan's equatorial ridge](/202609/07/2609.03060v1-low-energy-ring-particle-accretion-as-the-origin-of-pans-equatorial-ridge)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：月面高程估计是着陆危险检测和近月自主导航的关键支撑，该文用基础模型适配实现月面DEM估计。
-4. [GPU-Accelerated Astrodynamics World Models for Spacecraft Rendezvous and Proximity Operations](/202609/06/2609.03067v1-gpu-accelerated-astrodynamics-world-models-for-spacecraft-rendezvous-and-proximity-operations)  
+   evidence：使用CR3BP模型分析L1/L2颈口低能转移轨迹
+4. [Variational Continuation for Double Pendulum Periodic Orbits](/202609/07/2609.05337v1-variational-continuation-for-double-pendulum-periodic-orbits)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：基于世界模型实现航天器交会与近距操作的自主规划与轨迹预测，可迁移至月球近距操作自主导航
-5. [Can Julia land on the Moon? On the development of a GNC simulation framework for the Argonaut lunar lander](/202609/06/2609.03843v1-can-julia-land-on-the-moon-on-the-development-of-a-gnc-simulation-framework-for-the-argonaut-lunar-lander)  
-   标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：月球着陆GNC仿真框架ATLAS，用于月球自主导航算法验证
-6. [Transversality Conditions for Boundary Constraints Defined by Differential Equations](/202609/06/2609.04084v1-transversality-conditions-for-boundary-constraints-defined-by-differential-equations)  
-   标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：面向N体系统轨迹优化的横截条件推导
-7. [Design and Implementation of a Kalman Filter-Infused Algorithm for Tilt Estimation](/202609/06/2609.00730v1-design-and-implementation-of-a-kalman-filter-infused-algorithm-for-tilt-estimation)  
+   evidence：无积分器的海森变分延拓周期轨道方法可迁移至地月三体问题中NRHO/晕轨道族的延拓与轨迹优化
+5. [VeloBins: Learning Velocity and Its Uncertainty via Bins and Error-Conditioned Gaussian Labels for Aerial Inertial Odometry](/202609/07/2608.29720v1-velobins-learning-velocity-and-its-uncertainty-via-bins-and-error-conditioned-gaussian-labels-for-aerial-inertial-odometry)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：演示基于卡尔曼滤波的多传感器融合实现倾角估计，是可用于导航系统的通用传感器融合方法
-8. [Real-Time Model Predictive Control Algorithms for Autonomous Spacecraft Guidance](/202609/06/2609.00927v1-real-time-model-predictive-control-algorithms-for-autonomous-spacecraft-guidance)  
+   evidence：空中机器人学习式惯性里程计结合EKF融合，在弱视觉环境下估计速度与不确定性，可迁移至月球抵近自主导航算法设计
+6. [Real-Time Model Predictive Control Algorithms for Autonomous Spacecraft Guidance](/202609/07/2609.00927v1-real-time-model-predictive-control-algorithms-for-autonomous-spacecraft-guidance)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：面向自主交会制导的实时模型预测控制涉及在线轨迹优化与动力学稳定性分析，可作为地月系统轨迹优化与稳定性研究的方法参考。
-9. [Vision-Based Leader-Follower Formation Control for Cooperative UAVs in GPS-Degraded Environments](/202609/06/2609.01420v1-vision-based-leader-follower-formation-control-for-cooperative-uavs-in-gps-degraded-environments)  
+   evidence：自主航天器交会制导的实时MPC算法可迁移至月球近距离自主导航任务
+7. [Vision-Based Leader-Follower Formation Control for Cooperative UAVs in GPS-Degraded Environments](/202609/07/2609.01420v1-vision-based-leader-follower-formation-control-for-cooperative-uavs-in-gps-degraded-environments)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：面向GPS失效环境的视觉与深度融合相对定位方法，可迁移至月球临近操作中的自主导航
+   evidence：GPS拒止环境下基于视觉的编队相对位姿估计与控制，方法可映射到月球邻近操作中的相对导航
+8. [Efficient Sensor Fusion Through Covariance-Constrained Observation Decimation (CCOD)](/202609/07/2609.02010v1-efficient-sensor-fusion-through-covariance-constrained-observation-decimation-ccod)  
+   标签：评分：6.0/10、query:cislunar-dyn-nav
+   evidence：面向卡尔曼滤波的协方差约束观测抽取高效传感器融合方法
+9. [FIRE-LIVWO: Robust LiDAR-Inertial-Visual-Wheel Odometry via Failure-Immune mmWave Radar Enhancement](/202609/07/2609.05325v1-fire-livwo-robust-lidar-inertial-visual-wheel-odometry-via-failure-immune-mmwave-radar-enhancement)  
+   标签：评分：6.0/10、query:cislunar-dyn-nav
+   evidence：紧耦合LiDAR/毫米波雷达/视觉/惯导/轮速多源融合定位框架，面向GNSS拒止环境，可迁移至地月空间多源融合定位与授时
 
 
 <div class="dpr-home-promo-card">
