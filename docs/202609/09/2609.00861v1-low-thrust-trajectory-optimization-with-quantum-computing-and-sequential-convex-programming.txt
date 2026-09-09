@@ -1,0 +1,824 @@
+Title: Low-Thrust Trajectory Optimization with Quantum Computing and Sequential Convex Programming
+
+URL Source: https://arxiv.org/pdf/2609.00861v1
+
+Published Time: Wed, 02 Sep 2026 00:55:43 GMT
+
+Number of Pages: 28
+
+Markdown Content:
+Astrodynamics https://mc03.manuscriptcentral.com/astrod 
+
+# Low-Thrust Trajectory Optimization with Quantum Comput-ing and Sequential Convex Programming 
+
+Carmine Giordano 1(B)
+
+1. Dept. of Aerospace Science and Technology, Politecnico di Milano, Milano, Italy, 20156 
+
+B carmine.giordano@polimi.it 
+
+Abstract 
+
+Low-thrust trajectory optimization is a central task in interplanetary mission design, but its nonlinear dynamics and operational constraints often lead to challenging non-convex optimal-control problems. Sequential convex programming has emerged as an effective approach to address these problems, while quantum annealing offers a complementary paradigm for solving quadratic unconstrained binary op-timization problems. This paper introduces quSCP, a quantum-based sequential convex programming framework that reformulates each convex subproblem as a quadratic unconstrained binary optimization problem suitable for quantum and hybrid quantum–classical solvers. Equality, inequality, and trust-region constraints are embedded through quadratic penalty terms, while an iterative refinement strategy is used to reduce the accuracy loss introduced by binary discretization. The method is assessed on a fuel-optimal Earth–Mars low-thrust transfer by comparing standard sequential convex programming, a continuous quadratic unconstrained formulation, direct quantum processing unit sampling, and D-Wave hybrid solvers. Results show that quSCP produces physically consistent trajectories with propellant con-sumption and nonlinear constraint violations close to classical benchmarks. Direct quantum annealing is feasible only for small instances because of embedding overhead and hardware connectivity limits, whereas hybrid solvers scale to larger discretizations. Although no computational quantum advantage is demonstrated with current hardware, the results show that quantum and hybrid quantum–classical optimization can already provide competitive solutions for demanding trajectory design problems. 
+
+Keywords 
+
+Trajectory Optimization · Quantum Computing · Quantum Annealing · Sequential Convex Programming 
+
+# 1 Introduction 
+
+The consumption, time of flight, or maximize mission robustness is of capital importance for both robotic and human missions beyond Earth. In recent years, the rapid advancement of computational capabilities arXiv:2609.00861v1 [math.OC] 1 Sep 2026 Astrodynamics https://mc03.manuscriptcentral.com/astrod has enabled the development of new tools and methodologies aimed at facilitating the implementation and solution of complex trajectory optimization problems in space. The combination of novel computational techniques with increasingly powerful hardware platforms has significantly enhanced the efficiency and flexibility of trajectory design. Methods leveraging artificial intelligence [1, 2], machine learning [3, 4], and general-purpose graphics processing units [5–8] have opened new horizons for solving large-scale and computationally intensive optimization tasks. Among these emerging methodologies, Sequential Convex Programming (SCP) has gained prominence as an effective strategy for addressing non-convex trajectory optimization problems [9–12]. SCP iteratively linearizes the problem around a reference trajec-tory, solving a sequence of convex subproblems that converge toward an optimal solution. Its application in deep-space trajectory optimization has demonstrated promising results, particularly for low-thrust transfers where the trajectory dynamics are inherently nonlinear and complex [10]. Parallel to these algorithmic advances, quantum computing has emerged as a disruptive technology with the potential to tackle computational problems considered intractable for classical computers [13]. In particular, Quan-tum Annealing (QA) [14] offers an alternative paradigm for solving hard combinatorial optimization problems by mapping them into a Quadratic Unconstrained Binary Optimization (QUBO) form [15]. Although still in its infancy, quantum computing has shown promise in a variety of contexts [16–19], in general optimization applications [20–22], and it is now being explored within the aerospace community for trajectory planning [23] and optimization applications [24]. In this work, a novel approach that combines Sequential Convex Programming with QUBO-based opti-mization, labeled as quSCP, is presented. The objective of this study is not to demonstrate a computational quantum advantage with current quantum-annealing hardware, but rather to assess whether low-thrust trajectory optimization subproblems can be reformulated and solved within a quantum-compatible opti-mization framework. In this sense, the proposed method should be interpreted as a feasibility study and as a methodological step toward future quantum-assisted trajectory design tools. The proposed methodology is applied to a low-thrust Earth-to-Mars transfer scenario, serving as a benchmark to evaluate the quality of the solutions obtained with QPU-based and hybrid quantum–classical solvers. Although current de-vices impose severe limitations in terms of embeddable problem size, coefficient precision, and overall runtime, the ability to obtain physically meaningful solutions from a QUBO formulation is relevant for future applications in which quantum optimization may become more effective. This includes higher-level mission-design problems, such as low-thrust multiple-gravity-assist trajectory design or campaign-level optimization, where the low-thrust transfer optimization considered here may appear as one component Astrodynamics https://mc03.manuscriptcentral.com/astrod of a larger discrete-continuous quantum optimization pipeline. The paper is organized as follows. First, the background about SCP and QA is presented in Section 2. Then, Section 3 shows how the low-thrust optimization problem is adapted to the QUBO framework. The test-case scenario, results, and comparisons are shown in Section 4. Section 5 concludes the work. 
+
+# 2 Background 
+
+2.1 Sequential Convex Programming 
+
+Sequential convex programming is a powerful method for solving optimal control problem by transforming nonconvex problems into a series of easier-to-solve convex subproblems [11]. This approach allows efficient handling of complex dynamics and constraints, making it particularly useful for optimizing continuous-thrust trajectories. The efficiency and flexibility of SCP have made this approach popular in various aerospace contexts, such as powered descent guidance [25] and interplanetary trajectory design [10, 26]. The generic optimal control problem for a spacecraft equipped with low-thrust continuous control in a planar motion subjected only to the Sun gravitational pulling can be formalized as 
+
+Minimize  
+
+> u(t)
+
+J := −m(tf ) (1a) subject to 
+
+˙x = f (x, u) = 
+
+
+
+˙r
+
+˙v
+
+˙m
+
+ =
+
+
+
+v
+
+−μ r 
+
+> ∥r∥3
+
++ T (t) 
+
+> m(t)
+
+γ
+
+− T (t)
+
+> Isp g0
+
+ (1b) 
+
+x(t0) = x0 (1c) 
+
+x(tf ) = xf (1d) 
+
+0 ≤ T (t) ≤ Tmax (1e) where r = [ x, y ]T , v = [ u, v ]T denote the position and the velocity, respectively, m the mass, Isp 
+
+represents the thruster specific impulse, g0 gravitational acceleration at sea level, and the parameter μ is the Sun gravitational constant. The control u = [ T, α ]T is composed by the thrust magnitude T , having Tmax 
+
+as its attainable maximum value, and the angle α, used to define the thrust direction γ = [cos α, sin α]T .Astrodynamics https://mc03.manuscriptcentral.com/astrod In order to facilitate the problem solution, the coupling between state and control in Eqs. (1b) is removed by defining a scaled control variable and a different metric for the mass [27] 
+
+Γ( t) = T (t)
+
+m(t) , w(t) = ln( m(t)) 
+
+In this way, the ordinary differential equation for m (i.e., the last term in Eq. (1b)) is substituted by 
+
+˙w = − Γ
+
+Isp g0
+
+(2) while Eq. (1e) in the new variables is 
+
+0 ≤ Γ( t) ≤ Tmax e−w(t) (3) Following the SCP paradigm, the dynamics is linearized about a reference solution (¯ x, ¯u), and a trust-region constraint is added to keep the linearization valid [11]. Thus, the convexified optimization problem for a generic continuous-thrust problem reads 
+
+Minimize  
+
+> u(t)
+
+J := −w(tf ) + 
+
+Z tf
+
+> t0
+
+κ∥ν(t)∥1 dt +
+
+Z tf
+
+> t0
+
+θ max (0 , η (t)) d t (4a) subject to 
+
+˙x = f (¯ x, ¯u) + A(x − ¯x) + B(u − ¯u) + ν (4b) 
+
+x(t0) = x0 (4c) 
+
+x(tf ) = xf (4d) 
+
+0 ≤ Γ ≤ Tmax e− ¯w (1 − w + ¯ w) + η (4e) 
+
+∥x − ¯x∥1 + τ ∥u − ¯u∥1 ≤ R (4f) where the dependence on time has been dropped for clarity’s sake, and where 
+
+A = ∂f
+
+∂x ¯x
+
+=
+
+
+
+02×2 I2 02×1
+
+−μ
+
+ I2 
+
+> ∥¯r∥3
+
+− 3¯ r¯rT
+
+> ∥¯r∥5
+
+
+
+02×2 02×1
+
+01×2 01×2 0
+
+Astrodynamics https://mc03.manuscriptcentral.com/astrod 
+
+B = ∂f
+
+∂u ¯u
+
+=
+
+
+
+02×2
+
+cos ¯ α −¯Γ sin ¯ α
+
+sin ¯ α ¯Γ cos ¯ α
+
+−1/I sp g0 0
+
+
+
+with In representing the n-dimensional identity matrix, and 0n×m the (n × m) null array. Eq. (4e) is the linearization about the reference solution of the non-convex constraints in Eq. (3). The variables ν and η are virtual controls introduced to avoid artificial infeasibility: ν is added to the linearized dynamics constraints, while η relaxes the linearized maximum-thrust constraint. Both terms are penalized in the objective function through the weights κ and θ, respectively, which are used to balance feasibility recovery against the original performance index. Artificial unboundeness is managed by imposing a constraint on the trust region radius R (Eq. (4f)). The convex formulation of the optimal control problem must be translated in a programming problem to be solved. To this aim, the timespan [t0, t f ] is subdivided into N segments, and both the state and the control are projected into this time grid to have finite-dimensional variables. A first-order hold (FOH) method is used to discretize the problem. Specifically, the control history is approximated as a piecewise affine function, that is in each segment [11] 
+
+u(t) = tk+1 − th uk + t − tk
+
+h uk+1 = λ−(t)uk + λ+(t)uk+1 , ∀t ∈ [tk, t k+1 ] (5) In this case, the linearized dynamics in Eq. (4b) becomes 
+
+˙x = Ax + Bλ −uk + Bλ +uk+1 + ( f (¯ x, ¯u) − A¯x − B ¯u) (6) Hence, for each segment, Eq. (6) could be integrated by exploiting the linear systems theory. Thus, the dynamical constraint for each segment become [11] 
+
+xk+1 −
+
+ ˆAkxk + ˆB− 
+
+> k
+
+uk + ˆB+ 
+
+> k
+
+uk+1 + qk + νk
+
+
+
+= 0 (7) Astrodynamics https://mc03.manuscriptcentral.com/astrod where 
+
+ˆAk = Φ( tk, t k+1 ) (8) 
+
+ˆB− 
+
+> k
+
+= ˆAk
+
+Z tk+1 
+
+> tk
+
+Φ−1(tk, t )Bλ − dt (9) 
+
+ˆB+ 
+
+> k
+
+= ˆAk
+
+Z tk+1 
+
+> tk
+
+Φ−1(tk, t )Bλ + dt (10) 
+
+qk = ˆAk
+
+Z tk+1 
+
+> tk
+
+Φ−1(tk, t ) ( f (¯ x, ¯u) − A¯x − B ¯u) d t (11) where Φ( tk, t ) is the state transition matrix between time tk and time t.The optimal control problem can be translated so in a second-order cone programming problem (SOCP), i.e., a convex programming problem, that can be stated as: 
+
+Problem 1 (SCP). Find y = [ xk, uk, νk, η k], k = 0 , . . . , N , such that 
+
+J := − wN +
+
+> N
+
+X
+
+> i=0
+
+κ∥νk∥1 +
+
+> N
+
+X
+
+> i=0
+
+θ max (0 , η k) (12a) is minimized, subjected to 
+
+∆ = xk+1 −
+
+ ˆAkxk + ˆB− 
+
+> k
+
+uk + ˆB+ 
+
+> k
+
+uk+1 + qk + νk
+
+
+
+= 0 ∀k ∈ 1, . . . , N − 1 (12b) 
+
+0 ≤ Γk ≤ Tmax e− ¯wk (1 − wk + ¯ wk) + ηk ∀k ∈ 1, . . . , N (12c) 
+
+∥x − ¯x∥1 + τ ∥u − ¯u∥1 ≤ R (12d) with x0 and xN = xf prescribed. The problem in Eqs. (12a)–(12d) must be solved iteratively. Iterations are stopped successfully if the maximum nonlinear constraint violation and the improvement in the cost function, i.e., ∥c(x, u)∥∞ ≤ εc
+
+and ¯w − w ≤ εw. On the other hand, the procedure is terminated without success if the relative difference of the solution vector in two consecutive iterations is below a certain threshold (i.e., ∥¯x − x∥1 ≤ εx), meaning that the solution is not improving, or if the trust region radius is too small (i.e., R ≤ εR). As a matter of fact, following the SCP procedure, the trust radius must be changed according to an appropriate mechanism. At each iteration, the solution of the convex solver is accepted or rejected based on the following ratio [11] 
+
+r = ¯ϕ − ϕ
+
+¯ϕ − φ (13) Astrodynamics https://mc03.manuscriptcentral.com/astrod where ϕ is the actual cost, while φ is the predicted cost reduction. In this case, three parameters (r0, r 1, r 2),with 0 < r 0 < r 1 < r 2 < 1, are selected and used to manage the trust region. If r ≤ r0, the linearized problem is performing poorly, so the step is rejected and a smaller new region radius R is selected. Otherwise, the solution is accepted and the trust region is updated as [11] 
+
+R =
+
+
+
+R/a if r0 ≤ r < r 1
+
+R if r1 ≤ r < r 2
+
+bR if r ≥ r2
+
+(14) with a and b predetermined values grater than 1. 
+
+2.2 Quantum Annealing Optimization 
+
+Quantum annealing is a quantum computing technique developed to accelerate the solution of complex optimization problems. QA frames a discrete optimization task as the search for the ground state of a quantum system whose energy landscape encodes the cost function to be minimized. Formally, an 
+
+n-qubit register is prepared in the ground state of a driver Hamiltonian HD and evolves it slowly towards a problem Hamiltonian HP that embeds the objective function: 
+
+H(s) =  1 − sHD + s H P , s = t 
+
+> T
+
+∈ [0 , 1] , (15) with T the annealing time. If the interpolation is sufficiently adiabatic, i.e., T ≫ O 
+
+ 1
+
+> g2min
+
+
+
+where gmin 
+
+denotes the minimum spectral gap between the instantaneous ground and first-excited states, the system remains in its ground state, so that measuring the qubits at s = 1 returns the optimal (or a near-optimal) solution with high probability [14]. To interface with current hardware, the optimisation problem must be cast either as an Ising model, 
+
+JIs (s) = X
+
+> i
+
+hisi + X
+
+> i<j
+
+Jij sisj , si ∈ {− 1, +1 } (16) or, equivalently, as a quadratic unconstrained binary optimization (QUBO) problem, 
+
+JQUBO (z) = zTQ z, zi ∈ { 0, 1} (17) Astrodynamics https://mc03.manuscriptcentral.com/astrod Both models are equivalent and it is possible to change from one model to the other via the simple linear transformation zi = ( si + 1) /2. The resulting quadratic coefficients populate the entries of HP
+
+and therefore dictate the pairwise couplings implemented on the chip. Because physical qubits occupy a sparse connectivity graph, the logical QUBO must be embedded into the hardware topology using chains of ferromagnetically coupled qubits that behave as a single logical variable [28]. This embedding could inflate qubit counts and can introduce errors when chains break, so problem size and sparsity play a critical role in performance. The possibility to encode several real-life optimization problems in QUBOs made the use of QA an appealing methodology to solve complex academic or industrial-scale instances [19]. Hence, in recent years, several advancements have been done to provide QA access to the community. To this aim, commercial annealers able to provide O(10 3) qubits and millisecond-scale anneals, such as D-Wave’s Advantage 1, have been made available, enabling the solution of medium-scale optimization instances outright or, in hybrid modes, as sub-solvers inside larger classical algorithms. While gate-based quantum processors pursue universal speed-ups, QA already supplies a practical heuristic whose effectiveness hinges on judicious problem reformulation, careful scheduling, and clever discretizations that keep QUBO density and embedding overhead within hardware limits. 
+
+# 3 Low-Thrust Trajectory Quantum Optimization 
+
+To use a quantum annealer for low-thrust trajectory optimization, the optimal-control problem must be translated into a binary formulation that can be expressed as a QUBO. While the SCP paradigm is exploited to convert the continuous problem in a convex programming problem, as explained in Section 2.1, Problem 1 itself must be transformed in a QUBO form, trying to keep the number of variables contained in order to be compliant with the limitation in qubits given by the annealers. 
+
+3.1 The Quadratic Unconstrained Binary Optimization Problem 
+
+Problem 1 is a constrained problem, having both equality and inequality convex constraints. Thus, in order to get a QUBO, all the constrains must be encoded within the cost function, and at the same time being converted into quadratic forms. To have an unconstrained problem, a penalty method is exploited, meaning that the cost function J is augmented with the constraints, i.e., ˆJ = J + ρh , where ρ is a penalty 
+
+> 1https://www.dwavequantum.com/solutions-and-products/systems/. Last accessed on December 15, 2025.
+
+Astrodynamics https://mc03.manuscriptcentral.com/astrod coefficient and h is a general equality constraint function, rearranged to be always positive and being null when the constraints are respected. As a matter of fact, when ρ → ∞ , the constraint h is force to go to 0 and the original problem is correctly solved. Thus, all the constraints in Problem 1 must be modified to be compatible with this methodology. In order to reduce the number of variables, the virtual buffer variables ηk are dropped, and the artificial infeasibility is handled exploiting only the virtual control ν, as in [29]. Additionally, since the initial state and the final position and velocity are prescribed, the variables x1 and xN are fixed to the desired values 
+
+x0 and xf , respectively. The equality constraint in Eq. (12b) could be easily transformed in a quadratic form. As a matter of fact, Eq. (12b) could be more conveniently rewritten as 
+
+Aeq y = beq (18) with 
+
+Aeq =
+
+
+
+0 −I 0 . . . 0 0 − ˆB− 
+
+> 1
+
+− ˆB+1 0 . . . 0 0 −I 0 . . . 00 ˆA2 −I . . . 0 0 0 − ˆB− 
+
+> 2
+
+− ˆB+2 . . . 0 0 0 −I . . . 0
+
+... ... ... . . . ... ... ... ... ... . . . ... ... ... ... . . . ...
+
+0 0 0 . . . ˆAN −1 −1 0 0 0 . . . − ˆB−  
+
+> N−1
+
+− ˆB+  
+
+> N−1
+
+0 0 ... −I
+
+
+
+(19) and 
+
+beq =
+
+
+
+q1 − ˆA1x0
+
+T
+
+qT 
+
+> 2
+
+. . . (qN −1 + xf )T
+
+T
+
+(20) Thus, the quadratic form to be considered in the augmented cost is simply 
+
+Jeq = ( Aeq y − beq )T (Aeq y − beq ) = yT ATeq Aeq y − 2bTeq Aeq y + bTeq beq (21) Inequality constraints represented by Eq. (12c) must be first transformed into equality constraints, by means of slack variables, i.e., 
+
+Gy + σ = h (22) Astrodynamics https://mc03.manuscriptcentral.com/astrod where 
+
+G =
+
+
+
+0 0 0 . . . 0 1 0 0 . . . 0 0 . . . 00 g2 0 . . . 0 0 1 0 . . . 0 0 . . . 00 0 g3 . . . 0 0 0 1 . . . 0 0 . . . 0
+
+... ... ... . . . ... ... ... ... . . . ... ... . . . ...
+
+0 0 0 . . . Tmax e−¯zN 0 0 0 . . . 1 0 . . . 0
+
+
+
+(23) and 
+
+h = −Tmax [(1 + ¯ w1) e− ¯w1 + Tmax e− ¯wi m0 (1 + ¯ w2) e− ¯w2 . . . (1 + ¯ wN ) e− ¯wN ]T (24) with gk = [0 0 0 0 Tmax e− ¯wk ] and σ the slack variables which must be positive to keep the new equality constraint equivalent to the original inequality one. Thus, the quadratic form to be considered in the augmented cost is simply 
+
+Jineq = ( Gy + σ − h)T (Gy + σ − h) = yT GT Gy+σT σ +2 σT Gy−2hT Gy−2hT σ +hT h (25) Lastly, the trust region constraint in Eq. (12d) must be adapted to the augmented cost. While the use of the ℓ1-norm, as standard in the SCP for low-thrust transfer, is still possible to this aim, it would require to define additional slack variables, that would inflate the number of qubits. For this reason, a different approach is preferred, that is to define the trust region using the ℓ2-norm, since it can be directly translated in a quadratic form. Thus, Eq. (12d) is first rewritten as 
+
+∥x − ¯x∥2 + τ ∥u − ¯u∥2 ≤ R
+
+√nx + nu
+
+(26) where nx and nu are the length of the vector x and u, respectively. The radius R is scaled to make the comparison between the standard SCP and the QUBO easier. Then, it is converted into the quadratic form 
+
+JR = yT GRy + gTRy + hR + σR (27) where 
+
+GR =
+
+
+
+Inx
+
+τ 2Inu
+
+0
+
+ (28) Astrodynamics https://mc03.manuscriptcentral.com/astrod 
+
+gR = −2¯ xT − 2τ 2 ¯uT 0Tnν
+
+T (29) and hR = ¯ xT ¯x + τ 2 ¯uT ¯u − R2/(nx + nu), with σR a slack variable, constrained to be always positive. Finally, the cost in Problem 1 (i.e., Eq. (12a)) must be rearranged. As for the trust region constraint, while the use of ℓ1-norm and max functions could be still possible, it will require additional variables. For this reason, they are both changed into the squared ℓ2-norm, that is 
+
+J = −zN + κ2νT ν = yT Qy + qT y (30) with 
+
+Q =
+
+
+
+00
+
+κ2Inν
+
+
+
+and q = 0Tnx−1 − 1 0Tnu 0Tnν
+
+T .In this way, the convex programming problem is translated in a quadratic unconstrained problem (QUP), that can be stated as: 
+
+Problem 2 (QUP). Find y = [ x, u, ν], such that 
+
+J := yT Qy + qT y + ρ1
+
+ yT ATeq Aeq y − 2bTeq Aeq y + bTeq beq 
+
+ +
+
+ρ2
+
+ yT GT Gy + σT σ + 2 σT Gy − 2hT Gy − 2hT σ + hT h +
+
+ρ3
+
+ yT GRy + gTRy + σR + hR
+
+
+
+(31) is minimized, with Γk ≥ 0, σ ≥ 0, and σR ≥ 0.The weighting parameters ρ1, ρ2, and ρ3 are selected such that there is a good balance between the cost functions and the constraints and among the different constraints. To derive the QUBO representation, each continuous decision variable must be encoded into nb binary variables using a fixed-point scheme that maps the real-valued domain onto the allowable binary range. Specifically, the minimum and maximum representable values of the chosen binary encoding are selected to be aligned with the lower and upper bounds of each variable. These bounds come either from the optimization problem (e.g., for Γ) or from physical considerations. If yi, min and yi, max are the real limits, the fixed-point mapping ensures that the binary vector zi ∈ { 0, 1}nb corresponds to 
+
+yi = yi, min + yi, max − yi, min 
+
+2nb − 1
+
+> nb−1
+
+X
+
+> k=0
+
+2kzi,k (32) Astrodynamics https://mc03.manuscriptcentral.com/astrod such that zi = 0 yields yi, min and zi = 1 yields yi, max . This procedure converts each real variable into a fixed-length binary vector whose span exactly covers the feasible interval, enabling substitution into the objective and constraint expressions. In a more compact way, starting from this definition, it is possible to define a linear vector map between the continuous real variable y and the binary variable vector zy = ymin + Dz (33) where 
+
+D = ymax − ymin 
+
+2nb − 1
+
+
+
+dT 0 . . . 00 dT . . . 0
+
+... ... . . . ...
+
+0 0 . . . dT
+
+
+
+(34) with d = 20 21 . . . 2nb−1. The same transformation can be applied also to the slack variables to get 
+
+σ = σmin + Dσzσ, σR = σR, min + DσR zσR (35) By inserting Eqs. (33) and (35) in Eq. (31), it is possible to define an expression for the cost function in terms of the binary decision vector ˆz = zT zTσ zTσR
+
+T ∈ { 0, 1}, that is 
+
+J := ˆ zT ˆQˆz + ˆ qT ˆz + ˆk (36) where ˆQ is the matrix, composition of the quadratic terms, ˆq is the sum of the linear terms, and k is the known coefficient. Since for binary variables z2 
+
+> i
+
+= zi, it is possible to incorporate the linear terms within the quadratic matrix, setting ˜Q = ˆQ + diag (ˆ q). The constant coefficient k, on the other hand, can be ignored in the optimization setting. Hence, it is possible to render the quadratic unconstrained problem as a quadratic unconstrained binary problem, that can be finally stated as: 
+
+Problem 3 (QUBO). Find ˆz ∈ { 0, 1}, such that 
+
+J := ˆ zT ˜Qˆz (37) is minimized. Astrodynamics https://mc03.manuscriptcentral.com/astrod 
+
+3.2 The Computational Algorithm 
+
+As per Problem 1, Problem 3 must be solved iteratively to obtain the optimal solution. However, some care must be placed to have the quantum-based sequential convex programming (quSCP) to converge to the non-linear optimal solution. In classical constrained optimization, quadratic penalties enforce feasibility by solving a sequence of unconstrained problems. Convergence to the constrained optimum relies on letting the penalty coefficient starting with small values and progressively increase them, enforcing stricter constraints as the algorithm progresses. In this continuous setting, violations can be made arbitrarily small and the optimal solution is retrieved when ρ → ∞ . In the case of quantum optimization, the decision variables are discretized via a binary expansion (as per Eq. (32)). The optimization is then performed over a finite set of binary configurations, and the goal is not to approximate the constrained optimum by increasing the penalty coefficient, but to construct a single unconstrained binary energy whose ground state corresponds to the optimal feasible discretized solution. Thus, the role of the penalty coefficients is fundamentally different, since it is a separation parameter used to ensure that all infeasible binary states have higher energy than any feasible state, while preserving objective discrimination among feasible states. Discretization changes constraint enforcement because constraint residuals become quantized. Over the discrete set, each residual component (Aeq y − beq )j (and likewise (Gy + σ − h)j ) can only take values on a finite grid determined by the minimum jump for each variable ∆i = yi, max −yi, min   
+
+> 2nb−1
+
+and the constraint coefficients. As a result, there typically exists a strictly positive minimum nonzero violation δ provided the discretization and scaling. This gap is the key property that enables an exact penalty separation in the discrete setting. Unlike continuous optimization, infeasibility cannot approach zero continuously, but it must jump from zero to at least δ.A sufficient strategy to choose the initial ρ values is to select its order of magnitude so that the smallest possible penalty incurred by any infeasible configuration dominates the largest possible improvement in the original objective across the discretized domain. In this case, any 
+
+ρ > ∆wN
+
+δ2
+
+with ∆wN the maximum possible variation in the objective function, guarantees that every global minimizer of JQUBO is feasible, and among feasible points minimizing JQUBO is equivalent to minimizing the original cost function, i.e., the control effort. In practice, ∆wN is selected to be conservative, Astrodynamics https://mc03.manuscriptcentral.com/astrod by computing the difference between the initial mass and the final mass with the thrust always on. Additionally, a safety margin ζ > 1 is introduced, so that 
+
+ρ = ζ ∆wN
+
+δ2 (38) to account both for mathematical issues and for hardware characteristics, e.g., analog noise, coefficient quantization, and embedding-related distortion. It is important to remark that Eq. (38) provides a sufficient separation condition for the ideal discrete QUBO, but it should not be interpreted as a prescription to select arbitrarily large penalty values on quantum hardware. Current annealers operate within a finite programmable range for local biases and couplers; therefore, the QUBO matrix must be globally rescaled before submission to the solver. If the penalty coefficients are chosen excessively large, this rescaling compresses the contribution of the original objective function, reducing the effective energy separation among feasible states. As a consequence, although infeasible configurations are energetically discouraged, the propellant-minimization term may become comparable to, or smaller than, the effective resolution imposed by analog noise, coefficient quantization, and embedding-related distortions. This creates a trade-off between feasibility enforcement and objective resolution. In this work, the penalty factors are therefore selected to be sufficiently large to separate feasible and infeasible configurations in the discretized model, but not increased beyond what is required for reliable feasibility, so as to preserve the relative contribution of the original cost after hardware rescaling. While the fact that QUBO formulation requires the discretization of the decision variables via an unsigned binary expansion can be helpful to a certain extent in the selection of proper penalty factors, it generates issues in the representation of the optimal solution. As a matter of fact, even with an appropriate selection of the penalty factors, the solution of the QUBO in Problem 3 will never match the solution of Problem 2, and, consequently, the one of the original Problem 1. For a fixed binary depth nb, the discretization step 
+
+∆i imposes an intrinsic quantization error that limits the accuracy with which the continuous optimum can be represented. In practice, conservative initial bounds [ymin , ymax ] are often required to ensure that the feasible region is not inadvertently excluded. However, wide bounds increase ∆i and therefore degrade solution fidelity. This trade-off is particularly detrimental when the continuous optimum lies in a small subset of the initial hyper-rectangle, since a large portion of the binary code space is spent representing values that are never selected by optimal solutions. Iterative refinement addresses this Astrodynamics https://mc03.manuscriptcentral.com/astrod limitation by repeatedly re-centering and shrinking the encoding interval around a high-quality QUBO solution, thereby reducing ∆i without increasing the representing bits. Once the QUBO has been solved with the initial encoding, a candidate continuous vector y⋆ is obtained by decoding the best (i.e., lowest-energy feasible) binary sample. The encoding interval is then shrunk by a factor β ∈ (0 , 1) . Defining the current width of each variable as Wi = yi, max − yi, min the refined width is 
+
+Wi = max ( β W i, W i, min ) (39) with Wi, min a prescribed value to prevent over-refinement and the new discretization step 
+
+∆i = Wi
+
+2nb − 1 (40) To ensure that the optimal value is exactly representable by the unsigned encoding at the next iteration, a correcting index γ = ⌊ 2nb −12 ⌋ is introduced and the boundaries are computed as 
+
+yi, min = y⋆i − γ∆i, yi, max = yi, min + (2 nb − 1) ∆ i (41) This construction places the optimal values at the center of the grid, while decreasing the discretization step by the factor β. If global physical bounds (Li, U i) are available, the interval is clipped to satisfy yi, min ≥ Li
+
+and yi, max ≤ Ui, adjusting γ if necessary to maintain feasibility of the interval. Because interval refinement changes both the attainable objective range over the discrete domain and the quantization of constraint residuals, the penalty weight used to enforce feasibility in the QUBO should be recomputed at each iteration to preserve feasibility–optimality separation. This iterative refinement procedure yields a sequence of progressively finer QUBO encodings with fixed bit-depth, enabling increasingly accurate approximations of the continuous constrained optimum. It should be noted that this refinement strategy is local by construction. Since the encoding interval is progressively re-centered and shrunk around the best decoded QUBO solution, an incorrect early sample may bias the subsequent search and cause the refinement to converge toward a suboptimal discrete basin. This risk is particularly relevant when the QUBO solver returns approximate samples, as is generally the case for quantum annealing and hybrid heuristics. To mitigate this effect, the refinement is not performed around an arbitrary sample, but around the lowest-energy feasible solution returned by a batch of samples. Moreover, the shrink factor β is selected conservatively, so that the refined interval still Astrodynamics https://mc03.manuscriptcentral.com/astrod preserves a neighborhood around the current solution rather than collapsing immediately to a narrow region. If the decoded objective does not improve, if the best solution repeatedly lies close to the boundary of the current interval, or if no feasible sample is recovered after refinement, the shrink step is rejected and the interval is either restored to the previous bounds or enlarged before repeating the QUBO solve. In this sense, the refinement should be interpreted as a trust-region-like local improvement mechanism rather than as a guarantee of global optimality. The iterative refinement could be performed, however, only if the solution of the QUBO could be accepted, that is when the trust region constraint, needed to guarantee the validity of the dynamics linearization, is respected. Since the trust-region constraint is embedded within the cost function, an approach similar to the soft trust region strategy used in SCP is exploited. Specifically, the violation with respect to the trust-region constraint is evaluated, i.e., δR = ( ymin + Dz)T GR (ymin + Dz) + gTR (ymin + Dz) − hR.If the constraint is violated (i.e., δR > 0, thus the step has been outside the trust region), the step is rejected and the penalty coefficient is increased, setting ρ3 = ζrρ3. Otherwise, the step is accepted and the a new QUBO, with updated bounds, as per Eqs. (41), is solved. The process is repeated until a stopping criterion is met, i.e., max ∆ i falls below a prescribed tolerance, the decoded objective ceases to improve, or the step between two consecutive optimal value is too small. Once the solution of the single linearized problem represented by Problem 3 has been found, the validity of the solution for the single SCP iteration is evaluated and, in case, the new reference solution is updated and the update rule for the radius in Eq. (14) is followed. This procedure is, again, repeated iteratively, until the stopping criteria, which are the same of Problem 1 in Section 2.1, are met. In conclusion, quSCP is made by two loops: 
+
+• An inner loop solving the QUBO in Problem 3 several times, exploiting the iterative refinement to obtain a discrete solution close to the continuous one. This loop is equivalent to the iterative cycles performed by any convex solver; 
+
+• An outer loop solving the SCP, by updating the reference solution, adjusting the trust region, and checking the converge conditions. This loop is standard to any SCP methodology. A sketch summarizing how quSCP works is reported in Algorithm 1. Astrodynamics https://mc03.manuscriptcentral.com/astrod 
+
+Algorithm 1: Quantum-based Sequential Convex Programming (quSCP) 
+
+Input: Spacecraft data, x0, xf , t0, tf , SCP parameters, N , nb 
+
+> 1
+
+Compute an initial guess for ¯x and ¯u 
+
+> 2
+
+Set the initial value for the key penalties ρ ▷See Eq. (38)  
+
+> 3
+
+Set the initial values for the boundaries yi, min and yi, max  
+
+> 4
+
+while SCP exitconditions is not true  
+
+> 5
+
+Compute the linearized matrices for the dynamics ˆAk, ˆB+ 
+
+> k
+
+, ˆB− 
+
+> k
+
+, and qk ▷See Eqs. (8) --(11)  
+
+> 6
+
+Build Aeq and beq ▷See Eqs. (19) --(20)  
+
+> 7
+
+Build G and h ▷See Eqs. (23) --(24)  
+
+> 8
+
+Build GR, gR, and hR ▷See Eqs. (28) --(29)  
+
+> 9
+
+while QUBO exitconditions is not true  
+
+> 10
+
+Compute the enconding matrices D, Dσ, and DσR ▷See Eq. (34)  
+
+> 11
+
+Define ˜Q 
+
+> 12
+
+Solve the QUBO in Problem 3  
+
+> 13
+
+Retrieve y⋆, σ⋆, and σ⋆R ▷See Eqs. (33) --(35)  
+
+> 14
+
+if δR ≤ 0 ▷Trust region respected  
+
+> 15
+
+Recompute the variable widths Wi and new boundaries yi, min and yi, max ▷See Eqs. (39) --(41)  
+
+> 16
+
+else ▷Trust region not respected  
+
+> 17
+
+Update the thrust region coefficient ρ3 = ζrρ3 
+
+> 18
+
+end  
+
+> 19
+
+Compute the QUBO exitconditions  
+
+> 20
+
+end  
+
+> 21
+
+Compute the ratio r ▷See Eq. (13)  
+
+> 22
+
+if r < r 0 ▷SCP solution is rejected  
+
+> 23
+
+Reduce trust region radius with R = R/a  
+
+> 24
+
+else ▷SCP solution is accepted  
+
+> 25
+
+Update reference values ¯x and ¯u based on y⋆ 
+
+> 26
+
+Update trust region radius based on Eq. (14)  
+
+> 27
+
+Update the new boundaries yi, min and yi, max  
+
+> 28
+
+end  
+
+> 29
+
+Compute the SCP exitconditions  
+
+> 30
+
+end Output: Optimal trajectory x⋆ and optimal control u⋆Astrodynamics https://mc03.manuscriptcentral.com/astrod 
+
+# 4 Results 
+
+The methodology was validated on an optimal Earth–Mars transfer problem. Characteristics of the initial and final state and of the spacecraft are listed in Table 1. The resulting solutions are compared against a reference trajectory computed with a standard SCP solver, whose parameters are listed in Table 2. To characterize the capabilities and performance of quSCP, its key internal parameters, namely the dis-cretization size N and the bit-width nb are varied. The QUBO subproblems generated within quSCP were solved using D-Wave’s cloud-accessible optimization backends, leveraging both hardware quantum annealing solvers (QPU-based) and hybrid solvers. In particular, QPU-based solutions, which require a minor-embedding of the logical QUBO onto the physical connectivity graph, are best suited to relatively small instances, while hybrid solvers, which combine classical metaheuristics with targeted QPU calls are exploited to handle larger problem sizes. The distinction is practically relevant because, as the number of logical variables or the QUBO density increases, the embedding typically induces longer chains and may ultimately become infeasible, whereas hybrid approaches mitigate these limitations and retain robust performance on higher-dimensional instances. For QPU runs, logical problems were embedded onto the hardware graph using Ocean’s standard minor-embedding workflow; chain strength and unembedding strategy were selected consistently across experiments, and embedding quality was monitored via chain-length and chain-break statistics. All QUBOs were globally rescaled to comply with solver coefficient ranges while preserving the relative weighting between the original objective and penalty terms. Solutions were selected as the lowest-energy feasible samples (or, when multiple feasible samples were returned, the one minimizing the original objective), using a fixed sampling budget (i.e., number of reads) for fair comparison across configurations. All solver calls, both for QPU and hybrid ones, were orchestrated through the D-Wave Ocean SDK, which provides a unified interface for model construction, embedding, sampling, and post-processing. The numerical results are not intended to establish a runtime advantage over classical SCP or QUP solvers. Instead, they are used to assess whether the proposed QUBO transcription can produce feasible and phys-ically consistent low-thrust trajectories, to quantify the degradation introduced by binary discretization and current quantum hardware, and to identify the regimes in which QPU-based and hybrid solvers can be practically employed. The benchmark is provided by an SCP solution with N = 100 , shown in Fig. 1. Astrodynamics https://mc03.manuscriptcentral.com/astrod x [AU] 
+
+-1.5 -1 -0.5 0 0.5 1 1.5 
+
+> y [AU]
+
+-1 -0.5 00.5 1
+
+> Earth orbit Mars orbit Optimal Trajectory Thrust arcs
+
+(a) Optimal trajectory. Time [d] 
+
+0 50 100 150 200 
+
+> Thrust [N]
+
+00.05 0.1 0.15 0.2 
+
+(b) Optimal control profile. 
+
+Fig. 1 SCP optimal solution with N = 100 .Astrodynamics https://mc03.manuscriptcentral.com/astrod                                            
+
+> Table 1 Data for the test scenario.
+> Parameter Symbol Value
+> Spacecraft mass m250 kg
+> Maximum thrust Tmax 0.2 N
+> Specific impulse Isp 1 500 s
+> Initial position r0[1 .496 ×10 8,0.0] km
+> Initial velocity v0[0 .0,29 .78] km /s
+> Final position rf[−2.244 ×10 8,0.0] km
+> Final velocity vf[0 .0,−24 .32] km /s
+> Time of flight tf−t0240 d
+> Table 2 SCP parameters.
+> Parameter Value
+> κ1000
+> τ100
+> R02500
+> (a, b )(1 .5,1.5) (r0, r 1, r 2)(0 .01 ,0.5,0.95) (εc, ε w, ε x, ε R) 10 −10 ,10 −4,10 −8,10 −4
+
+As anticipated, QPU-based sampling imposes strict limitations on problem size: increasing dimen-sionality leads to longer minor-embedding chains, which amplifies the impact of analog noise and chain breaks and can in turn degrade solution quality. On the other hand, a low bit-width nb results in a coarse discretization of the decision variables, which fundamentally limits the achievable accuracy of the solution by introducing significant quantization error, requiring a longer and more complex iterative refinement, while using a low number of segments N could bring to poor control and dynamics representation. Indeed, for N = 4 and nb = 6 , the resulting optimization problem comprises 312 binary variables. Figure 2 illustrates an example of the corresponding QUBO matrix ˜Q, with nonzero entries highlighted using a color scale proportional to their magnitude. As shown, the quadratic formulation is relatively sparse, exhibiting an overall sparsity of approximately 0.24, and can be efficiently embedded and solved using a QPU-based sampler. Figure 3 depicts the optimal control profile obtained by quSCP with the QUBO formulation on the QPU (quSCP-Q), alongside the reference solution from the original SCP (with SOCP), the solution of the SCP with continuous QUP, solved with Clarabel, and the hybrid sampler result (quSCP-H). It can be seen that the history in time of the thrust magnitude does not change significantly for the different solvers. However, due to the low number of segments considered, it is quite different from the benchmark profile in Fig. 1(b). Qualitative considerations are reflected in the quantitative metrics reported in Table 3. For N = 4 , all ap-proaches yield comparable values of the maximum constraint violation ∥c∥∞, indicating that the nonlinear constraints are satisfied to a similar accuracy across solvers. As expected, the SCP benchmark attains the Astrodynamics https://mc03.manuscriptcentral.com/astrod lowest propellant consumption, representing the continuous reference solution. The QUP formulation, solved with a classical convex optimizer, exhibits a modest increase in propellant mass, which can be attributed to the unconstrained formulation. The QUBO-based formulations incur a further, yet limited, degradation: for nb = 6 , the QPU-based solution differs from the SCP benchmark by approximately 5.2% in propellant mass, while maintaining a comparable level of constraint satisfaction. The hybrid solver achieves slightly improved propellant values with respect to the pure QPU approach and benefits from increased bit-width, as evidenced by the reduction in mp when moving from nb = 6 to nb = 10 . This trend confirms the impact of discretization resolution on solution quality. From a computational standpoint, the classical SCP and QUP solvers complete in fractions of a second, whereas quSCP requires a substantially larger wall time, dominated by the repeated solution of QUBO subproblems on remote quantum hardware. Notably, the QPU-based configuration exhibits a significantly lower wall time per iteration, owing to the intrinsic speed of quantum annealing. However, it also requires a larger number of iterations to converge, reflecting the reduced quality of each QUBO solve, which is affected by long embedding chains, analog noise, and chain-break phenomena. In contrast, the hybrid approach trades longer per-iteration times for improved robustness and solution quality, resulting in fewer iterations overall. These results highlight the complementary nature of QPU and hybrid solvers within quSCP, i.e., while QPU sampling enables rapid exploration at small scales, hybrid strategies provide enhanced reliability and accuracy as problem complexity increases. Column       
+
+> 50 100 150 200 250 300
+> Row
+> 50 100 150 200 250 300 -12 -10 -8 -6 -4 -2 0
+> log 10 (Q)
+
+Fig. 2 Structure for the normalized matrix ˜Q of the QUBO problem with N = 4 and nb = 6 .
+
+The same Earth–Mars transfer has been tested by increasing the number of segments. In these cases, the dimensionality of the problem grows accordingly and, as a consequence, it becomes no longer possible Astrodynamics https://mc03.manuscriptcentral.com/astrod Time [d]      
+
+> 050 100 150 200
+> Thrust [N]
+> 00.02 0.04 0.06 0.08 0.1 0.12 0.14 0.16 0.18 0.2
+> N= 4
+> QUP QUBO-Q n b=6 QUBO-H n b=6 QUBO-H n b=10
+
+Fig. 3 Optimal control profile for different solvers with N = 4 .
+
+Table 3 Summary of results. 
+
+N Solver nb mp [kg] ∥c∥∞ [-] # Iterations WT [s] 4SCP (SOCP) - 106.23 0.0217 - 0.125 SCP (QUP) - 111.07 0.0218 48 0.259 quSCP-Q 6 111.75 0.0225 201 64.22 quSCP-H 6 111.57 0.0221 105 109.2 10 111.15 0.0220 102 144.7 
+
+to embed the resulting QUBO on the QPU, thereby precluding the use of a QPU-based sampler. On the other hand, it is still possible to exploit hybrid solvers to prove that they are able to tackle this case study problem and offer solutions similar to SCP. The optimal control history for the hybrid-based samplers, together with SCP with SOCP and QUP formulation, for a number of segments from 6 to 10 are reported in Fig. 4. Quantitative results are summarized in Table 4 for N = 6 , 8, 10 . As the number of segments increases, the SCP benchmark exhibits the expected monotonic reduction in propellant mass and constraint violation, approaching the finely discretized reference at N = 100 . The QUP formulation closely tracks this behavior, with marginal differences in both mp and ∥c∥∞, confirming that the convex relaxation preserves high fidelity with respect to the SCP solution. The quSCP solved with hybrid sampler remains consistently aligned with the classical solvers across all tested values of N .For each discretization level, the hybrid solutions exhibit only a modest degradation in propellant mass with respect to SCP, on the order of 1%-2% for N = 6 and below 1% for N = 8 and N = 10 , while maintaining comparable levels of constraint satisfaction. Increasing the bit-width systematically improves solution quality. For instance, at N = 6 , moving from nb = 6 to nb = 10 reduces the propellant gap with SCP by approximately 0.3 kg , a trend that is consistently observed at larger N . From a computational standpoint, the classical SCP and QUP solvers complete in sub-second times, whereas quSCP requires Astrodynamics https://mc03.manuscriptcentral.com/astrod substantially longer wall times, dominated by the iterative solution of QUBO subproblems. The hybrid solver converges in roughly 100 to 140 iterations, with wall times ranging from approximately 140 s 
+
+to 310 s , as N increases. Despite this overhead, the hybrid framework demonstrates robust scalability and delivers solutions that closely approximate the classical optimum, even in regimes where direct QPU-based sampling is no longer feasible. These results confirm that hybrid quantum-classical solvers provide a viable path for extending quSCP to higher-dimensional trajectory optimization problems while retaining solution quality comparable to state-of-the-art classical methods. Time [d]      
+
+> 050 100 150 200
+> Thrust [N]
+> 00.02 0.04 0.06 0.08 0.1 0.12 0.14 0.16 0.18 0.2
+> N= 6
+> QUP QUBO-H n b=6 QUBO-H n b=10
+
+(a) N = 6 Time [d]      
+
+> 050 100 150 200
+> Thrust [N]
+> 00.02 0.04 0.06 0.08 0.1 0.12 0.14 0.16 0.18 0.2
+> N= 8
+> QUP QUBO-H n b=6 QUBO-H n b=10
+
+(b) N = 8 Time [d]       
+
+> 050 100 150 200
+> Thrust [N]
+> 00.02 0.04 0.06 0.08 0.1 0.12 0.14 0.16 0.18 0.2
+> N= 10
+> QUP QUBO-H n b=6 QUBO-H n b=8
+
+(c) N = 10 
+
+Fig. 4 Optimal control profile for different number of segments. 
+
+Table 4 Summary of results. 
+
+N Solver nb mp [kg] ∥c∥∞ [-] # Iterations WT [s] 6SCP (SOCP) - 96.77 1.706 × 10 −4 - 0.098 SCP (QUP) - 99.30 1.774 × 10 −4 57 0.315 quSCP-H 6 99.98 1.854 × 10 −4 135 240.2 10 99.67 1.801 × 10 −4 118 140.8 8SCP (SOCP) - 94.13 3.075 × 10 −6 - 0.117 SCP (QUP) - 94.25 4.138 × 10 −6 32 0.427 quSCP-H 6 94.86 5.052 × 10 −6 122 256.2 10 94.36 4.301 × 10 −6 97 175.4 10 SCP (SOCP) - 91.87 6.165 × 10 −7 - 0.128 SCP (QUP) - 91.97 7.364 × 10 −7 52 0.578 quSCP-H 6 92.54 7.995 × 10 −7 136 313.6 8 92.11 7.784 × 10 −7 128 208.5 100 SCP (SOCP) - 91.84 7.370 × 10 −9 - 2.582 Astrodynamics https://mc03.manuscriptcentral.com/astrod 
+
+# 5 Conclusions 
+
+This work has introduced quSCP, a novel framework that integrates sequential convex programming with QUBO-based optimization to enable the solution of low-thrust trajectory design problems using quantum and hybrid quantum-classical solvers. Each convex subproblem generated within SCP is reformulated as a QUBO and solved through quantum-oriented backends, while the trust-region logic and convergence properties of SCP are preserved. The methodology has been validated on an Earth–Mars low-thrust transfer, demonstrating that quSCP produces physically consistent trajectories and closely tracks the solutions obtained with classical SCP and QUP formulations. Both QPU-based and hybrid solvers can be effectively embedded within the iterative pipeline, with hybrid strategies proving robust for higher-dimensional instances where direct QPU sampling is no longer feasible. The study also exposes the current technological limitations of quantum hardware. The size of QUBO instances that can be directly embedded on present-day QPUs remains severely constrained, and solution quality is affected by embedding overhead, long chains, and analog noise. Consequently, the present implementation does not provide a computational advantage over state-of-the-art classical solvers, either in terms of accuracy or wall-clock time. This limitation is expected under current hardware and software conditions: direct QPU sampling is restricted to small QUBO instances because of embedding constraints, while hybrid solvers improve scalability at the cost of substantially larger runtimes. The contribution of this work is therefore methodological rather than computational-performance driven. As a matter of fact, it demonstrates that the SCP subproblems arising in low-thrust trajectory optimization can be consistently embedded into a QUBO framework and solved by quantum-oriented backends, producing solutions that remain close to classical references. These results indicate that, although current hardware does not yet enable a practical quantum advantage, quSCP provides a future-proof architecture for trajectory optimization. It establishes a concrete pathway for seamlessly integrating more capable quantum devices as they become available, positioning quantum computing as a viable component of next-generation mission design workflows. 
+
+Acknowledgements 
+
+This work was supported by CASTOR, a project that has received funding from the European Union’s Horizon Europe research and innovation programme under the Marie Sk lodowska-Curie grant agreement no. 101103826. Astrodynamics https://mc03.manuscriptcentral.com/astrod The author acknowledges also the CINECA award under the ISCRA initiative, for the availability of quantum computing resources and support. 
+
+Declaration of competing interest 
+
+The author has no competing interests to declare that are relevant to the content of this article. 
+
+# References 
+
+[1] Izzo D, M¨ artens M, Pan B. A survey on artificial intelligence trends in spacecraft guidance dynamics and control. Astrodynamics , 2019, 3(4): 287–299, doi:10.1007/s42064-018-0053-6. [2] Habib TMA. Artificial intelligence for spacecraft guidance, navigation, and control: a state-of-the-art. Aerospace Systems , 2022, 5(4): 503–521, doi:10.1007/s42401-022-00152-y. [3] Zavoli A, Federici L. Reinforcement Learning for Robust Trajectory Design of Interplanetary Missions. Journal of Guidance, Control, and Dynamics , 2021, 44(8): 1440–1453, doi:10.2514/1. G005794. [4] Federici L, Benedikter B, Zavoli A. Deep Learning Techniques for Autonomous Spacecraft Guidance During Proximity Operations. Journal of Spacecraft and Rockets , 2021, 58(6): 1774–1785, doi: 10.2514/1.A35076. [5] Arora N, Vittaldev V, Russell RP. Parallel Computation of Trajectories Using Graphics Processing Units and Interpolated Gravity Models. Journal of Guidance, Control, and Dynamics , 2015, 38(8): 1345–1355, doi:10.2514/1.G000571. [6] Antony T, Grant MJ. Rapid Indirect Trajectory Optimization on Highly Parallel Computing Archi-tectures. Journal of Spacecraft and Rockets , 2017, 54(5): 1081–1091, doi:10.2514/1.A33755. [7] Masat A, Colombo C, Boutonnet A. GPU-based high-precision orbital propagation of large sets of initial conditions through Picard–Chebyshev augmentation. Acta Astronautica , 2023, 204: 239–252, doi:10.1016/j.actaastro.2022.12.037. [8] Chari GM, Kamath AG, Elango P, Acikmese B. Fast Monte Carlo Analysis For 6-DoF Powered-Descent Guidance via GPU-Accelerated Sequential Convex Programming. In AIAA SciTech 2024 Forum , Orlando, FL2024, 1762, doi:10.2514/6.2024-1762, aIAA 2024-1762. [9] Sagliano M. Pseudospectral Convex Optimization for Powered Descent and Landing. Journal of Guidance, Control, and Dynamics , 2018, 41(2): 320–334, doi:10.2514/1.G002818. Astrodynamics https://mc03.manuscriptcentral.com/astrod [10] Hofmann C, Topputo F. Rapid Low-Thrust Trajectory Optimization in Deep Space Based on Convex Programming. Journal of Guidance, Control, and Dynamics , 2021, 44(7): 1379–1388, doi:10.2514/ 1.G005839. [11] Malyuta D, Reynolds TP, Szmuk M, Lew T, Bonalli R, Pavone M, Ac ¸ıkmes ¸e B. Convex Optimization for Trajectory Generation: A Tutorial on Generating Dynamically Feasible Trajectories Reliably and Efficiently. IEEE Control Systems Magazine , 2022, 42(5): 40–113, doi:10.1109/MCS.2022. 3187542. [12] Giordano C, Campagnola S, Topputo F, et al.. Goal-oriented trajectories about minor bodies using Sequential Convex Programming: A Deterministic Approach. In 35th AAS/AIAA Space Flight Mechanics Meeting , Kaua’i, HI2025, 1–26, aAS 25-181. [13] Nielsen MA, Chuang IL. Quantum computation and quantum information , Cambridge University Press2010, chapter 1. [14] Farhi E, Goldstone J, Gutmann S, Sipser M. Quantum Computation by Adiabatic Evolution. arXiv preprint , 2000, doi:10.48550/arXiv.quant-ph/0001106. [15] Kadowaki T, Nishimori H. Quantum annealing in the transverse Ising model. Physical Review E ,1998, 58(5): 5355, doi:10.1103/PhysRevE.58.5355. [16] Peng X, Liao Z, Xu N, Qin G, Zhou X, Suter D, Du J. Quantum adiabatic algorithm for factorization and its experimental implementation. Physical review letters , 2008, 101(22): 220405, doi:10.1103/ PhysRevLett.101.220405. [17] Montanaro A. Quantum speedup of Monte Carlo methods. Proceedings of the Royal Society A: Mathematical, Physical and Engineering Sciences , 2015, 471(2181): 20150301, doi:10.1098/rspa. 2015.0301. [18] Zanger B, Mendl CB, Schulz M, Schreiber M. Quantum algorithms for solving ordinary dif-ferential equations via classical integration methods. Quantum , 2021, 5: 502, doi:10.22331/ q-2021-07-13-502. [19] Yarkoni S, Raponi E, B¨ ack T, Schmitt S. Quantum annealing for industry applications: Introduction and review. Reports on Progress in Physics , 2022, 85(10): 104001, doi:10.1088/1361-6633/ac8c54. [20] Shukla A, Vedula P. Trajectory optimization using quantum computing. Journal of Global Opti-mization , 2019, 75(1): 199–225, doi:10.1007/s10898-019-00754-5. [21] Hadfield S, Wang Z, O’gorman B, Rieffel EG, Venturelli D, Biswas R. From the Quantum Approxi-mate Optimization Algorithm to a Quantum Alternating Operator Ansatz. Algorithms , 2019, 12(2): Astrodynamics https://mc03.manuscriptcentral.com/astrod 34, doi:10.3390/a12020034. [22] Abbas A, Ambainis A, Augustino B, B¨ artschi A, Buhrman H, Coffrin C, Cortiana G, Dunjko V, Egger DJ, Elmegreen BG, et al.. Challenges and opportunities in quantum optimization. Nature Reviews Physics , 2024: 1–18, doi:10.1038/s42254-024-00770-9. [23] Makarov A, P´ erez-Herrad´ on C, Franceschetto G, Taddei MM, Osaba E, del Barrio Cabello P, Villar-Rodriguez E, Oregi I. Quantum Optimization Methods for Satellite Mission Planning. IEEE Access ,2024, 12: 71808–71820, doi:10.1109/ACCESS.2024.3402990. [24] De Grossi F, Carbone A, Spiller D, Ottaviani D, Mengoni R, Circi C. Transcription and optimization of an interplanetary trajectory through quantum annealing. Astrodynamics , 2025, 9(2): 195–215, doi:10.1109/TAES.2025.3572466. [25] Acikmese B, Ploen SR. Convex Programming Approach to Powered Descent Guidance for Mars Landing. Journal of Guidance, Control, and Dynamics , 2007, 30(5): 1353–1366, doi:10.2514/1. 27553. [26] Hofmann C, Morelli AC, Topputo F. Performance Assessment of Convex Low-Thrust Trajectory Optimization Methods. Journal of Spacecraft and Rockets , 2023, 60(1): 299–314, doi:10.2514/1. A35461. [27] Wang Z, Grant MJ. Minimum-Fuel Low-Thrust Transfers for Spacecraft: A Convex Approach. IEEE Transactions on Aerospace and Electronic Systems , 2018, 54(5): 2274–2290, doi:10.1109/TAES. 2018.2812558. [28] Zbinden S, B¨ artschi A, Djidjev H, Eidenbenz S. Embedding Algorithms for Quantum Annealers with Chimera and Pegasus Connection Topologies. In International Conference on High Performance Computing , Digital: Springer2020, 187–206, doi:10.1007/978-3-030-50743-5 10. [29] Kamath AG, Elango P, Yu Y, Mceowen S, Chari GM, Carson III JM, Ac ¸ıkmes ¸e B. Real-Time Sequential Conic Optimization for Multi-Phase Rocket Landing Guidance. In 22nd IFAC World Congress , volume 56, Yokohama, Japan: Elsevier2023, 3118–3125, doi:10.1016/j.ifacol.2023.10. 1444. 
+
+Author biography Astrodynamics https://mc03.manuscriptcentral.com/astrod 
+
+Carmine Giordano Carmine Giordano is an Assistant Professor at Politecnico di Milano. His main fields of interest are nonlinear astrodynamics and trajectory opti-mization. He took part in different space mission studies funded by ESA (LUMIO, Hera’s Milani, and RAMSES’ Farinella) as mission analyst. 
+
+Graphical table of contents Time [d]      
+
+> 050 100 150 200
+> Thrust [N]
+> 00.02 0.04 0.06 0.08 0.1 0.12 0.14 0.16 0.18 0.2
+> N= 6
+> QUP QUBO-H n b=6 QUBO-H n b=10
+
+(a) N = 6 Time [d]      
+
+> 050 100 150 200
+> Thrust [N]
+> 00.02 0.04 0.06 0.08 0.1 0.12 0.14 0.16 0.18 0.2
+> N= 8
+> QUP QUBO-H n b=6 QUBO-H n b=10
+
+(b) N = 8 Time [d]       
+
+> 050 100 150 200
+> Thrust [N]
+> 00.02 0.04 0.06 0.08 0.1 0.12 0.14 0.16 0.18 0.2
+> N= 10
+> QUP QUBO-H n b=6 QUBO-H n b=8
+
+(c) N = 10 
+
+The figure illustrates the optimal low-thrust control profiles obtained with the proposed quSCP framework for increasing trajectory discretization levels. The close agreement with the classical QUP reference highlights the capability of hybrid quantum–classical solvers to recover physically consistent solutions for interplanetary trajec-tories.
