@@ -1,6 +1,9 @@
 * <a class="dpr-sidebar-root-link" href="#/">首页</a>
 * <a class="dpr-sidebar-root-link dpr-sidebar-noactive-link" href="javascript:void(0)" data-dpr-hash="#/tutorial/README">使用教程</a>
 * Daily Papers
+  * 2026-09-13 <!--dpr-date:20260913-->
+    * 速读区
+      * <a class="dpr-sidebar-item-link dpr-sidebar-item-structured" href="#/202609/13/2609.08979v2-tempus-relativistic-coordinate-time-scales-for-any-solar-system-body-from-arbitrary-ephemerides" data-sidebar-item="{&quot;title&quot;: &quot;TEMPUS: Relativistic coordinate time scales for any solar-system body from arbitrary ephemerides&quot;, &quot;link&quot;: &quot;https://arxiv.org/abs/2609.08979v2-tempus-relativistic-coordinate-time-scales-for-any-solar-system-body-from-arbitrary-ephemerides&quot;, &quot;score&quot;: &quot;6.0&quot;, &quot;tags&quot;: [{&quot;kind&quot;: &quot;query&quot;, &quot;label&quot;: &quot;cislunar-dyn-nav&quot;}], &quot;evidence&quot;: &quot;支撑太阳系导航的相对论时间尺度转换&quot;}">TEMPUS: Relativistic coordinate time scales for any solar-system body from arbitrary ephemerides</a>
   * 2026-09-11 <!--dpr-date:20260911-->
     * 速读区
       * <a class="dpr-sidebar-item-link dpr-sidebar-item-structured" href="#/202609/11/2609.03843v1-can-julia-land-on-the-moon-on-the-development-of-a-gnc-simulation-framework-for-the-argonaut-lunar-lander" data-sidebar-item="{&quot;title&quot;: &quot;Can Julia land on the Moon? On the development of a GNC simulation framework for the Argonaut lunar lander&quot;, &quot;link&quot;: &quot;https://arxiv.org/abs/2609.03843v1-can-julia-land-on-the-moon-on-the-development-of-a-gnc-simulation-framework-for-the-argonaut-lunar-lander&quot;, &quot;score&quot;: &quot;6.0&quot;, &quot;tags&quot;: [{&quot;kind&quot;: &quot;query&quot;, &quot;label&quot;: &quot;cislunar-dyn-nav&quot;}], &quot;evidence&quot;: &quot;面向月球着陆器下降着陆的GNC仿真框架&quot;}">Can Julia land on the Moon? On the development of a GNC simulation framework for the Argonaut lunar lander</a>
