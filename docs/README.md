@@ -6,28 +6,26 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-09-13
-- 运行时间：2026-09-13 21:16:11 UTC
+- 最新运行日期：2026-09-14
+- 运行时间：2026-09-14 22:07:31 UTC
 - 运行状态：成功
-- 本次总论文数：1
-- 精读区：0
+- 本次总论文数：2
+- 精读区：1
 - 速读区：1
 
 ### 今日简报（AI）
-今天速读了1篇6.0分论文《TEMPUS: Relativistic coordinate time scales for any solar-system body from arbitrary ephemerides》，没有精读。
-
-最值得关注的是它尝试为任意太阳系天体和任意星历构建相对论坐标时标，适合关注时间系统与相对论建模的读者留意。
-
-普通读者建议先看摘要和适用边界，确认它解决什么场景，再决定是否追更或等更高分相关论文。
-- 详情：[/202609/13/README](/202609/13/README)
+2026-09-14 日报精选 2 篇：精读航天器相对导航等变滤波器，速读太阳系天体相对论坐标时标 TEMPUS。最值得关注的是用等变滤波提升距离与方位测量下的航天器相对导航精度（8.0/10），以及 TEMPUS 为任意太阳系天体提供基于任意星历的相对论坐标时标（6.0/10）。普通读者可先看精读篇了解导航滤波思路，再按兴趣浏览 TEMPUS 的时标应用场景。
+- 详情：[/202609/14/README](/202609/14/README)
 
 ### 精读区论文标签
-- 本次无精读推荐。
+1. [An Equivariant Filter for Spacecraft Nonlinear Relative Navigation with Range and Bearing Measurements](/202609/14/2609.13094v1-an-equivariant-filter-for-spacecraft-nonlinear-relative-navigation-with-range-and-bearing-measurements)  
+   标签：评分：8.0/10、query:cislunar-dyn-nav
+   evidence：航天器近距操作相对导航滤波
 
 ### 速读区论文标签
-1. [TEMPUS: Relativistic coordinate time scales for any solar-system body from arbitrary ephemerides](/202609/13/2609.08979v2-tempus-relativistic-coordinate-time-scales-for-any-solar-system-body-from-arbitrary-ephemerides)  
+1. [TEMPUS: Relativistic coordinate time scales for any solar-system body from arbitrary ephemerides](/202609/14/2609.08979v2-tempus-relativistic-coordinate-time-scales-for-any-solar-system-body-from-arbitrary-ephemerides)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：支撑太阳系导航的相对论时间尺度转换
+   evidence：面向太阳系导航与授时的相对论坐标时间尺度
 
 
 <div class="dpr-home-promo-card">
