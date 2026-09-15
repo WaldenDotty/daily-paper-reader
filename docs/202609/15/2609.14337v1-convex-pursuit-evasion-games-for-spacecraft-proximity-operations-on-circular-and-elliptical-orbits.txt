@@ -1,0 +1,3044 @@
+Convex Pursuit–Evasion Games for Spacecraft Proximity Operations on Circular
+and Elliptical Orbits⋆
+Omer Burak Iskendera,∗
+aSchool of Electrical and Electronic Engineering, Nanyang Technological University, Singapore
+Abstract
+Inspecting or servicing a non-cooperative spacecraft is a two-player game: the target can thrust to defeat the inspector’s
+plan. Hamilton–Jacobi–Isaacs reachability answers such games exactly but its cost grows exponentially with the state
+dimension, while learning-based controllers scale yet certify nothing. Convex formulations are the usual escape, and
+are almost always cast as convex–concave saddle-point problems. That framing does not survive contact with the
+terminal-distance orbital game: once a small effort regularization is included the payoff is convex in the evader’s
+controls as well as the pursuer’s, so no pure open-loop saddle point need exist. In its place we derive two exact
+one-sided guarantees, both read from the two players’ terminal reachable sets through their support functions: an
+escape certificate that proves the target can hold a guaranteed standoff against every admissible inspector control, and
+a security strategy that bounds the miss distance the inspector can force against every admissible target. Together they
+bracket the engagement without assuming either player is rational, and over two hundred perturbed trials the escape
+certificate separated capture from escape without a single error. A projected extragradient method then supplies a
+concrete strategy pair in about twenty-five milliseconds, certified in place by its best-response gaps rather than by
+a convergence theorem that does not apply in this regime. The same construction carries unchanged to elliptical
+reference orbits through the Yamanaka–Ankersen dynamics, where the orbital phase at which an engagement begins
+moves the miss distance by nearly a factor of two, a dependence reproduced by nonlinear Keplerian propagation.
+Under receding-horizon play the inspector captures in half of ten representative engagements. Angles-only navigation
+error, keep-out zones, multiple pursuers and closed-loop play are treated as extensions, each with the guarantee it does
+and does not carry.
+Keywords: spacecraft proximity operations, orbital pursuit–evasion, reachability certificate, extragradient method,
+support-function reachable sets, Yamanaka–Ankersen relative dynamics
+1. Introduction
+Consider an inspector spacecraft dispatched to image a defunct satellite at close range in low Earth orbit. A
+rendezvous plan computed against a stationary target is optimistic here, because it never accounts for the move the
+target will actually make.
+Rendezvous targets are conventionally graded by how much they help the chaser [1], from cooperative (actively
+assisting the approach) through collaborative (built to be captured, with markers and grapple fixtures) to uncooperative
+(no assistance, no communication link, attitude motion unknown in advance). The engagement studied in this paper
+sits one step beyond that scale: the target is not merely unhelpful but adversarial, since if it retains attitude control
+and even modest translational authority it can thrust to keep the inspector’s camera off its damaged face. Missions of
+exactly this kind (orbital inspection, on-orbit servicing, and active debris removal) are moving from studies to flight,
+and the population of maneuverable, non-cooperative resident space objects that they must approach is growing [2–5].
+⋆Accepted for publication at Aerospace Science and Technology, 11 September 2026.
+∗Corresponding author.
+Email address: iske0001@e.ntu.edu.sg (Omer Burak Iskender)
+arXiv:2609.14337v1  [math.OC]  13 Sep 2026
+
+
+The honest way to plan against such a target is to treat inspector and target as the two players of a differential game [6],
+in which each optimizes against the other’s best response.
+Solving that game is the hard part. Hamilton–Jacobi–Isaacs (HJI) reachability [7–9] computes exact equilibria but
+discretizes the state space, so its cost grows exponentially with dimension and it is confined in practice to the four-
+state planar problem, well short of the eight and twelve states that two-player and multi-pursuer orbital engagements
+require. Deep reinforcement learning [10, 11] scales to those dimensions but returns a policy with no equilibrium
+guarantee and no bound on how it behaves outside its training distribution, an uncomfortable position for a safety-
+critical maneuver. What is missing is a formulation that keeps a usable guarantee, runs at the millisecond timescale
+an onboard planner needs, and is not tied to a circular reference orbit.
+This paper supplies one for the terminal-distance game, in which the inspector minimizes and the target maximizes
+their separation at a fixed final time, and it does so by exploiting a structural fact. Because the Hill–Clohessy–Wiltshire
+(HCW) [12] and Yamanaka–Ankersen (YA) [13] relative-motion models are linear, each player’s terminal position
+ranges over a reachable set that is an exact function of its control bounds, and the game is decided by the geometry
+of those two sets. That geometry is what we compute. It yields two guarantees, each exact and each computed from
+support functions [14, 15] rather than from a grid: a scalar escape certificate ϕN whose negativity proves the target
+can hold a guaranteed standoff against every admissible inspector maneuver, and a security strategy whose value
+bounds the miss distance the inspector can force against every admissible target. Between the two lies an interval that
+brackets the engagement outcome without assuming either player is rational. Across 200 perturbed trials the escape
+certificate separates capture from escape with no error (sections 4 and 6.8). A projected extragradient method [16, 17]
+then returns a concrete strategy pair in about 25 ms, roughly forty times faster than rebuilding the iterative-best-
+response programs from cold start; that ratio is a statement about cold-start cost and not about the method being
+intrinsically faster than a well-implemented QP loop, as section 6.8 makes precise. We certify the quality of that
+pair in place using its best-response gaps, which hold pursuer-side optimality to under a metre (sections 5 and 6.2),
+rather than asserting an equilibrium the problem may not possess. Because the construction depends on the dynamics
+only through the terminal support functions, the same solver spans circular and elliptical reference orbits, and the
+eccentricity dependence it predicts is confirmed against nonlinear Keplerian propagation (section 7).
+The paper therefore contributes the following.
+1. Two exact one-sided guarantees for the terminal-distance game, an escape certificate and a pursuer security bound,
+both read from support functions and both valid against every admissible opponent (sections 4.2 and 5.2).
+2. A curvature result showing the payoff is convex in both players, so that no pure open-loop saddle is claimed, and a
+millisecond solver certified per run by its best-response gaps in place of a convergence theorem that does not apply
+here (sections 5.1 and 5.3).
+3. One construction that spans circular and elliptical reference orbits without modification, validated against nonlinear
+Keplerian and J2 propagation (section 7).
+4. An account of the operational extensions, keep-out zones, multiple pursuers, navigation error and receding-horizon
+play, that states the guarantee each does and does not carry (table 2 and sections 3.4 and 8).
+Scope. The exact guarantees above concern the open-loop game with box-bounded controls. Keep-out avoidance,
+multiple pursuers and closed-loop play are extensions that carry weaker claims; table 2 and section 3.4 pair each
+assumption with the guarantee it supports, and sections 3.2 and 6.8 bound what linearization error and relative-
+navigation error do to the outcome.
+2. Related Work
+2.1. Orbital Pursuit–Evasion
+Differential game theory for spacecraft pursuit–evasion (PE) dates to early studies of satellite interception un-
+der Keplerian dynamics [18, 19]. The numerical line runs through direct collocation for the impulsive two-player
+game [20], canonical three-dimensional treatments [21], nonlinear programming in the Hill frame [22], fuel-constrained
+impulsive analysis [23], and primer-vector methods for continuous low thrust [24]; a recurring finding is that the
+chaser/target thrust-ratio asymmetry, rather than any single control law, sets the outcome [25, 26]. Recent work has
+2
+
+
+widened the setting to cislunar three-body dynamics [27] and to reachable-set and game-theoretic maneuver strategies
+for space-domain awareness [28, 29]. Two contributions sit particularly close to this paper: Ma and Zhang [30] screen
+impulsive engagements by the ∆V needed to cover the target’s reachable domain, a budget-side counterpart to the
+support-function screen used here, and Huo et al. [31] build a multi-pursuer encirclement strategy from the target’s
+reachable area under maneuver uncertainty, a geometry close to the weighted surrogate of section 5.4.
+Cutting across that literature is the older division between indirect and direct solution methods, and it is worth
+saying plainly where this paper sits. Indirect methods apply the calculus of variations to the game: they write the
+Hamiltonian for both players, derive the Euler –Lagrange and saddle-point necessary conditions, and solve the result-
+ing two-point boundary-value problem in the state and costate. This is the classical route [6, 18] and it remains in use
+for orbital engagements, through multiple-shooting and collocation [20, 21], primer-vector analysis for continuous
+low thrust [24], and analytically exact gradients for the elliptical game [32]. Its appeal is sharpness: the necessary
+conditions hold at the true equilibrium, with no discretization of the control history. Its costs are equally well known:
+the boundary-value problem is sensitive to the initial costate guess, the switching structure has to be assumed in ad-
+vance, and the solve time is minutes rather than milliseconds, so nothing is returned that could run onboard. The
+present paper is a direct method in that taxonomy. It discretizes the controls, keeps the resulting problem convex on
+the pursuer side, and pays for the discretization with a finite-dimensional problem that solves in tens of milliseconds
+and carries per-run certificates. The certificates are what replace the sharpness of the necessary conditions: instead of
+asserting an equilibrium, we bound how far the returned pair can be from one. The two families are complementary,
+and an indirect refinement of a direct solution is a sensible pairing that we do not pursue here.
+Two lines of recent work bear directly on the present method, and it is useful to be specific about the trade-offs. The
+first pursues online tractability. Jia et al. [33] reduce the elliptical-orbit game to a discounted minimum-time transfer,
+solve it through a sequence of convex subproblems, and synthesize a receding-horizon pursuit law; a companion
+paper [34] fixes the terminal time from an analytic ellipsoidal reachable-set boundary. This is the closest comparator
+to our approach and it runs in real time, but the reduction is one-sided: it optimizes the pursuer against a worst-case
+evader and returns no two-sided certificate, whereas our construction bounds both players’ guaranteed outcomes.
+Pang et al. [32] solve the elliptical game to high accuracy with analytically exact gradients, at the price of a two-point
+boundary-value problem that is sensitive to its initial guess and yields no feedback law. The second line pursues
+richer game structure: impulsive Stackelberg equilibria [35], three-player and two-on-one engagements [36, 37], and
+analytic winning regions for target–attacker–defender games [38, 39]. These enlarge what can be modeled but rely
+on closed-form or search-based solvers without the polynomial-time guarantees of the convex problem solved here.
+Learning-based controllers are a third, orthogonal line, surveyed by Yang et al. [11] and exemplified by Li et al. [10],
+with recent multi-agent, distributed, and incomplete-information variants [40–43]; they scale to high dimension but
+certify nothing. Cheng et al. [5] review the broader field. Against this backdrop the present work occupies a specific
+niche: exact one-sided guarantees and millisecond runtime on linear relative dynamics, for both circular and elliptical
+orbits. Table 1 summarizes the comparison.
+Table 1: Methodological position relative to representative spacecraft PE methods.
+This work
+Jia [33]
+Stupik [20]
+Li [10]
+Hafer [27]
+Method
+Reachable-set + EG
+Convex min-time
+Direct collocation
+DRL
+HJI
+Guarantees
+Two one-sided bounds
+One-sided
+Local optimum
+None
+Saddle-point
+Runtime
+∼25 ms
+real-time
+minutes
+seconds
+minutes
+Orbit type
+Circ.+Ellip.
+Elliptical
+Circular
+Circular
+CR3BP
+Dimension
+4D planar, 6D verified
+6D
+6D
+6D
+6D
+Players
+nP vs. 1
+1 vs. 1
+1 vs. 1
+1 vs. 1
+1 vs. 1
+Reachable set
+Exact (support fn.)
+Ellipsoidal
+No
+No
+No
+2.2. Relative Motion on Elliptical Orbits
+Linearized relative motion about an elliptical reference orbit goes back to Tschauner and Hempel [44]; the state
+transition matrices that followed [45, 46] carried integrals that grow singular near circular orbits, which Yamanaka
+3
+
+
+and Ankersen [13] removed with a J-integral formulation well conditioned at every eccentricity. That line has since
+been extended to eccentric formation control [47], perturbed non-circular STMs [48], and orbit-element formulations
+of nonlinear Riccati formation dynamics [49], and is surveyed by Sullivan et al. [50]. Two recent results bear directly
+on section 7: an analytical linear-quadratic PE strategy for arbitrary Keplerian reference orbits via the Tschauner–
+Hempel differential Riccati equation [51], and a theory-of-functional-connections treatment of analytic rendezvous
+boundary conditions in elliptical PE problems [52]. We adopt the Yamanaka–Ankersen STM because its conditioning
+across the whole eccentricity range is what lets one solver cover circular and elliptical orbits alike.
+2.3. Reachability for Linear Orbital Systems
+Hamilton–Jacobi (HJ) reachability [7, 8] provides rigorous backward reachable tubes that characterize the set of
+states from which one player can guarantee a particular outcome; the approach has been applied to aerial pursuit–
+evasion and multi-player reach–avoid problems [9, 53–55]. Their grid cost is the exponential one already noted in
+section 1.
+For linear systems with bounded inputs, forward reachable sets admit exact set-valued representations that avoid
+this curse, among them zonotopes [15], ellipsoids [56], and support-function polytopes [14]; support functions are
+attractive here because they separate the set representation from the propagation, reducing the reachable set to scalar
+evaluations along template directions. In the spacecraft setting the domain has been approximated polyhedrally for
+relative motion [57] and extended to multi-impulse elliptical maneuvers [58]. Closest to the present use, several
+groups turn the reachable domain into a capture-feasibility test, through the ∆V needed to cover the target’s set [30],
+through time-dependent reachable domains [59], or by feeding a reachable-domain screen into equilibrium computa-
+tion [34, 60]. A related use is to delimit safe start regions rather than capture sets, as in approach to a tumbling target
+under rotating line-of-sight constraints [61]. All use ellipsoidal or sampled approximations; the escape certificate of
+section 4.2 instead uses the exact support function of the linear reachable set, which is what lets it certify rather than
+estimate infeasibility.
+2.4. Saddle-Point Methods and Game Solvers
+Existence and uniqueness of equilibria in continuous games were established by Rosen [62] for concave N-person
+games and by the minimax theorem of von Neumann and Morgenstern [63] for the two-player zero-sum convex–
+concave case. Neither applies here: the terminal-distance payoff falls outside the convex–concave class (theorem 3),
+which is why the treatment below is certificate-based rather than an appeal to a minimax theorem. Iterative best
+response (IBR), in which the players optimize against each other in alternation, is a common practical heuristic
+and reduces each subproblem to a standard convex program for off-the-shelf QP/SOCP solvers [64, 65], but it lacks
+convergence guarantees and can cycle.
+The extragradient method of Korpelevich [16] and its variants [17, 66, 67] solve monotone variational inequalities,
+of which convex–concave saddle problems are a special case, and its two-step extrapolation removes the oscillation of
+naive gradient descent–ascent; Facchinei and Pang [68] give the standard reference. We retain it as a fast equilibrium-
+seeking solver, since projection onto box control sets is element-wise clipping (section 5.3), while being explicit that
+its convergence theory does not apply in our operating regime and using the certificates to judge the solution instead.
+For constrained games the alternatives are augmented-Lagrangian solvers such as ALGAMES [69] and epigraph
+reformulations [70], which handle constraints exactly but trade away global convergence; keep-out constraints here
+are instead treated by successive convexification (section 5.5), a technique with a strong track record in aerospace
+trajectory optimization [71].
+Convex programming underpins much of aerospace trajectory generation [72], and model predictive control ex-
+tends it to single-agent rendezvous and docking [1, 73, 74], including robust tube-based [75] and chance-constrained
+variants for halo-orbit rendezvous [76] and convex deterministic tightenings of probabilistic constraints [77]. All as-
+sume a passive or worst-case target. The present paper keeps the convex structure that makes such controllers fast but
+replaces that assumption with an explicit game; a nominal-MPC baseline (section 6) measures the cost of wrongly
+assuming passivity.
+4
+
+
+3. Dynamics and Problem Formulation
+3.1. Relative Motion Model
+Relative motion between a target (chief) on a circular reference orbit and a deputy (chaser) is modeled by the
+Hill–Clohessy–Wiltshire (HCW) equations [12, 78] in the local-vertical local-horizontal (LVLH) frame (x radial, y
+along-track, z cross-track):
+¨x −2n˙y −3n2x = ux,
+¨y + 2n˙x = uy,
+¨z + n2z = uz,
+(1)
+with mean motion n =
+p
+µ/a3, where µ is the Earth’s gravitational parameter and a the reference semi-major axis. In
+state-space form ˙x = Acx + Bcu. The cross-track axis decouples, so all experiments use the planar model with nx = 4
+states x = [x, y, ˙x, ˙y]⊤and nu = 2 controls u = [ux, uy]⊤; the np = 2 position components are r = [x, y]⊤. A zero-order
+hold discretization at timestep ∆t yields
+xk+1 = Ad xk + Bd uk,
+k = 0, . . . , N −1,
+(2)
+with (Ad, Bd) obtained from the matrix exponential of the augmented block  Ac Bc
+0
+0
+∆t. The transition matrix is stan-
+dard [12], and section Appendix A records the discretization check: against an RK45 reference the ZOH model is
+within 0.01% at the ∆t = 10 s used throughout.
+Throughout, uk is an acceleration in m s−2, held constant over the interval [k∆t, (k + 1)∆t) by the zero-order hold,
+and never an impulsive velocity increment. The distinction matters for reading the tables: the thrust bounds ¯u are
+quoted in mm s−2, whereas the reported ∆v = P
+k ∥uk∥2 ∆t is the integrated velocity change in m s−1, which is why a
+bound of 10 mm s−2 over 300 s appears as a few m s−1 of ∆v. An impulsive formulation would keep everything that
+follows intact, with Bd replaced by the velocity-injection map and ∆t dropped from the ∆v sum; continuous thrust is
+used because the box bound is then a bound on the acceleration a body-mounted thruster set delivers directly.
+The cross-track reduction is verified rather than assumed: section 6.9 solves the same engagements on the full
+six-state model with out-of-plane offsets and recovers the planar numbers exactly when the cross-track state is zero.
+3.2. Linearization Validity
+Whether the linear model can be trusted depends on the engagement regime, so we quantify its error over one
+rather than assert a single bound. A 360-case sweep compares the discrete HCW model against full nonlinear Earth-
+centered-inertial propagation (two-body and two-body-plus-J2) across altitudes of 400–800 km, initial separations of
+0.1–2 km, closing speeds up to 1 m s−1, horizons of 300 and 600 s, and both free drift and maximum thrust. Figure 1
+summarizes the result. The error is dominated by unmodeled differential J2 and grows roughly linearly with separation
+and about fourfold from 300 to 600 s. Over a 300 s horizon it stays below 0.16 m for separations up to 600 m and
+below 0.43 m out to 2 km; over 600 s it reaches 1.76 m at 2 km. Relative to the separation this is under 0.06% at 300 s
+everywhere tested, and under 0.26% at 600 s for separations of 300 m or more; relative to the 50 m capture radius
+that decides outcomes, the model error is at most 0.9% over 300 s and 3.5% over 600 s, so capture and escape are
+distinguished unambiguously whenever the terminal distance is more than a few metres from the boundary. Replaying
+a single Case A engagement against the same nonlinear propagator with J2 and atmospheric drag both active agrees
+to the same order in the time domain: the peak inspector position error is 0.056 m, the linear and nonlinear inter-agent
+distances differ by 0.024 m (0.03%) at the terminal time, and drag alone contributes under 0.2 mm. The one effect
+the planar model cannot represent is differential-J2 cross-track motion, which reaches 0.9 m over 600 s at the most
+demanding grid point.
+3.3. Players, Controls, and the Game
+Consider an engagement between nP pursuers (i ∈{1, . . . , nP}) and a single evader. Each agent j ∈{P1, . . . , PnP, E}
+evolves under the discrete dynamics
+x(j)
+k = Ad x( j)
+k−1 + Bd u( j)
+k−1,
+k = 1, . . . , N,
+(3)
+5
+
+
+100
+300
+600 1000
+2000
+Initial separation d0 (m)
+10
+4
+10
+3
+10
+2
+10
+1
+100
+Terminal position error (m)
+(a) HCW error vs. initial separation
+Two-body, 300 s
+Two-body, 600 s
+Two-body + J2, 300 s
+Two-body + J2, 600 s
+100
+300
+600 1000
+2000
+Initial separation d0 (m)
+10
+4
+10
+3
+10
+2
+10
+1
+100
+Terminal error (% of d0)
+1% of separation
+(b) Error relative to separation
+Figure 1: Linearization error of the discrete HCW model against nonlinear ECI propagation, free-drift envelope over 400–800 km altitude and
+0–1 m s−1 closing speed. (a) Terminal position error versus initial separation for two-body and two-body-plus-J2 truth at 300 and 600 s. (b) The
+same error as a fraction of separation; the 1% reference line is never approached at 300 s.
+with box-bounded controls
+u(j)
+k ∈U( j) ≜u ∈Rnu : ∥u∥∞≤¯u( j)	,
+(4)
+where ¯u(Pi) = ¯uP for pursuers and ¯u(E) = ¯uE for the evader. The thrust ratio ¯uP/¯uE > 1 throughout, reflecting the
+operational case in which the inspector has a maneuvering advantage over the target.
+The paper studies the terminal-distance pursuit–evasion game: the pursuer team minimizes, and the evader maxi-
+mizes, the squared distance between the evader and the nearest pursuer at the final time,
+min
+{u(Pi)} max
+u(E)
+min
+i∈{1,...,nP}
+r(Pi)
+N
+−r(E)
+N
+
+2
+2 ,
+(5)
+where r( j)
+k is the position part of x(j)
+k . We write d f = mini
+r(Pi)
+N
+−r(E)
+N
+2 for the resulting terminal miss distance. Two
+capture conventions appear in the paper and it helps to fix them here. For the open-loop game, capture at horizon
+N means d f ≤rcap for a specified capture radius. For the closed-loop, receding-horizon play of section 6.6, capture
+is instead a first-passage event: the engagement terminates at the first step whose separation enters the capture ball,
+tcap = ∆t·min{k : mini
+r(Pi)
+k
+−r(E)
+k
+2 ≤rcap}, after which the outcome is decided and later drift is irrelevant. This is the
+standard game-of-kind convention [6] and it is what the receding-horizon figures and tables report. Minimum-time
+intercept and fuel-bounded variants lie outside the present scope, as they introduce integer or nonlinear structure that
+breaks the reachable-set geometry exploited here.
+Throughout, “inspector” and “pursuer” denote the same agent P and “target” and “evader” the same agent E.
+The information pattern is open-loop, with each player committing to a full control sequence at k = 0. Table G.1 in
+section Appendix G collects every symbol used in the paper.
+3.4. Scope, Assumptions, and Guarantees
+Game-based guidance tends to see its guarantees weaken as the model is made realistic, so table 2 states what
+each part of the framework does and does not guarantee. The strongest claims, the escape and security certificates,
+rest only on the top rows, which are exactly the assumptions the linearization can support.
+6
+
+
+Table 2: Assumptions and the guarantee each one supports. Section numbers indicate where each item is established or used.
+Assumption
+Status / scope of guarantee
+Planar HCW motion at LEO over 300–600 s
+horizons
+Linearization error below 0.9% of the capture radius against nonlinear
+ECI+J2 over the tested regime (section 3.2); the planar reduction and hori-
+zons to 1200 s are checked on the six-state model in section 6.9
+Linear time-varying Yamanaka–Ankersen
+dynamics, e ∈[0, 0.6]
+Reachable-set and certificate constructions preserved verbatim; validated
+against nonlinear Keplerian+J2 propagation (sections 7 and 7.2)
+Continuous thrust, ℓ∞-bounded (box), no il-
+lumination, communication or sensing con-
+straints
+Makes the reachable-set support function closed-form and projection
+element-wise (sections 4.1 and 5.3); which operational constraints preserve
+that structure is set out in section 8.2
+Terminal-distance payoff, box controls
+Exact escape certificate and pursuer security bound from support functions
+(theorems 1 and 4); these hold for any admissible opponent
+Effort regularization λ > 0
+Strict pursuer-side convexity; the payoff is not concave in the evader, so no
+pure open-loop saddle is claimed (theorem 3)
+Projected extragradient solution
+Fast equilibrium-seeking; solution quality certified per run by best-
+response gaps, not by a convergence theorem in this regime (sections 5.3
+and 6.2)
+Multi-pursuer via weighted surrogate
+Heuristic coordination; the rigorous statement is the joint escape certificate
+(sections 5.4 and 6.4)
+Keep-out avoidance via successive convexi-
+fication
+Exact constraint satisfaction at convergence; each convex subproblem is
+well posed (sections 5.5 and 6.3)
+Receding-horizon closed-loop play
+Empirical; no recursive-feasibility proof, but per-step feasibility is check-
+able from the reachable-set screen (section 6.6)
+Perfect state knowledge, deterministic dy-
+namics
+Modeling assumption; navigation-error sensitivity measured in section 6.8,
+further relaxations in section 8
+7
+
+
+4. Reachable Set Interpretation
+4.1. Support-Function Propagation of Forward Reachable Sets
+The N-step forward reachable set under eq. (2) with control set U admits the Minkowski decomposition
+RN(x0) = AN
+d x0 ⊕
+N−1
+M
+k=0
+AN−1−k
+d
+BdU.
+(6)
+Defining the support function hS(d) ≜maxx∈S d⊤x and using its standard linear-map and Minkowski properties [14],
+hRN(d) = d⊤AN
+d x0 +
+N−1
+X
+k=0
+hU
+
+B⊤
+d (A⊤
+d )N−1−kd
+
+.
+(7)
+For the box control set U = {u : ∥u∥∞≤¯u} the support function is ¯u ∥d∥1, which evaluates in O(nu) time. The
+position-space reachable set is then outer-approximated by evaluating eq. (7) along L template directions {dℓ} uni-
+formly distributed on the unit circle:
+ˆRN ≜
+L
+\
+ℓ=1
+r ∈Rnp : d⊤
+ℓr ≤hRN(dℓ)	 ⊇Rpos
+N .
+(8)
+Sweeping L ∈{8, . . . , 128}, the excess area ratio αL = (VL −V∗)/V∗relative to a fine reference (L = 1000) decreases
+as O(1/L2); at L = 48, αL ≈0.01. Two templates appear in what follows: L = 48 where a set is drawn or screened,
+and L = 96 for the certificates of sections 4.2 and 5.2, where the extra directions cost microseconds and tighten the
+bound.
+4.2. An Exact Escape Certificate
+The support functions of eq. (7) are exact for box controls, and this is enough to certify, not merely estimate, that
+a target cannot be caught. Define, over any finite set of unit directions {dℓ}L
+ℓ=1,
+ϕ(i)
+N ≜
+min
+ℓ∈{1,...,L}
+
+hR
+(Pi)
+N (dℓ) −hR(E)
+N (dℓ) + rcap
+
+,
+(9)
+where hR(j)
+N is the exact terminal-position support function of agent j, and let d∗attain the minimum.
+Theorem 1 (Escape certificate). If ϕ(i)
+N < 0, the evader has an admissible open-loop control that keeps
+r(Pi)
+N
+−r(E)
+N
+2 ≥
+rcap −ϕ(i)
+N > rcap against every admissible control of pursuer i. Escape from pursuer i is therefore guaranteed, with
+margin −ϕ(i)
+N .
+Proof. Let the evader play the bang-bang control that attains the support value in direction d∗, so that d∗⊤r(E)
+N
+=
+hR(E)
+N (d∗); for box controls this is u(E)
+k
+= ¯uE sign(B⊤
+d (A⊤
+d )N−1−kd∗). Any admissible pursuer terminal position obeys
+d∗⊤r(Pi)
+N
+≤hR
+(Pi)
+N (d∗). By Cauchy–Schwarz,
+r(E)
+N −r(Pi)
+N
+2 ≥d∗⊤(r(E)
+N −r(Pi)
+N ) ≥hR(E)
+N (d∗) −hR
+(Pi)
+N (d∗) = rcap −ϕ(i)
+N .
+Remark 2 (Existence of capture versus success of capture). Ask instead whether some admissible pair of plans
+ends close together. That is a joint question about the two reachable sets: writing DN ≜R(P)
+N ⊕(−R(E)
+N ) for their
+difference body, the Minkowski sum of R(P)
+N
+and −R(E)
+N
+and not the erosion ⊖, a pair of admissible controls with
+terminal separation at most rcap exists if and only if DN meets the capture ball of radius rcap, which for convex
+compact sets is decided by ψN ≜min∥d∥2=1[hR(P)
+N (d) + hR(E)
+N (−d)] + rcap ≥0. Note the plus sign: ψN is not ϕN, and since
+each terminal set is a free response plus a zonotope centred on it, ϕN ≤ψN always. Non-existence of a capture pair
+therefore implies certified escape, but not conversely, and it is the converse that matters operationally. In Case A of
+section 6.2 the two terminal sets in fact intersect: the minimum separation over all admissible pairs, obtained exactly
+from a small convex program, is 0 m, so capture pairs exist in abundance. The target nevertheless guarantees 72.3 m
+of standoff, because the inspector must commit to its plan without knowing the target’s. A Pontryagin difference,
+which encodes the stronger requirement that one set contain another, is likewise not the object this question needs.
+8
+
+
+Two points make ϕN a genuine certificate rather than a screen. First, it delivers not only the sign of the outcome but
+a constructive evader strategy and a guaranteed standoff. Second, direction sampling can only make it conservative:
+the minimum over a finite {dℓ} is at least the minimum over the whole circle, so a sampled ϕN < 0 is valid a fortiori,
+and refining L can only tighten the margin. Against multiple pursuers, escape from all of them simultaneously requires
+a single direction that clears every pursuer at once,
+ϕjoint
+N
+≜min
+ℓ
+max
+i
+
+hR
+(Pi)
+N (dℓ) −hR(E)
+N (dℓ)
+
++ rcap,
+(10)
+so ϕjoint
+N
+< 0 certifies joint escape while each ϕ(i)
+N < 0 certifies escape only from pursuer i in isolation. The gap between
+the two is exactly how encirclement helps the pursuers, made quantitative in section 6.4. When ϕN ≥0 the certificate
+is silent and the full game must be solved; fig. 2 evaluates ϕN on Case A across thrust ratios, and section 6.8 reports
+that over 200 perturbed trials the sign of ϕN predicts the game outcome without a single error.
+5. Game Formulation and Solver
+5.1. The Terminal-Distance Game and Its Curvature
+The linearity of eq. (3) makes each agent’s state trajectory an affine function of its control sequence. Stacking
+controls as U( j) ∈RNnu and using the block-lower-triangular control-to-state matrix S with blocks S k, j = Ak−j−1
+d
+Bd for
+j < k,
+X( j) = f ( j) + S U( j),
+(11)
+where f (j) is the free response. Writing TN for the terminal-position extraction matrix, so that TNX( j) = r( j)
+N , the
+terminal relative position is
+δ = GPU(P) −GEU(E) + g0,
+(12)
+with GP = GE = TNS and g0 = TN(f (P) −f (E)).
+The game payoff is the squared terminal distance with a small symmetric effort regularization,
+J(U(P), U(E)) = ∥δ∥2
+2 + λ
+U(P)2
+2 −λ
+U(E)2
+2 ,
+(13)
+with λ = 10−3 throughout, and the open-loop problem is
+min
+U(P)∈UN
+P
+max
+U(E)∈UN
+E
+J(U(P), U(E)).
+(14)
+It is tempting to call eq. (14) a convex–concave game and invoke a minimax theorem, but that is only half true, and
+the distinction matters for the rest of the paper.
+Proposition 3 (Curvature of the payoff). For every λ > 0 the payoff J is strictly convex in U(P). It is concave in
+U(E) if and only if λ ≥σmax(GE)2, where σmax(GE) is the largest singular value of GE. The same threshold governs
+monotonicity of the game operator F below.
+Proof. The Hessians are ∇2
+U(P)J = 2(G⊤
+PGP+λI) ≻0 and ∇2
+U(E)J = 2(G⊤
+EGE −λI), and the latter is negative semidefinite
+exactly when λI ⪰G⊤
+EGE, i.e. λ ≥σmax(GE)2. The bilinear cross terms of F cancel in its symmetric part, which
+is blkdiag(2(G⊤
+PGP + λI), 2(λI −G⊤
+EGE)); monotonicity is equivalent to this being positive semidefinite, the same
+condition.
+For the engagement parameters used here σmax(GE)2 ≈9.4×107 in the units of eq. (13), eleven orders of magnitude
+above λ = 10−3. Any λ large enough to restore concavity would also swamp the terminal-distance objective with the
+effort term and change the game being played. In the natural parameterization, then, the terminal-distance game is
+convex in both players: the evader maximizes a convex function of its terminal position over its reachable set, so its
+optimal reply is a bang-bang extreme point and a pure open-loop saddle need not exist. The rest of the paper is built
+around that fact.
+9
+
+
+The value λ = 10−3 is therefore chosen as a regularizer, not as a tuning knob, and the outcome is insensitive to it.
+Sweeping λ over twelve values from 10−4 to 107 leaves Case A unchanged at d f = 72.63 m and ∆VP = 4.16 m s−1
+across the whole range [10−4, 104], because both players saturate their thrust bounds (96.7% of the horizon) and the
+effort term merely shifts the objective by a constant. The first departure exceeding 1% appears only near λ⋆≈7×105,
+nearly nine orders above the operative value: by λ = 107 the penalty desaturates the thrust and df rises to 109.6 m. A
+positive λ is kept because it makes the pursuer subproblem strongly convex and the projection well posed, so the best
+response is unique; the full sweep is in section Appendix D.
+The gradients
+∇U(P)J = 2G⊤
+Pδ + 2λU(P),
+(15)
+∇U(E)J = −2G⊤
+Eδ −2λU(E),
+(16)
+define the game operator F = [∇U(P)J, −∇U(E)J]⊤, which is Lipschitz continuous with constant LF = 2(∥G∥2
+2 + λ),
+∥G∥2 = max{∥GP∥2 , ∥GE∥2}.
+5.2. Two Exact One-Sided Guarantees
+In place of an equilibrium, each player is furnished with a worst-case guarantee that holds regardless of the
+opponent. The evader’s is the escape certificate of theorem 1: when ϕN < 0 it can force a terminal separation of at
+least rcap −ϕN. The pursuer’s is a security strategy.
+Definition 4 (Pursuer security strategy). Let ˆR(E)
+N
+⊇R(E)
+N
+be the outer polytope eq. (8) of the evader’s terminal
+reachable set, with vertices {v j}L
+j=1. The pursuer security value is
+¯V =
+min
+U(P)∈UN
+P
+max
+j
+r(P)
+N (U(P)) −v j
+2 ,
+(17)
+attained by the security control U(P)
+sec.
+Since the polytope contains the true reachable set, playing U(P)
+sec guarantees a terminal miss distance of at most ¯V
+against every admissible evader, and ¯V ≤rcap certifies capture. Problem eq. (17) is a second-order-cone program with
+L cones, a one-time solve rather than a game iteration. The two guarantees bracket the engagement: when ϕN < 0, the
+outcome lies in [ rcap−ϕN, ¯V ], a certified interval that assumes nothing about either player’s rationality or information.
+5.3. Extragradient Equilibrium-Seeking, Certified per Run
+The certificates bound the outcome but do not by themselves produce a strategy to fly. For that we run the projected
+extragradient method [16] on eq. (14). With zt = (U(P)
+t , U(E)
+t
+), each iteration takes an extrapolation step
+ˆzt = ΠZ
+ zt −η F(zt)
+(18)
+and an update step
+zt+1 = ΠZ
+ zt −η F(ˆzt),
+(19)
+with Z = UN
+P × UN
+E and step size η = min(η0, 0.5/(∥G∥2
+2 + λ)). Because the constraints are boxes, ΠZ is element-wise
+clipping at O(Nnu) cost, and the evader block of F carries a sign flip so its update is a gradient ascent. Each iteration
+is two gradient evaluations and two projections, all matrix–vector work; no QP solver is called, which is what makes
+it fast (section 6).
+Theorem 5 (Conditional convergence). If λ ≥σmax(GE)2, so that F is monotone (theorem 3), then for η ≤1/(2LF)
+the iterates converge to the unique saddle point, geometrically with factor q = 1 −2λ/(∥G∥2
+2 + λ) [66, 67].
+The result is the standard one for a monotone operator and we do not reproduce its Lyapunov argument [66–68],
+because its hypothesis does not hold in the operative regime (λ = 10−3 against σmax(GE)2 ≈9.4 × 107). The margin
+is wide enough to make the rate vacuous, q ≈1 −2 × 10−11, so the observed termination at 141 iterations is set by the
+relative-value tolerance εSP = 10−4 and not by any contraction. Theorem 5 therefore does not certify the runs in this
+10
+
+
+paper, and we certify each solution after the fact instead. Let (U(P)◦, U(E)◦) be the returned iterate. Its pursuer-side
+best-response gap is the amount by which the pursuer could improve the terminal distance against the returned evader,
+γP =
+δ(U(P)◦, U(E)◦)
+2 −min
+U(P)∈UN
+P
+δ(U(P), U(E)◦)
+2 ,
+(20)
+a convex program. A small γP certifies that the pursuer plays near-optimally against the evader the solver produced.
+Across the engagements of sections 6.2 to 6.4 we find γP ≤2.9 m, and under half a metre in the two one-on-one cases;
+where a stopping tolerance tuned at one horizon is carried to a much longer one the gap grows to tens of metres, which
+section 6.9 reports rather than hides, since exposing exactly that is what a per-run check is for. The evader-side gap is
+generally large: as theorem 3 predicts, the evader could unilaterally do much better against a fixed pursuer point. The
+returned iterate is therefore a strong pursuer strategy together with a plausible evader reply, and it coincides with the
+iterated-best-response outcome to within 0.5% (section 6.2).
+5.4. Multiple Pursuers
+With nP > 1 pursuers the inner mini in eq. (5) is non-smooth, and the exact convex handling is an epigraph
+reformulation with a scalar slack for the inner minimum. We instead use the smoother and cheaper weighted surrogate
+Jmulti =
+X
+i
+wi
+r(Pi)
+N
+−r(E)
+N
+
+2
+2 + λ
+X
+i
+U(Pi)2
+2 −λ
+U(E)2
+2 ,
+(21)
+with adaptive weights wi ∝exp(−∥δi∥2
+2 / minj
+δj
+2
+2) that concentrate effort on the pursuer with the most favorable
+geometry. This is a coordination heuristic and we do not claim it solves eq. (5). What we can state rigorously about the
+multi-pursuer engagement is the joint escape certificate eq. (10): whenever ϕjoint
+N
+≥0, no single evader direction clears
+every pursuer, and the target cannot guarantee escape even though it may escape any one pursuer alone. Section 6.4
+exhibits exactly this: two pursuers each individually escapable (ϕ(i)
+N < 0) but jointly inescapable (ϕjoint
+N
+> 0).
+5.5. Keep-Out Zones by Successive Convexification
+Keep-out balls
+rk −robs
+m
+2 ≥rm are nonconvex, and adding a raw quadratic penalty to F destroys the reachable-
+set geometry the method depends on: the penalty gradient at the extragradient midpoint can dominate the pursuit
+gradient and drive the iteration to a non-equilibrium point (we return to this failure in section 6.3). We instead
+convexify successively. At each outer iteration the previous trajectory supplies, for each active step k and obstacle m,
+a supporting half-space with outward normal ηkm = (rprev
+k
+−robs
+m )/
+rprev
+k
+−robs
+m
+, and the penalty is applied to the affine
+margin,
+P(U) = κ
+X
+k,m
+max 0, rm −η⊤
+km(rk −robs
+m )2.
+(22)
+This term is convex in each player’s own controls, so the inner game retains the structure of section 5.3; a few
+relinearizations, followed by one hard-constrained polishing solve, drive the keep-out violation to zero. A penalty
+weight κ = 103 gives exact feasibility in every scenario tested, with the violation decreasing as O(1/κ) before the
+polish (section 6.3).
+Two alternatives deserve mention, since keep-out avoidance is the one genuinely nonconvex ingredient in the
+paper. A mixed-integer formulation encodes the disjunction exactly and returns a global optimum [79], at a branch-
+and-bound cost that grows with the number of zone–step pairs and rules out a solve at the timescale sought here.
+Control barrier functions give forward invariance of the safe set and compose cleanly with quadratic-program con-
+trollers [80, 81], but they presuppose a feedback law and a valid barrier certificate for the two-player dynamics, neither
+of which an open-loop game supplies. We choose successive convexification because it is the alternative that preserves
+what the rest of the paper rests on: every subproblem stays convex in each player’s own controls, so the projection
+stays element-wise, and the certificates, computed on the box and indifferent to the zones, stay exact.
+6. Numerical Experiments
+All circular-orbit experiments use the planar 4D HCW model with box-bounded controls at LEO altitude 500 km
+(n = 1.131 × 10−3 rad/s), timestep ∆t = 10 s, horizon N = 30 (300 s), thrust bounds ¯uP = 10 mm/s2 and ¯uE = 5 mm/s2
+(2:1 ratio), and capture radius rcap = 50 m. Full parameters are in section Appendix A.
+11
+
+
+6.1. Setup and Baselines
+Two baselines accompany the extragradient solver (section 5.3). Nominal MPC assumes a passive target (u(E) ≡0)
+and solves the single-agent QP via CVXPY+OSQP [65, 82]; its miss distance is a lower bound that measures the cost
+of assuming passivity. Iterative best response (IBR) alternates pursuer and evader QPs; because the evader subproblem
+is linearized, IBR solves a related but distinct game, so its agreement with the extragradient value is a cross-check,
+not a proof. Pseudocode is algorithm 1 in section Appendix B.
+Neither is a competitor. That nominal MPC captures a passive target is a foregone conclusion; its role is to
+price the passivity assumption, in metres and in ∆v (table 3 and section 6.8), which is the argument for modeling
+the engagement as a game at all. IBR is an independent implementation reaching the same values through different
+subproblems, which is what makes an agreement informative.
+6.2. Case A: One-on-One Open-Loop Game
+The inspector starts at x(P)
+0
+= [200, −300, 0, 0]⊤m and the target at the origin. Table 3 collects the results. Against
+a passive target the inspector closes completely; nominal MPC reaches the capture radius at t = 280 s (d = 40.9 m
+at first passage). Once the target thrusts to escape, both game solvers finish at df ≈72.5 m, outside the 50 m
+radius; the extragradient value (72.63 m) and IBR (72.28 m) agree to 0.5%, and the pursuer-side best-response gap
+is γP = 0.40 m, so the returned pursuer strategy is certifiably near-optimal against the returned evader. The escape
+certificate is consistent with this: ϕN = −22.3 m, guaranteeing the target a standoff of at least 72.3 m, and the pursuer
+security value is ¯V = 319.7 m, so the outcome is bracketed in [72.3, 319.7] m, comfortably outside capture. Theorem 2
+sets this against the weaker question of whether a close pair of plans merely exists, which for this geometry it does.
+The gap between the two bounds is wide because the security value against an unconstrained evader reachable set
+is inevitably loose at a single horizon; it is the escape certificate that decides this engagement. Figure 3 shows the
+resulting trajectories: both agents run along nearly the same line, down-radial and along-track, with the target holding
+its lead to the final sample instead of turning – the certifying direction d∗of theorem 1 is what it is running along.
+Both game solutions are bang-bang, as the linear dynamics and terminal payoff require, and fig. 4 shows it directly:
+each control component sits on its bound at 29 of the 30 steps (96.7% of components for both agents), the only interior
+values being those of the final step, where the effort term λ is the only thing acting. Neither plan changes sign, so
+the optimal open-loop strategies are constant-direction saturated burns – the same sign pattern that attains the support
+value in the certificate proof of theorem 1. The structure is a property of the unconstrained terminal-distance game
+rather than of the solver: once a keep-out constraint binds in Case B below, the inspector’s control leaves the box
+vertices and saturation drops to 65%.
+Table 3: Case A (one-on-one open loop): terminal miss distance df , minimum separation dmin, per-agent ∆v, maximum relative speed, solve time,
+and iterations. N = 30, ∆t = 10 s, rcap = 50 m, 2:1 thrust ratio. Nominal MPC reports first-passage capture.
+Method
+d f (m)
+dmin (m)
+∆vP
+∆vE
+vmax
+rel
+Time (s)
+Iter
+Nominal MPC
+40.9 †
+40.9
+2.20
+0.00
+2.04
+0.08
+–
+IBR
+72.3
+72.3
+4.24
+2.12
+1.96
+1.38
+3
+Extragradient
+72.6
+72.6
+4.16
+2.11
+1.90
+0.05
+141
+† Captured at tcap = 280 s (first passage). Times are single cold-start calls including matrix setup, as logged by the reproducibility scripts; table F.1
+reports medians over 20 repeats (23.5 ms for the extragradient solver), which are the figures quoted in the text.
+Figure 2 sweeps ϕN over horizon at four thrust ratios. At the 2:1 baseline it stays negative (escape certified,
+matching d f ≈72 m); it crosses zero near a 2.1:1 ratio, above which the certificate falls silent and the game must be
+solved. Notably the security bound ¯V does not fall to the capture radius at any ratio for this geometry, for the reason
+given above, which is one motivation for the receding-horizon play of section 6.6.
+6.3. Case B: Engagement with Keep-Out Zones
+The inspector starts at [300, −400, 0, 0]⊤m with three keep-out balls between the agents (section Appendix A).
+This case both demonstrates the successive-convexification scheme of section 5.5 and shows why it is needed. A naive
+quadratic penalty added directly to F fails badly here: evaluated at the extragradient midpoint, where the extrapolated
+12
+
+
+0
+50
+100
+150
+200
+250
+300
+Time (s)
+300
+200
+100
+0
+100
+200
+300
+400
+500
+Feasibility metric 
+N (m)
+Case A: capture-feasibility regimes
+Capture feasible (
+N
+0)
+Infeasible (
+N < 0)
+thrust ratio 1.5:1
+thrust ratio 3.0:1
+thrust ratio 4.0:1
+Case A (
+N)
+Figure 2: Escape certificate ϕN versus horizon for Case A at thrust ratios 1.5:1, 2:1, 3:1, and 4:1. Negative ϕN (red band) certifies escape; the 2:1
+baseline stays below zero, consistent with table 3, while higher ratios cross into the region where the game must be solved.
+pursuer trajectory dips into a keep-out ball, the penalty gradient is nearly twenty times the pursuit gradient and drives
+the iteration to a spurious point at which the pursuer flees the target, reporting a physically meaningless d f = 964.6 m;
+a best-response check exposes it at once, as a feasible pursuer can cut that distance to 305 m. The successive-
+convexification scheme eq. (22) avoids this by keeping every subproblem convex. It converges to d f = 306.3 m with
+zero keep-out violation after a hard-constrained polish, and its pursuer-side best-response gap against the corrected
+evader is 0.4 m (table 4). Exact feasibility is not free. The outer loop and its hard-constrained polish take 67 s, against
+25 ms for the unconstrained game, so the keep-out variant is a ground-planning or slow-loop tool rather than the
+onboard one; this is the same trade the treatment of exclusion constraints in section 8.2 predicts, since the one-shot
+solve is what nonconvexity costs. The certificates are unaffected, being obstacle-free constructions: for this geometry
+ϕN = −177.7 m, so the target holds at least 227.7 m against any inspector plan, constrained or not. The keep-out zones
+cost the inspector a 78 m detour relative to the unconstrained game (228.1 m); the inspector, not the target, is the one
+constrained by the obstacles: it skims the tightest ball to within 10−7 m at t = 240 s (fig. 5), while the target never
+comes within 81 m of any zone. The unconstrained IBR value (227.8 m, obtained by driving straight through a ball
+with a 49 m violation) matches the unconstrained extragradient value (228.1 m) and is listed only as a reference for
+the detour cost. A penalty-weight and obstacle-geometry study (section 6.5) confirms exact feasibility across κ and
+four geometries, including a threaded ten-metre corridor.
+Table 4: Case B (keep-out zones). The successive-convexification extragradient solver enforces the constraints exactly; the unconstrained MPC and
+IBR rows are references (they drive through the zones). “Clr.” is the signed minimum clearance to any keep-out boundary (negative = violation).
+Path metrics are reported as in table 3; here the approach is monotone, so dmin coincides with d f in every row.
+Method
+d f (m)
+dmin (m)
+Clr. (m)
+∆vP
+∆vE
+vmax
+rel
+Time (s)
+Keep-out
+Nominal MPC
+34.0†
+34.0
+−22.7
+3.69
+0.00
+3.39
+0.06
+ignored
+IBR
+227.8
+227.8
+−49.1
+4.24
+2.12
+1.89
+1.32
+ignored
+Extragradient (no zones)
+228.1
+228.1
+−49.1
+4.16
+2.11
+1.83
+0.03
+ignored
+Successive convex. (+ polish)
+306.3
+306.3
++0.0
+4.20
+2.12
+1.65
+67.5
+enforced
+† Captured at tcap = 290 s (first passage).
+13
+
+
+300
+200
+100
+0
+100
+50
+0
+50
+100
+150
+200
+250
+Radial x (m)
+t = 0 s
+t = 140 s
+t = 280 s
+Nominal MPC
+200
+0
+200
+Along-track y (m)
+300
+200
+100
+0
+100
+200
+300
+t = 0 s
+t = 150 s
+t = 300 s
+IBR
+200
+0
+200
+Along-track y (m)
+300
+200
+100
+0
+100
+200
+300
+Radial x (m)
+t = 0 s
+t = 150 s
+t = 300 s
+Saddle-Point
+Inspector
+Target
+Case A: Trajectory Comparison
+Figure 3: Case A trajectories in the LVLH x–y plane. Solid blue: inspector; dotted red: target; dashed circle: capture zone. Markers show the
+inspector at the start, mid-trajectory, and terminal sample. Panels are drawn at the same size, so the metres-per-point scale differs between them;
+within a panel, distance reads alike along both axes.
+14
+
+
+0
+50
+100
+150
+200
+250
+300
+Time (s)
+10
+5
+0
+5
+10
+Acceleration (mm/s2)
+Inspector
+ux (radial)
+uy (along-track)
+0
+50
+100
+150
+200
+250
+300
+Time (s)
+6
+4
+2
+0
+2
+4
+6
+Target
+Figure 4: Control histories of the Case A extragradient solution, drawn as the zero-order-hold staircases they are. Dotted lines mark the box bounds
+(±10 and ±5 mm s−2). Every component of both plans is saturated except at the final step, and no component changes sign: the solutions are
+bang-bang with a constant thrust direction.
+6.4. Case C: Two Pursuers and the Value of Encirclement
+Two inspectors at x(P1)
+0
+= [300, −200, 0, 0]⊤m and x(P2)
+0
+= [−200, −350, 0, 0]⊤m engage a target at the origin. This
+case is where the joint escape certificate earns its place. Taken one at a time, each pursuer is escapable: ϕ(1)
+N = −98.6 m
+and ϕ(2)
+N = −103.9 m, so against either alone the target can guarantee a large standoff. Taken together they are not:
+no single evasion direction clears both reachable sets, and the joint certificate is ϕjoint
+N
+= +70.0 m > 0. Encirclement
+thus destroys the guarantee even though neither pursuer breaks it individually, which is a rigorous statement of why
+a second inspector helps, independent of any solver. The weighted surrogate (section 5.4) plays this out, closing the
+target to d f = 136.8 m as it trades distance against one pursuer for distance against the other (fig. 6). The pursuer-side
+best-response gaps here are 1.9 and 2.8 m for the two inspectors, larger than the sub-metre gaps of Cases A and B.
+That is the expected price of the surrogate rather than a solver failure: it coordinates the team but does not solve
+eq. (5), and the rigorous multi-pursuer statement remains the joint certificate above.
+The sequential multi-pursuer IBR baseline is instructive as a failure. It does not converge: both pursuers best-
+respond to the same stale target prediction, so it enters a two-cycle (alternating 52.6 and 191.5 m) that more iterations
+do not settle, and damping merely lengthens the cycle. Sequential best response has no fixed point on this instance
+(table 5), which is a concrete reason to prefer the simultaneous weighted update.
+Table 5: Case C (two pursuers versus one target). d f is the closest inspector–target terminal distance and ∆vP the sum over both inspectors
+(3.94+3.78 m s−1). Sequential IBR does not converge (two-cycle), so it has no single trajectory on which to measure path metrics; the extragradient
+surrogate settles at 135.2 m given enough iterations, reported at the 200-iteration cap as 136.8 m.
+Method
+df (m)
+dmin (m)
+∆vP
+∆vE
+vmax
+rel
+Time (s)
+Status
+Sequential IBR
+52.6–191.5
+–
+–
+–
+–
+13.9
+two-cycle (no convergence)
+Extragradient surrogate
+136.8
+136.8
+7.72
+2.11
+2.59
+0.08
+200-iteration cap
+6.5. Penalty and Geometry Sensitivity of the Keep-Out Scheme
+Sweeping the penalty weight κ ∈{1, 10, 100, 103, 104}, the unpolished violation of the successive-convexification
+scheme decays as O(1/κ), from 49 m at κ = 1 to 0.04 m at κ = 104, and the hard-constrained polish drives it to zero
+for any κ ≥10. The polished terminal distance settles at 306 m for κ ≥100 (the κ = 103 value used throughout); at
+κ = 10 the scheme converges instead to a distinct feasible trajectory at 255 m, a reminder that the keep-out problem
+15
+
+
+400
+200
+0
+200
+100
+0
+100
+200
+300
+400
+Radial x (m)
+t = 0 s
+t = 140 s
+t = 290 s
+Nominal MPC
+400
+200
+0
+200
+Along-track y (m)
+300
+200
+100
+0
+100
+200
+300
+400
+t = 0 s
+t = 150 s
+t = 300 s
+IBR
+400
+200
+0
+200
+Along-track y (m)
+300
+200
+100
+0
+100
+200
+300
+400
+Radial x (m)
+t = 0 s
+t = 150 s
+t = 300 s
+Saddle-Point
+Inspector
+Target
+skim@t = 240 s
+clearance 0.0 m
+Case B: Trajectory Comparison
+Figure 5: Case B trajectories with three keep-out balls (grey). Under successive convexification (right) the inspector detours around the zones while
+the target flees; the inset zooms on the tightest clearance, where the inspector skims the keep-out boundary at t = 240 s. The passive-target MPC
+panel terminates at first-passage capture. Panels are drawn at the same size, so the metres-per-point scale differs between them; within a panel,
+distance reads alike along both axes.
+16
+
+
+400
+300
+200
+100
+0
+100
+200
+100
+0
+100
+200
+300
+Radial x (m)
+t = 0 s
+t = 140 s
+t = 280 s
+t = 0 s
+t = 140 s
+t = 280 s
+Nominal MPC
+200
+0
+200
+Along-track y (m)
+300
+200
+100
+0
+100
+200
+300
+t = 0 s
+t = 140 s
+t = 290 s
+t = 0 s
+t = 140 s
+t = 290 s
+IBR
+200
+0
+200
+Along-track y (m)
+300
+200
+100
+0
+100
+200
+300
+Radial x (m)
+t = 0 s
+t = 150 s
+t = 300 s
+t = 0 s
+t = 150 s
+t = 300 s
+Saddle-Point
+Inspector 1
+Inspector 2
+Target
+Case C: Trajectory Comparison
+Figure 6: Case C (two pursuers versus one target). The target trades distance against Inspector 1 for distance against Inspector 2, ending nearer
+than in the single-inspector case. Markers show each inspector at the start, mid-trajectory, and terminal sample. The three panels are drawn at the
+same size, so the metres-per-point scale differs between them; within a panel, distance reads alike along both axes.
+17
+
+
+is nonconvex and admits several feasible local solutions. The naive quadratic penalty, by contrast, has no usable
+weight: at κ = 1 it ignores the constraint, and for κ ≥10 it produces the fleeing-pursuer artifact of section 6.3. Across
+four obstacle geometries (the zones shifted, enlarged by half, blocking the line of sight, and arranged as a ten-metre
+corridor), the scheme reaches zero violation in every case, threading the corridor at a detour cost of only 7 m. The one
+failure is κ = 1, where the initial iterate is too deeply infeasible for the polish to recover; any κ ≥10 avoids it. This is
+the evidence behind the exact-constraint-satisfaction entry of table 2.
+6.6. Engagement Tradespace
+To map outcomes across the operational parameter space, the game is wrapped in a receding-horizon loop and
+solved on a 15 × 15 grid of thrust ratio versus warning time at fixed initial geometry (d0 = 128 m), and on ten named
+scenarios spanning thrust ratios 1.2:1–4:1, initial separations 76–532 m, and horizons 125–600 s. The receding-
+horizon wrapper is an empirical extension that re-solves the open-loop game at each step and applies the first control;
+we claim no recursive-feasibility proof for it, though per-step feasibility is checkable online from the reachable-set
+screen. Capture is the first-passage event of section 3.3: the engagement ends when the separation first enters the
+capture ball.
+Figure 7 shows the feasibility map. The frontier is monotone in warning time: with enough warning, a thrust
+ratio as low as 1.2:1 suffices, and the minimum capturing ratio falls smoothly from 4:1 at 90 s to 1.2:1 beyond 280 s.
+Escape, in the ten scenarios, is instead set by the initial geometry: every escaping case begins at d0 ≥200 m with a
+target velocity head start that along-track drift amplifies faster than the inspector can close. The ten trajectories are
+shown in fig. 8, truncated at the first-passage event, so the figure and table 6 score every scenario by the same criterion:
+the five captures reach the capture circle, and the five escapes stay outside it for the whole engagement.
+100
+200
+300
+400
+500
+600
+Warning Time (s)
+1.0
+1.5
+2.0
+2.5
+3.0
+3.5
+4.0
+Thrust ratio uP/uE
+CAPTURE
+REGION
+EVASION
+REGION
+Capture/Evasion Tradespace
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+Figure 7: Capture / escape feasibility map over thrust ratio and warning time at fixed initial geometry (d0 = 128 m). Dashed line: the frontier
+separating capture (green) from escape (red). Numbered markers: the ten scenarios of table 6; their colors reflect each scenario’s outcome at its
+own initial separation, which can differ from the fixed-geometry background (e.g. S8 at d0 = 532 m).
+6.7. Design Implications
+The tradespace supports a short list of design rules, with the qualifications the data actually warrant.
+1. Thrust ratio is necessary but not sufficient. Capture needs ¯uP/¯uE ≥1.8 (mean 2.66:1 among captures); a 100 kg
+inspector with a 1 N thruster (≈10 mm s−2) meets this against a target of half its authority. Because thrust ratio
+reduces to (TP/mP)/(TE/mE), a light, high-thrust-to-mass inspector outperforms a heavier one of nominally larger
+thrust.
+18
+
+
+Table 6: Ten-scenario tradespace under the receding-horizon game with first-passage capture. Top block (S1–S5): capture, reported by time-to-
+capture tcap and the separation at capture. Bottom block (S6–S10): escape, reported by the minimum separation reached (equal to the terminal
+separation, as these are still closing at the horizon). Capture rate 5/10; mean thrust ratio 2.66:1 for capture, 1.60:1 for escape.
+ID
+Name
+Ratio
+d0 (m)
+Horizon (s)
+rcap (m)
+tcap (s)
+dmin (m)
+vmax
+rel (m/s)
+∆VP (m/s)
+∆VE (m/s)
+Outcome
+S1
+High thrust ratio
+4.0
+100
+150
+40
+70
+39.6
+1.13
+1.56
+0.49
+Capture
+S2
+Moderate, long horizon
+3.0
+144
+320
+40
+168
+37.0
+0.90
+2.39
+1.16
+Capture
+S3
+Close range, short horizon
+2.5
+76
+125
+40
+95
+39.6
+0.68
+1.43
+0.64
+Capture
+S4
+Persistent low ratio
+2.0
+192
+600
+45
+320
+42.5
+0.71
+3.29
+2.19
+Capture
+S5
+Marginal approach
+1.8
+103
+315
+45
+133
+42.4
+0.61
+1.52
+0.91
+Capture
+S6
+Along-track drift wins
+1.5
+292
+320
+50
+–
+162.9
+0.96
+3.31
+2.21
+Escape
+S7
+Target velocity advantage
+1.5
+250
+200
+50
+–
+208.8
+0.74
+2.04
+1.36
+Escape
+S8
+Too far at start
+2.0
+532
+160
+50
+–
+456.1
+0.94
+2.15
+1.07
+Escape
+S9
+Narrow escape (target)
+1.8
+200
+175
+45
+–
+135.9
+0.92
+2.14
+1.19
+Escape
+S10
+Orbit-mechanics escape
+1.2
+308
+200
+50
+–
+281.4
+0.32
+1.63
+1.36
+Escape
+50
+0
+50
+50
+0
+50
+x (m)
+CAPTURED
+t=70 s
+CAPTURE
+S1: 4.0:1
+d =100 m
+100
+0
+0
+100
+CAPTURED
+t=168 s
+S2: 3.0:1
+d =144 m
+50
+0
+50
+100
+50
+0
+50
+CAPTURED
+t=95 s
+S3: 2.5:1
+d =76 m
+100
+0
+100
+100
+0
+100
+CAPTURED
+t=320 s
+S4: 2.0:1
+d =192 m
+0
+100
+100
+0
+100
+CAPTURED
+t=133 s
+S5: 1.8:1
+d =103 m
+250
+0
+250
+y (m)
+200
+0
+200
+x (m)
+EVADED
+d=163 m
+EVASION
+S6: 1.5:1
+d =292 m
+200
+0
+200
+y (m)
+0
+200
+EVADED
+d=209 m
+S7: 1.5:1
+d =250 m
+250
+0
+y (m)
+0
+200
+400
+EVADED
+d=456 m
+S8: 2.0:1
+d =532 m
+100 0
+100
+y (m)
+100
+0
+100
+200
+EVADED
+d=136 m
+S9: 1.8:1
+d =200 m
+250
+0
+y (m)
+0
+200
+EVADED
+d=281 m
+S10: 1.2:1
+d =308 m
+Figure 8: Per-scenario trajectories under the receding-horizon game. Top row (S1–S5): capture, with trajectories truncated at the first-passage event
+(inspector marker on the capture circle). Bottom row (S6–S10): escape. Blue: inspector; red: target; dashed circle: capture zone. Every panel is
+drawn at the same size, so the metres-per-point scale differs between panels; within a panel, distance reads alike along both axes.
+2. Warning time buys thrust, monotonically and without reversal. Warning time can be traded against installed thrust
+across the whole range swept (section 6.6).
+3. Detection range can dominate thrust. S8 out-thrusts S3 by a smaller margin than S3 out-ranges it, and S3 is the
+one that captures, so acquisition range is the first thing to buy. The 76–532 m range and 90–600 s warning swept
+here are within demonstrated practice: relative GNSS covers this regime when the target cooperates [83], and
+angles-only optical tracking of a non-cooperative target has been flown from tens of kilometres inward [84], so at
+these separations warning time is set by the tracking update rate rather than by acquisition.
+4. Budget. A 5 m s−1 reserve covers every observed capture at the 50 m radius (table 6).
+The capture radius itself is a design choice, and at 50 m it is an approach gate of the scale standard practice reserves
+around a resident space object [85] rather than a docking tolerance, so we sweep it. At rcap = 50 and 20 m the same
+five scenarios capture; at 10 and 5 m the count drops to four, as S3’s short 125 s window no longer suffices, and
+19
+
+
+time-to-capture roughly doubles as the radius tightens. The 1.8:1 ratio threshold is unchanged from 50 down to 5 m;
+what a tighter docking-class radius demands is not more thrust but a longer engagement window.
+6.8. Statistics, Screening, and Navigation Error
+A 200-trial Monte Carlo study perturbs the initial state (inspector ±50 m, ±0.5 m s−1; target ±20 m, ±0.2 m s−1) and
+records both game solvers and the certificate (section Appendix E). Against a passive target the inspector captures in
+99.0% of trials (95% Wilson interval [96.4, 99.7]); against a maneuvering target the capture rate is 25.0% [19.5, 31.4]
+for both the extragradient and IBR solvers, which agree on the outcome trial by trial. Capture concentrates at short
+range: 44% for d0 < 320 m, falling to 5% beyond 400 m. The terminal-distance distribution is sharply bimodal, with
+a capture cluster near 42 m and an escape cluster near 162 m (fig. 9).
+0
+100
+200
+300
+Separation at engagement end df (m)
+0
+10
+20
+30
+40
+50
+Number of trials
+rcap = 50 m
+capture cluster
+median = 42.3 m
+evasion cluster
+median = 161.6 m
+Saddle-point terminal separation, Case A
+(200 Monte Carlo trials)
+Captured by Inspector (n=50)
+Target escapes (n=150)
+Figure 9: Terminal-distance distribution over the 200-trial Monte Carlo study under game play. The distribution is bimodal: a capture cluster
+(green, median 42 m) and an escape cluster (red, median 162 m), split cleanly at the rcap = 50 m radius (dashed). The sign of the escape certificate
+ϕN predicts which cluster each trial lands in with no error.
+The escape certificate performs better than its own statement requires, and it is worth being precise about what is
+being measured. Theorem 1 is one-sided: it says nothing when ϕN ≥0, so it cannot be wrong on that branch. The
+false-positive rate below therefore scores ϕN used as a two-sided screen, which is more than the theorem claims, and
+is the quantity an operator deciding whether to solve the full game actually cares about. Used that way, across all 200
+trials the sign of ϕN predicts the game outcome without a single error (0 false positives out of 50 predicted captures,
+0 false negatives out of 150 certified escapes; 95% upper bounds 5.8% and 2.0%). On the escape branch the realized
+separation tracks the certificate bound almost exactly, d f ≈rcap −ϕN with correlation −0.9999, so the bound is not
+merely correct but tight, and the outer approximation costs little conservatism in practice. The perturbations leave the
+two branches well separated, so this sample does not probe ϕN within a few metres of zero; the certificate direction is
+safe there by theorem 1, but the screen’s behaviour on the boundary is not measured.
+Perfect state knowledge is an idealization, so we also perturb it. A separate hundred-trial study plans open-loop
+from an estimated relative state and flies the plan against the truth, holding the true initial conditions fixed so that
+navigation error is isolated from the randomized geometry above; its unperturbed capture rate is 27%. Cooperative-
+grade navigation (position 0.1 m, velocity 1 mm s−1, the regime of GNSS relative navigation [83]) leaves every
+outcome unchanged: the median terminal-distance shift is under 0.01 m, and no trial changes capture status. Angles-
+only navigation of a non-cooperative target is far coarser, at metre-level cross-range and roughly ten percent of range
+down the boresight [84, 86], and it cuts that rate to 11%, with every flip a capture lost to an escape. Navigation error is
+thus one-sided: it penalizes the inspector, which must close precisely, and never the target. This places the value of the
+20
+
+
+whole framework in context: the terminal-distance game and its certificates are only as good as the relative navigation
+feeding them, and the binding operational requirement for a non-cooperative inspection is sensing, not thrust.
+The solver’s efficiency is characterized in section Appendix F. In one shot the extragradient method returns a
+strategy pair in about 25 ms, some forty times faster than rebuilding the IBR QPs. That comparison is cold-start
+only: a condensed, warm-started QP implementation of IBR is faster still when amortized over many solves. The
+extragradient method’s durable advantages are that it requires no per-step problem compilation, its memory is O(Nnu),
+and its cost scales linearly in the number of pursuers. The escape certificate costs a fraction of one game solve once
+the reachable-set maps are in hand, so screening before solving is nearly free.
+6.9. Model Checks: Out-of-Plane Motion and Long Engagements
+Two modeling choices carry the results so far: the planar reduction and the 300 s horizon. Both are checked here
+rather than argued for.
+Six states and out-of-plane motion. The engagements of section 6.2 were re-solved on the full six-state HCW model
+of eq. (1) with three control axes, keeping the in-plane initial conditions and the per-axis thrust bound unchanged, so
+the inspector gains a third axis but no extra authority per axis, which is what a body-mounted thruster set provides.
+Table 7 collects the outcome. With zero cross-track state the six-state solve reproduces the planar terminal distance
+to 4 × 10−13 m, confirming the decoupling argument of section 3 numerically rather than by inspection. Cross-track
+offsets up to 150 m leave the outcome unchanged, because the inspector can null that much separation within the
+horizon at 10 mm s−2; the cost appears as ∆v, which rises from 4.16 to 4.62 m s−1. At 300 m of cross-track separation
+the offset can no longer be nulled, the target holds 60.9 m of it to the terminal time, and the miss distance grows
+from 72.6 to 94.9 m. The escape certificate tracks this without modification, tightening from −22.3 to −44.3 m and
+bounding the realized separation to within 0.6 m. Three effects are worth noting. The certificate needs a direction
+template on the sphere rather than the circle, and a template of practical size sits far enough from the best direction to
+cost tens of metres of margin, so the reported values refine the best template direction by local ascent; this is sound
+because theorem 1 holds for every single direction. The security value is genuinely weaker in three dimensions,
+rising from 319.7 to 389.8 m, because the target’s reachable set has grown an axis. And the solver cost is essentially
+unchanged, 19–22 ms against 25 ms planar, since the extragradient iteration is matrix–vector work in the control
+dimension. Replaying the six-state plans against nonlinear two-body-plus-J2 propagation moves the terminal distance
+by at most 0.030 m.
+The IBR baseline behaves instructively here: it returns 72.3 m in every configuration, including the 300 m one,
+because its linearized target subproblem does not exploit the new axis. That is the concrete form of the caveat in
+section 6.1 that IBR solves a related but distinct game, and it is why we treat its agreement as a cross-check rather
+than as a reference value.
+Table 7: Case A on the six-state model with out-of-plane initial offsets. Per-axis thrust bounds, horizon, and in-plane initial conditions are those of
+table 3; ∆z0 is the initial cross-track separation and ∆zN the terminal one. The last column is the change in terminal distance when the same plans
+are flown against nonlinear ECI+J2 dynamics.
+Geometry
+∆z0
+∆zN
+d f
+ϕN
+rcap −ϕN
+∆vP
+Nonlin. shift
+(m)
+(m)
+(m)
+(m)
+(m)
+(m/s)
+(m)
+Planar limit
+0
+0.0
+72.63
+−22.28
+72.28
+4.16
+0.024
+Cross-track offset
+50
+0.0
+72.63
+−22.28
+72.28
+4.39
+0.026
+Cross-track offset
+150
+0.0
+72.63
+−22.28
+72.28
+4.62
+0.030
+Cross-track offset
+300
+60.9
+94.91
+−44.34
+94.34
+5.07
+0.022
+Split ±150
+300
+60.9
+94.91
+−44.34
+94.34
+5.07
+0.021
+Target drifting out-of-plane
+150
+0.0
+72.63
+−22.28
+72.28
+4.40
+0.029
+Longer engagements. Table 8 extends Case A from 300 to 1200 s. The engagement changes character: at 300 s the
+target escapes with the certificate confirming it, while from 450 s onward the 2:1 inspector closes to contact and ϕN
+turns positive, which is the certificate correctly falling silent rather than failing. With enough time a thrust-advantaged
+inspector wins, so the informative regime is the one where the horizon is short enough for the outcome to be in doubt.
+21
+
+
+Two things do degrade with horizon, and both are visible in the table. The first is a solver setting. The stopping
+tolerance was tuned at N = 30, and at 900 and 1200 s it stops the iteration early, leaving a pursuer best-response
+gap of 27.9 and 19.9 m respectively – large enough to matter, though not large enough to change the capture label.
+The per-run certificate is what exposes this: tightening the tolerance to 10−8 closes the gap to 2 mm for 239 and 608
+iterations, still 135 and 272 ms; a solver reporting only convergence would have hidden it. The second is the linear
+model itself, which is the real limit on horizon: the peak position discrepancy against nonlinear ECI+J2 propagation
+grows from 0.056 m at 300 s to 2.56 m at 1200 s, a factor of 46, while the terminal-distance discrepancy stays under
+0.35 m, i.e. under 0.7% of the capture radius. Engagements much beyond 1200 s would need either re-linearization
+about a reference trajectory or the elliptical LTV treatment of section 7, not a different solver.
+Table 8: Case A over horizons from 300 to 1200 s (∆t = 10 s). γP is the pursuer best-response gap at the default stopping tolerance and at 10−8,
+with the iteration count for the latter. The last two columns compare against nonlinear ECI+J2 propagation of the same plans.
+T
+d f
+Outcome
+ϕN
+γP
+γP
+Iter.
+Peak lin.
+(s)
+(m)
+(m)
+(m)
+tight (m)
+tight
+error (m)
+300
+72.63
+escape
+−22.3
+0.40
+0.398
+142
+0.056
+450
+0.01
+capture
+244
+0.01
+0.000
+92
+0.096
+600
+0.00
+capture
+660
+0.00
+0.000
+69
+0.173
+900
+27.85
+capture
+2025
+27.85
+0.002
+239
+0.258
+1200
+19.89
+capture
+3782
+19.89
+0.000
+608
+2.556
+7. Extension to Elliptical Reference Orbits
+GTO, Molniya, and many high-altitude or science orbits carry non-negligible eccentricity, for which time-invariant
+HCW is inaccurate. The Yamanaka–Ankersen (YA) state transition matrix [13] yields a linear time-varying (LTV)
+system, which the solver takes without a single change, for the reason theorem 6 states precisely.
+7.1. Yamanaka–Ankersen LTV Model
+Relative motion about an elliptical Keplerian orbit of eccentricity e is governed by the Tschauner–Hempel equa-
+tions [44], which reduce to HCW eq. (1) in the circular limit e = 0. Yamanaka and Ankersen [13] constructed a
+closed-form state transition matrix
+x(ν) = Φ(ν, ν0) x(ν0),
+(23)
+parameterized by the true anomaly ν and resolved through the Kepler equation M = E −e sin E, in which E is the
+eccentric anomaly, written so as not to collide with the evader label E. Its auxiliary integral is what avoids the near-
+circular singularity discussed in section 2.2; the full derivation, including the fundamental matrix entries and the
+time-to-anomaly mapping, is in section Appendix C.
+At each timestep k the true anomaly advances by Kepler’s equation from νk to νk+1, yielding the discrete LTV form
+xk+1 = Ak xk + Bk uk,
+k = 0, . . . , N −1,
+(24)
+with Ak = Φ(νk+1, νk) and Bk obtained from Simpson’s rule quadrature of
+R ∆t
+0 Φ(νk+1, ν(τ))[0; I] dτ, which achieves
+O(∆t5) accuracy. At e = 0, (Ak, Bk) reduce to the constant HCW matrices (Ad, Bd) of eq. (2) to machine precision (see
+validation in section 7.4).
+7.2. Reachable Sets and Game Formulation under LTV Dynamics
+The Minkowski-sum decomposition eq. (6) and the trajectory-space representation eq. (11) both generalize to LTV
+systems by replacing matrix powers with time-varying products ΦN: j = AN−1AN−2 · · · A j. The forward reachable set
+becomes
+RN(x0) = ΦN:0 x0 ⊕
+N−1
+M
+k=0
+ΦN:k+1 Bk U,
+(25)
+22
+
+
+with support-function evaluation
+hRN(d) = d⊤ΦN:0 x0 +
+N−1
+X
+k=0
+hU
+
+B⊤
+k Φ⊤
+N:k+1d
+
+;
+(26)
+the LTV control-to-state mapping has block S LTV
+k, j
+= Φk: j+1Bj for j < k in place of Ak−j−1
+d
+Bd. Precomputing and
+caching the time-varying products once leaves the O(NL) screening cost and the O(Nnpnu) per-iteration solver cost
+unchanged.
+Remark 6 (Structure preserved under LTV dynamics). The LTV payoff has the same quadratic form as J in eq. (13)
+with GP,GE, g0 replaced by their LTV counterparts. Every statement of section 5 carries over verbatim: the curvature
+threshold of theorem 3 (with GE replaced by GLTV
+E
+), the escape certificate theorem 1, and the security bound theorem 4
+all hold, since each depends on the dynamics only through the terminal support functions eq. (26). The elliptical game
+is thus certified by the same two inequalities as the circular one.
+7.3. Eccentricity and Orbital Phase
+The mechanism behind the eccentricity dependence is geometric. Near periapsis the chief’s transverse velocity
+is largest (rvθ = h by angular-momentum conservation), so a deputy maneuvering relative to it sees a strong, rapidly
+varying along-track shear; near apoapsis the same deputy sees a gentle one. The along-track drift that already aids the
+target’s escape in the circular case is therefore amplified at periapsis and damped at apoapsis, and an engagement that
+begins at the wrong orbital phase is harder for the inspector.
+To keep the comparison physical, all elliptical scenarios fix a 500 km perigee altitude, so the semi-major axis
+grows with eccentricity as a = (R⊕+ 500 km)/(1 −e). Holding a fixed instead would drive the perigee below the
+surface at high e. The Case A scenario is re-run on the LTV system over e ∈{0, 0.1, 0.3, 0.6} at periapsis and over five
+initial true anomalies at the two higher eccentricities (table 9).
+Table 9: Terminal distance and escape certificate at periapsis (ν0 = 0◦) for four eccentricities, fixed 500 km perigee. Other parameters as in Case A.
+Here ϕN is the L = 48 screen value, so the e = 0 row (−22.2 m) matches the L = 96 certificate of section 6.2 (−22.3 m) up to the direction-sampling
+resolution. Five rows reach the 200-iteration cap; re-solving them to 2 × 104 iterations moves d f by at most 0.21 m and changes no certificate sign
+and no outcome.
+e
+a (km)
+ν0 (deg)
+d f (m)
+ϕN (m)
+Captured
+0.0
+6871
+0
+72.6
+−22.2
+No
+0.1
+7634
+0
+75.9
+−25.4
+No
+0.3
+9816
+0
+81.9
+−31.8
+No
+45
+69.7
+−19.3
+No
+90
+53.5
+−3.3
+No
+135
+55.7
+−5.4
+No
+180
+59.1
+−9.1
+No
+0.6
+17178
+0
+91.1
+−41.0
+No
+45
+69.2
+−18.8
+No
+90
+53.9
+−3.6
+No
+135
+67.2
+−16.8
+No
+180
+71.3
+−21.0
+No
+Two patterns emerge. Increasing eccentricity at periapsis raises the miss distance modestly, from 72.6 to 91.1 m
+between e = 0 and e = 0.6, a factor of 1.25, and the certificate tracks this in both sign and magnitude. The dependence
+on orbital phase is stronger: at e = 0.6 the miss distance varies by a factor of 1.7 across the sweep (91.1 m at periapsis,
+53.9 m near ν0 = 90◦), so when in the orbit an engagement begins matters as much as the thrust ratio does on a circular
+orbit. Whether the engagement is timed by wall-clock or by orbital arc changes the story: holding the 300 s horizon
+fixed, escape remains certified at every phase, but scaling the horizon to a fixed orbital arc (about 1200 s at e = 0.6)
+gives the inspector enough time that the certificate flips sign and capture becomes feasible at every ν0. The practical
+reading is that on eccentric orbits the inspector should budget engagement time in orbital arc, not seconds. Figure 10
+23
+
+
+shows the geometry: as e grows the terminal reachable sets become asymmetric, radially squashed and along-track
+elongated near periapsis, which is what widens the target’s escape margin −ϕN from 22.2 to 41.0 m across the sweep.
+Because ν0 is not known exactly in flight, where ephemeris and timing error both surface as a phase offset, the
+outcome should not depend sharply on it. Planning on an assumed ν0 and flying the resulting sequence against the
+truth, over ν0 ∈{90◦, 135◦, 180◦} at e = 0.6 and offsets up to ±15◦, moves the flown terminal distance by at most
+0.31 m and changes no capture outcome. The predicted value is far more sensitive than the flown one: at ν0 = 90◦
+a +15◦error moves the planned df from 53.7 to 58.3 m while the flown result moves to 54.0 m (this sweep is run to
+convergence, which is the 0.17 m offset from the capped entry in table 9), and it likewise inflates the certificate margin
+from −3.7 to −8.3 m without changing its sign. Anomaly error of this size therefore costs accuracy in the prediction,
+not correctness in the decision. Larger or structured uncertainty is better handled by inflating the reachable sets, as in
+the robust extension noted in section 8.
+200
+0
+200
+Along-track y (m)
+200
+100
+0
+100
+200
+300
+Radial x (m)
+e = 0.0, df = 72.6 m
+Pursuer
+Evader
+200
+0
+200
+Along-track y (m)
+200
+100
+0
+100
+200
+300
+Radial x (m)
+e = 0.1, df = 75.9 m
+Pursuer
+Evader
+200
+0
+200
+Along-track y (m)
+200
+100
+0
+100
+200
+300
+Radial x (m)
+e = 0.3, df = 82.2 m
+Pursuer
+Evader
+200
+0
+200
+Along-track y (m)
+200
+100
+0
+100
+200
+300
+Radial x (m)
+e = 0.6, df = 91.3 m
+Pursuer
+Evader
+Pursuit-Evasion Trajectories: Eccentricity Comparison
+Figure 10: Case A trajectories at e ∈{0, 0.1, 0.3, 0.6} with ν0 = 0 (periapsis) and a fixed 500 km perigee. Higher eccentricity modestly widens the
+target’s along-track escape under the same thrust ratio and geometry.
+24
+
+
+7.4. Validation Against Nonlinear Dynamics
+Two checks confirm that the elliptical results are properties of the dynamics, not of the linear model. First,
+the YA implementation reduces to constant-coefficient HCW at e = 0: the A-matrix and free-drift errors are at
+machine precision and the Simpson-rule B-error is of order 10−9 (table 10). Second, and more importantly, the phase
+dependence survives nonlinear propagation. Replaying each YA extragradient control pair through a full nonlinear
+two-body (and two-body-plus-J2) integration of both spacecraft, the terminal distances match the linear values to
+within 0.011 m for two-body truth and 1.1 m with J2, and the factor-of-1.7 window at e = 0.6 is reproduced to
+three significant figures. Free-drift YA propagation likewise agrees with independent Keplerian propagation to within
+4.1 mm (0.001% of separation) over 300 s. The orbital-phase effect is therefore real, not a linearization artifact.
+Table 10: YA-STM validation: relative errors at e = 0 against the HCW reference, plus structural checks.
+Check
+Relative error
+∥AHCW −AYA(e=0)∥/∥AHCW∥
+7.96 × 10−15
+∥BHCW −BYA(e=0)∥/∥BHCW∥
+1.86 × 10−9
+Free-drift trajectory (30 steps)
+2.22 × 10−15
+STM composition ∥Φ20 −Φ21Φ10∥
+1.05 × 10−14
+8. Discussion
+8.1. What the Framework Guarantees, and What It Does Not
+Exact are the two one-sided certificates of sections 4.2 and 5.2: they assume nothing about the opponent’s ra-
+tionality, carry over unchanged to the elliptical case, and survive nonlinear propagation. Not guaranteed is a pure
+open-loop equilibrium, since the payoff is convex in both players (theorem 3), so the extragradient strategy pair is
+a certified-good pursuer strategy with a plausible evader reply, not a Nash point. Linear keep-out half-spaces and
+ℓ2-bounded thrust stay inside the tractable envelope; minimum-time intercept, hard ∆V caps, and integer impulsive
+control leave it and would require HJI or successive convexification.
+8.2. Limitations
+Four assumptions bound the practical reach of the results, and the measurements above let us be specific about
+each. Navigation. Both players are assumed to know the relative state. In flight, cooperative GNSS-based navigation
+reaches decimetre and millimetre-per-second accuracy [83], at which the outcome is unaffected (section 6.8); angles-
+only navigation of a non-cooperative target is metre-level and roughly ten percent of range along the boresight [84, 86],
+which measurably lowers the inspector’s capture rate. A minimax-filtering or robust-reachable-set extension [87] that
+inflates the reachable sets by the navigation covariance is the natural next step and preserves the convex structure.
+Actuation. The continuous box-bounded model abstracts away minimum impulse bits and finite slew; a 100 kg-
+class inspector with 1 N thrusters, as flown on PRISMA [88], has impulse quantization of a few micrometres per
+second per pulse, well below the navigation noise, and pulse-width modulation reproduces the continuous plan to
+good fidelity [89, 90]. Perturbations. Over 300–600 s at sub-kilometre separation the differential J2, drag, and
+third-body accelerations are orders of magnitude below the control authority [91], consistent with the sub-percent
+linearization error of section 3.2. Capture radius. The 50 m radius is an approach gate rather than a docking tolerance;
+standard RPO practice reserves keep-out spheres of this scale around a resident space object [85], and the rcap sweep
+of section 6.7 shows how the design rules tighten toward docking-class radii. Finally, the zero-sum structure does not
+model cooperative or general-sum interactions, which lie outside the present scope.
+Closed-loop play. The receding-horizon wrapper of section 6.6 is an empirical extension. We prove neither
+recursive feasibility nor convergence of the closed-loop play to an equilibrium, and we claim neither; what is available
+online is the per-step reachable-set screen, which tells an operator before committing a control whether the next
+open-loop subproblem is solvable. The gap is shared by the current model-predictive game literature, including the
+model-predictive Stackelberg solution of Liu et al. [92] and the closed-loop elliptical pursuit law of Jia et al. [33]. The
+most promising route to a genuine guarantee is a passive-safety construction of the kind Elango et al. [93] develop
+25
+
+
+for rendezvous, in which every committed control leaves behind an abort trajectory that stays safe, so feasibility is
+inherited from step to step by construction. Establishing that for a two-player game, where the abort must hold against
+an adversarial target rather than a passive one, is open.
+Operational constraints. The only constraint on either player here is the thrust box. Real inspections also run under
+illumination, communication, and sensing limits, and it is worth stating which of these the present machinery absorbs
+and which it does not, because the answer is not uniform. Three classes cost nothing structurally. Relative-velocity
+and range limits are norms of affine functions of the control sequence, hence second-order cone constraints [71]. A
+line-of-sight or boresight requirement, that the relative position stay within a half-angle θ of a fixed direction b, is the
+cone ∥rk∥2 cos θ ≤b⊤rk, again second-order cone representable, and the same form covers a Sun phase-angle upper
+bound for illumination. Should the target tumble, b becomes a known function of time and the cone rotates with
+it, which leaves each step convex but ties the admissible set to the attitude history; reachability under exactly that
+rotating constraint is treated in [61]. Communication and eclipse windows restrict which steps may thrust or must
+coast, which is a linear equality on the affected components. Each of these keeps every subproblem convex and can be
+added to the solver as it stands. Two classes do not. Exclusion constraints – keep-out zones, solar or sensor blinding
+cones, minimum-range holds – are complements of convex sets and therefore nonconvex; they need the successive-
+convexification treatment already used for keep-out zones in section 5.5, which buys exact constraint satisfaction at
+convergence and gives up the one-shot solve. And constraints tied to the inspector’s own attitude couple translation to
+rotation, which the planar or six-state translational model does not carry at all.
+The certificates deserve a separate word, since they are the paper’s rigorous content. Their O(nu) closed form is the
+box support function of section 4.1. Adding any of the convex constraints above shrinks a player’s admissible set, so
+its support values must be recomputed as h(d) = max{d⊤r : r admissible}, a small convex program instead of a closed
+form. The exactness of theorem 1 survives that substitution unchanged, because the proof needs only that h be the
+true maximum over the admissible set; what is lost is the O(nu) evaluation, and with it the ability to screen thousands
+of geometries in the time the full game takes once. Which way the bounds move is also predictable: shrinking the
+target’s admissible set raises ϕN and weakens its escape guarantee, while shrinking the inspector’s set lowers ϕN and
+raises the security value, so each player’s operational constraints tighten its opponent’s certificate and loosen its own.
+The framework also addresses only the translational approach. What follows a successful approach (capture or
+servicing of the target) is a separate problem, spanning cable-driven capture mechanisms [94] and learning-based
+control of free-floating servicing manipulators [95]. Coordinating the approach with the inspector’s own attitude, for
+which constrained and finite-time pointing control is well developed [96, 97], is likewise future work, as is fault-
+tolerant guidance that must react to actuator failures mid-approach, a capability demonstrated for terminal-phase
+vision-based landing in adjacent aerospace domains [98] but not covered by the present open-loop certificates.
+9. Conclusions
+Terminal-distance orbital pursuit–evasion is decided by the geometry of the two players’ reachable sets, and that
+geometry gives two exact guarantees, an escape certificate and a pursuer security bound, that hold for any admissible
+opponent on both circular and elliptical reference orbits. A projected extragradient method supplies a concrete strategy
+pair in about 25 ms, certified in place by its best-response gaps, and the escape certificate predicted every one of 200
+perturbed outcomes without error. The framework is honest about its edges: it certifies one-sided guarantees rather
+than a saddle point, its accuracy is set by the relative navigation available against a non-cooperative target, and on
+eccentric orbits engagement timing should be budgeted in orbital arc. Three questions remain open. Can the receding-
+horizon and multi-pursuer variants be given closed-loop guarantees? Does inflating the reachable sets by a navigation
+covariance yield a robust certificate? And how far do the exact guarantees extend once J2 and drag are folded into the
+time-varying linearization?
+Reproducibility Statement
+All algorithms, scenarios, and data-generation scripts are available as open-source Python code at https://
+github.com/iskender9961/Astrodynamics_Games, with one seeded entry point per experiment reported here
+and the complete parameter specification of section Appendix A. The implementation depends only on NumPy, SciPy,
+CVXPY, OSQP, and Clarabel.
+26
+
+
+Acknowledgments
+The author acknowledges the support of Nanyang Technological University, Singapore.
+Declaration of generative AI and AI-assisted technologies in the writing process
+During the preparation of this work the author used Anthropic Claude in order to condense and copy-edit prose,
+to reorganize figure layout code, and to cross-check the manuscript against the reviewers’ comments. No generative
+tool was used to produce, analyze, or interpret the research data: all numerical results, proofs, and conclusions are the
+author’s own and are reproducible from the code cited above. After using this tool the author reviewed and edited the
+content as needed and takes full responsibility for the content of the publication.
+References
+[1] O. B. Iskender, Model predictive control for spacecraft rendezvous and docking with uncooperative targets,
+Ph.D. thesis, Nanyang Technological University, Singapore (2020). doi:10.32657/10356/144018.
+[2] B. C. Weeden, V. Samson, Global counterspace capabilities: An open source assessment, Secure World Founda-
+tion (2024).
+[3] K. L. Hobbs, M. L. Perez, E. A. Butcher, J. M. Hinks, A survey of space domain awareness capabilities and
+research, Journal of the Astronautical Sciences 67 (4) (2020) 1426–1457.
+[4] X. Long, J. Chen, L. Yang, H. Huang, An emergency scheduling method based on AutoML for space maneu-
+ver objective tracking, Expert Systems with Applications 298 (2026) 129759. doi:10.1016/j.eswa.2025.
+129759.
+[5] L. Cheng, Z. Wang, Y. Song, F. Jiang, Spacecraft intelligent orbital game technology: A review, Aerospace
+Science and Technology 161 (2025) 110158. doi:10.1016/j.ast.2025.110158.
+[6] R. Isaacs, Differential Games: A Mathematical Theory with Applications to Warfare and Pursuit, Control and
+Optimization, John Wiley & Sons, 1965.
+[7] I. M. Mitchell, A. M. Bayen, C. J. Tomlin, A time-dependent Hamilton–Jacobi formulation of reachable sets for
+continuous dynamic games, IEEE Transactions on Automatic Control 50 (7) (2005) 947–957.
+[8] C. J. Tomlin, J. Lygeros, S. S. Sastry, A game theoretic approach to controller design for hybrid systems, Pro-
+ceedings of the IEEE 88 (7) (2000) 949–970.
+[9] S. Bansal, M. Chen, S. Herbert, C. J. Tomlin, Hamilton–Jacobi reachability: Some recent theoretical advances
+and applications in unmanned airspace management, Annual Review of Control, Robotics, and Autonomous
+Systems 4 (2021) 253–279.
+[10] Q. Li, Y. Yuan, J. Gao, S. Zhang, Intelligent game-based pursuit-evasion strategy for spacecraft proximity oper-
+ations, Chinese Journal of Aeronautics 36 (10) (2023) 262–277.
+[11] K. Yang, A. Shen, N. Xu, F. Deng, M. Lu, C. Chen, A review of reinforcement learning approaches for pursuit-
+evasion games, Chinese Journal of Aeronautics 38 (2025). doi:10.1016/j.cja.2025.103940.
+[12] W. H. Clohessy, R. S. Wiltshire, Terminal guidance system for satellite rendezvous, Journal of the Aerospace
+Sciences 27 (9) (1960) 653–658.
+[13] K. Yamanaka, F. Ankersen, New state transition matrix for relative motion on an arbitrary elliptical orbit, Journal
+of Guidance, Control, and Dynamics 25 (1) (2002) 60–66.
+[14] M. Althoff, Set propagation techniques for reachability analysis, Annual Review of Control, Robotics, and
+Autonomous Systems 4 (2021) 369–395.
+27
+
+
+[15] A. Girard, Reachability of uncertain linear systems using zonotopes, Hybrid Systems: Computation and Control
+(2005) 291–305.
+[16] G. M. Korpelevich, The extragradient method for finding saddle points and other problems, Ekonomika i Matem-
+aticheskie Metody 12 (1976) 747–756.
+[17] A. Nemirovski, Prox-method with rate of convergence O(1/t) for variational inequalities with Lipschitz contin-
+uous monotone operators and smooth convex-concave saddle point problems, SIAM Journal on Optimization
+15 (1) (2004) 229–251.
+[18] Y. C. Ho, A. E. Bryson, S. Baron, Differential games and optimal pursuit-evasion strategies, IEEE Transactions
+on Automatic Control 10 (4) (1965) 385–389.
+[19] M. Guelman, A. Shinar, Optimal guidance law in the plane, in: AIAA Guidance, Navigation, and Control
+Conference, 1990, pp. 1–10. doi:10.2514/6.1990-3455.
+[20] J. Stupik, M. Pontani, B. A. Conway, Optimal pursuit-evasion spacecraft maneuvers in low Earth orbit, Acta
+Astronautica 77 (2012) 91–104.
+[21] M. Pontani, B. A. Conway, Numerical solution of the three-dimensional orbital pursuit-evasion game, Journal
+of Guidance, Control, and Dynamics 32 (2) (2009) 474–487. doi:10.2514/1.37962.
+[22] A. Jagat, A. J. Sinclair, Optimization of spacecraft pursuit-evasion game trajectories in the Hill reference frame,
+in: AIAA/AAS Astrodynamics Specialist Conference, 2017, pp. 1–15. doi:10.2514/6.2017-5232.
+[23] N. Woodford, M. Harris, P. W. Bettinger, Game-theoretic analysis of orbital pursuit-evasion under impulsive
+thrust, Journal of Spacecraft and Rockets 60 (3) (2023) 834–848.
+[24] Z. Li, J. Zhu, Orbital pursuit-evasion game with continuous low-thrust propulsion, Aerospace Science and Tech-
+nology 97 (2020) 105670.
+[25] D. Ye, M. Shi, Z. Sun, Satellite proximate pursuit-evasion game with different thrust levels, Aerospace Science
+and Technology 111 (2021) 106568.
+[26] Y. Liu, Y. Liu, J. Liang, Satellite proximate pursuit–evasion game with different thrust configurations, Aerospace
+Science and Technology 96 (2020) 105572. doi:10.1016/j.ast.2019.105572.
+[27] W. T. Hafer, K. C. Howell, D. C. Folta, Pursuit-evasion differential games in cislunar space, Journal of Guidance,
+Control, and Dynamics 47 (5) (2024) 903–920.
+[28] Y. Geng, Z. Chen, C. Li, Reachable set based maneuver strategy for spacecraft proximity operations, Acta
+Astronautica 209 (2023) 68–82.
+[29] K. A. Cavalieri, E. S. Davis, L. Singh, Game-theoretic control for space domain awareness and non-cooperative
+rendezvous, Journal of Spacecraft and Rockets 60 (6) (2023) 1899–1913.
+[30] H. Ma, G. Zhang, Delta-v analysis for impulsive orbital pursuit–evasion based on reachable domain coverage,
+Aerospace Science and Technology 150 (2024) 109243. doi:10.1016/j.ast.2024.109243.
+[31] M. Huo, J. Liu, N. Qi, S. Yu, Research on proximity strategies for pursuit–evasion game with non-cooperative
+targets in space, Aerospace Science and Technology 155 (2024) 109677. doi:10.1016/j.ast.2024.109677.
+[32] B. Pang, C. Wen, H. Han, D. Qiao, Solving pursuit/evasion game along elliptical orbit by providing precise
+gradient, Journal of Guidance, Control, and Dynamics 47 (4) (2024) 797–807. doi:10.2514/1.G007025.
+[33] Z. Jia, D. Ye, Y. Xiao, Z. Sun, Closed-loop strategy synthesis for real-time spacecraft pursuit–evasion games
+in elliptical orbits, IEEE Transactions on Aerospace and Electronic Systems 61 (4) (2025) 9071–9086. doi:
+10.1109/TAES.2025.3552066.
+28
+
+
+[34] Z. Jia, D. Ye, Y. Xiao, Z. Sun, Approximate analytical approach for spacecraft pursuit–evasion game with
+reachability analysis, IEEE Transactions on Aerospace and Electronic Systems 61 (4) (2025) 9058–9070. doi:
+10.1109/TAES.2025.3552073.
+[35] Z. Li, Y. Luo, Orbital impulsive pursuit–evasion game formulation and Stackelberg equilibrium solutions, Jour-
+nal of Spacecraft and Rockets 62 (2) (2025) 349–364. doi:10.2514/1.A35956.
+[36] S. Sun, H. Zhu, W. Wang, Orbital three-player pursuit-evasion game, The Journal of the Astronautical Sciences
+72 (3) (2025). doi:10.1007/s40295-025-00501-x.
+[37] L. Zhao, Q. Sun, Z. Dang, Intelligent strategy resolution methods and mechanism analysis in two-
+on-one impulsive orbital pursuit–evasion games, Astrodynamics 9 (5) (2025) 727–751.
+doi:10.1007/
+s42064-025-0262-8.
+[38] S. Fu, S. Gong, D. Wu, P. Shi, Analytical solutions and winning conditions of elliptic-orbit target-attacker-
+defender game, Journal of Guidance, Control, and Dynamics 49 (1) (2026) 257–268.
+doi:10.2514/1.
+G009187.
+[39] Q. Yang, Z. Li, Y.-z. Luo, X. Guo, Approximate analytical winning regions of the spacecraft in the coplanar
+pursuit–evasion–defense game, Journal of Spacecraft and Rockets 63 (3) (2026) 965–985. doi:10.2514/1.
+A36494.
+[40] C. Hu, L. Yang, Y. Zhu, Impulsive maneuver strategy for multi-agent orbital pursuit–evasion game under sparse
+rewards, Aerospace Science and Technology 155 (2024) 109599. doi:10.1016/j.ast.2024.109599.
+[41] S. Huang, Diverse strategy generation for orbital pursuit–evasion games using distributed reinforcement learning,
+Aerospace Science and Technology 168 (2026) 111052. doi:10.1016/j.ast.2025.111052.
+[42] Y. Li, D. Ye, Pursuit–evasion game switching strategies for spacecraft with incomplete information, Aerospace
+Science and Technology 119 (2022) 107200. doi:10.1016/j.ast.2021.107200.
+[43] H. Wang, Y. Zhang, S. Bi, Game strategy prediction for spacecraft orbital pursuit–evasion game based on long
+short-term memory, Space: Science & Technology 5 (2025) 0279. doi:10.34133/space.0279.
+[44] J. Tschauner, P. Hempel, Rendezvous zu einem in elliptischer Bahn umlaufenden Ziel, Astronautica Acta 11 (2)
+(1965) 104–109.
+[45] T. E. Carter, State transition matrices for terminal rendezvous studies: Brief survey and new example, Journal of
+Guidance, Control, and Dynamics 21 (1) (1998) 148–155.
+[46] R. A. Broucke, Solution of the elliptic rendezvous problem with the time as independent variable, Journal of
+Guidance, Control, and Dynamics 26 (4) (2003) 615–621.
+[47] G. Inalhan, M. Tillerson, J. P. How, Relative dynamics and control of spacecraft formations in eccentric orbits,
+Journal of Guidance, Control, and Dynamics 25 (1) (2002) 48–59.
+[48] D.-W. Gim, K. T. Alfriend, State transition matrix of relative motion for the perturbed noncircular reference
+orbit, Journal of Guidance, Control, and Dynamics 26 (6) (2003) 956–971.
+[49] R. Vázquez, F. Gavilan, E. F. Camacho, Approximate analytic solution of nonlinear Riccati spacecraft formation
+flying dynamics in terms of orbit element differences, Aerospace Science and Technology 110 (2021) 106494.
+doi:10.1016/j.ast.2021.106494.
+[50] J. Sullivan, S. Grimberg, S. D’Amico, Comprehensive survey and assessment of spacecraft relative motion
+dynamics models, Journal of Guidance, Control, and Dynamics 40 (4) (2017) 723–760.
+[51] S. Fu, S. Gong, P. Shi, Analytical pursuit–evasion game strategy in arbitrary Keplerian reference orbits,
+Aerospace Science and Technology 158 (2025) 109946. doi:10.1016/j.ast.2025.109946.
+29
+
+
+[52] C. Zhang, Y. Zhu, L. Yang, A theory of functional connections-based method for orbital pursuit–evasion games
+with analytic satisfaction of rendezvous constraints, Aerospace Science and Technology 161 (2025) 110141.
+doi:10.1016/j.ast.2025.110141.
+[53] M. Chen, C. J. Tomlin, Hamilton–Jacobi reachability: Some recent theoretical advances and applications in
+unmanned airspace management, Annual Review of Control, Robotics, and Autonomous Systems 1 (2018)
+333–358.
+[54] J. F. Fisac, M. Chen, C. J. Tomlin, S. S. Shankar, Reach-avoid problems with time-varying dynamics, targets and
+constraints, Hybrid Systems: Computation and Control (2015) 11–20.
+[55] S. L. Herbert, M. Chen, S. Han, S. Bansal, J. F. Fisac, C. J. Tomlin, FaSTrack: A modular framework for fast
+and guaranteed safe motion planning, in: IEEE Conference on Decision and Control, 2017, pp. 1517–1522.
+[56] A. B. Kurzhanski, P. Varaiya, Ellipsoidal techniques for reachability analysis, in: Hybrid Systems: Computation
+and Control, 2000, pp. 202–214.
+[57] L. Shao, H. Miao, R. Hu, H. Liu, Reachable set estimation for spacecraft relative motion based on bang-bang
+principle, Chinese Journal of Aeronautics 36 (2) (2023) 229–240. doi:10.1016/j.cja.2022.07.003.
+[58] S. Zhang, Z. Yang, Y. Luo, Spacecraft multi-impulse reachable domain, Chinese Journal of Aeronautics 38 (6)
+(2025). doi:10.1016/j.cja.2024.12.001.
+[59] S. Zhang, Z. Yang, Y.-Z. Luo, Time-dependent reachable domain and its application to impulsive orbital pursuit–
+evasion analysis, Journal of Spacecraft and Rockets 62 (2) (2025) 631–642. doi:10.2514/1.A36112.
+[60] W. Xu, X. Liu, Z. Lu, B. Hua, Y. Wu, Numerical method for Nash equilibrium strategies of spacecraft or-
+bit pursuit-evasion game based on continuous thrust reachable domain analysis, Science China Technological
+Sciences 69 (4) (2026). doi:10.1007/s11431-025-3186-8.
+[61] O. B. Iskender, K. V. Ling, W. S. Lim, E. Lansard, Reachability-based safe-start regions for approach to a
+tumbling target with rotating LOS constraints, in: 77th International Astronautical Congress, IAC, Antalya,
+Türkiye, 2026.
+[62] J. B. Rosen, Existence and uniqueness of equilibrium points for concave N-person games, Econometrica 33 (3)
+(1965) 520–534.
+[63] J. von Neumann, O. Morgenstern, Theory of Games and Economic Behavior, Princeton University Press, 1944.
+[64] S. Boyd, L. Vandenberghe, Convex Optimization, Cambridge University Press, 2004.
+[65] B. Stellato, G. Banjac, P. Goulart, A. Bemporad, S. Boyd, OSQP: An operator splitting solver for quadratic
+programs, Mathematical Programming Computation 12 (4) (2020) 637–672.
+[66] P. Tseng, On linear convergence of iterative methods for the variational inequality problem, Journal of Compu-
+tational and Applied Mathematics 60 (1-2) (1995) 237–252.
+[67] A. Mokhtari, A. Ozdaglar, S. Pattathil, A unified analysis of extra-gradient and optimistic gradient methods
+for saddle point problems: Proximal point approach, in: International Conference on Artificial Intelligence and
+Statistics (AISTATS), 2020, pp. 1497–1507.
+[68] F. Facchinei, J.-S. Pang, Finite-Dimensional Variational Inequalities and Complementarity Problems, Springer,
+2003.
+[69] S. Le Cleac’h, M. Schwager, Z. Manchester, ALGAMES: a fast augmented Lagrangian solver for constrained
+dynamic games, Autonomous Robots 46 (1) (2022) 201–215. doi:10.1007/s10514-021-10024-7.
+30
+
+
+[70] O. So, C. Fan, Solving stabilize-avoid via epigraph form optimal control using deep reinforcement learning, in:
+Robotics: Science and Systems XIX, Daegu, Republic of Korea, 2023. doi:10.15607/RSS.2023.XIX.085.
+[71] D. Malyuta, T. P. Reynolds, M. Szmuk, T. Lew, R. Bonalli, M. Pavone, B. Açıkme¸se, Convex optimization for
+trajectory generation: A tutorial, IEEE Control Systems Magazine 42 (5) (2022) 40–113.
+[72] B. Açıkme¸se, S. R. Ploen, Convex programming approach to powered descent guidance for Mars landing, Jour-
+nal of Guidance, Control, and Dynamics 30 (5) (2007) 1353–1366. doi:10.2514/1.27553.
+[73] J. B. Rawlings, D. Q. Mayne, M. M. Diehl, Model Predictive Control: Theory, Computation, and Design, 2nd
+Edition, Nob Hill Publishing, 2017.
+[74] O. B. Iskender, K.-V. Ling, L. Simonini, M. Schlotterer, D. Seelbinder, S. Theil, J. M. Maciejowski, Dual quater-
+nion based autonomous rendezvous and docking via model predictive control, in: Proc. 70th Int. Astronautical
+Congr. Int. Astronautical Federation, 2019, pp. 1–16.
+[75] M. Mammarella, E. Capello, H. Park, G. Guglieri, M. Romano, Tube-based robust model predictive control for
+spacecraft proximity operations in the presence of persistent disturbance, Aerospace Science and Technology 77
+(2018) 585–594. doi:10.1016/j.ast.2018.04.009.
+[76] J. C. Sánchez, F. Gavilan, R. Vazquez, Chance-constrained model predictive control for Near Rectilinear Halo
+Orbit spacecraft rendezvous, Aerospace Science and Technology 100 (2020) 105827. doi:10.1016/j.ast.
+2020.105827.
+[77] K. Oguri, Chance-constrained control for safe spacecraft autonomy: Convex programming approach, in: Pro-
+ceedings of the 2024 American Control Conference (ACC), 2024, pp. 2318–2324. doi:10.23919/ACC60939.
+2024.10645008.
+[78] G. W. Hill, Researches in the lunar theory, American Journal of Mathematics 1 (1) (1878) 5–26.
+[79] A. Richards, T. Schouwenaars, J. P. How, E. Feron, Spacecraft trajectory planning with avoidance constraints
+using mixed-integer linear programming, Journal of Guidance, Control, and Dynamics 25 (4) (2002) 755–764.
+[80] J. Breeden, D. Panagou, Robust control barrier functions under high relative degree and input constraints for
+satellite trajectories, Automatica 155 (2023) 111109. doi:10.1016/j.automatica.2023.111109.
+[81] D. van Wijk, K. Dunlap, M. Majji, K. L. Hobbs, Safe spacecraft inspection via deep reinforcement learning
+and discrete control barrier functions, Journal of Aerospace Information Systems 21 (12) (2024) 996–1013.
+doi:10.2514/1.I011391.
+[82] S. Diamond, S. Boyd, CVXPY: A Python-embedded modeling language for convex optimization, Journal of
+Machine Learning Research 17 (83) (2016) 1–5.
+[83] S. D’Amico, J.-S. Ardaens, R. Larsson, Spaceborne autonomous formation-flying experiment on the PRISMA
+mission, Journal of Guidance, Control, and Dynamics 35 (3) (2012) 834–850. doi:10.2514/1.55638.
+[84] G. Gaias, J.-S. Ardaens, Flight demonstration of autonomous noncooperative rendezvous in low Earth orbit,
+Journal of Guidance, Control, and Dynamics 41 (6) (2018) 1337–1354. doi:10.2514/1.G003239.
+[85] W. Fehse, Automated Rendezvous and Docking of Spacecraft, Cambridge University Press, Cambridge, UK,
+2003. doi:10.1017/CBO9780511543388.
+[86] J.-S. Ardaens, G. Gaias, Flight demonstration of spaceborne real-time angles-only navigation to a noncooperative
+target in low Earth orbit, Acta Astronautica 153 (2018) 367–382. doi:10.1016/j.actaastro.2018.01.044.
+[87] Y. Li, G. Zhang, Robust trajectory optimization for pursuit-evasion game with navigation and control errors,
+Advances in Space Research 77 (2) (2026) 2028–2042. doi:10.1016/j.asr.2025.10.058.
+31
+
+
+[88] P. Bodin, R. Larsson, F. Nilsson, C. Chasset, R. Noteborn, M. Nylund, PRISMA: An in-orbit test bed for
+guidance, navigation, and control experiments, Journal of Spacecraft and Rockets 46 (3) (2009) 615–623.
+doi:10.2514/1.40161.
+[89] F. Bernelli-Zazzera, P. Mantegazza, Pulse-width equivalent to pulse-amplitude discrete control of linear systems,
+Journal of Guidance, Control, and Dynamics 15 (2) (1992) 461–467. doi:10.2514/3.20858.
+[90] R. Vazquez, F. Gavilan, E. F. Camacho, Pulse-width predictive control for LTV systems with application to
+spacecraft rendezvous, Control Engineering Practice 60 (2017) 199–210.
+doi:10.1016/j.conengprac.
+2016.06.017.
+[91] S. A. Schweighart, R. J. Sedwick, High-fidelity linearized J2 model for satellite formation flight, Journal of
+Guidance, Control, and Dynamics 25 (6) (2002) 1073–1080. doi:10.2514/2.4986.
+[92] Y. Liu, C. Li, J. Jiang, Y. Zhang, A model predictive Stackelberg solution to orbital pursuit-evasion game,
+Chinese Journal of Aeronautics 38 (2) (2025) 103198. doi:10.1016/j.cja.2024.08.029.
+[93] P. Elango, A. P. Vinod, K. Kitamura, B. Açıkme¸se, S. Di Cairano, A. Weiss, Successive convexification for
+passively-safe spacecraft rendezvous on Near Rectilinear Halo Orbit, arXiv preprint arXiv:2505.17251, under
+review (2025).
+[94] R. Liu, Y. Fan, Y. Huang, H. Guo, C. Zhao, M. Su, Design and workspace analysis of a cable-driven space
+capture robot for noncooperative targets, Proceedings of the Institution of Mechanical Engineers, Part G: Journal
+of Aerospace Engineering 238 (14) (2024) 1406–1418. doi:10.1177/09544100241272826.
+[95] Y. A. Adde, Y. N. Razoumny, A. A. Betelie, T. K. Mohammed, Y. A. Wendemagegn, C. M. Abdissa, Intelligent
+hybrid control for free-floating space robots: PSO–RL–SMC with inverse-dynamics tracking, IEEE Access 14
+(2026) 27137–27157. doi:10.1109/ACCESS.2026.3661861.
+[96] D. Li, S. Tong, H. Yang, Q. Hu, Time-synchronized control for spacecraft reorientation with time-varying con-
+straints, IEEE/ASME Transactions on Mechatronics 30 (3) (2025) 2073–2083. doi:10.1109/TMECH.2024.
+3430953.
+[97] G. Wang, Z. Feng, Y. Qu, H. Sun, Event-triggered adaptive predefined-time anti-unwinding attitude tracking
+control for spacecraft, PLOS ONE 20 (10) (2025) e0333700. doi:10.1371/journal.pone.0333700.
+[98] M. Khaneghaei, D. Asadi, M. Zahmatkesh, Ö. Tutsoy, An experimental vision-based integrated guidance and
+control strategy for autonomous landing of a faulty UAV, Proceedings of the Institution of Mechanical En-
+gineers, Part I: Journal of Systems and Control Engineering 239 (9) (2025) 1700–1716.
+doi:10.1177/
+09596518251339288.
+32
+
+
+Appendix A. Parameter Tables
+Tables A.1 to A.3 specify the complete set of parameters used in all numerical experiments.
+Table A.1: Reference orbit, simulation and game parameters. Values apply to every experiment unless a section states otherwise.
+Parameter
+Symbol
+Value
+Unit / notes
+Semi-major axis
+a
+6871
+km
+Altitude (approx.)
+–
+500
+km
+Gravitational parameter
+µ
+3.986 × 1014
+m3/s2
+Mean motion
+n
+1.131 × 10−3
+rad/s
+Orbital period
+T
+5556
+s
+Timestep
+∆t
+10.0
+s
+Horizon (steps / time)
+N, N∆t
+30, 300
+–, s
+Position / state / control dim.
+np, nx, nu
+2, 4, 2
+–
+Inspector max acceleration
+¯uP
+10.0
+mm/s2
+Target max acceleration
+¯uE
+5.0
+mm/s2
+Inspector/target thrust ratio
+¯uP/¯uE
+2.0
+–
+Control norm type
+–
+Box (ℓ∞)
+Capture radius
+rcap
+50.0
+m
+Effort regularization
+λ
+10−3
+–
+Keep-out penalty weight
+κ
+103
+–
+Random seed
+–
+42
+–
+Table A.2: Solver, reachable-set and Monte Carlo parameters. Monte Carlo capture is scored under the absorbing first-passage convention (sec-
+tion Appendix E).
+Parameter
+Symbol
+Value
+Unit / notes
+IBR solver
+Max iterations
+Kmax
+IBR
+20
+Outer loop
+Convergence tol.
+εIBR
+10−4
+On |∆J|
+OSQP iter. / abs. / rel. tol.
+–
+50 000, 10−5, 10−5; also nominal MPC
+Extragradient solver
+Max iterations
+Kmax
+SP
+200
+–
+Default step size
+η0
+0.01
+Before adaptation
+Convergence tol.
+εSP
+10−4
+Relative change
+Step size adapt.
+–
+η=min(η0, 0.5/(∥G∥2+λ))
+Reachable sets and Monte Carlo
+Template directions
+L
+48
+2D uniform, position space
+Number of trials
+NMC
+200
+Uniform perturbations
+Inspector pos. / vel. range
+∆r, ∆v
+±50, ±0.5
+m, m/s
+Target pos. / vel. range
+∆rE, ∆vE
+±20, ±0.2
+m, m/s
+The zero-order-hold discretization was checked against an RK45 continuous-integration reference (∆t = 0.1 s,
+300 s horizon). At the ∆t = 10 s used throughout, the terminal position error is 3.0 × 10−2 m, a relative error
+below 0.01% and well inside the modeling error of the HCW linearization itself; the error scales as O(∆t2), reaching
+7.4 × 10−1 m (0.24%) only at ∆t = 50 s.
+Appendix B. Iterative Best Response Pseudocode
+The escape direction is taken from the evader’s current trajectory iterate: r(E)
+N is the terminal position of the propagated
+evader trajectory at the start of the iteration, which on the first pass is the free-drift terminal position because U(E) is
+initialized to zero. This matches the implementation. When the two terminal positions nearly coincide, the direction
+is ill-defined and the solver defaults to the along-track axis [0, 1]⊤. The pursuer best response and the convergence
+check are unchanged.
+33
+
+
+Table A.3: Initial conditions and keep-out zones. Positions in meters, velocities in m/s; the state vector is x0 = [x, y, ˙x, ˙y]⊤and all agents start at
+rest. The three keep-out balls apply to Case B.
+Scenario
+Agent
+x0 (m)
+y0 (m)
+Radius (m)
+Case A
+Inspector
+200
+−300
+–
+Target
+0
+0
+–
+Case B
+Inspector
+300
+−400
+–
+Target
+0
+0
+–
+Case C (2P)
+Inspector 1
+300
+−200
+–
+Inspector 2
+−200
+−350
+–
+Target
+0
+0
+–
+Case C (3P)
+Inspector 1
+300
+−200
+–
+Inspector 2
+−200
+−350
+–
+Inspector 3
+−100
+300
+–
+Target
+0
+0
+–
+Keep-out zones
+O1
+100
+−100
+60
+O2
+−50
+−200
+50
+O3
+150
+100
+55
+Algorithm 1 Iterative Best Response for Two-Player PE Game
+Require: Initial states x(P)
+0 , x(E)
+0 ; dynamics Ad, Bd; bounds ¯uP, ¯uE; horizon N; tolerance ε; max iterations Kmax
+Ensure: Control sequences U(P)∗, U(E)∗; trajectories X(P)∗, X(E)∗
+1: Initialize U(E) ←0
+2: Propagate X(E) ←Propagate(x(E)
+0 , U(E), Ad, Bd)
+3: Jprev ←∞
+4: for t = 1, 2, . . . , Kmax do
+5:
+{Pursuer best response}
+6:
+U(P) ←arg min∥u∥∞≤¯uP ∥r(P)
+N −r(E)
+N ∥2 + λ∥U(P)∥2
+(QP via OSQP)
+7:
+X(P) ←Propagate(x(P)
+0 , U(P), Ad, Bd)
+8:
+{Evader best response}
+9:
+Compute escape direction d ←(r(E)
+N −r(P)
+N )/
+r(E)
+N −r(P)
+N
+
+(r(E)
+N : current-iterate terminal position)
+10:
+if
+r(E)
+N −r(P)
+N
+ < εd then
+11:
+d ←[0, 1]⊤
+(along-track fallback, εd = 10−3 m)
+12:
+end if
+13:
+U(E) ←arg max∥u∥∞≤¯uE d⊤r(E)
+N −λ∥U(E)∥2
+(QP via OSQP)
+14:
+X(E) ←Propagate(x(E)
+0 , U(E), Ad, Bd)
+15:
+{Convergence check}
+16:
+J ←∥r(P)
+N −r(E)
+N ∥
+17:
+if |J −Jprev| < ε then
+18:
+return U(P), U(E), X(P), X(E), “converged”
+19:
+end if
+20:
+Jprev ←J
+21: end for
+22: return U(P), U(E), X(P), X(E), “max_iter”
+34
+
+
+The remaining two procedures need no pseudocode, being direct transcriptions of equations in the main text. The
+extragradient solver precomputes GP,GE, g0 from eqs. (11) and (12) and the step size η = min(η0, 0.5/(∥G∥2
+2 + λ)),
+starts from U(P) = U(E) = 0, and then alternates eqs. (18) and (19) with the gradients eqs. (15) and (16), the projection
+ΠZ being element-wise clipping to [−¯u j, ¯uj]; it terminates when the relative change in J eq. (13) falls below εSP or at
+Kmax
+SP
+iterations (table A.2). Reachable-set propagation evaluates eq. (7) along each template direction, accumulating
+the box support value ¯u ∥·∥1 over the horizon, and in the planar case intersects consecutive half-planes eq. (8) to recover
+the polytope vertices.
+Appendix C. Yamanaka–Ankersen State Transition Matrix
+This appendix records only what is needed to reproduce our implementation of the Yamanaka–Ankersen (YA) state
+transition matrix of section 7. The underlying Tschauner–Hempel equations for relative motion about an elliptical
+chief, written with true anomaly ν as the independent variable and scaled by ρ(ν) = 1 + e cos ν, are standard [44], as
+is the YA derivation itself [13]; neither is reproduced here. What matters for the LTV construction is the auxiliary
+integral
+J(ν, ν0) = h
+p2 (t −t0) =
+Z ν
+ν0
+dν′
+ρ(ν′)2 = M(ν) −M(ν0)
+(1 −e2)3/2
+,
+(C.1)
+where h = √µp, p = a(1 −e2), and M = E −e sin E is the mean anomaly obtained from ν via the eccentric anomaly E
+(written thus so that E remains the evader label). The integral J removes the singular near-circular behavior of earlier
+closed-form solutions [45, 46] and is evaluated efficiently through Kepler’s equation.
+The closed-form STM factors as Φ(ν, ν0) = ˜Φ(ν) ˜Φ−1(ν0), with ˜Φ the fundamental solution matrix of the homoge-
+neous T-H system; its entries are polynomials in ρ(ν), sin ν, cos ν and J, and are tabulated in [13]. After permuting
+from the T-H ordering to the HCW convention and correcting the along-track sign, Φ(ν, ν0) enters the discrete LTV
+model eq. (24) as Ak = Φ(νk+1, νk), while
+Bk ≈∆t
+6
+
+Φ(νk+1, νk) ˆB + 4 Φ(νk+1, νm) ˆB + ˆB
+
+,
+(C.2)
+with ˆB = [0; Inu] and νm the midpoint anomaly. This quadrature is O(∆t5) accurate; at ∆t = 10 s the Bk entries match
+the reference to 1.86 × 10−9, and the HCW-recovery and composition checks are in section 7.4 and table 10.
+The discrete matrices Ak, Bk are time-varying because the underlying flow is anomaly-driven. Four distinct mech-
+anisms produce the variation, and all four collapse at e = 0, where ρ ≡1, ν = n(t −t0) and J = ν −ν0, returning the
+constant HCW matrices Ad, Bd:
+1. ρ(ν) = 1+e cos ν enters both the fundamental solutions ˜Φ and the coordinate scaling T(ν) that converts between
+physical and T-H variables, so Ak = Φ(νk+1, νk) depends on the true anomaly at both endpoints of the step, not
+on the elapsed time alone.
+2. The clock-to-anomaly map ν(t), obtained by inverting Kepler’s equation, is nonlinear: a uniform time grid maps
+to a non-uniform anomaly grid that advances fastest near periapsis, so equal ∆t steps span unequal ∆ν.
+3. The propagation carries a secular term proportional to J(νk+1, νk) ∝∆t, which accumulates linearly with
+elapsed time.
+4. The control matrix Bk from the Simpson quadrature is modulated by ρ along the arc, since ˆB is mapped through
+Φ(·, ν) evaluated at anomaly-dependent nodes.
+Appendix D. Regularization Sensitivity
+Table D.1 gives the full sweep behind the λ-invariance reported in section 5.1. The plateau is explained by
+saturation: while both thrust sequences stay saturated the regularizer only shifts the objective by a constant, and the
+table’s saturation column shows where that ends.
+35
+
+
+Table D.1: Regularization sweep (Case A). Terminal miss distance d f , per-player ∆V, thrust-saturation fraction, and extragradient iteration count
+versus the effort weight λ.
+λ
+df (m)
+∆VP (m/s)
+∆VE (m/s)
+satP (%)
+satE (%)
+Iters
+10−4 to 104 ‡
+72.63
+4.16
+2.11
+96.7
+96.7
+141
+105
+72.71
+4.15
+2.10
+95.0
+96.7
+131
+106
+73.89
+4.04
+2.07
+91.7
+95.0
+96
+3 × 106
+80.19
+3.80
+2.01
+78.3
+88.3
+51
+107
+109.59
+3.28
+1.89
+53.3
+78.3
+26
+‡ Eight sampled values (10−4, 10−3, 10−2, 10−1, 100, 101, 103, 104), all identical to the digits shown; 142 iterations at 104.
+Appendix E. Monte Carlo Robustness Study
+A 200-trial Monte Carlo study perturbs the Case A initial state (inspector ±50 m, ±0.5 m/s; target ±20 m, ±0.2 m/s;
+uniform) and re-solves the engagement under each method. Metrics use the absorbing first-passage convention, so the
+reported d f is the separation at engagement end, at most rcap = 50 m on captured trials. Under game-theoretic play
+the capture rate drops from 99.0% (passive target, nominal MPC) to 25.0% (table E.1). The extragradient and IBR
+solvers capture on the same 50 trials and produce statistically indistinguishable terminal distances; a Welch test on d f
+gives t = 0.123, dof = 398, p = 0.90. The extragradient solver runs about 73× faster on this machine.
+Table E.1: Monte Carlo results (200 trials, Case A; first-passage convention). Mean ± standard deviation; capture rate with a Wilson 95% confidence
+interval.
+Method
+df (m)
+Cap. (%)
+95% CI
+Time (s)
+Nominal MPC
+38.3 ± 8.5
+99.0
+[96.4, 99.7]
+0.09
+IBR
+129.7 ± 75.0
+25.0
+[19.5, 31.4]
+2.34
+Extragradient
+130.6 ± 74.6
+25.0
+[19.5, 31.4]
+0.03
+Table E.2 bins the trials by the initial inspector range d0. The game-solver capture rate falls monotonically with
+d0, from 44.4% in [280, 320) m to 5.0% in [400, 440) m, so the outcome is set primarily by the opening geometry.
+Table E.2: Monte Carlo detail (200 trials, Case A). Top: extragradient capture rate by initial inspector range d0, with Wilson 95% intervals. Bottom:
+escape-certificate confusion matrix against the extragradient outcome. The ϕN ≥0 row scores ϕN used as a two-sided screen, which is more than
+theorem 1 claims; the theorem itself is silent there.
+d0 bin (m)
+n
+Capture (%)
+95% CI
+[280, 320)
+18
+44.4
+[25, 66]
+[320, 360)
+77
+27.3
+[19, 38]
+[360, 400)
+85
+23.5
+[16, 34]
+[400, 440)
+20
+5.0
+[1, 24]
+Certificate
+EG captured
+EG escaped
+ϕN ≥0 (capture predicted)
+50
+0
+ϕN < 0 (escape certified)
+0
+150
+The escape certificate ϕN predicts the extragradient outcome without error across all 200 trials (table E.2). Every
+trial with ϕN ≥0 is captured (50/50; false-positive rate 0%, one-sided 95% upper bound 5.8%), and every trial with
+ϕN < 0 escapes (0/150; false-negative rate 0%, upper bound 2.0%). Over all trials corr(ϕN, df ) = −0.96; on the escape
+branch the fit d f = −0.997 ϕN + 51.1 (r = −0.9999) shows the certificate bound rcap −ϕN is tight.
+Appendix F. Algorithmic Complexity and Scalability
+All three methods share the same O(N2nxnu) precomputation of the trajectory matrices. They differ in the inner
+loop: nominal MPC and IBR solve a quadratic program, at O(N3n3
+u) per solve via interior-point methods and hence
+36
+
+
+O(KIBRN3n3
+u) over KIBR best-response rounds, whereas the extragradient iteration costs only O(KSP nPNnu), linear in
+Nnu, because it performs matrix–vector products and projections and nothing else. Empirically, the extragradient loop
+costs 89.4 µs per iteration for Case A (12.6 ms over 141 iterations, after an 11.0 ms one-time matrix setup).
+The absolute cost, however, depends heavily on how the QP inside IBR is implemented (table F.1). One-shot, the
+extragradient solver is 41× faster than as-is IBR that rebuilds the CVXPY problem each call (971.5 vs 23.5 ms) and
+24.8× faster than a parametrized-CVXPY IBR. Amortized, a condensed warm-started direct-OSQP IBR solves the
+same game in 1.36 ms after an 18.0 ms one-time setup; all three IBR variants agree at d f = 72.28 m. The escape
+screen and the security bound bracket the game cost: the ϕN screen costs 10.8 ms from scratch and 0.064 ms once the
+terminal maps are in hand, while the pursuer-security SOCP costs 177.4 ms.
+Table F.1: One-shot versus amortized solver cost for Case A (N = 30, nu = 2). Median over 20 repeats on an idle machine.
+Method
+Median (ms)
+Iters
+Quality
+IBR, as-is (CVXPY rebuilt per call)
+971.5
+3
+df = 72.28 m
+IBR, parametrized CVXPY (DPP)
+583.9
+3
+df = 72.28 m
+IBR, condensed OSQP (warm-started)
+1.36
+4
+df = 72.28 m
+condensed-OSQP setup (once)
+18.0
+–
+–
+Extragradient (full call)
+23.5
+141
+df = 72.63 m
+Nominal MPC (single QP)
+36.7
+–
+passive target
+ϕN screen (L = 48), from scratch
+10.8
+–
+ϕN = −22.2 m
+ϕN screen (L = 48), maps reused
+0.064
+–
+ϕN = −22.2 m
+Pursuer-security SOCP (L = 96)
+177.4
+–
+¯V = 319.7 m
+For nP pursuers, the extragradient method scales as O(nP · np · Nnu), linearly in the number of pursuers. Table F.2
+presents empirical timing data.
+Table F.2: Empirical solve times (milliseconds) versus the number of pursuers nP (N = 30, nu = 2; median over 20 repeats). The condensed
+IBR-multi column is warm-started (one OSQP object per agent, set up once).
+nP
+MPC-multi
+IBR-multi (as-is)
+IBR-multi (cond.)
+EG-multi
+1
+36.5
+961.5
+1.45
+28.8
+2
+74.0
+1102.7
+1.69
+25.5
+3
+116.5
+1218.5
+3.45
+36.0
+5
+211.5
+2619.7
+10.6
+75.8
+The extragradient method scales roughly linearly in nP and retains a 33–43× speed advantage over as-is IBR
+across all agent counts. A condensed, warm-started IBR is faster still once its per-agent setup is amortized, so the
+speed ratio is not the operative advantage; what is, is set out under Onboard implementation below.
+Higher-dimensional models. The extragradient core is dimension-agnostic. Each iteration is two gradient evaluations
+and two box projections, all matrix–vector products, so the cost grows linearly in Nnu rather than combinatorially, in
+contrast to the exponential grid growth that confines Hamilton–Jacobi–Isaacs reachability to the planar case. Restoring
+out-of-plane translation is the case measured in section 6.9, where six states cost 19–22 ms against 25 ms planar.
+Attitude states enter through the control-effect matrix and are the natural next extension; there the added difficulty is
+modeling fidelity, since attitude couples nonlinearly, rather than solver complexity.
+Onboard implementation. The same structure is what recommends the method for flight hardware: the iteration per-
+forms no matrix factorization and calls no compiled optimization backend, so it needs neither a linear-algebra library
+with dynamic memory nor a per-step problem build, and its working set is the O(Nnu) iterate plus the precomputed
+terminal maps. We measured 89.4 µs per iteration and about 25 ms per Case A solve on a desktop and make no claim
+about a specific flight processor, which we did not benchmark; the argument for onboard suitability is structural,
+resting on the absence of factorization and compilation, not on a ported measurement.
+37
+
+
+Appendix G. Notation Summary
+Every symbol below carries one meaning, with two exceptions that are distinguished by their argument. J is
+the scalar game payoff, whereas J(ν, ν0) is the Yamanaka–Ankersen integral of eq. (C.1); and h prints both for the
+support-function operator hS(·) and, in the elliptical model, for the specific angular momentum √µp. Three further
+collisions were removed rather than tolerated: the eccentric anomaly is written E so that E stays the evader label, the
+geometric contraction factor of theorem 5 is written q, and the reachable-set excess-area ratio is written αL, so that
+ρ(ν) denotes only the radius ratio 1 + e cos ν. Altitude is given in prose (500 km) rather than as a symbol, since h is
+taken.
+Table G.1: Summary of notation used throughout the paper. Dimensions are given where they are not implied by the definition; nx = 4, nu = np = 2
+in all experiments.
+Symbol
+Description
+Symbol
+Description
+x
+State vector, Rnx
+λ
+Effort regularization weight
+u
+Control (acceleration), Rnu
+κ
+Keep-out penalty weight
+r
+Position vector, Rnp
+η
+Extragradient step size
+Ac, Bc
+Continuous-time matrices
+∥G∥2
+max(∥GP∥2 , ∥GE∥2)
+Ad, Bd
+Discrete-time matrices
+σmax(GE)
+Largest singular value of GE
+n
+Mean motion, rad/s
+LF
+Lipschitz constant of F
+∆t
+Timestep, s
+ΠZ
+Projection onto Z
+N
+Horizon length
+d f
+Terminal miss distance, m
+¯uP, ¯uE
+Max acceleration, mm/s2
+ϕN, ϕ(i)
+N
+Escape certificate, m
+rcap
+Capture radius, m
+¯V
+Pursuer security value, m
+U
+Control constraint set
+γP
+Pursuer best-response gap, m
+RN
+N-step reachable set
+ψN
+Capture-pair existence value, m
+hS
+Support function of S
+wi
+Adaptive pursuer weight
+dℓ
+Template direction, Rnp
+nP
+Number of inspectors
+L
+Number of template directions
+Om
+Keep-out zone m
+αL
+Reachable-set excess-area ratio
+q
+Contraction factor, theorem 5
+Elliptical orbit extension
+e
+Orbital eccentricity
+TN
+Terminal-position extractor
+ν
+True anomaly, rad
+S
+Control-to-state matrix
+a
+Semi-major axis, m
+GP,GE
+Terminal position response
+p
+Semi-latus rectum a(1 −e2), m
+g0
+Free-response terminal offset
+h
+Angular momentum √µp
+δ
+GPU(P)−GEU(E)+ g0
+ρ(ν)
+1 + e cos ν
+J
+Game payoff function
+J(ν, ν0)
+YA fundamental integral
+Φ(ν, ν0)
+Yamanaka–Ankersen STM
+Ak, Bk
+Time-varying matrices at step k
+ΦN:j
+Transition from step j to N
+38

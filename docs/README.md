@@ -6,26 +6,30 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-09-14
-- 运行时间：2026-09-14 22:07:31 UTC
+- 最新运行日期：2026-09-15
+- 运行时间：2026-09-15 22:17:51 UTC
 - 运行状态：成功
-- 本次总论文数：2
-- 精读区：1
-- 速读区：1
+- 本次总论文数：3
+- 精读区：0
+- 速读区：3
 
 ### 今日简报（AI）
-2026-09-14 日报精选 2 篇：精读航天器相对导航等变滤波器，速读太阳系天体相对论坐标时标 TEMPUS。最值得关注的是用等变滤波提升距离与方位测量下的航天器相对导航精度（8.0/10），以及 TEMPUS 为任意太阳系天体提供基于任意星历的相对论坐标时标（6.0/10）。普通读者可先看精读篇了解导航滤波思路，再按兴趣浏览 TEMPUS 的时标应用场景。
-- 详情：[/202609/14/README](/202609/14/README)
+今日筛选出3篇航天器相关速读论文，聚焦相对导航、AI位姿估计与追逃博弈。三篇均获6.0分，其中基于距离与方位测量的等变滤波相对导航、圆/椭圆轨道上的凸追逃博弈最值得关注。建议普通读者优先了解前者的导航滤波思路，并留意AI位姿估计测试床的后续验证进展。
+- 详情：[/202609/15/README](/202609/15/README)
 
 ### 精读区论文标签
-1. [An Equivariant Filter for Spacecraft Nonlinear Relative Navigation with Range and Bearing Measurements](/202609/14/2609.13094v1-an-equivariant-filter-for-spacecraft-nonlinear-relative-navigation-with-range-and-bearing-measurements)  
-   标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：航天器近距操作相对导航滤波
+- 本次无精读推荐。
 
 ### 速读区论文标签
-1. [TEMPUS: Relativistic coordinate time scales for any solar-system body from arbitrary ephemerides](/202609/14/2609.08979v2-tempus-relativistic-coordinate-time-scales-for-any-solar-system-body-from-arbitrary-ephemerides)  
+1. [An Equivariant Filter for Spacecraft Nonlinear Relative Navigation with Range and Bearing Measurements](/202609/15/2609.13094v1-an-equivariant-filter-for-spacecraft-nonlinear-relative-navigation-with-range-and-bearing-measurements)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：面向太阳系导航与授时的相对论坐标时间尺度
+   evidence：面向空间接近操作与自主交会的航天器相对导航
+2. [DreamSat-Bench: Development and Initial Testing of a Testbed for AI-Based Pose Estimation from 3D Reconstruction](/202609/15/2609.14183v1-dreamsat-bench-development-and-initial-testing-of-a-testbed-for-ai-based-pose-estimation-from-3d-reconstruction)  
+   标签：评分：6.0/10、query:cislunar-dyn-nav
+   evidence：交会与近距操作中AI相对导航的测试平台
+3. [Convex Pursuit-Evasion Games for Spacecraft Proximity Operations on Circular and Elliptical Orbits](/202609/15/2609.14337v1-convex-pursuit-evasion-games-for-spacecraft-proximity-operations-on-circular-and-elliptical-orbits)  
+   标签：评分：6.0/10、query:cislunar-dyn-nav
+   evidence：圆与椭圆轨道航天器接近操作博弈及可达集证书
 
 
 <div class="dpr-home-promo-card">
