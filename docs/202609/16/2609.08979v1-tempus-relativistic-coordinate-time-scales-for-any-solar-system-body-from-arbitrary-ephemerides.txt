@@ -1,0 +1,385 @@
+Title: TEMPUS: Relativistic coordinate time scales for any solar-system body from arbitrary ephemerides
+
+URL Source: https://arxiv.org/pdf/2609.08979v1
+
+Published Time: Wed, 09 Sep 2026 04:07:57 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+Astronomy & Astrophysics manuscript no. main ©ESO 2026 September 9, 2026 
+
+# TEMPUS: Relativistic coordinate time scales for any solar-system body from arbitrary ephemerides 
+
+Y. Sey ff ert and A. Fienga 
+
+Observatoire de la Côte d’Azur, Université Côte d’Azur, CNRS, Géoazur, IRD, 250 avenue A. Einstein 06560 Valbonne, France Received XX; accepted XX 
+
+ABSTRACT 
+
+Context. Precise time-scale transformations between solar-system bodies are an essential requirement for deep-space science and solar system navigation. The post-Newtonian relativistic expression relating a body-centered coordinate time TCX to the Barycentric Coordinate Time TCB depends on the gravitational environment and velocity of the target body, and must be evaluated consistently with the chosen planetary ephemerides. So far only INPOP has provided such a solution as part of its ephemerides releases, albeit only for Earth with TCG-TCB. 
+
+Aims. We present T empus , a tool that numerically integrates the IAU 2000 time-transformation for any solar-system body using positions and velocities from an arbitrary ephemerides. We provide a validated, ephemerides-agnostic implementation of TCX −TCB and assess its accuracy against published independent solutions. 
+
+Methods. The rate d TCX /d TCB is integrated with an Adams–Moulton order-12 predictor–corrector. The gravitational potential sum tested here includes the Sun, eight planets, Pluto, up to 343 main-belt asteroids, and 30 trans-Neptunian objects. Outputs can be stored in readable format tables of sampled values or as Chebyshev coe ffi cient files. Comparisons are performed against the TU Dresden time solutions (Klioner 2021), the TCG-TCB solution provided with INPOP19a (Fienga et al. 2019) and INPOP21a (Fienga et al. 2021a), and the LTE440 lunar solution (Lu et al. 2025). We use INPOP19a, INPOP21a, DE430, DE440, and EPM2021 as input ephemerides. 
+
+Results. For the planetary bodies T empus agrees with Klioner (2021) at the 10 −21 s s −1 level over 200 yr. Against the INPOP19a released TCG-TCB we also agree to the same level. The main-belt asteroids as well as the trans-Neptunian objects shift the planetary time scales at the 10 −18 s s −1 level, and the choice of planetary and lunar ephemerides contributes di ff erences on the 10 −18 s s −1 level as well. 
+
+Conclusions. Tempus provides a validated, ephemeris-agnostic post-Newtonian time-transformation for any solar-system body. 
+
+Key words. time scale – reference systems – ephemerides – celestial mechanics 
+
+1. Introduction 
+
+According to general relativity, a clock’s tick rate depends on its velocity and the gravitational potential at its location: a clock co-moving with the Earth therefore runs at a slightly di ff erent rate than an ideal clock co-moving with the Moon, Mars, or solar-system barycenter (SSB). For the Earth this secular drift to the SSB is about 1 .28 ms per day, and an additional periodic compo-nent (driven by orbital eccentricity and planetary perturbations) that must be modeled to nanosecond accuracy for modern space applications. With the IAU 2000 resolution So ff el et al. (2003), the IAU gives the metric that should be used for describing the motions of objects in the solar system weak field approximation. Derived from the So ff el et al. (2003) metric and considering each specific gravitational environment, one can define di ff erent time-scales: Barycentric Coordinate Time (TCB) at the SSB, its body-mass-centered analogues Geocentric Coordinate Time (TCG), Seleno-centric Coordinate Time (TCL), and generically TCX for any body X at its center of mass, with TCX −TCB typically fixed to zero at the 1977 origin, when the SI second came into e ff ect. Closely related to TCB is Barycentric Dynamical Time (TDB), which is TCB rescaled to best match the secular drift of clocks at Earth’s geoid. Deep-space radio science and navigation need these time scales in practice: the proper time kept by a clock at a body X must be tied to the barycentric frame through the same ephemerides and perturber set that propagate the spacecraft and model the signal path, since any mismatch leaks into the esti-mated range. As range is inferred from a light travel time, 1 ns corresponds to about 30 cm, so centimetre-level ranging requires TCX −TCB at the sub-nanosecond level, where the second post-Newtonian terms become relevant – besides being there for bet-ter consistency. Rotation modeling is attached to the body-fixed frame and in consequence, in GR, this body-fixed frame has a specific 4-D metric, di ff erent from the metric attached to the Barycentric Celestial Reference System (BCRS). Consequently, the time-scale attached to the body-fixed frame in which the Ro-tation modeling should be described, is di ff erent from the TCB or TDB time-scales. However, so far, no rotation modeling ex-cept the one for the Earth for which the rotation angles are given relative to TT or TCG, is produced in the natural local time TCX but in TDB. So far, no general tool exists for computing time-scale for any body that a user can apply to an arbitrary body, with an ar-bitrary ephemerides, and with a controllable set of perturbers. We present Tempus , an open-source tool that fills this gap. It numerically integrates the IAU 2000 time-transformation from an arbitrary planetary ephemerides, and is (i) ephemeris-agnostic , reading INPOP, DE, and EPM files with either TDB or TCB as initial time-scale; (ii) body-agnostic , computing TCX −TCB for any target X, or the di ff erence between two body-centered scales such as TCG −TCL directly; (iii) perturber-
+
+Article number, page 1 of 10 arXiv:2609.08979v1 [astro-ph.EP] 8 Sep 2026 A&A proofs: manuscript no. main 
+
+aware , admitting several hundred main-belt asteroids and trans-Neptunian objects; and (iv) reproducible , with a command-line interface (CLI) that specifies a run entirely by its flags and records them in a metadata companion file, a Chebyshev ex-porter producing standard ASCII files for interpolation, and a Python application programming interface (API) exposing their parts. The remainder of the paper describes the model and its implementation (Sect. 2), with some parameterization caveats discussed in Sect. 3, then validates T empus against indepen-dent solutions (Sect. 4), studies its sensitivity to the input ephemerides and perturbers (Sect. 5), describes the Chebyshev polynomial output representation option (Sect. 6), and then dis-cusses the timing implications for planetary rotation and naviga-tion (Sect. 7) before concluding (Sect. 8). 
+
+2. Relativistic Model and Implementation 
+
+Tempus integrates the IAU’s post-Newtonian time transforma-tion numerically, evaluating the transformation rate at the center of mass of the considered body X at each step from the posi-tions, velocities, and masses supplied by an arbitrary planetary ephemerides. 
+
+2.1. Post-Newtonian time transformation 
+
+In the framework of the IAU 2000 relativistic reference systems (So ff el et al. 2003), the coordinate time TCX at the center of mass of a body X (located at position rX with velocity vX rel-ative to the solar system barycenter) is related to Barycentric Coordinate Time (TCB) by 
+
+d TCX 
+
+d TCB − 1 = αX
+
+c2 + βX
+
+c4 + O c−5 , (1) where the O c−2 (first post-Newtonian) term is 
+
+αX = − 12 v2 
+
+> X
+
+− UX , (2) with the Newtonian gravitational potential at the position of the center of mass of the body X summed over all other /external bodies A:
+
+UX =
+
+X
+
+> A,X
+
+GM A
+
+rAX 
+
+, (3) and the O c−4 (second post-Newtonian) correction is 
+
+βX = − 18 v4 
+
+> X
+
++ 12 U2 
+
+> X
+
++
+
+X
+
+> A,X
+
+GM A
+
+rAX 
+
+"
+
+4 vX · vA − 32 v2 
+
+> X
+
+− 2 v2
+
+> A
+
++ 12 aA · rAX + 12
+
+vA · rAX 
+
+rAX 
+
+!2
+
++
+
+X
+
+> B,A
+
+GM B
+
+rBA 
+
+#
+
+. (4) Here aA is the barycentric acceleration of body A, GM A is its gravitational parameter in the BCRS, and rAX is the barycentric distance between body X and A.The O c−2 term αX is the sum of the specific kinetic and potential energy at the center of mass of body X and pro-duces the familiar secular drift of TCX −TCB (for the Earth, 
+
+≃ 1.28 ms d −1) modulated at the orbital period. The O c−4 term 
+
+βX collects the c−4 cross-terms between the body’s motion and the external potential together with the square of the potential itself. For the inner planets βX /c4 contributes a drift around the 10 −16 s s −1 level, which accumulates to several hundred nanosec-onds per century in TCX −TCB, and to ≃ 2.4 μs per century for Mercury; so T empus evaluates the full Eq. 1 by default (a --pn1 
+
+switch is provided to consider only the α contribution for diag-nostic comparison). An optional solar oblateness ( J2,⊙) term is described together with the other perturbing bodies in Sect. 2.2. To fix the free integration constant we can choose to an-chor TCX −TCB to be zero at the 1977 January 1.0 TAI epoch (JD 2443144 .5003725 TT), analogous to the Earth case. In the context of the T empus integration, this can be achieved by ei-ther starting the integration at this date or by applying a shift in post-processing. The latter is recommended, as it allows for arbi-trary start epochs and standardised Chebyshev fitting (Sect. 2.5). The integrations are run through the CLI command tempus integrate and its options and flags. 
+
+2.2. Perturbing bodies and solar oblateness 
+
+The potential sum in Eqs. (3) and (4) runs over every body with non-negligible mass. The Sun, the eight planetary barycenters, and the Pluto barycenter are always taken from the ephemerides itself and constitute the default external potential set (option 
+
+--ext auto ). Main-belt asteroids (MBAs) and trans-Neptunian objects (TNOs) can be added optionally: their positions are read from a companion trajectory file ( --asteroid-file )– a SPICE small-body kernel such as sb441-n373s.bsp –while their gravitational masses (GM ) are taken from the ephemerides constants or supplied through a JPL-style ASCII header ( --asteroid-gm-header ). Bodies present in the trajec-tory file but lacking a GM constant or vice versa are skipped. This mechanism supports up to 343 MBAs and 30 TNOs in the configurations tested here (Sect. 5). The di ff erence in aster-oid trajectories between ephemerides have a negligible e ff ect, whereas their mass di ff erences have a noticeable e ff ect, see com-parisons in Sect. 5. A further optional perturbation is the Sun’s oblateness J2,⊙.Beyond the monopole GM ⊙/r⊙X already contained in Eq. (3), the Sun contributes a quadrupole correction to the c−2 potential, 
+
+∆UJ2 = − GM ⊙ J2,⊙ R2
+
+> ⊙
+
+r3
+
+> ⊙X
+
+P2(sin ϕ) , (5) with P2(x) = 12 (3 x2 −1) the second Legendre polynomial, r⊙X the Sun–target distance, and ϕ the heliographic latitude of the target, so that sin ϕ = ˆr⊙X · ˆn⊙ with ˆ n⊙ the Sun’s rotation-pole direction (held fixed at IAU WGCCRE values α0 = 286 .13 ◦, δ0 = 63 .87 ◦;Archinal et al. 2018). The constants J2,⊙ ≈ 2.2 × 10 −7 and R⊙ are read from the ephemerides header. The term enters the O c−2
+
+potential additively, UX → UX + ∆ UJ2 in Eq. (2); it is o ff by default but may be enabled using the flag --sun-j2 . Its e ff ect on the derived time scales is quantified in Sect. 5.3. 
+
+2.3. ephemerides compatibility 
+
+All ephemerides access goes through CALCEPH (v4.0.5; Gastineau et al. 2015), so T empus reads INPOP binary files (as .dat or .tcheb ) and SPICE kernels ( .bsp with the as-sociated .tpc /.tls ) through a single interface. The timescale of the file is detected from its header. TCB ephemerides are used directly; for a TDB ephemerides T empus applies the ex-act linear rescaling of positions, velocities, and GM values by 
+
+> Article number, page 2 of 10 Sey ff ert et al.: TEMPUS
+
+1/(1 − LB), with LB = 1.550519768 × 10 −8 (Petit & Luzum 2010), so that the transformation is always evaluated in TCB-consistent units. Epochs are converted between TT, TDB, and TCB by reading each file’s own internal time-ephemerides series rather than an external model, keeping the result self-consistent with the ephemerides in use. All epochs are carried as split (in-teger + fractional) Julian dates (JD) to preserve sub-nanosecond resolution, which an ordinary float64 JD cannot represent. The ephemerides tested here are INPOP19a (TCB and TDB) Fienga et al. (2019), INPOP21a (TCB and TDB) Fienga et al. (2021a), DE430 Folkner et al. (2014), DE440 Park et al. (2021), and EPM2021 Pitjeva et al. (2022). 
+
+> 2.4. Numerical integration
+
+The transformation rate of Eq. (1) is integrated with an Adams–Moulton predictor–corrector of order 12 (AM12) by de-fault. Because the integrand is a smooth function of interpo-lated ephemerides states, a high-order multistep method con-verges far better, while the total runtime does not increase significantly — as the quadrature here is a small fraction of the total runtime dominated by ephemerides evaluation calls. AM12 is the default after comparison with the trapezoidal rule and lower-order schemes ( rk4 , am4 –am10 , all selectable through --integrator ). The 11-step start-up phase of AM12 is prepended before the requested start epoch, such that the re-ported output series is free of start-up transients. All results here use an integration step size of 0 .75 d (18 h), matching the internal sampling rate of the ephemerides like INPOP. 
+
+> 2.5. Chebyshev polynomial output
+
+For downstream use the integrated samples can be fitted, by the tempus chebyshev subcommand, into a piecewise Cheby-shev series and written as an ASCII coe ffi cient file ( .asc ) in the same tabular layout as the series distributed by INPOP and Klioner (2021), which T empus also reads directly for compar-ison. The subcommand can also write the series in either of the two time-argument parameterisations distributed with the TU Dresden time solutions (see Sect. 3). The fitting algorithm, its tuning options, and the representation and evaluator accuracy are described in Sect. 6. To keep the fitting and physical error budgets separate, all comparisons in Sect. 4 use the direct T em -
+
+pus integration results directly, without Chebyshev fitting. 
+
+3. Coordinate and parameterisation choices 
+
+Two options in T empus change not the accuracy but the very quantity that is computed, and both are easy to misuse. We high-light them here because a user who overlooks this would incur errors and inconsistencies far larger than the sub-nanosecond model accuracy established in Sect. 4. 
+
+> 3.1. Differences between two body-centered scales
+
+By default the integration is centered on the solar-system barycenter ( --center SSB ), giving TCX −TCB at the body X center of mass. Setting --center to a body and --target to another — for example --center EARTH_CENTER --target MOON — makes T empus run two barycentric integrations and sub-tract them, returning the di ff erence between two time-scales at the centers of mass of the two bodies, here TCG −TCL, as a func-tion of TDB or TCB (depending on what timescale the under-lying ephemerides is parameterised with, typically TDB). This subtraction is exact as a function of TDB or TCB .One must be aware though, that this di ff erence is only valid in the simultaneity of the BCRS. To move to a di ff erent notion of simultaneity, the user must add a kinematic boundary term. In the case of TCL, it would be vE · rLE /c2, that moves to a geocentric-simultaneity description. This term has an amplitude of ∼ 125 μs oscillating at the lunar month, and is only a func-tion of the ephemerides built from the same state vectors as the Tempus integration itself. Tempus deliberately leaves this term out of the default output and provides the function tempus.model.boost_term to add it when a particular simultaneity convention is required. The two descriptions are di ff erent functions of time; consequently a naive subtraction of two TCX −TCB series (staying in the simultaneity of the BCRS), compared against a reference such as the lunar solution in Kopeikin & Kaplan (2024) (which carries a GCRS notion of simultaneity), will disagree by this ∼ 125 μs term. This is expected behaviour, not an error. What has been described so far has exclusively been center-of-mass quantities. A real clock, at the surface or in orbit, needs one further term c−2(−v2clock /2 − WX (xclock )), which unlike the boundary term above is not a function of the ephemerides: it requires a gravity-field model of body X and a clock loca-tion /trajectory, and thus lies outside the scope of T empus and is a users responsibility. This term dominates any clock comparison, and is applied on top of (each) TCX −TCB. 
+
+> 3.2. Choice of time argument
+
+The o ff set TCX −TCB tabulated as a function of TCB /TDB and the same o ff set tabulated as a function of the body’s own time at its center of mass TCX are two di ff erent functions. They di ff er by a secular term F · ∆ ≈ L2 
+
+> X
+
+τ that grows linearly with elapsed time τ and quadratically with the body’s rate constant LX : about 0.69 μs cy −1 for TCG and 0 .30 μs cy −1 for TCM (Klioner 2026). Evaluating a series built against one argument at a numerically equal value of the other therefore introduces an error of exactly this magnitude — microseconds per century, orders of magni-tude above the model accuracy. Any user of a time-ephemerides product must know which argument parameterises it. Tempus makes both available. The integration and its na-tive ASCII export are parameterised by the ephemerides time argument (TCB for a TCB ephemerides, TDB for a TDB one); 
+
+tempus chebyshev --also-tcx additionally writes the o ff set parameterised by the body’s own coordinate time TCX. Because every integrated sample is a single event carrying both time la-bels, this re-parameterisation is an exact per-event relabelling of the output ( tempus.model.relabel_to_tcx ) rather than a re-integration, with --anchor aligning the relabelled axis to the 1977 origin. This re-labeling applied either to a T empus run, or separately to the TCB-parameterised ASCII file distributed by Klioner (2021), reproduces Klioner’s independently-integrated, TCX-parameterised (“inverse”) product at the picosecond level. 
+
+4. Validation 
+
+We validate T empus by comparing its output against other solu-tions: the independent TU Dresden solution (Klioner 2021), the TCG −TCB series stored inside the ephemerides files themselves INPOP19a and INPOP21a, and the LTE440 lunar time solution (Lu et al. 2025). As will be seen, these comparisons show di ff er-ences far below the accuracy of the modern atomic clocks, and validate our implementation with T empus .
+
+> Article number, page 3 of 10
+
+A&A proofs: manuscript no. main 
+
+Table 1. Tempus against the independent TU Dresden solution (Klioner 2021) for every body it publishes, from the files at https://gaia. geo.tu-dresden.de/TimeEphemerides/ . Both solutions here use INPOP19a with as perturbers the Sun and major planets only over the same 200 yr span, so each row isolates the transformation itself. The first pair of columns gives the secular rate of the quantity compared, on which both solutions agree to all nine digits computed; the second pair gives the di ff erences in the same fractional-rate units. For the Earth’s case, also see Fig. 1. The Klioner (2021) series are stitched from for-ward and backward integrations meeting at the 1977 origin; the result-ing step, at most 5 .4 ps, is removed here before linear fitting. 
+
+TCB −TCX drift TEMPUS vs Klioner Body [ms d −1] [s s −1] Drift [s s −1] Peak [ps] Sun 0.000192 2.22 × 10 −12 8.7 × 10 −21 0.36 Mercury 3.304862 3.83 × 10 −8 4.1 × 10 −21 13 .56 Venus 1.768717 2.05 × 10 −8 2.2 × 10 −21 24 .83 Earth 1.279434 1.48 × 10 −8 5.0 × 10 −21 5.86 Moon 1.280911 1.48 × 10 −8 4.3 × 10 −21 6.85 Mars 0.839753 9.72 × 10 −9 3.4 × 10 −21 4.95 Jupiter 0.245831 2.85 × 10 −9 7.3 × 10 −21 0.59 Saturn 0.134269 1.55 × 10 −9 1.7 × 10 −21 1.13 Uranus 0.066791 7.73 × 10 −10 6.2 × 10 −22 0.16 Neptune 0.042585 4.93 × 10 −10 3.8 × 10 −22 0.07 Pluto 0.037345 4.32 × 10 −10 3.3 × 10 −22 0.16 A complementary question, how much the result depends on the input ephemerides and on the considered dynamical model-ing, is a sensitivity study that we defer to Sect. 5. In Tables 1 and 2 each comparison row reports the di ff erence of two solutions. All series are sampled on a common 0 .75 d (18 h) grid. Di ff erences of solutions consist of a linear drift (the fitted slope) and remaining residual after detrending, which is described via its peak amplitude. Drifts are quoted in fractional-rate units (s s −1) so they can be compared directly with clock-accuracy figures; 1 ns cy −1 = 3.169 × 10 −19 s s −1.As a baseline consistency check, running on the TDB and TCB releases of INPOP19a, as shown in the first row of Ta-ble 2, at matched physical epochs yields series that agree to 
+
+∼ 10 −23 s s −1 (sub-picosecond over the full 200-yr span), con-firming that the 1 /(1 − LB) rescaling of positions and GM values (Sect. 2.3) is applied correctly and that T empus is genuinely ag-nostic to the timescale of its input. 
+
+4.1. Comparison with the Klioner solution. 
+
+The strongest test available is against a solution produced by di ff erent authors using di ff erent code from the exact same in-put. The TU Dresden time solutions (Klioner 2021) provide ex-actly that for eleven bodies. Table 1 compares every one of them against a comparable evaluation using T empus . Both solutions agree on the secular rate of TCX −TCB to all nine digits com-puted (six given in the table); the disagreement is confined to a remaining relative drift between 3 .3 × 10 −22 and 8 .7 × 10 −21 s s −1
+
+(1–30 ps cy −1) with detrended peak values below 10 ps, except for Mercury and Venus. Also see Fig. 1 for a detailed Earth’s comparison plot specifically. The detrended di ff erence (in the table proxied by the peak column) is not the same for every body: it seems to track or-bital speed rather than the magnitude of the o ff set itself, which is largest for Mercury. The fastest worldlines are where two inde-pendent solutions have the most opportunity to di ff er. The peak column is nevertheless an outlier-dominated statistic: looking at 0.00 0.01 0.02 0.03 Difference [ns]           
+
+> Difference of TCG-TCB: Klioner vs. TEMPUS
+> 1900 1920 1940 1960 1980 2000 2020 2040 2060 2080 2100 TCB [year] 0.005
+> 0.000 Residual [ns]
+
+Fig. 1. Independent validation of the TCG −TCB implementation: T em -
+
+pus minus the TU Dresden (Klioner) solution over 200 yr, both com-puted from INPOP19a. Top: the di ff erence; the fitted slope in black has a drift of 5 .04 × 10 −21 s s −1 (0 .016 ns cy −1). Bottom: the detrended di ff er-ence stays below 6 ps. This confirms our independent Eq 1 implemen-tation. 
+
+the data directly, Venus shows the largest peak (24 .8 ps as seen in Table 1) on an RMS of about 0 .6 ps, while Mercury’s RMS is twice as large, so the ordering by RMS follows orbital speed more faithfully than the ordering by peak. The two solutions are numerically independent in a strong sense: While T empus precomputes the rate on a fixed grid and integrates it with a fixed-order multistep scheme, Klioner (2021) integrates the di ff erential equation directly with the adaptive-order extrapolation code ODEX. Our excellent agreement with the very small observed relative drifts, therefore already val-idates the implementation of Eq. (1)’s time transformation in Tempus .
+
+4.2. Comparison with the time solution provided by INPOP ephemerides. 
+
+INPOP distributes its own TCG −TCB series together with the ephemerides file, which allows a second, quite di ff erent check: not against another implementation of the same model, but against the time scale that the ephemerides publishers itself de-rived while constructing the ephemerides. The two dynamical models are not necessarily identical by construction. T empus evaluates the potential from the bodies the user supplies; INPOP built its internal series from the full per-turber set of its own fit. Any mismatch in that body list, or lack of an idealized internal modeling of say Kuiper belt rings, is a physical signal, not a numerical error, and the comparison is best read as a measurement of how completely the dynamical model has been reproduced. This interpretation is supported by Table 2. With a planets-only potential the di ff erence against INPOP19a drifts at 6 .19 ×
+
+10 −18 s s −1 (19 .5 ns cy −1) over 200 years, and the Klioner (2021) solution di ff ers from the same INPOP internal series by an iden-tical slope and shape — so the drift belongs to the missing bod-ies, not to either implementation. Adding the 353 standard ob-jects of INPOP19a (343 MBAs and 10 TNOs) reduces the drift by a factor 95, to −6 × 10 −21 s s −1 (−0.019 ns cy −1), with a resid-ual of 11 ps (see Fig. 2), closing the consitency gap so the same order-of-magnitude agreement with Klioner (2021), as seen be-fore in Fig. 1. 
+
+Article number, page 4 of 10 Sey ff ert et al.: TEMPUS 
+
+Table 2. Validation of T empus against the other available TCX −TCB solutions besides Klioner (2021) solution (see Table 1). Each solution is done on an 200 year interval. The ephemerides each solution uses is given in parentheses, and “INPOP” denotes the solution stored inside the INPOP file (queried through CALCEPH), available for the Earth alone. “Drift” is the slope of a linear fit to the di ff erence ∆(TCX − TCB); “peak” is the maximum amplitude of the detrended di ff erence. All rows are evaluated at the same events on one TDB grid. The last row crosses ephemerides (T empus on INPOP19a against a DE440 product) and is discussed in Sect. 4.3. 
+
+Body Comparison Tempus Model Drift [s s −1] Peak [ns] 
+
+Internal consistency of Tempus 
+
+Earth Tempus (INPOP19a TDB) − Tempus (INPOP19a TCB) planets only ∼ 10 −23 < 0.001 
+
+Against the INPOP solutions 
+
+Earth Tempus (INPOP19a) − INPOP(19a) with 353 small bodies −6.06 × 10 −21 0.011 Earth Tempus (INPOP21a) − INPOP(21a) with 353 small bodies +1.76 × 10 −17 0.254 Earth Tempus (INPOP19a) − INPOP(19a) planets only +6.19 × 10 −18 0.173 Earth Tempus (INPOP21a) − INPOP(21a) planets only +2.41 × 10 −17 0.331 
+
+Against an independent third-party solution 
+
+Moon Tempus (DE440) − LTE440(DE440) with 373 small bodies +1.64 × 10 −17 0.043 Moon Tempus (INPOP19a) − LTE440(DE440) with 353 small bodies +1.77 × 10 −17 0.257 0.05           
+
+> 0.04
+> 0.03
+> 0.02
+> 0.01
+> 0.00 Difference [ns]
+> Difference of TCB-TCG: TEMPUS + 353 small bodies vs. INPOP19a internal
+> 1900 1920 1940 1960 1980 2000 2020 2040 2060 2080 2100 TCB [year] 0.00 0.01 Residual [ns]
+
+Fig. 2. Di ff erences of TCG −TCB via T empus and the independent so-lution distributed by the INPOP19a release. Sun, Planets, Pluto and the standard INPOP19a 353 small bodies are inlcuded in the calcu-lation by T empus . Linear fit in black, that shows a relative drift of 
+
+−6.06 × 10 −21 s s −1 (−0.019 ns cy −1) with a residual max peak of 11 ps. Agreement is at the same order of magnitude, as in Fig. 1 
+
+The same exercise on INPOP21a behaves di ff erently, and the contrast is the more interesting result, which probes how INPOP21a di ff ers from INPOP19a regarding Kuiper belt ob-jects. Its planets-only di ff erence is already a factor 4 larger (2 .41 × 10 −17 s s −1) than for T empus -INPOP19a planet-only run, and adding the 353 small bodies we had available for that release improves it by only a factor 1 .4, to 1 .76 × 10 −17 s s −1. Supplying the known 353 point masses, in other words, does not close the gap against INPOP21a the way it does against INPOP19a. The higher relative drift seems to be caused by our T empus run not accounting for 500 individually integrated objects in INPOP21a (Fienga et al. 2021b), that amount to a quoted total mass of 0.0259 M ⊕ between 39 .3 and 47 .6 AU. That mass contributes a near-constant potential at the Earth of U/c2 = 1.8 × 10 −17 s s −1
+
+– matching the above observed di ff erential drift w.r.t. INPOP21a to better than 2%. 
+
+4.3. Comparison with LTE440. 
+
+The lunar time solution LTE440 (Lu et al. 2025) is an in-dependent product built on DE440, with the claim it com-pletely reproduces DE440’s dynamical model. Run on that same DE440 ephemerides, T empus reproduces it to 1 .64 × 10 −17 s s −1
+
+(52 ns cy −1) with a detrended peak of 0 .043 ns. This di ff erence is not a floor: it falls from 2 .38 to 1 .64 × 10 −17 s s −1 as the 343 main-belt asteroids and the 30 individual TNOs are added ver-sus a planets-only run, with the detrended peak dropping by a factor 4 .5. It therefore still measures the remaining di ff erence in dynamical model rather than the transformation itself. Repeating the comparison with T empus using INPOP19a, barely changes the di ff erence: 2 .39 × 10 −17 s s −1 with planets-only and 1 .77 × 10 −17 s s −1 with INPOP19a’s 353 small bodies, with detrended peaks of 0 .37 and 0 .26 ns. What Table 2’s last row measures is the INPOP19a-versus-DE440 di ff erence in the lunar ephemerides dynamical model, and it is included here only to show how completely the choice of input ephemerides can dominate a comparison — the question taken up systematically in the following section. 
+
+5. Sensitivity study 
+
+The transformation rate of Eq. (1) is built entirely from the masses, positions, and velocities of the bodies that make up the solar system: the potential UX (Eq. 3) and the c−4 cross-terms (Eq. 4) sum over every perturber with a provided GM and trajec-tory. The computed time scale is therefore only as good as its un-derlying dynamical model, and crucially that model must be kept 
+
+consistent with the ephemerides being used: T empus should eval-uate the potential from the same bodies, with the same masses and trajectories, that were used to construct the ephemerides in the first place. A mismatch between the two body sets does not degrade the numerical accuracy of the transformation; it injects a physical signal — the gravitational e ff ect of the bodies present in one model but absent in the other. Two levers control this dynamical model, and we vary them independently. The choice of planetary ephemerides fixes the masses and orbits of the Sun and planets in a mutually consis-tent way (Sect. 5.1). On top of a given ephemerides, the optional small-body perturbers — main-belt asteroids (MBAs) and trans-Neptunian /Kuiper-belt objects (TNOs or KBOs) — and the solar oblateness can be switched on and o ff (Sects. 5.2 and 5.3), iso-lating each contribution while the planetary motion is held fixed. We quantify the sensitivity of TCX −TCB to each. One limitation applies throughout. Modern ephemerides may model parts of the Kuiper belt as an ideal ring of evenly spaced and equal mass point masses on fixed Keplerian orbits, rather than an extended set of actual small bodies. Such a treat-ment is not yet supported by T empus .
+
+Article number, page 5 of 10 A&A proofs: manuscript no. main   
+
+> Table 3. Sensitivity of TCX −TCB, measured as the di ff erence of two T empus runs identical except one property, over a common 200 yr span centered around J2000. Each row names both runs, so a row di ff ering only in the “Model” columns isolates a physical term and one di ff ering only in the “ephemerides” columns isolates the ephemerides. “Drift” is the slope of a linear fit to the di ff erence, in fractional-rate units; “Peak” is the largest deviation once that linear slope is removed from the di ff erence. Drifts are magnitudes. In block (c) “own asteroids” means each ephemerides’s native small-body set (INPOP19a /21a: 353; DE430: 343; EPM2021: 244).
+
+Tempus (x) Tempus (y)Body ephemerides Model ephemerides Model Drift [s s −1] Peak [ps] 
+
+(a) The hierarchy of model terms, for one body on one ephemerides 
+
+Earth INPOP19a Eq. 1 with only α term INPOP19a Full Eq. 1 1.10 × 10 −16 33 .5Earth INPOP19a planets INPOP19a + 353 bodies 6.19 × 10 −18 162 .0Earth INPOP19a planets INPOP19a + Sun J2 2.1 × 10 −20 0.6
+
+(b) How many small bodies are needed, and what the distant population adds 
+
+Earth INPOP19a planets INPOP19a + 5 MBAs 2.76 × 10 −18 12 .6Earth INPOP19a planets INPOP19a + 343 MBAs 4.34 × 10 −18 12 .7Earth INPOP19a + 343 MBAs INPOP19a + 10 TNOs 1.85 × 10 −18 161 .7Mars INPOP19a planets INPOP19a + 5 MBAs 2.92 × 10 −18 70 .5Mars INPOP19a planets INPOP19a + 343 MBAs 4.58 × 10 −18 72 .2Mars INPOP19a + 343 MBAs INPOP19a + 10 TNOs 1.85 × 10 −18 157 .9Moon DE440 planets DE440 + 5 MBAs 2.74 × 10 −18 12 .3Moon DE440 planets DE440 + 343 MBAs 4.71 × 10 −18 12 .8Moon DE440 + 343 MBAs DE440 + 30 KBOs 2.65 × 10 −18 187 .5
+
+(c) ephemerides changed, each with its own small-body set 
+
+Mars INPOP19a own asteroids INPOP21a own asteroids 3.6 × 10 −19 608 Mars INPOP21a own asteroids DE430 own asteroids 2.10 × 10 −18 1421 Mars INPOP21a own asteroids EPM2021 own asteroids 2.43 × 10 −18 536 Mars DE430 own asteroids EPM2021 own asteroids 3.3 × 10 −19 1676 All T empus runs and comparisons relevant for this section are found in Table 3. Section (a) of the Table gives an overview of the expected incurred relative drift values, if enabling or dis-abling the full usage of Eq. 1, all small bodies, or the Sun J 2
+
+term. The biggest relevant e ff ect, as stated in the beginning is by the contribution of the β term in Eq. 1, on a scale of 10 −16 s s −1,followed by the e ff ect of small bodies on the 10 −18 s s −1 scale, and with the least e ff ect by the solar oblateness on the scale of 10 −20 s s −1.
+
+5.1. Sensitivity to planetary ephemerides 
+
+Because T empus post-processes an existing ephemerides, it in-herits the di ff erences between input ephemerides. Here we quan-tify how much the choice of input matters. Block (c) of Table 3 does this for Mars, the body whose time scale is most exposed to the question: it orbits closest to the main belt, so it is most sus-ceptive to asteroid perturbations. Each ephemerides are taken as a user should process it, with its own native small-body set, so a row measures the total change on switching ephemerides input. Within the INPOP family the step from INPOP19a to IN-POP21a moves TCM −TCB by 3 .6 × 10 −19 s s −1 (1 .1 ns cy −1). Across independent families (INPOP, the JPL DE, and the IAA EPM series, each built from overlapping but not identical obser-vation sets and dynamical models) the di ff erences are roughly six times larger, 2 .10 × 10 −18 between INPOP21a and DE430 and 2 .43 × 10 −18 between INPOP21a and EPM2021. DE430 and EPM2021 agree with each other far better than either agrees with INPOP, at 3 .3 × 10 −19 . This can be explained by the di ff erences in the dynamical modelings of these ephemerides (see Fienga & Minazzoli (2024) for a review). The same comparison for the Moon, computed for the IL-uRS2026 lunar products over the 1970–2052 span, gives a con-sistent picture. As given by Fienga (2026), the di ff erences es-timated over the ILuRS2026 interval are 1 .73 × 10 −18 between INPOP21a and DE430, 1 .89 × 10 −18 between INPOP21a and EPM2021, and 1 .61 × 10 −19 between DE430 and EPM2021. The ordering is the same as for Mars and the drifts agree with the Martian values to within about 30%, so the bound on uncertainty induced by planetary and lunar ephemerides is not peculiar to one target. Overall the choice of input ephemerides a ff ects TCX −TCB at the few ×10 −18 s s −1 level and below, with nanosecond-level periodic structure. 
+
+5.2. Sensitivity to asteroid and Kuiper-belt number 
+
+Holding the ephemerides fixed, we now switch the small-body perturbers on and o ff (Section (b) of Table 3). Every user-provided body with resolvable mass and position state con-tributes to the potential UX (Eq. 3). The most massive main-belt asteroid, Ceres, is comparable to a small planetary moon; together with Vesta, Pallas, Iris and Bamberga it dominates the belt’s mass and gravity. We indeed find that these five asteroids (which also enter INPOP’s equa-tions of motion) account for the bulk of the belt: they shift TCX −TCB by 2 .8 × 10 −18 s s −1 for the Earth and 2 .9 × 10 −18 
+
+for Mars, against 4 .3 and 4 .6 × 10 −18 for the complete 343-object main-belt set. These five bodies thus account for about 60% of the belt’s e ff ect. The same holds on DE440 for the Moon. The distant population enters the potential in the same way but from some fifteen times further out, and its e ff ect is corre-spondingly smaller without being negligible. Individually these objects are far more massive — Eris has GM ≈ 1100 km 3 s−2
+
+against Ceres GM ≈ 62 km 3 s−2 — so their contributions to 
+
+GM /r are comparable body for body, and only their small num-ber keeps the total down. Added on top of the complete main belt, the 10 distant objects distributed with INPOP19a change 
+
+> Article number, page 6 of 10 Sey ff ert et al.: TEMPUS
+
+TCX −TCB by 1 .9 × 10 −18 s s −1 for both the Earth and Mars, about 40% of what the entire main belt contributes; the 30 KBOs of DE440 give 2 .6×10 −18 for the Moon, a larger share on account of their greater number. Runs that include the distant population also show much larger peaks — 156 and 187 ps against 8 and 13 ps for the main-belt-only runs. We attribute this to orbital periods involved rather than from any modeling deficiency: objects beyond 40 AU com-plete well under one revolution in 200 yr, so their contribution to 
+
+UX is a slowly curving drift that a linear fit cannot absorb, and it survives almost entirely into the residual. Main-belt asteroids cy-cle roughly forty times over the same window, so their variation averages down to a few picoseconds. 
+
+> 5.3. Effect of the solar oblateness
+
+The Sun’s quadrupole moment J2,⊙ enters the c−2 potential (Sect. 2.1). Its e ff ect on the planetary time scales is negligi-ble: for the Earth (TCG) on INPOP19a it contributes a drift of 2.1 × 10 −20 s s −1, with a residual within ±0.6 ps over 200 years. This is four orders of magnitude below the β term of Eq. (1) and two under e ff ect of small bodies. It is o ff by default, however a user may enable it with --sun-j2 .
+
+6. Chebyshev representation 
+
+The integrated samples are the primary output of T empus , but the form in which TCX −TCB is distributed and consumed down-stream is a piecewise Chebyshev polynomial series in a plain-text ASCII coe ffi cient file (Sect. 2.5). This section describes the fitting algorithm, the options that control it, and the accuracy of the resulting Chebyshev product, in both the representation error of approximating the integrated series by these polynomials, and the evaluation error of reading those coe ffi cients back. 
+
+> 6.1. Fitting algorithm
+
+The span is divided into multiple fixed-length segments, called 
+
+granules (default 4 d), each with a fitted Chebyshev series of fixed degree. Within a granule the fit is a collocation rather than a least-squares problem: n+1 collocation nodes are placed on [ −1, 1], the T empus samples are interpolated to those nodes, and the Chebyshev coe ffi cients follow from a single small linear solve 
+
+c = M−1f, where M is the Vandermonde matrix of the basis at the nodes. Because M−1 depends only on the degree and node distri-bution, it is computed once and cached, so fitting each granule costs one matrix–vector product; the granules are independent and fitted in parallel. Evaluation uses the Clenshaw recurrence, and all times are carried relative to the granule start to avoid can-cellation against the large ( ∼ 2.4 × 10 6) Julian-date base. The mentioned interpolation of the T empus integration sam-ples to the nodes is done with a local stencil of --npoints 
+
+neighbouring samples (default 10). If the integration rate 
+
+d TCX /d TCB is exported alongside the values ( integrate --out-rate ), a Hermite interpolant using both value and derivative may be used; otherwise a Lagrange interpolant on the values alone is used. Three node distributions are available (--dist ): Gauss–Lobatto with endpoints (default), the interior Chebyshev–Gauss roots, and a C1-continuous Lobatto variant that additionally matches the derivative at the granule boundaries — enforcing continuity of both value and rate across granules — which requires the rate column. 
+
+> 6.2. Tuning the fit
+
+The representation error is governed by the polynomial degree (--order ) and the granule length ( --granule-len ): raising the degree or shortening the granule both reduce the residual, trad-ing file size for accuracy. T empus gates the fit on two indepen-dent quality checks. The first is a truncation estimate from the decay of the trailing Chebyshev coe ffi cients, which flags a gran-ule whose series has not converged. The second is an explicit residual budget ( --max-err ): the maximum |fit − samples | over the whole span must stay below a user-set threshold. The budget is the more reliable gate near machine precision, where the coef-ficient tail flattens into the float64 noise floor and the truncation test can report non-convergence for an otherwise excellent fit. When a gate fails, --auto retries with progressively higher de-gree and halved granule length until the budget is met. Finally, 
+
+--anchor zeros the series at a chosen epoch (bare --anchor 
+
+uses the 1977 origin) by shifting only the constant coe ffi cient of each granule, as long as the T empus integration run covers that chosen anchor epoch. 
+
+> 6.3. Representation and evaluator accuracy
+
+The representation error is not a fixed property of the method but a setting: it is bounded by the residual budget --max-err , which the fit is gated on (Sect. 6.2), and can be pushed down by raising the degree or shortening the granule at the cost of file size. A user can therefore choose it to sit as far below the physical error budget of Sect. 4 as the application requires. The evaluator is validated independently against CALCEPH. An INPOP time-ephemerides ASCII is an export of the Cheby-shev coe ffi cients stored inside the binary ephemerides, so read-ing it with the T empus evaluator and querying the same quan-tity through CALCEPH exercises two implementations – our Clenshaw recurrence implemented as part of T empus and CAL-CEPH’s own recurrence – on identical coe ffi cients. Over 10 5 ran-dom epochs spanning all granules of the INPOP19a TCG −TCB file the two agree to at most one unit in the last place ( ∼ 4 ×
+
+10 −16 s), with 99 .99% of epochs bit-identical, confirming that the evaluation adds no error above float64 rounding: reading a dis-tributed series back costs nothing against the model accuracy. 
+
+7. Applications 
+
+A body’s coordinate time has two kinds of use, and we give one example of each. The first is a modeling question independent of any mission: rotation models are currently referred to TDB while the rotation itself belongs in the body’s own time scale, and Sect. 7.1 quantifies the di ff erence. The second is operational: the radio navigation systems being designed for the Moon, Mars need a body time that is traceable to Earth at the nanosecond level, and Sect. 7.2 asks whether the transformation meets that. Tempus supplies the transformation only; it does not replace the orbit determination, tracking or rotation models that consume it. 
+
+> 7.1. Relativistic timescales for planetary rotation
+
+A body’s rotation must be modeled in the frame attached to it, known as the body-fixed frame. In general relativity, this frame is defined by an origin at the body’s center of mass, a local metric determined by the body’s own gravitational field, and an orientation that evolves under the external gravitational torque from other bodies. Klioner et al. (2003) proposed in 2003            
+
+> Article number, page 7 of 10 A&A proofs: manuscript no. main
+> Fig. 3. Di ff erences between TCL and TDB time derivatives of the orientation angles ψ,θ,ϕ(left-hand side, in mas /d) and their linear integration over δt(right-hand side, in mas). The Euler angles are ψ, the precession angle, θ, the nutation angle, and ϕ, the free rotation angle.
+
+the only framework that describes orbital and rotational mo-tion for the Earth self-consistently within general relativity. For the Moon, orbit and rotation are integrated together numerically (Viswanathan 2017; Pavlov et al. 2016): the orbit follows the full parametrised post-Newtonian (PPN) Einstein-Infeld-Ho ff mann (EIH) equations (So ff el et al. 2003), but rotation uses the New-tonian Liouville equations, with added relativistic terms, as in state-of-the-art ephemerides (Park et al. 2021; Fienga et al. 2021a; Pitjeva & Pitjev 2014). However, these Newtonian Li-ouville equations are solved not in the Moon’s own time-scale, TCL, but in TDB, the common time-scale used to solve the EIH equations for all solar-system bodies. Dating the Moon’s rota-tion in barycentric rather than local time — this time-rotation coupling — remains standard practice in current rotation mod-els. It is then possible to do a conversion from the orientation Euler angles (PA) given in TDB as described in Rambaux et al. (2026) to PA in TCL in consider a change of variable such as: 
+
+dPA dTCL = dPA dT DB × dT DB dTCB × dTCB dTCL (6) With angles not being a ff ected by time-scales, only the time derivatives of the orientation angles PA have to be transformed following Eq. (6). The di ff erences between the time derivatives of the orienta-tion angles expressed in TCL and in TDB are plotted in Fig. 3. The most significant e ff ect is on the time variation of the free rotation angle ϕ, with a maximum amplitude of about 0.063 mil-liarcseconds (mas) per day. On the left-hand side of Fig. 3, ˙ ψ and ˙ θ oscillate symmetri-cally about zero, remaining bounded with no drift in the envelope center. ˙ ϕ, by contrast, carries an o ff set of about 0 .03 mas /day: a periodic modulation superimposed on a non-zero mean, which is the signature of a genuine secular rate combined with a periodic term, rather than a purely periodic e ff ect. On the right-hand side, the integrated quantities ∆ψ and ∆θ
+
+remain bounded and oscillate around zero over the full 80-year span, reaching maximum amplitudes of 2.73 mas and 1.05 mas respectively — corresponding to equatorial surface displace-ments of about 2.30 cm and 0.87 cm. The free rotation an-gle, by contrast, shows a clear linear secular trend, from about 
+
+−0.56 arcsec to +1.0 arcsec over 1970–2050, corresponding to an additional drift of about 11.7 mas /yr on top of the remaining periodic signature. For Mars, (Baland et al. 2023) estimate that the time-rotation coupling a ff ects also Mars’s rotation angle and rate at up to 167 mas (2.7 m at the surface) and 7.3 mas /day. For Moon and Mars, time-rotation coupling terms are com-parable to current tracking precision; if unmodelled, they could plausibly bias the parameters these data are used to fit, a possi-bility no current decoupled solution has tested. For Mercury and Venus, rotation itself has been studied only within Newtonian dynamics (Noyelles & Lhotka 2013; Etienne, V. et al. 2025; Phan, P.-L. & Rambaux, N. 2025) or, in a relativis-tic spin-orbit model, unvalidated against spacecraft data (Ram-baux & Bois 2004), and not even the time-rotation coupling quantified for the Moon and Mars has been computed for these planets. 
+
+> 7.2. Time scales for lunar and Martian navigation
+
+The application that motivated T empus is the Position, Naviga-tion and Timing (PNT) service, and in particular, the Lunanet 
+
+> Article number, page 8 of 10
+
+Sey ff ert et al.: TEMPUS 
+
+constellation at the Moon (Lunanet Interoperability Specifica-tion for PNT working group 2025) and its ESA Martian coun-terpart MARCONI (Melman et al. 2024), in whose preparatory study T empus was developed. A user derives one-way ranges from the constellation’s clocks, which are kept on a system time traceable to Earth, so an error in the transformation between the body’s coordinate time and TT enters the user’s timing directly, at about 30 cm of range per 1 ns. For the Moon the IAU has defined TCL (IAU XXXII 2024); LunaNet requires every provider to deliver timing synchronised to a standard lunar time, or the corrections needed to reach it (Lunanet Interoperability Specification for PNT working group 2025); and the architectures studied for ESA Lunanet contribu-tion (Moonlight) tie the satellite clocks to the constellation ref-erence at the 1–5 ns level, within a 10 m signal-in-space budget (Iess et al. 2025; Sesta et al. 2025). MARCONI aims to o ff er the same kind of one-way ranging at Mars, with expected accuracies of 15 m for a surface user aided by a digital elevation model, be-low 100 m for a lander and 80 m or better for an orbiter (Melman et al. 2024). The transformation these systems have to undergo is not small. TCL runs slower than TCG by 1 .48 μs per day (from Table 1), with periodic terms of up to 0 .47 μs from the eccentric-ity of the lunar orbit (Turyshev et al. 2025), so a nanosecond is 0.2% of that amplitude; TCM runs faster than TCG by 0 .44 ms per day. Four sources contribute to the error of a computed series, each bounded by one of the comparisons of Sects. 4 and 5, and they span four orders of magnitude. Largest is the truncation of the model itself: the β term of Eq. (1) contributes 1 .1×10 −16 s s −1
+
+(block (a) of Table 3), or 3 .5 ns per year, so a transformation carried only to c−2 with the α contribution only leaves the re-quirement within the year. Next is the completeness of the dy-namical model: with all 373 small bodies of DE440 supplied, Tempus still di ff ers from LTE440 by 1 .6 × 10 −17 s s −1, or 0 .5 ns per year (Table 2), which is the part of DE440’s lunar model that Tempus does not carry. Smaller again is the impact of choosing di ff erent ephemerides, 1 .3–1 .9 × 10 −18 s s −1 for the Moon and up to 2 .4 × 10 −18 for Mars, below 0 .1 ns per year, though with de-trended peaks reaching 1 .7 ns over 200 yr (block (c); Sect. 5.1). The smallest possible error is from T empus numerical inte-gration itself, shown by the comparison with the TU Dresden solution: both use the same INPOP19a ephemerides on the same body set, so only their implementations di ff er by at most 6 .9 ps for TCL and 5 .0 ps for TCM (Table 1) for the peak di ff erence. Therefore, against 1–5 ns, only the lunar dynamical model, at half a nanosecond per year, is relevant for how long a computed series stays inside the requirement. The distinction between the drift and the max peaks of the residual, properties given in all Tables, matters here: a drift is in part absorbed by the periodic re-synchronisation such a system can perform, whereas the residual peaks are not. A constellation time scale should in any case be computed from the same ephemerides that produce its satellite orbits. Then there is no mismatch between the two, and the com-pleteness of the dynamical model is left as the term to improve. 
+
+8. Conclusions 
+
+With T empus we provide a validated, ephemeris-agnostic im-plementation of the IAU 2000 time transformation, Eq. (1), for any solar-system body at its center of mass. TCX −TCB is inte-grated numerically from any available ephemerides (INPOP, DE or EPM) in their TDB or TCB releases, with dynamical model-ing scalable by the user, and is tabulated against the time scale of that ephemerides or, as the TU Dresden time solutions do (Klioner 2021), against TCX itself (Sect. 3.2), written directly or as a Chebyshev polynomial product. Every run is reproducible from a single command line. The implementation of Eq. (1) has been validated against the TU Dresden time solutions (Klioner 2021) and the TCG −TCB solution distributed with INPOP19a: over a 200 yr span the drifts agree at the 10 −21 s s −1 level and the detrended residuals stay be-low 25 ps (Tables 1 and 2), far below the accuracy of any current atomic clock. The comparison with LTE440 is limited instead by the remaining di ff erence in the lunar dynamical model, not by the integration of Eq. (1) itself. The five largest main-belt asteroids account for some 60% of the 4 .3–4 .7 × 10 −18 s s −1 by which the full main belt shifts TCX −TCB for the Earth, Mars and the Moon; the trans-Neptunian objects add a further 2–3 × 10 −18 ; and the choice of ephemerides contributes up to 2 .4 × 10 −18 .A body time scale is therefore only as good as its consistency with the ephemerides and body set that produced the trajectories it serves, and T empus makes that consistency a matter of passing the correct mass and trajectory files. Tempus has already been used for the ILuRS2026 lunar prod-ucts and in ESA’s MARCONI study. Against the nanosecond synchronisation that lunar and Martian navigation constellations require, neither our implementation of the numerical integra-tion nor the choice of input ephemerides is the limiting term; the completeness of the dynamical model is. It also supplies the time argument in which planetary rotation must be modelled (see Sec. 7.1). The T empus software will be made available as open source. Natural future extensions would be the introduction of the per-turbations induced by a ring, support and tests of natural satel-lite ephemerides with the parent planet’s oblateness for bodies such as Ganymede and Titan, and a surface time output option referred to a chosen geoid value.  
+
+> Acknowledgements. This work was carried in the context of the ESA study “Fun-damental Techniques, Models and Algorithms for a Mars Radio Navigation Sys-tem”, contract No. 4000149060 /25 /NL /AT.
+
+References 
+
+> Archinal, B. A., Acton, C. H., A’Hearn, M. F., et al. 2018, Celestial Mechanics and Dynamical Astronomy, 130, 22 Baland, R.-M., Hees, A., Yseboodt, M., Bourgoin, A., & Le Maistre, S. 2023, Astronomy & Astrophysics, 670, A29 Etienne, V., Boué, G., & Ragazzo, C. 2025, A&A, 700, A121 Fienga, A. 2026, in Proceedings of REFAG 2026, International Association of Geodesy Symposia (Springer Nature), on behalf of the IAG /IAU Joint Work-ing Group 1.1.3 “Lunar Reference Frames” Fienga, A., Deram, P., Di Ruscio, A., et al. 2021a, Notes Scientifiques et Tech-niques de l’Institut de Mecanique Celeste, 110 Fienga, A., Deram, P., Di Ruscio, A., et al. 2021b, Notes Scientifiques et Tech-niques de l’Institut de Mecanique Celeste, 110 Fienga, A., Deram, P., Viswanathan, V., et al. 2019, Notes Scientifiques et Tech-niques de l’Institut de Mécanique Celeste, 109 Fienga, A. & Minazzoli, O. 2024, Living Reviews in Relativity, 32, 2 Folkner, W. M., Williams, J. G., Boggs, D. H., Park, R. S., & Kuchynka, P. 2014, Interplanetary Network Progress Report, 196, 1 Gastineau, M., Laskar, J., Manche, H., & Fienga, A. 2015, CALCEPH: Plane-tary ephemeris files access code, Astrophysics Source Code Library, record ascl:1505.001 IAU XXXII . 2024, in General Assembly, resolution II Iess, L., Di Benedetto, M., Boscagli, G., et al. 2025, Navigation Klioner, S. A. 2021, Time Ephemerides based on INPOP19a, TU Dresden, online resource, chebyshev coe ffi cient files for TCG–TCB, TCL–TCB, TCM–TCB computed with INPOP19a; persistent copy at doi:10.5281 /zenodo.17691611; described in Klioner (2026); accessed 2024 Klioner, S. A. 2026, arXiv e-prints, arXiv:2604.16006, prepared for the Proceed-ings of IAU Symposium 401
+
+Article number, page 9 of 10 A&A proofs: manuscript no. main 
+
+Klioner, S. A., So ff el, M., & Xu, C. 2003, Physical Review D, 68, 044015 Kopeikin, S. M. & Kaplan, G. H. 2024, Physical Review D, 110 Lu, X., Yang, T.-N., & Xie, Y. 2025, A&A, 704, A76 Lunanet Interoperability Specification for PNT working group. 2025, LunaNet Interoperability Specification Document – Version 5, https: // www.nasa.gov /wp-content /uploads /2025 /02 /lunanet-interoperability-specification-v5-baseline.pdf Melman, F. T., Audet, Y., Molli, S., et al. 2024, in IAF Space Communications and Navigation Symposium, 75th International Astronautical Congress, Mi-lan, Italy, 35–49, iAC-24,B2,1,5,x84823 Noyelles, B. & Lhotka, C. 2013, Advances in Space Research, 52, 2085 Park, R. S., Folkner, W. M., Williams, J. G., & Boggs, D. H. 2021, AJ, 161, 105 Pavlov, D. A., Williams, J. G., & Suvorkin, V. V. 2016, Celestial Mechanics and Dynamical Astronomy, 126, 61 Petit, G. & Luzum, B. 2010, IERS Technical Note, 36, 1 Phan, P.-L. & Rambaux, N. 2025, A&A, 699, A65 Pitjeva, E., Pavlov, D., Aksim, D., & Kan, M. 2022, in IAU Symposium, Vol. 364, Multi-Scale (Time and Mass) Dynamics of Space Objects, ed. A. Cel-letti, C. Gale¸ s, C. Beaugé, & A. Lemaître, 220–225 Pitjeva, E. V. & Pitjev, N. P. 2014, Proceedings of the International Astronomical Union, 9, 321 Rambaux, N. & Bois, E. 2004, Astronomy & Astrophysics, 413, 381 Rambaux, N., Fienga, A., Sey ff ert, Y., et al. 2026, A&A, 705, A88 Sesta, A., Durante, D., Boscagli, G., et al. 2025, NAVIGATION: Journal of the Institute of Navigation, 72 So ff el, M., Klioner, S. A., Petit, G., et al. 2003, Astronomical Journal, 126, 2686 Turyshev, S. G., Williams, J. G., Boggs, D. H., & Park, R. S. 2025, ApJ, 985, 140 Viswanathan, V. 2017, Theses, Université Paris sciences et lettres 
+
+Article number, page 10 of 10

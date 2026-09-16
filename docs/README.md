@@ -6,30 +6,35 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-09-15
-- 运行时间：2026-09-15 22:17:51 UTC
+- 最新运行日期：2026-09-16
+- 运行时间：2026-09-16 21:50:18 UTC
 - 运行状态：成功
-- 本次总论文数：3
-- 精读区：0
-- 速读区：3
+- 本次总论文数：5
+- 精读区：1
+- 速读区：4
 
 ### 今日简报（AI）
-今日筛选出3篇航天器相关速读论文，聚焦相对导航、AI位姿估计与追逃博弈。三篇均获6.0分，其中基于距离与方位测量的等变滤波相对导航、圆/椭圆轨道上的凸追逃博弈最值得关注。建议普通读者优先了解前者的导航滤波思路，并留意AI位姿估计测试床的后续验证进展。
-- 详情：[/202609/15/README](/202609/15/README)
+2026-09-16 日报完成5篇论文筛选，精读1篇、速读4篇，重点聚焦航天器相对导航与小天体引力场建模。最值得看的是精读8.0分的等变滤波器方案，用距离与方位测量提升航天器非线性相对导航精度；速读中神经哈密顿ODE学习小天体引力场不规则性也值得关注。普通读者可先读精读摘要，若对深空自主导航感兴趣，再顺带浏览速读中的引力场建模思路。
+- 详情：[/202609/16/README](/202609/16/README)
 
 ### 精读区论文标签
-- 本次无精读推荐。
+1. [An Equivariant Filter for Spacecraft Nonlinear Relative Navigation with Range and Bearing Measurements](/202609/16/2609.13094v1-an-equivariant-filter-for-spacecraft-nonlinear-relative-navigation-with-range-and-bearing-measurements)  
+   标签：评分：8.0/10、query:cislunar-dyn-nav
+   evidence：面向空间接近操作，用距离和方位量测的等变滤波器进行非线性相对导航
 
 ### 速读区论文标签
-1. [An Equivariant Filter for Spacecraft Nonlinear Relative Navigation with Range and Bearing Measurements](/202609/15/2609.13094v1-an-equivariant-filter-for-spacecraft-nonlinear-relative-navigation-with-range-and-bearing-measurements)  
+1. [TEMPUS: Relativistic coordinate time scales for any solar-system body from arbitrary ephemerides](/202609/16/2609.08979v1-tempus-relativistic-coordinate-time-scales-for-any-solar-system-body-from-arbitrary-ephemerides)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：面向空间接近操作与自主交会的航天器相对导航
-2. [DreamSat-Bench: Development and Initial Testing of a Testbed for AI-Based Pose Estimation from 3D Reconstruction](/202609/15/2609.14183v1-dreamsat-bench-development-and-initial-testing-of-a-testbed-for-ai-based-pose-estimation-from-3d-reconstruction)  
+   evidence：为太阳系天体提供相对论坐标时间尺度，支撑深空导航授时
+2. [Platonic constellations of periodic motions in the $(n + 1)$-body problem](/202609/16/2609.10242v1-platonic-constellations-of-periodic-motions-in-the-n--1-body-problem)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：交会与近距操作中AI相对导航的测试平台
-3. [Convex Pursuit-Evasion Games for Spacecraft Proximity Operations on Circular and Elliptical Orbits](/202609/15/2609.14337v1-convex-pursuit-evasion-games-for-spacecraft-proximity-operations-on-circular-and-elliptical-orbits)  
+   evidence：利用对称性约化求解n体问题周期轨道
+3. [Continuous Learning of Gravity Field Irregularities Around Small Bodies via Neural Hamiltonian ODEs](/202609/16/2609.12022v1-continuous-learning-of-gravity-field-irregularities-around-small-bodies-via-neural-hamiltonian-odes)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：圆与椭圆轨道航天器接近操作博弈及可达集证书
+   evidence：从小天体跟踪数据学习未知引力动力学，服务接近段导航
+4. [Unified Constrained Geometric Configuration Optimization for Source Localization Systems: A Riemannian Manifold-Based Approach](/202609/16/2609.12670v1-unified-constrained-geometric-configuration-optimization-for-source-localization-systems-a-riemannian-manifold-based-approach)  
+   标签：评分：6.0/10、query:cislunar-dyn-nav
+   evidence：面向TOA/TDOA/RSS/AOA定位的统一传感器几何优化
 
 
 <div class="dpr-home-promo-card">
