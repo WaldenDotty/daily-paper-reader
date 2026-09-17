@@ -6,35 +6,27 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-09-16
-- 运行时间：2026-09-16 21:50:18 UTC
+- 最新运行日期：2026-09-17
+- 运行时间：2026-09-17 22:22:38 UTC
 - 运行状态：成功
-- 本次总论文数：5
-- 精读区：1
-- 速读区：4
+- 本次总论文数：2
+- 精读区：0
+- 速读区：2
 
 ### 今日简报（AI）
-2026-09-16 日报完成5篇论文筛选，精读1篇、速读4篇，重点聚焦航天器相对导航与小天体引力场建模。最值得看的是精读8.0分的等变滤波器方案，用距离与方位测量提升航天器非线性相对导航精度；速读中神经哈密顿ODE学习小天体引力场不规则性也值得关注。普通读者可先读精读摘要，若对深空自主导航感兴趣，再顺带浏览速读中的引力场建模思路。
-- 详情：[/202609/16/README](/202609/16/README)
+今日速读两篇航天导航与AI测试平台论文，聚焦空间相对导航与3D重建姿态估计。最值得看的是7.0分的航天器非线性相对导航等变滤波器，以及6.0分的DreamSat-Bench AI姿态估计测试台。普通读者可关注等变滤波在测距测向导航中的实用价值，并留意AI姿态估计评测标准的后续进展。
+- 详情：[/202609/17/README](/202609/17/README)
 
 ### 精读区论文标签
-1. [An Equivariant Filter for Spacecraft Nonlinear Relative Navigation with Range and Bearing Measurements](/202609/16/2609.13094v1-an-equivariant-filter-for-spacecraft-nonlinear-relative-navigation-with-range-and-bearing-measurements)  
-   标签：评分：8.0/10、query:cislunar-dyn-nav
-   evidence：面向空间接近操作，用距离和方位量测的等变滤波器进行非线性相对导航
+- 本次无精读推荐。
 
 ### 速读区论文标签
-1. [TEMPUS: Relativistic coordinate time scales for any solar-system body from arbitrary ephemerides](/202609/16/2609.08979v1-tempus-relativistic-coordinate-time-scales-for-any-solar-system-body-from-arbitrary-ephemerides)  
+1. [An Equivariant Filter for Spacecraft Nonlinear Relative Navigation with Range and Bearing Measurements](/202609/17/2609.13094v1-an-equivariant-filter-for-spacecraft-nonlinear-relative-navigation-with-range-and-bearing-measurements)  
+   标签：评分：7.0/10、query:cislunar-dyn-nav
+   evidence：面向空间抵近操作的航天器相对导航等变滤波器
+2. [DreamSat-Bench: Development and Initial Testing of a Testbed for AI-Based Pose Estimation from 3D Reconstruction](/202609/17/2609.14183v1-dreamsat-bench-development-and-initial-testing-of-a-testbed-for-ai-based-pose-estimation-from-3d-reconstruction)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：为太阳系天体提供相对论坐标时间尺度，支撑深空导航授时
-2. [Platonic constellations of periodic motions in the $(n + 1)$-body problem](/202609/16/2609.10242v1-platonic-constellations-of-periodic-motions-in-the-n--1-body-problem)  
-   标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：利用对称性约化求解n体问题周期轨道
-3. [Continuous Learning of Gravity Field Irregularities Around Small Bodies via Neural Hamiltonian ODEs](/202609/16/2609.12022v1-continuous-learning-of-gravity-field-irregularities-around-small-bodies-via-neural-hamiltonian-odes)  
-   标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：从小天体跟踪数据学习未知引力动力学，服务接近段导航
-4. [Unified Constrained Geometric Configuration Optimization for Source Localization Systems: A Riemannian Manifold-Based Approach](/202609/16/2609.12670v1-unified-constrained-geometric-configuration-optimization-for-source-localization-systems-a-riemannian-manifold-based-approach)  
-   标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：面向TOA/TDOA/RSS/AOA定位的统一传感器几何优化
+   evidence：交会与接近操作相对导航测试平台
 
 
 <div class="dpr-home-promo-card">
