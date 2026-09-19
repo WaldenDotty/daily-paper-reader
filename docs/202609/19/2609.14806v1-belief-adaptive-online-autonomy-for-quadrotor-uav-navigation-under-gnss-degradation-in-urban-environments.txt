@@ -1,0 +1,526 @@
+Title: Belief-Adaptive Online Autonomy for Quadrotor UAV Navigation under GNSS Degradation in Urban Environments
+
+URL Source: https://arxiv.org/pdf/2609.14806v1
+
+Published Time: Tue, 15 Sep 2026 01:40:29 GMT
+
+Number of Pages: 7
+
+Markdown Content:
+# Belief-Adaptive Online Autonomy for Quadrotor UAV Navigation under GNSS Degradation in Urban Environments 
+
+Deepak Kumar Panda 1 and Weisi Guo 1
+
+Abstract — Reliable online autonomy is critical for quadrotor operation in urban airspaces, where global navigation satellite systems (GNSS) measurements suffer from multipath, block-age, and latency issues, introducing non-stationary, temporally correlated errors that degrade conventional GNSS–IMU fusion. This paper presents a belief-adaptive online autonomy frame-work that augments an extended Kalman filter (EKF) with ex-plicit GNSS trust modelling, second-order online belief adapta-tion, and latency-aware out-of-sequence measurement handling. GNSS trust is represented as a latent belief state that modulates measurement weighting and multipath bias uncertainty, and is updated online using EKF consistency signals. Unlike reactive covariance tuning, the proposed approach enables proactive and stable sensor trust adaptation without prior environmental knowledge or offline training. Evaluation in simulated urban air mobility scenarios with correlated multipath, stochastic latency, and obstacle constraints demonstrates improved belief convergence, smoother trajectories, and reduced estimation and tracking errors compared to naive, adaptive, and first-order baselines. The framework preserves classical GNSS-IMU fusion structure and can be integrated directly into existing flight-control pipelines, supporting robust online autonomy in GNSS-degraded environments. 
+
+I. INTRODUCTION Urban air mobility (UAM) places stringent requirements on the navigation reliability of quadrotor unmanned aerial vehicles (UAVs) operating in dense urban airspaces [1]. Quadrotors, navigating in an integrated airspace, must main-tain accurate and resilient positioning while flying close to urban infrastructures [2]. Global navigation satellite systems (GNSS) remain the primary source of position, navigation, and timing (PNT) information for quadrotor flight control [3, 4], offering high accuracy under open-sky conditions. How-ever, in urban environments GNSS performance degrades due to signal blockage, multipath reflections [5], interference, and latency [6]. These effects introduce non-line-of-sight propagation and non-stationary errors [7] that violate the assumptions of conventional navigation filters and pose a major challenge for reliable UAM autonomy. To improve robustness, GNSS is commonly fused with inertial measurement units (IMUs) in loosely or tightly cou-pled architectures [3, 8, 9]. IMUs provide high-rate motion information that enables quadrotors to bridge short GNSS outages and maintain smooth state estimates. However, IMU-only dead reckoning accumulates bias and scale-factor errors,                
+
+> *The work is supported by EPSRC CHEDDAR: Communications Hub for Empowering Distributed clouD computing Applications and Research (EP/X040518/1) (EP/Y037421/1) and Royal Academy of Engineering UKIC Fellowship
+> 1The authors are with Centre for Connected and Assured Auton-omy, Cranfield University, Bedford MK43 0AL
+
+Deepak.Panda, Weisi.Guo @cranfield.ac.uk 
+
+making periodic GNSS correction essential for long-term ac-curacy. As a result, GNSS–IMU fusion remains the baseline navigation architecture for quadrotor UAM platforms. The performance of GNSS–IMU fusion is dependent on the underlying estimation algorithms like Extended Kalman filters (EKF) [10] and unscented Kalman filters [11], which perform approximate Bayesian inference under assumed process and measurement noise distribution. In urban en-vironments, GNSS errors vary abruptly due to multipath, blockage, and latency [12], yet are often modeled using fixed or slowly tuned covariances. This assumption of static sensor reliability can lead to position estimation errors that may compromise mission safety under unpredictable GNSS conditions. Adaptive filtering approaches have been proposed to mit-igate non-stationary GNSS errors, including innovation and residual-based covariance tuning [13], redundant noise esti-mation [14], variational Bayesian filtering [15], and robust heavy-tailed formulations [16]. Despite their differences, these methods share a common structural assumption that sensor reliability is inferred reactively from innovation or residual statistics at the current time step, while not capturing the measurement degradation explicitly. However, in urban GNSS environments these assumptions break down, as mul-tipath effects, signal blockages and latencies generate abrupt, geometry-dependent, and temporally correlated errors. As a result, innovation-based covariance adaptation often re-sponds only after large errors have already corrupted the state estimate, leading to delayed recovery and inconsistent estimator confidence. Redundant noise estimation and vari-ational Bayesian methods [14, 15] assume local stationarity, limiting adaptation to rapidly varying GNSS degradation. Heavy-tailed filters [16] mitigate isolated outliers but struggle with persistent multipath bias and delayed measurements that break temporal alignment assumptions. More importantly, these methods lack an explicit mechanism to represent and adapt measurement trust over time, preventing sustained modulation of filter behavior. Machine-learning-based nav-igation methods have also been explored to model nonlinear and context-dependent GNSS errors [17, 18]. While effec-tive in specific settings, such approaches introduce training dependence, additional computational overhead, and sensi-tivity to out-of-distribution conditions, posing challenges to quadrotor autonomy in UAM. Collectively, these limitations motivate lightweight online adaptation mechanisms that pre-serve the structure and interpretability of classical estimation pipelines, while enabling proactive adjustment of sensor trust under non-stationary urban GNSS degradation. arXiv:2609.14806v1 [cs.RO] 13 Sep 2026 In this paper, a second-order online belief-adaptive EKF is proposed for quadrotor navigation under GNSS degra-dation. The framework represents GNSS reliability as an explicit latent belief state that governs both measurement weighting and multipath-bias dynamics, and updates this belief online using a curvature-aware adaptation rule driven by filter consistency signals. Unlike conventional adaptive filters that adjust sensor confidence only after large residuals have occurred, the proposed approach proactively modulates GNSS trust, yielding improved performance under non-stationary conditions. In contrast to ML-based sensor fusion techniques, the proposed online learning mechanism operates without offline training on environment-specific data [17, 19], enabling data-efficient, and robust adaptation suitable for UAM operations. In addition, a latency-aware out-of-sequence update mechanism, similar to the approach in [6], is integrated to retroactively correct delayed measurements and re-propagate state estimates, ensuring temporally consistent GNSS–IMU fusion in the presence of measurement latency. This paper does not propose a new planner, controller or GNSS degradation model; they serve as a controlled ex-perimental environment to isolate and evaluate the effect of second-order belief adaptation within the estimation layer. This paper contributes only to the estimator adaptation layer; all other modules remain fixed across comparisons. The paper contributions can be summarized as follows:  
+
+> •
+
+Curvature-Aware Second-order Online Belief Adap-tation for GNSS Trust Modulation: We introduce a dual-timescale second-order online Newton update that explicitly models GNSS reliability as a latent belief state governing both measurement covariance and bias process dynamics. Unlike innovation-based covariance tuning, the proposed mechanism adapts trust proactively using curvature information, yielding improved dynamic navigation under non-stationary degradation.  
+
+> •
+
+Evaluation in Urban Air Mobility Environments: 
+
+The framework is evaluated in a sample urban air mo-bility simulation framework with geometry-dependent multipath bias and correlated latency, while comparing against vanilla EKF, non-belief aware adaptive EKF with ablation study comparison with first-order meth-ods. II. Q UADROTOR NAVIGATION SYSTEM 
+
+Figure 1 illustrates an integrated closed-loop architec-ture for autonomous point-to-point UAV navigation in ur-ban environment. The quadrotor follows standard nonlinear rigid-body dynamics [20] with a cascaded position-attitude controller. The mission objectives and obstacle informa-tion in the urban airspace environment are processed by a global mission planner to generate a sequence of way-points p1, · · · , pN and subsequently minimum jerk reference trajectory pref . This reference trajectory is tracked by a cascaded position–attitude controller, which computes low-level control commands using the feedback of the estimated states from EKF. In parallel, a predictor–corrector state estimator as, a part of EKF, fuses high-rate IMU data with GNSS measurements z j from navigation satellites to estimate the quadrotor position ˆ xk, and the resulting estimated position is fed back to the controller to enable accurate and robust trajectory tracking under sensing uncertainty. 
+
+A. Global Path Planning in Urban Environment 
+
+The operational environment is represented as a 2D binary occupancy grid G ⊂ Z2, where buildings are modeled as axis-aligned rectangular obstacles, consistent with urban GIS abstractions and voxelized city maps. Obstacle clearance is quantified using an Euclidean distance transform (EDT) and incorporated directly into the global planning cost. 
+
+dobs (c) = min 
+
+> c′∈O
+
+∥c − c′∥2, (1) where O denotes the set of occupied cells due to obstacles. Modified A* is used as a global planner on the grid repre-senting urban environment, while considering the curvature-aware costs that affect downstream quadrotor trajectory tracking. Total evaluation function for the global planner is defined as, 
+
+f (n) = g (n) + h (n) , (2) where g (n) is the accumulated path cost, and h (n) is the admissible heuristic. The path cost at node nk, g (nk),depends on the previous cost g (nk−1) and the incremental cost ginc (·).The criteria for expanding from node nk−1 to nk
+
+considers the:  
+
+> •
+
+Traversal cost enforcing path length minimization 
+
+gtra inc (·). 
+
+> •
+
+Regularization cost which discourages aggressive turns that are dynamically infeasible for quadrotors gturn inc (·). 
+
+> •
+
+Clearance cost representing the distance from the near-est obstacle gclr inc (·).Hence, the total accumulated path cost for the quadrotor tracking is given by: 
+
+f (n) = wtra · gtra inc (·) + wturn · gturn inc (·) + wclr · gclr inc (·) + h (n) .
+
+(3) The heuristic h (n) is chosen as the Euclidean distance to the goal, given by, h(n) = ∥pn − pgoal ∥2. After solving the given global planning algorithm resulting plan is a sequence of waypoints given by 
+
+P = pwp 0 , pwp 1 , · · · , pwp  
+
+> N
+
+. (4) Based on the waypoints obtained in (4), the next task is for the quadrotor control system to track the straight line, based on the reference trajectory generated as given in the next subsection. 
+
+B. Reference Trajectory Generation 
+
+Based on the discrete sequence of the waypoints given in (4), a time-parametrized minimum-jerk trajectory is gener-ated between each consecutive waypoint pair  pwp  
+
+> i
+
+, pwp 
+
+> i+1
+
+ .
+
+For each segment, motion is parameterized over a fixed horizon Ti using a normalized time variable ˜ s = t/Ti, ˜s ∈
+
+[0, 1]. The position trajectory is defined as, 
+
+p ( ˜s) = ( 1 − α ( ˜s)) pi + α ( ˜s) pi+1, (5) Airspace Environment Obstacle Information Mission Objectives P2P navigation   
+
+> Navigation Satellites
+> Position
+> Controller Attitude Controller
+> Cascaded Controller Predictor Corrector State Estimator Mission Planner Reference Trajectory Global Planner IMU Fig. 1. Overview of the closed-loop mission planning, estimation, and control architecture for autonomous UAV navigation.
+
+where α ( ˜s) = 10 ˜ s3 − 15 ˜ s4 + 6 ˜ s5 is classical minimum-jerk polynomial. Similarly, reference velocity and acceleration can be obtained by differentiating the position trajectory given in (5) accordingly. The reference trajectories ensure smooth continuity with bounded acceleration and no jerk discontinuities. 
+
+C. Quadrotor Dynamics 
+
+We consider a rigid body quadrotor operating at low altitude in an urban environment. The full state vector is defined as per [20], 
+
+s = [ x, y, z, vx, vy, vz, ϕ, ϑ , ˜ψ, p, q, r] . (6) Here, (x, y, z) denote inertial-frame position, (vx, vy, vz) repre-sents linear velocity, (ϕ, ϑ , ˜ψ) represent roll, pitch and yaw angles and (p, q, r) represents body-frame angular rates. ˙p = v, ˙v = 1
+
+m ρ(ϕ, ϑ , ˜ψ)
+
+00
+
+T
+
+ −
+
+ 00
+
+gg
+
+ , (7) where m represent the quadrotor mass, T is the total thrust, gg
+
+being the gravitational acceleration and ρ (·) is the rotational matrix from the body to the inertial frame. The rotation matrix ρ in (6) is defined as, 
+
+ρ =
+
+
+
+cψ cθ cψ sθ sφ − sψ cφ cψ sθ cφ + sψ sφ
+
+sψ cθ sψ sθ sφ + cψ cφ sψ sθ cφ − cψ sφ
+
+−sθ cθ sφ cθ cφ
+
+ .
+
+Here, c (·) and s (·) represent cosine and sine functions. 
+
+1) Rotational Dynamics: The rotational dynamics follow rigid-body equations shown as follows ˙ωωω = I−1(τττ − ωωω × (Iωωω)) , (8) where ωωω = [ p, q, r]T , τττ = τϕ , τϑ , τ ˜ψ
+
+T and I is the inertia matrix. Euler angles are propagated via first-order integration of body rates. The full nonlinear quadrotor model is dis-cretized at IMU rate of 200 Hz for simulation and estimation propagation. 
+
+2) Cascaded Control Systems: Trajectory tracking is achieved using a cascaded outer-loop position controller and inner-loop attitude controller, operating on the estimated state provided by the onboard state estimator [20]. The controller-estimator structure ensures system stability in case of laten-cies and data corruption in safety-critical environment similar to [21]. Given the reference trajectory (pref , ˙pref , ¨pref ), the commanded acceleration is computed as, 
+
+acmd = ¨pref + Kp
+
+ pref − ˆp + Kd
+
+  ˙pref − ˆv + Ki
+
+Z  pref − ˆp dt .
+
+(9) where ˆp and ˆv are the estimated position and velocity from EKF, and Kp, Ki, Kd are proportional, integral and derivative gain to track the reference trajectory. To prevent the integrator windup, the integral term is activated when position reference and value is within a given threshold 
+
+∥pref − ˆp∥ < εint . The commanded acceleration vector is mapped to desired roll and pitch angles under the small-angle approximation to generate attitude references provided as follows: 
+
+ϕcmd = − acmd ,y
+
+gg
+
+, ϑcmd = − acmd ,x
+
+gg
+
+. (10) The commanded thrust is provided as Tcmd = m (gg + acmd ,z).The desired yaw angle is held constant or aligned with the heading to minimize the lateral drag. The inner-loop stabilization is achieved via PD control with angular-rate damping. The control torques are provided as 
+
+τϕ = kϕ (ϕcmd − ϕ) − dϕ p,
+
+τϑ = kϑ (ϑcmd − ϑ ) − dϑ q. (11) The cascaded structure ensures time-scale separation, allow-ing the inner loop to stabilize attitude dynamics significantly faster than the outer-loop translational controller. III. O NLINE AUTONOMY FRAMEWORK 
+
+As shown in Fig. 2, the predictor–corrector EKF is aug-mented with a belief-driven adaptation layer that models GNSS reliability in real time. Innovation consistency statis-tics are used to update a scalar belief variable β , which mod-ulates measurement covariance to proactively adjust sensor trust. The update does not increase the EKF state dimension and adds negligible computational overhead, preserving real-time feasibility. A state buffer supports temporally consistent and out-of-sequence measurement handling, ensuring stable closed-loop estimation under GNSS degradation. Navigation Satellites   
+
+> Online Learning Framework Predictor Corrector State Estimator
+> IMU
+> Learning Loss Belief
+> Update State Buffer
+> Fig. 2. Schematic of the belief-adaptive online learning framework for UAV navigation.
+
+A. Extended Kalman Filter 1) Process Model: We consider the EKF maintaining an augmented state-vector xk ≜ pk vk bk
+
+T ∈ R1×9. Here 
+
+xk, vk represent the position and velocity estimate, and bk
+
+represents the estimated bias due to GNSS degradation. The overall process model is given by, 
+
+xk+1 = Fx k + Ba k + wk, (12) with F =
+
+I ∆t I 00 I 00 0 αI
+
+ , B =
+
+ 
+
+> 12
+
+∆t2 I
+
+∆t I0
+
+ . The process noise 
+
+wk is a zero-mean random disturbance capturing unmodelled dynamics, and modelling uncertainty in the propagation step due to potential GNSS degradation here. We consider 
+
+E [wk] = 0, E wTk wk
+
+ = Qk.. We can decompose that as 
+
+Qk =
+
+Qpv 00 Qb(βk)
+
+
+
+Qpv = σ 2
+
+> a
+
+
+
+∆t3
+
+3 I ∆t2
+
+2 I
+
+∆t2
+
+2 I ∆t I
+
+ . (13) Here, Qb (βk) =  1 − α2 σ 2 
+
+> b
+
+(β ) I, with σb (βk) =(1 − βk + εk). Here βk is the belief parameter which has to be adapted thus enabling the estimator to respond quickly to GNSS degradation via covariance matrix Qk
+
+2) Measurement Model: GNSS provides position mea-surement corrupted by multipath bias and latency given by 
+
+ˆzk = pk + bk + νk. If ˆxk|k−1 represents the predicted state from the process model xk, we can compute the normalized innovation square (NIS) from the measurement residuals as, 
+
+yk = zk − H ˆxk|k−1,
+
+Sk = HP k|k−1HT + Rk
+
+NIS k = yTk S−1 
+
+> k
+
+yk
+
+(14) 
+
+B. Online Learning Framework 
+
+Classical adaptive EKFs, adjust measurement covariance reactively from instantaneous innovations, assuming locally informative and weakly correlated residuals, which leads to delayed and unstable trust adaptation under geometry-dependent multipath and latency. To address this, we intro-duce an explicit scalar belief state βk as a structural augmen-tation of the EKF, as per (12), that modulates GNSS trust via covariance adaptation, updated via a curvature-aware second-order online learning. The proposed dual-timescale curvature accumulation approximates an online Newton step for fast, stable, and bounded trust adaptation parametrized by a sigmoid function as follows, 
+
+βk = σ (θk) = 11 + e−θk . (15) In addition to the innovation consistency, abrupt changes in the estimated state may indicate instability caused by corrupted measurements ˜zk. Hence, a hybrid loss function is considered as, 
+
+ℓk = log 
+
+
+
+1 + NIS k
+
+χ20.95 
+
+
+
++ λ ˆpk|k − ˆpk−1|k−1 2 , (16) where the first term penalizes statistical inconsistency and the second discourages rapid fluctuations in the estimated position. The gradient of the loss with respect to θk, using second order Newton methods, is given by: 
+
+∇θ lk = − δ l
+
+δ β βk (1 − βk) , (17) where δ l 
+
+> δ β
+
+is obtained through differentiation of (16) with re-spect to the belief-dependent covariance terms. We maintain two second-moment accumulators of the gradient magnitude: 
+
+Hfast  
+
+> k
+
+= α f Hfast  
+
+> k−1
+
++ ∇θ lk2,
+
+Hslow  
+
+> k
+
+= αsHslow  
+
+> k−1
+
++ ∇θ lk2, (18) where 0 < α f ≪ αs < 1. Here Hfast  
+
+> k
+
+captures short-term curvature, and Hslow  
+
+> k
+
+captures long-term curvature in the loss-function. The effective curvature for learning is a convex combination given as: 
+
+Hk = ω f Hfast  
+
+> k
+
++  1 − ω f
+
+ Hslow  
+
+> k
+
+, ω f ∈ (0, 1) . (19) This dual-timescale design allows the learning process to be both reactive and stable, avoiding oscillations that arise from purely first-order methods. The belief parameter is updated using a damped online Newton-type rule, given as, 
+
+θk+1 = θk − η ∇θ lk
+
+Hk + λreg 
+
+(20) where η is the learning rate and λreg > 0 is a regularization constant preventing excessive updates when curvature is small. Hence updated belief is obtained as: 
+
+βk+1 = σ (θk+1) (21) Now, it is essential to test the proposed online-learning mechanism against the GNSS degradation model which is described in the next section. IV. U RBAN ENVIRONMENT AND GNSS D EGRADATION 
+
+MODEL 
+
+This section defines a controlled degradation environ-ment designed to evaluate the proposed second-order belief adaptation mechanism. The multipath and latency models are simplified, non-physical proxies introduced to induce non-stationary, correlated, and latency-coupled measurement degradation. The model is not intended to reproduce absolute GNSS statistics; rather, it captures the structural conditions under which conventional adaptive filters degrade. The ob-jective is to assess estimator adaptation behavior under con-trolled non-stationarity, not to develop a high-fidelity GNSS propagation model, which is the focus in subsequent follow-up works. In order to model the effects of the GNSS degrada-tion, we consider the quadrotor positions pk = [ xk, yk]T , while computing the minimum Euclidean distance to the nearest obstacle boundary given as, 
+
+dk = min  
+
+> i
+
+d (pk, Oi) , (22) where d (·) represents Euclidean distance. The scalar dk
+
+serves as a geometric proxy for the GNSS signal obstruc-tion, obstacle reflection likelihood, and satellite visibility degradation. The satellite constellation or ray-tracing model is not considered here for analysis. Given the true GNSS observation zk,the multipath-induced bias νk is modelled as a zero-mean measurement noise as it evolves according to the first-order Gauss Markov process [22]: 
+
+bk+1 = κ (dk) bk + wk, wk ∼ N  0, σ 2 
+
+> b
+
+(dk) I , (23) where persistence coefficient κ (dk) and excitation variance 
+
+σ 2 
+
+> b
+
+which depends on the obstacle proximity of the UAV dk.The persistence coefficient is defined as, 
+
+κ (dk) = exp 
+
+
+
+− ∆t
+
+Γ (dk)
+
+
+
+(24) The correlation time coefficient is given as: 
+
+Γ (dk) = 
+
+(
+
+Γcanyon , dk < dnear ,
+
+Γopen , dk ≥ dnear , Γcanyon ≫ Γopen . (25) The excitation variance is scaled as: 
+
+Γb(dk) = 
+
+(
+
+σhigh , dk < dnear ,
+
+σlow , dk ≥ dnear . (26) The given formulation captures spatial dependence and tem-poral persistence aspect of the urban GNSS multipath sig-nals. In addition to multipath bias, GNSS measurement noise increases in urban environments due to reduced visibility and degraded precision. This is modeled by inflating the noise covariance Rk by a factor mk, with mk = rurban >
+
+1 near buildings and mk = 1 otherwise, which represents increased pseudorange uncertainty without satellite geome-try model or signal-to-noise ratios. Urban degradation also introduces time-varying measurement latency due to receiver and tracking effects. The latency Lk is modeled as a distance-dependent stochastic process with dynamics given by: 
+
+Lk+1 = ζ Lk + ( 1 − ζ ) ¯L (dk) + ϒk. (27) Here, ζ ∈ (0, 1) controls the temporal correlation. The geometry-dependent mean latency is defined as, ¯L(dk) = 
+
+(
+
+Lcanyon , dk < dnear ,
+
+Lopen , dk ≥ dnear , Lcanyon ≫ Lopen .
+
+The implementation of online autonomy framework under degraded GNSS measurements and time-varying latency is stated in Algorithm 1. 
+
+Algorithm 1 Second-order belief-adaptive EKF with latency-aware GNSS updates 
+
+Input IMU measurements ak, degraded GNSS measure-ments ˆzk, global waypoints P, process and measurement models ( f , h), learning rates (η, λreg ), curvature parameters 
+
+(α f , αs, ω).
+
+Output Belief-adaptive state estimates ˆ xk. 
+
+> 1:
+
+Initialize state estimate ˆ x0, covariance P0 
+
+> 2:
+
+Initialize belief parameter θ0, belief β0 = σ (θ0) 
+
+> 3:
+
+Initialize curvature accumulators Hfast , Hslow > 0 
+
+> 4:
+
+for each control step k do  
+
+> 5:
+
+ˆxk|k−1 ← f (ˆxk−1|k−1, ak) 
+
+> 6:
+
+Pk|k−1 ← FkPk−1F⊤ 
+
+> k
+
++ ( 1 − α2)σb (βk)2 I 
+
+> 7:
+
+if delayed GNSS measurement zk−d is available then  
+
+> 8:
+
+Innovation y ← zk−d − Hˆxk−d 
+
+> 9:
+
+S ← HP k−d H⊤ + R(βk−d ) 
+
+> 10:
+
+K ← Pk−d H⊤S−1 
+
+> 11:
+
+ˆxk−d ← ˆxk−d + Ky  
+
+> 12:
+
+Pk−d ← (I − KH )Pk−d 
+
+> 13:
+
+Re-propagate EKF forward to time k 
+
+> 14:
+
+Compute NIS ρk ← y⊤S−1y 
+
+> 15:
+
+end if  
+
+> 16:
+
+Compute the online learning loss as per (16)  
+
+> 17:
+
+Obtain the gradient for online belief update as per (17).  
+
+> 18:
+
+Update Hfast and Hslow as per (18) to obtain Hk in (19).  
+
+> 19:
+
+Update the belief parameter as per (20).  
+
+> 20:
+
+Obtain the updated belief parameter βk+1 and update the measurement covariance matrix Qb (βk+1). 
+
+> 21:
+
+end for 
+
+V. R ESULTS AND DISCUSSIONS 
+
+A. Numerical Implementation 
+
+The proposed framework is implemented in Python envi-ronment while simulating the nonlinear quadrotor model as defined in (7) with full translational and rotational dynamics discretized at an IMU rate of 200 Hz ( ∆timu = 0.005 s), while control and GNSS updates are applied at 20 Hz ( ∆tctrl 
+
+= 0.05 s). The quadrotor mass is set to 5 kg with inertia 0.02 , 0.02 , 0.04 kg·m². IMU acceleration noise has standard deviation 0.08 m/s2, while nominal GNSS noise is 0.08 m and inflates to 0.1 m under multipath. GNSS multipath bias follows a first-order Gauss–Markov process with time constant Γmp = 3 s and maximum bias standard deviation 1.2 m, scaled by obstacle proximity. Measurement latency is modeled as a geometry-dependent property with correlation time Γdelay = 2.5 s, noise standard deviation 0.03 s, and maximum delay capped at 1.2 s while inducing out-of-sequence updates. Online belief adaptation uses a sigmoid-parameterized scalar belief updated via a dual-timescale second-order rule with learning rate η = 0.15 and regulariza-tion λreg = 0.1, driven by a hybrid loss combining normalized innovation squared ( χ2 threshold at 95%) and inter-step state variation. Performance is evaluated across multiple urban point-to-point missions and benchmarked against naive EKF, adaptive EKF, by modifying the measurement covariance matrix and first-order belief adaptation baselines. 
+
+B. Simulation results 0 200 400 600 800 1000 
+
+> Time step
+> 0.5 0.6 0.7 0.8 0.9
+> Belief  1st Order Learning 2nd Order Learning
+
+Fig. 3. Comparison of belief adaptation over time for first-order and second-order online learning over 10 mission profiles. Naive EKF 1st-Order Online Learning 2nd-Order Online Learning 
+
+> Planned path Multipath zone True Start End
+
+Fig. 4. Comparison of quadrotor navigation trajectories under GNSS multipath and latency: naive EKF, first-order online learning, and second-order online learning. 
+
+As demonstrated in Figure 3, the belief state for second-order online learning achieves faster convergence to a stable trust level with reduced oscillation amplitude, while for first-order online learning a persistent drift and higher variability is observed. Trajectory comparisons in multipath-affected urban regions (Fig. 4) show that the naive EKF deviates from the planned path, particularly near waypoints located close to obstacles with strong multipath effects. The resulting unmitigated bias leads to degraded tracking of the reference trajectory from the global planner and increases the risk of unsafe navigation in obstacle-dense regions. First-order online learning reduces the overall deviation but exhibits delayed recovery and transient path-tracking errors, indicat-ing limited responsiveness under degraded GNSS conditions. In the second mission, this leads to temporary violations of the planned path, as the controller relies primarily on local gradient information without accounting for global path constraints, as it moves out from the constrained airspace region. In contrast, second-order online learning maintains closer adherence to the planned trajectory and smoother mo-tion through multipath-affected regions, consistently reach-ing the goal without large deviations. These results suggest that curvature-aware second-order belief adaptation provides stable GNSS trust adjustment, leading to improved trajectory tracking and robustness under geometry-dependent multi-path and latency effects. We further analyze the results Naive EKF Adaptive EKF 1st-order OBA 2nd-Order OBA 0.0 0.5 1.0 1.5 2.0 2.5 3.0 
+
+> Tracking Error (m) Tracking Error Distribution Across Algorithms
+
+Fig. 5. Tracking error distribution across classical and adaptive Kalman filter with respect to first and second order online learning methods over 10 mission profiles. Naive EKF Adaptive EKF 1st-Order OBA 2nd-Order OBA 0.0 0.5 1.0 1.5 2.0 2.5 3.0 
+
+> Estimation Error (m) Estimation Error Distribution Across Algorithms
+
+Fig. 6. State estimation error distribution across classical and adaptive Kalman filter with respect to first and second order online learning methods over 10 mission profiles. 
+
+obtained across multiple mission profiles with different start and goal locations in the urban airspace, selected to en-sure convergence of the global planner used to generate the reference waypoints. The improved belief stability of second-order online learning in Fig. 3 directly translates to better innovation stabilization leading to lower position estimation and trajectory tracking errors as shown in Fig. 5 and 6. The naive EKF exhibits the largest median errors and widest interquartile ranges, indicating high sensitivity to multipath bias and delayed measurements that violate its fixed-noise assumptions. The adaptive EKF reduces the median error but shows increased variance and long-tailed error distributions, reflecting reactive covariance tuning that struggles under rapidly changing GNSS conditions. Heavier tails observed in adaptive EKF reflect reactive covariance inflation rather than structured trust adaptation. First-order belief adaptation provides further improvement by explicitly modulating GNSS trust; however, its error distribution re-mains relatively dispersed, suggesting slower or inconsistent adaptation across missions. In contrast, the proposed second-order belief-adaptive method achieves the lowest median estimation with 80% reduction in estimation errors and 30% reduction in tracking errors across 10 mission profiles, demonstrating improved accuracy and consistency across all evaluated trajectories. These results demonstrate that curvature-aware adaptation reduces oscillatory trust updates, stabilizes innovation energy, and yields consistent covariance evolution across missions, even without modifying the un-derlying EKF structure. VI. C ONCLUSION 
+
+This paper presented a belief-adaptive online autonomy framework for quadrotor navigation under GNSS degrada-tion, integrating second-order online learning with a bias-augmented EKF and latency-aware measurement handling. By modeling GNSS reliability as a latent belief and adapt-ing it through curvature-aware updates, the method enables stable sensor trust adjustment under geometry-dependent multipath and latency effects while navigating in urban envi-ronments. Simulation results show consistent improvements over naive and adaptive EKF, and first-order learning in terms of belief convergence, trajectory smoothness, and estimation and tracking accuracy. The framework preserves the struc-ture of classical GNSS–IMU fusion and can be integrated into existing flight-control pipelines without offline training. Future work will focus on validation in real-world flight trials and extensions to multi-vehicle urban operations. REFERENCES 
+
+[1] O. K. Isik, I. Petrunin, and A. Tsourdos, “Machine learning-based environment-aware gnss integrity monitoring for urban air mobility.,” Drones (2504-446X) , vol. 8, no. 11, 2024. [2] D. Fan, K. Guo, S. Lyu, X. Yu, L. Xie, and L. Guo, “Quadrotor uav: Collision resilience behaviors,” IEEE Trans-actions on Aerospace and Electronic Systems , vol. 59, no. 3, pp. 2092–2104, 2022. [3] C. Chi, X. Zhan, S. Wang, and Y. Zhai, “Enabling robust and accurate navigation for uavs using real-time gnss precise point positioning and imu integration,” The Aeronautical Journal , vol. 125, no. 1283, pp. 87–108, 2021. [4] S. A. Negru et al., “Resilient time dissemination fusion framework for uavs for smart cities,” Engineering Proceed-ings , vol. 88, no. 1, p. 5, 2025. [5] P. Geragersian, I. Petrunin, W. Guo, and R. Grech, “Multi-path detection from gnss observables using gated recurrent unit,” in 2022 IEEE/AIAA 41st Digital Avionics Systems Conference (DASC) , IEEE, 2022, pp. 1–7. [6] K. Gamagedara, T. Lee, and M. Snyder, “Quadrotor state estimation with imu and delayed real-time kinematic gps,” 
+
+IEEE transactions on aerospace and electronic systems ,vol. 57, no. 5, pp. 2661–2673, 2021. [7] S. A. Negru, P. Geragersian, I. Petrunin, R. Grech, and G. Buesnel, “Realism-oriented design, verification, and val-idation of novel robust navigation solutions,” Engineering Proceedings , vol. 54, no. 1, p. 57, 2023. [8] F. Qin, X. Zhan, and L. Zhan, “Performance assessment of a low-cost inertial measurement unit based ultra-tight global navigation satellite system/inertial navigation system integration for high dynamic applications,” IET Radar, Sonar & Navigation , vol. 8, no. 7, pp. 828–836, 2014. [9] R. Sun, J. Wang, Q. Cheng, Y. Mao, and W. Y. Ochieng, “A new imu-aided multiple gnss fault detection and exclusion algorithm for integrated navigation in urban environments,” 
+
+GPS Solutions , vol. 25, no. 4, p. 147, 2021. [10] K. Iyer, A. Dey, B. Xu, N. Sharma, and L.-T. Hsu, “En-hancing positioning in gnss denied environments based on an extended kalman filter using past gnss measurements and imu,” IEEE transactions on vehicular technology , vol. 73, no. 6, pp. 7908–7924, 2024. [11] C. Yang, W. Shi, and W. Chen, “Correlational inference-based adaptive unscented kalman filter with application in gnss/imu-integrated navigation,” GPS solutions , vol. 22, no. 4, p. 100, 2018. [12] Z. Gong et al., “Graph-based adaptive fusion of gnss and vio under intermittent gnss-degraded environment,” IEEE Transactions on Instrumentation and Measurement , vol. 70, pp. 1–16, 2020. [13] W. Li, D. Gong, M. Liu, J. Chen, and D. Duan, “Adaptive robust kalman filter for relative navigation using global position system,” IET Radar, Sonar & Navigation , vol. 7, no. 5, pp. 471–479, 2013. [14] Z. Yin, J. Yang, Y. Ma, S. Wang, D. Chai, and H. Cui, “A robust adaptive extended kalman filter based on an improved measurement noise covariance matrix for the monitoring and isolation of abnormal disturbances in gnss/ins vehicle navigation,” Remote Sensing , vol. 15, no. 17, p. 4125, 2023. [15] C. Ma, S. Pan, W. Gao, H. Wang, and L. Liu, “Variational bayesian-based robust adaptive filtering for gnss/ins tightly coupled positioning in urban environments,” Measurement ,vol. 223, p. 113 668, 2023. [16] X. Yu, Z. Qu, and G. Jin, “Robust adaptive filters and smoothers for linear systems with heavy-tailed multiplica-tive/additive noises,” IEEE Transactions on Aerospace and Electronic Systems , vol. 60, no. 5, pp. 6717–6733, 2024. [17] T. E. Tabassum, Z. Xu, I. Petrunin, and Z. A. Rana, “Integrating gru with a kalman filter to enhance visual inertial odometry performance in complex environments,” 
+
+Aerospace , vol. 10, no. 11, p. 923, 2023. [18] P. Geragersian, I. Petrunin, W. Guo, and R. Grech, “An ins/gnss fusion architecture in gnss denied environment using gated recurrent unit,” in AIAA SCITECH 2022 Forum , 2022, p. 1759. [19] D. K. Panda and W. Guo, “Action robust reinforcement learn-ing for air mobility deconfliction against conflict induced spoofing,” IEEE Transactions on Intelligent Transportation Systems , 2024. [20] R. W. Beard and T. W. McLain, Small unmanned aircraft: Theory and practice . Princeton university press, 2012. [21] D. K. Panda, K. Halder, S. Das, and S. Townley, “Observer based decentralized load frequency control with false data injection attack for specified network quality and delay,” 
+
+Chaos, Solitons & Fractals , vol. 186, p. 115 323, 2024. [22] S. Khanafseh et al., “Gnss multipath error modeling for auto-motive applications,” in Proceedings of the 31st international technical meeting of the satellite division of the institute of navigation (ION GNSS+ 2018) , 2018, pp. 1573–1589.
