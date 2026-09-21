@@ -6,22 +6,28 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-09-20
-- 运行时间：2026-09-20 21:05:38 UTC
+- 最新运行日期：2026-09-21
+- 运行时间：2026-09-21 22:42:59 UTC
 - 运行状态：成功
-- 本次总论文数：0
+- 本次总论文数：1
 - 精读区：0
-- 速读区：0
+- 速读区：1
 
 ### 今日简报（AI）
-> 今日无新推荐，系统未产出可展示论文。
-- 详情：[/202609/20/README](/202609/20/README)
+今日仅速读1篇，聚焦DreamSat-Bench——一个面向3D重建的AI姿态估计测试平台。
+
+其核心价值在于为卫星姿态估计提供标准化评测思路，适合关注航天AI与3D视觉交叉方向者了解。
+
+普通读者可先留意“测试平台/基准”类工作，后续再跟进该方向是否有更多实证结果。
+- 详情：[/202609/21/README](/202609/21/README)
 
 ### 精读区论文标签
 - 本次无精读推荐。
 
 ### 速读区论文标签
-- 本次无速读推荐。
+1. [DreamSat-Bench: Development and Initial Testing of a Testbed for AI-Based Pose Estimation from 3D Reconstruction](/202609/21/2609.14183v1-dreamsat-bench-development-and-initial-testing-of-a-testbed-for-ai-based-pose-estimation-from-3d-reconstruction)  
+   标签：评分：6.0/10、query:cislunar-dyn-nav
+   evidence：交会与近距操作试验台，评测AI相对导航
 
 
 <div class="dpr-home-promo-card">
