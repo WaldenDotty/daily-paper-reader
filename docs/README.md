@@ -6,28 +6,26 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-09-21
-- 运行时间：2026-09-21 22:42:59 UTC
+- 最新运行日期：2026-09-22
+- 运行时间：2026-09-22 22:34:20 UTC
 - 运行状态：成功
 - 本次总论文数：1
-- 精读区：0
-- 速读区：1
+- 精读区：1
+- 速读区：0
 
 ### 今日简报（AI）
-今日仅速读1篇，聚焦DreamSat-Bench——一个面向3D重建的AI姿态估计测试平台。
-
-其核心价值在于为卫星姿态估计提供标准化评测思路，适合关注航天AI与3D视觉交叉方向者了解。
-
-普通读者可先留意“测试平台/基准”类工作，后续再跟进该方向是否有更多实证结果。
-- 详情：[/202609/21/README](/202609/21/README)
+2026-09-22 日报：仅精读 1 篇，9.0 分高分论文《Designing 3D transfers: application to Earth-Moon》成为今日唯一焦点。
+最值得看的是三维转移轨道设计方法及其在地月系统中的应用思路，对低能转移与轨道设计感兴趣的读者可重点关注其建模与求解框架。
+普通读者建议先读摘要与地月算例部分，抓住"三维设计相比平面近似带来什么改进"这一主线，再决定是否深入公式推导。
+- 详情：[/202609/22/README](/202609/22/README)
 
 ### 精读区论文标签
-- 本次无精读推荐。
+1. [Designing 3D transfers: application to Earth-Moon](/202609/22/2609.23496v1-designing-3d-transfers-application-to-earth-moon)  
+   标签：评分：9.0/10、query:cislunar-dyn-nav
+   evidence：地月三维转移轨道最优设计与轨迹优化
 
 ### 速读区论文标签
-1. [DreamSat-Bench: Development and Initial Testing of a Testbed for AI-Based Pose Estimation from 3D Reconstruction](/202609/21/2609.14183v1-dreamsat-bench-development-and-initial-testing-of-a-testbed-for-ai-based-pose-estimation-from-3d-reconstruction)  
-   标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：交会与近距操作试验台，评测AI相对导航
+- 本次无速读推荐。
 
 
 <div class="dpr-home-promo-card">

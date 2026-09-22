@@ -1,6 +1,9 @@
 * <a class="dpr-sidebar-root-link" href="#/">首页</a>
 * <a class="dpr-sidebar-root-link dpr-sidebar-noactive-link" href="javascript:void(0)" data-dpr-hash="#/tutorial/README">使用教程</a>
 * Daily Papers
+  * 2026-09-22 <!--dpr-date:20260922-->
+    * 精读区
+      * <a class="dpr-sidebar-item-link dpr-sidebar-item-structured" href="#/202609/22/2609.23496v1-designing-3d-transfers-application-to-earth-moon" data-sidebar-item="{&quot;title&quot;: &quot;Designing 3D transfers: application to Earth-Moon&quot;, &quot;link&quot;: &quot;https://arxiv.org/abs/2609.23496v1-designing-3d-transfers-application-to-earth-moon&quot;, &quot;score&quot;: &quot;9.0&quot;, &quot;tags&quot;: [{&quot;kind&quot;: &quot;query&quot;, &quot;label&quot;: &quot;cislunar-dyn-nav&quot;}], &quot;evidence&quot;: &quot;地月三维转移轨道最优设计与轨迹优化&quot;}">Designing 3D transfers: application to Earth-Moon</a>
   * 2026-09-21 <!--dpr-date:20260921-->
     * 速读区
       * <a class="dpr-sidebar-item-link dpr-sidebar-item-structured" href="#/202609/21/2609.14183v1-dreamsat-bench-development-and-initial-testing-of-a-testbed-for-ai-based-pose-estimation-from-3d-reconstruction" data-sidebar-item="{&quot;title&quot;: &quot;DreamSat-Bench: Development and Initial Testing of a Testbed for AI-Based Pose Estimation from 3D Reconstruction&quot;, &quot;link&quot;: &quot;https://arxiv.org/abs/2609.14183v1-dreamsat-bench-development-and-initial-testing-of-a-testbed-for-ai-based-pose-estimation-from-3d-reconstruction&quot;, &quot;score&quot;: &quot;6.0&quot;, &quot;tags&quot;: [{&quot;kind&quot;: &quot;query&quot;, &quot;label&quot;: &quot;cislunar-dyn-nav&quot;}], &quot;evidence&quot;: &quot;交会与近距操作试验台，评测AI相对导航&quot;}">DreamSat-Bench: Development and Initial Testing of a Testbed for AI-Based Pose Estimation from 3D Reconstruction</a>
