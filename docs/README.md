@@ -6,33 +6,35 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-09-25
-- 运行时间：2026-09-25 22:13:51 UTC
+- 最新运行日期：2026-09-26
+- 运行时间：2026-09-26 21:47:43 UTC
 - 运行状态：成功
-- 本次总论文数：3
+- 本次总论文数：5
 - 精读区：2
-- 速读区：1
+- 速读区：3
 
 ### 今日简报（AI）
-今日精选3篇、精读2篇，聚焦地月空间（Earth-Moon）转移轨道设计与环月轨道相对运动的轨迹优化。
-
-最值得看的是两篇9.0分工作：一篇讲3D转移轨道的设计方法并以地月系统为例，另一篇用Transformer辅助环月轨道相对运动的轨迹优化，代表"航天动力学+学习型方法"的融合方向。
-
-普通读者可先读这两篇精读了解地月任务的轨道设计思路，速读的TDOA传感器配对（6.0分）留作定位跟踪技术背景参考即可。
-- 详情：[/202609/25/README](/202609/25/README)
+今日精选5篇航天论文，精读2篇均达9.0分，聚焦地月空间轨道与相对运动控制。最值得看的是地月3D转移设计与Transformer轨迹优化两个方向，代表当前地月任务智能规划的前沿。普通读者可先关注地月空间开发与自主交会对接这两条主线，后续留意相关任务进展。
+- 详情：[/202609/26/README](/202609/26/README)
 
 ### 精读区论文标签
-1. [Designing 3D transfers: application to Earth-Moon](/202609/25/2609.23496v1-designing-3d-transfers-application-to-earth-moon)  
+1. [Designing 3D transfers: application to Earth-Moon](/202609/26/2609.23496v1-designing-3d-transfers-application-to-earth-moon)  
    标签：评分：9.0/10、query:cislunar-dyn-nav
-   evidence：地月最优三维转移轨道设计
-2. [Transformer-Informed Trajectory Optimization for Relative Motion in Cislunar Orbits](/202609/25/2609.25460v1-transformer-informed-trajectory-optimization-for-relative-motion-in-cislunar-orbits)  
+   evidence：地月三维转移轨道优化设计
+2. [Transformer-Informed Trajectory Optimization for Relative Motion in Cislunar Orbits](/202609/26/2609.25460v1-transformer-informed-trajectory-optimization-for-relative-motion-in-cislunar-orbits)  
    标签：评分：9.0/10、query:cislunar-dyn-nav
-   evidence：地月轨道相对运动轨迹优化，RPOD与近距操作
+   evidence：地月轨道相对运动轨迹优化与交会接近对接
 
 ### 速读区论文标签
-1. [Dynamic Sensor Pairing for TDOA-Based Target Tracking via mixed-integer Second-Order Cone Programming](/202609/25/2609.27343v1-dynamic-sensor-pairing-for-tdoa-based-target-tracking-via-mixed-integer-second-order-cone-programming)  
+1. [Recurrent Convolutional Neural Networks for LiDAR-Based Attitude Initialization of Rotating Spacecraft](/202609/26/2609.24685v1-recurrent-convolutional-neural-networks-for-lidar-based-attitude-initialization-of-rotating-spacecraft)  
+   标签：评分：7.0/10、query:cislunar-dyn-nav
+   evidence：基于LiDAR的自主近距操作姿态估计
+2. [HAT: Hypothesis-Anchored Tracking for Video Monocular Spacecraft Pose Estimation](/202609/26/2609.21597v1-hat-hypothesis-anchored-tracking-for-video-monocular-spacecraft-pose-estimation)  
    标签：评分：6.0/10、query:cislunar-dyn-nav
-   evidence：基于TDOA与FIM的多传感器定位跟踪
+   evidence：面向在轨近距操作的航天器位姿估计与相对导航
+3. [Decentralized Guidance and Control for Rendezvous and Docking with a Tumbling Target using Multiple Servicers](/202609/26/2609.26593v1-decentralized-guidance-and-control-for-rendezvous-and-docking-with-a-tumbling-target-using-multiple-servicers)  
+   标签：评分：6.0/10、query:cislunar-dyn-nav
+   evidence：多服务航天器近距离自主交会对接的分散式6自由度MPC
 
 
 <div class="dpr-home-promo-card">
