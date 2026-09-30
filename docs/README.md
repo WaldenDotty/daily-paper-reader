@@ -6,24 +6,24 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-09-29
-- 运行时间：2026-09-29 23:11:00 UTC
+- 最新运行日期：2026-09-30
+- 运行时间：2026-09-30 23:04:52 UTC
 - 运行状态：成功
 - 本次总论文数：1
-- 精读区：1
-- 速读区：0
+- 精读区：0
+- 速读区：1
 
 ### 今日简报（AI）
-今日精读1篇9.0分论文，聚焦地月轨道相对运动的Transformer轨迹优化。该研究用Transformer为地月空间相对运动轨迹优化提供新思路，值得关注航天器自主导航与智能优化方向。普通读者可留意Transformer在航天任务规划中的落地潜力。
-- 详情：[/202609/29/README](/202609/29/README)
+今日仅速读 1 篇，轨道确定方法 GLSDC 改进研究获 6.0 分，精读为零。该文聚焦 GLSDC 的精细化改进，适合关注航天器定轨算法优化的读者一探。建议普通读者先看结论与改进点，若与自身场景相关再回头补细节。
+- 详情：[/202609/30/README](/202609/30/README)
 
 ### 精读区论文标签
-1. [Transformer-Informed Trajectory Optimization for Relative Motion in Cislunar Orbits](/202609/29/2609.25460v1-transformer-informed-trajectory-optimization-for-relative-motion-in-cislunar-orbits)  
-   标签：评分：9.0/10、query:cislunar-dyn-nav
-   evidence：面向地月轨道相对运动与RPOD的Transformer热启动轨迹优化
+- 本次无精读推荐。
 
 ### 速读区论文标签
-- 本次无速读推荐。
+1. [Refining GLSDC for Orbit Determination](/202609/30/2609.26770v1-refining-glsdc-for-orbit-determination)  
+   标签：评分：6.0/10、query:cislunar-dyn-nav
+   evidence：仅测角轨道确定与兰伯特初始化
 
 
 <div class="dpr-home-promo-card">

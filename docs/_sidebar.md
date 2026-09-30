@@ -1,6 +1,9 @@
 * <a class="dpr-sidebar-root-link" href="#/">首页</a>
 * <a class="dpr-sidebar-root-link dpr-sidebar-noactive-link" href="javascript:void(0)" data-dpr-hash="#/tutorial/README">使用教程</a>
 * Daily Papers
+  * 2026-09-30 <!--dpr-date:20260930-->
+    * 速读区
+      * <a class="dpr-sidebar-item-link dpr-sidebar-item-structured" href="#/202609/30/2609.26770v1-refining-glsdc-for-orbit-determination" data-sidebar-item="{&quot;title&quot;: &quot;Refining GLSDC for Orbit Determination&quot;, &quot;link&quot;: &quot;https://arxiv.org/abs/2609.26770v1-refining-glsdc-for-orbit-determination&quot;, &quot;score&quot;: &quot;6.0&quot;, &quot;tags&quot;: [{&quot;kind&quot;: &quot;query&quot;, &quot;label&quot;: &quot;cislunar-dyn-nav&quot;}], &quot;evidence&quot;: &quot;仅测角轨道确定与兰伯特初始化&quot;}">Refining GLSDC for Orbit Determination</a>
   * 2026-09-29 <!--dpr-date:20260929-->
     * 精读区
       * <a class="dpr-sidebar-item-link dpr-sidebar-item-structured" href="#/202609/29/2609.25460v1-transformer-informed-trajectory-optimization-for-relative-motion-in-cislunar-orbits" data-sidebar-item="{&quot;title&quot;: &quot;Transformer-Informed Trajectory Optimization for Relative Motion in Cislunar Orbits&quot;, &quot;link&quot;: &quot;https://arxiv.org/abs/2609.25460v1-transformer-informed-trajectory-optimization-for-relative-motion-in-cislunar-orbits&quot;, &quot;score&quot;: &quot;9.0&quot;, &quot;tags&quot;: [{&quot;kind&quot;: &quot;query&quot;, &quot;label&quot;: &quot;cislunar-dyn-nav&quot;}], &quot;evidence&quot;: &quot;面向地月轨道相对运动与RPOD的Transformer热启动轨迹优化&quot;}">Transformer-Informed Trajectory Optimization for Relative Motion in Cislunar Orbits</a>
