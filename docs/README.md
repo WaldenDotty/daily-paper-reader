@@ -7,18 +7,16 @@
 
 ## 每次日报
 - 最新运行日期：2026-10-06
-- 运行时间：2026-10-06 00:41:39 UTC
+- 运行时间：2026-10-06 23:28:38 UTC
 - 运行状态：成功
-- 本次总论文数：2
+- 本次总论文数：1
 - 精读区：0
-- 速读区：2
+- 速读区：1
 
 ### 今日简报（AI）
-2026-10-06 日报速读两篇各7.0分：月球表面接收机用GNSS与卫星天底角实现时钟同步，以及用语言模型驱动航天器交会任务与运动规划。
-
-两篇都聚焦航天自主化，一篇解决月面导航授时，一篇让语言模型落地到交会规划，方向互补值得一读。
-
-普通读者可先看OrbitTAMP了解AI如何"听懂"指令做太空任务规划，再对比月面时钟同步看GNSS如何延伸服务到月球。
+今日速读 1 篇、精读 0 篇，聚焦月球表面接收机时钟同步这一冷门但关键的导航课题。
+最值得看的是它把 GNSS 信号与卫星天底角结合，尝试解决月球表面时钟同步难题，评分 7.0。
+普通读者可先关注“月球也能借用地球导航卫星”这一思路，后续留意该方向是否有实测验证或精度数据公开。
 - 详情：[/202610/06/README](/202610/06/README)
 
 ### 精读区论文标签
@@ -27,10 +25,7 @@
 ### 速读区论文标签
 1. [Lunar Surface Receiver Clock Synchronization Using GNSS and Satellite Nadir Angle](/202610/06/2610.01018v1-lunar-surface-receiver-clock-synchronization-using-gnss-and-satellite-nadir-angle)  
    标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：GNSS月球表面定位授时与钟差同步
-2. [OrbitTAMP: Grounding Language Models for Task and Motion Planning in Spacecraft Rendezvous](/202610/06/2610.01093v1-orbittamp-grounding-language-models-for-task-and-motion-planning-in-spacecraft-rendezvous)  
-   标签：评分：7.0/10、query:cislunar-dyn-nav
-   evidence：航天器交会接近操作规划，锚定轨道动力学
+   evidence：面向月球表面的GNSS定位导航授时与接收机钟差同步
 
 
 <div class="dpr-home-promo-card">
