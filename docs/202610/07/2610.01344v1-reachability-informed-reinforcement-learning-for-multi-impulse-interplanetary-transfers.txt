@@ -1,0 +1,1302 @@
+Title: Reachability-Informed Reinforcement Learning for Multi-Impulse Interplanetary Transfers
+
+URL Source: https://arxiv.org/pdf/2610.01344v1
+
+Published Time: Fri, 02 Oct 2026 01:53:37 GMT
+
+Number of Pages: 23
+
+Markdown Content:
+# Reachability-Informed Reinforcement Learning for Multi-Impulse Interplanetary Transfers 
+
+Yashdeep Chaudhary ∗
+
+Faculty of Engineering Waipapa Taumata Rau– University of Auckland Auckland 1010, New Zealand 
+
+Roberto Armellin 
+
+Faculty of Engineering Waipapa Taumata Rau– University of Auckland Auckland 1010, New Zealand 
+
+Harry Holt 
+
+Advanced Concepts Team ESTEC, European Space Agency Noordwijk 2201 AZ The Netherlands 
+
+## Abstract 
+
+Reinforcement learning offers the prospect of a reusable sequential decision-making mechanism for spacecraft trajectory design, motivating policy interfaces that connect learned decisions to the underlying maneuver geometry. This paper develops Reachability Analysis-Informed Reinforcement Learning (RARL) for deterministic multi-impulse interplanetary transfers, placing intermediate waypoint selection at the center of the learned decision process. Local first-order reachability maps bounded velocity perturbations into an ellipsoidal set of next-node positions, within which the policy selects its waypoint. Lambert reconstruction then determines the corresponding maneuver to reach this selected waypoint along a dynamically consistent ballistic arc, coupling learned transfer-geometry selection with classical astrodynamics. A terminal two-impulse reconstruction completes the ren-dezvous, supported by a linear maneuver-demand assessment used for reward shaping. Numerical studies characterize this interface on a two-body Earth–Mars benchmark. Across three independent training runs, RARL achieves a mean maneuver cost of 10.23 km/s, 1.72% above a validated local sequential convex programming reference. Training over dispersed initial states extends policy reuse across a departure family with fixed target state and transfer duration. Each of the three indepen-dently trained multi-state policies completes all 10,000 held-out Monte Carlo departures without impulse-cap violations, compared with a mean feasibility rate of 6.49% for single-state policies. This broader sampled feasibility is accompanied by a 0.61% increase in mean nominal maneuver cost, without further training across departures. These results demonstrate that a reachability-informed de-cision interface supports benchmark-quality trajectory construction and policy reuse across dispersed departure conditions. 
+
+Keywords Interplanetary transfer, Lambert problem, reachability analysis, reinforcement learning, trajectory optimization, spacecraft guidance, multi-impulse transfers. 
+
+## 1 Introduction 
+
+Even in deterministic settings, interplanetary transfers are shaped by nonlinear dynamics, limited maneuver authority, and stringent terminal requirements. In a multi-impulse rendezvous, these requirements couple the allocation of individual maneuvers to the geometry and cost of the complete transfer. Classical indirect optimal-control methods and direct transcription provide established tools for computing such trajectories [1, 2]. Their development also extends to joint trajectory and feedback design under uncertainty [3]. Alongside the design of an individual reference trajectory, mission analysis often requires the assessment of a family of departure conditions. This motivates complementing trajectory optimization with reusable decision mappings that can generate transfers from different initial states without solving the complete optimization problem anew for each departure. Reinforcement learning (RL) offers a means of constructing these mappings by learning a state-to-action policy through simulated interaction [4]. The main attraction is the opportunity to perform policy training offline and reuse the resulting   
+
+> ∗Corresponding author. Email address: yashdeep.chaudhary@auckland.ac.nz (Yashdeep Chaudhary) arXiv:2610.01344v1 [math.OC] 1 Oct 2026
+
+mapping across the conditions for which it has been trained and assessed. Within the broader application of artificial intelligence to spacecraft guidance, dynamics, and control [5], this approach has been explored for interplanetary trajectory design under uncertainty [6, 7] and autonomous cislunar orbit transfers [8]. These applications establish a basis for investigating how learned policies can accommodate variations in transfer conditions while meeting maneuver and terminal requirements. A complementary line of work embeds learning within an established guidance structure. Reinforced Q-laws [9] and Lyapunov controllers for lunar transfers [10] use learned parameters to adapt the underlying guidance law. Reinforced Lyapunov guidance has also been combined with precomputed ballistic capture trajectories for low-thrust cislunar transfers [11]. More recently, chance-constrained RL has been used to augment deterministic reference trajectories with learned feedforward and feedback corrections under sampled uncertainty [12]. These studies illustrate how learning can be assigned a defined role within a physically structured trajectory-design framework. For multi-impulse transfers, a related opportunity is to incorporate the relationship between maneuver authority and attainable transfer geometry directly into the policy’s decision space. This relationship is particularly relevant to rendezvous, where each maneuver changes both the subsequent ballistic arc and the maneuver demand required to meet the terminal state. Classical sensitivity maps and boundary-value solutions already describe aspects of this relationship [13, 14]. They therefore provide a basis for expressing a policy decision in terms of an intermediate target and reconstructing the maneuver required to reach it. The resulting design question is how to give the policy a geometrically meaningful set of next-node targets that reflects the available impulsive authority. Reachability analysis provides a natural basis for this construction by characterizing attainable states under specified dynamics and control bounds. Hamilton–Jacobi formulations describe reachable sets for nonlinear systems and dynamic games [15, 16], while ellipsoidal and zonotopic methods provide geometric representations and approximations of such sets [17, 18]. In astrodynamics, reachable domains have been studied for single-impulse maneuvers [19], tangent impulses subject to trajectory-safety restrictions [20], and ellipsoidal velocity-increment distributions [21]. This set-based view makes the connection between bounded maneuver authority and attainable spacecraft states explicit, providing a geometric description of where the spacecraft can go next. The use of such information in control decisions also connects to a broader literature on constraint satisfaction. Viability theory examines the ability to maintain state constraints over time [22], and verified feedback planning uses regions of attraction to organize admissible motion [23]. In RL, safety has been addressed through both learning objectives and exploration strategies [24]. Reachability-based approaches include iterative reachability estimation for policy optimization [25] and action projection using polynomial zonotopes [26]. The relationship between Hamilton–Jacobi reachability and RL is reviewed by Ganai et al. [27]. Together, these perspectives motivate making control constraints part of the representation used for learned decisions. Building on this viewpoint, this paper develops Reachability Analysis-Informed Reinforcement Learning (RARL) for deterministic multi-impulse interplanetary transfers. The central idea is to organize the learned decisions around intermediate waypoint selection, using local reachability geometry to define the available target set and deterministic astrodynamics to reconstruct the corresponding maneuvers. This places the selection of transfer geometry at the center of the policy’s role while retaining dynamical reconstruction within an explicit physical model. The reachability description remains local, and the feasibility of the resulting nonlinear transfers is assessed empirically. The contributions of this paper are fourfold. First, a reachability-informed action interface is formulated that relates bounded impulsive authority to node-dependent local waypoint sets. Second, a deterministic reconstruction layer connects policy-selected waypoints to nonlinear impulsive arcs, separating geometric decision making from maneuver reconstruction. Third, a terminal two-impulse proxy is formulated to assess the remaining rendezvous maneuver demand relative to the available control authority. Fourth, analytical and numerical studies examine the action mapping, the adequacy of the local reachability approximation, and the interpretation of the terminal proxy. These studies provide evidence for the principal modeling and interface choices in the proposed formulation. The framework is evaluated on a deterministic Earth–Mars benchmark using the problem data of Marmo et al. [28], with a separately computed sequential convex programming (SCP) solution serving as the numerical reference. Evaluation extends from nominal single-state training to a family of initial states induced by launch-time offsets, with the target state and transfer duration held fixed. Three independent training runs are performed for each regime, and the selected policies are assessed on a common held-out set of 10 4 Monte Carlo (MC) departures. Reporting both individual policies and aggregate statistics distinguishes variation across independent training runs from variation across departure states within each policy. This establishes the consistency of the observed performance across the trained policies and quantifies the empirical robustness–cost tradeoff associated with extending policy reuse beyond the nominal departure condition. 2The remainder of the paper is organized as follows. Section 2 defines the deterministic transfer problem, and Section 3 develops the RARL formulation. Section 4 examines the action interface and its supporting approximations. Section 5 presents the Earth–Mars configuration and the single-state and multi-state results. Section 6 concludes the paper. 
+
+## 2 Multi-Impulse Transfer Problem Formulation 
+
+Consider a point-mass spacecraft with inertial position r(t) ∈ R3 and velocity v(t) ∈ R3. Its Cartesian state is 
+
+x(t) = 
+
+r(t)
+
+v(t)
+
+
+
+∈ R6. (1) Between impulsive maneuvers, the spacecraft evolves according to the deterministic dynamics 
+
+˙x(t) = f (x(t)) . (2) Here, f (·) denotes an autonomous deterministic force model. The Earth–Mars case study in Section 5 uses a two-body heliocentric model consistently for propagation and maneuver reconstruction. Let the fixed transfer interval [t0, t f ] be partitioned into N ballistic arcs at the prescribed nodes {tk}Nk=0 , where tN = tf
+
+and ∆tk = tk+1 − tk. The superscripts − and + denote the states immediately before and after an impulse, respectively. At the departure of arc k, an impulsive velocity change ∆vk ∈ R3 is applied such that 
+
+r+ 
+
+> k
+
+= r− 
+
+> k
+
+, v+ 
+
+> k
+
+= v− 
+
+> k
+
++ ∆ vk, k = 0 , . . . , N − 1. (3) Denoting the deterministic flow map over an interval ∆t by P(x, ∆t), each ballistic arc satisfies 
+
+x− 
+
+> k+1
+
+= P x+ 
+
+> k
+
+, ∆tk
+
+ , k = 0 , . . . , N − 1. (4) An additional arrival impulse ∆vN is applied at the final node. It leaves the terminal position unchanged and closes the velocity rendezvous: 
+
+r+ 
+
+> N
+
+= r− 
+
+> N
+
+, v+ 
+
+> N
+
+= v− 
+
+> N
+
++ ∆ vN . (5) For a prescribed initial state x0 and target state xT (tf ) = [ rT 
+
+> T
+
+(tf ), vT 
+
+> T
+
+(tf )] T, the boundary conditions are 
+
+x− 
+
+> 0
+
+= x0, r− 
+
+> N
+
+= rT (tf ), v+ 
+
+> N
+
+= vT (tf ). (6) Each impulse is subject to the same magnitude limit, 
+
+∥∆vk∥2 ≤ ∆Vmax , k = 0 , . . . , N, (7) and the impulsive transfer objective is 
+
+minimize  
+
+> {∆vk}Nk=0
+
+J∆V =
+
+> N
+
+X
+
+> k=0
+
+∥∆vk∥2 , (8) subject to Eqs. (2)–(7). Thus, an N -arc transcription contains N departure impulses and one terminal arrival impulse, giving N + 1 impulse slots in both the objective and feasibility assessment. 
+
+## 3 Reachability Analysis-Informed Reinforcement Learning Methodology 
+
+The proposed RARL framework combines learned waypoint selection with deterministic reconstruction of each transfer segment. At every policy-controlled node, a local state-transition map defines coordinates for the next position under bounded impulsive authority. The policy selects a waypoint in this coordinate system, after which a Lambert solve reconstructs the maneuver and ballistic arc required to reach it. A deterministic terminal solve then completes the position and velocity rendezvous. 
+
+3.1 Moving-Target Representation and Local Sensitivity Map 
+
+Let xT (tf ) denote the prescribed terminal target state. A time-aligned target state at node tk is obtained by propagating the terminal state backward over the remaining interval according to 
+
+xT (tk) = P(xT (tf ), t k − tf ) , k = 0 , . . . , N. (9) 3This moving reference enters the policy observation, while xT (tf ) remains the prescribed terminal target state defined in Section 2. The local action interface follows from the sensitivity of a one-segment coast to a velocity perturbation. Consider the nominal coast from the current pre-impulse state, 
+
+xnom  
+
+> k+1
+
+= P x− 
+
+> k
+
+, ∆tk
+
+ . (10) The state transition matrix (STM) over the same interval is 
+
+Φk = ∂P(x, ∆tk)
+
+∂x x=x−
+
+> k
+
+=
+
+Φrr,k Φrv,k 
+
+Φvr,k Φvv,k 
+
+
+
+. (11) For a purely impulsive perturbation at node k,
+
+δxk =
+
+ 0
+
+δvk
+
+
+
+, δxk+1 ≈ Φkδxk. (12) The first-order position deviation at the next node therefore satisfies 
+
+∆rk+1 = rk+1 − rnom  
+
+> k+1
+
+≈ Φrv,k δvk. (13) Here, δvk denotes a local perturbation used to construct the sensitivity map and the notation ∆vk is reserved for a reconstructed physical maneuver. The matrix Ak = Φrv,k ∈ R3×3 is the local position-from-velocity sensitivity map. Its singular vectors and singular values characterize the directions and amplification with which local velocity perturbations map into next-node position deviations. 
+
+3.2 Reachable-Waypoint Action Interface 
+
+The sensitivity relation defines a waypoint interface once the local velocity perturbation is bounded. Let the closed Euclidean unit ball be B2 = {u ∈ R3 | ∥ u∥2 ≤ 1}. The physical impulse limit remains ∆Vmax , while the linear waypoint interface uses the contracted radius 
+
+∆VRS = ∆ Vmax − g, 0 ≤ g < ∆Vmax , (14) where g is an inner guard. The corresponding first-order next-position set is 
+
+Rlin  
+
+> k
+
+= rnom  
+
+> k+1
+
++ Ak (∆ VRS u) u ∈ B2 . (15) The set Rlin  
+
+> k
+
+is the affine image of B2 under Ak and therefore forms an ellipsoid centered at rnom  
+
+> k+1
+
+. If Ak is rank deficient, this image becomes a degenerate ellipsoid [17, 21]. Its principal directions and semiaxis lengths vary with the current orbital geometry, segment duration and adopted dynamics through Ak. Figure 1 illustrates how the guarded unit-ball coordinate is transformed by Ak into this locally defined waypoint geometry. 
+
+> Guarded Unit-Ball Coordinate
+
+uk, 1
+
+uk, 2 
+
+> δvk= ∆ VRS uk
+> Local Waypoint Set
+
+∆rk+1 ,1
+
+∆rk+1 ,2     
+
+> ∆rk+1 =Ak∆VRS uk
+> Ak=Φrv,k
+> local first-order map
+> Lambert reconstruction follows waypoint selection
+
+Figure 1: Two-dimensional schematic of the local first-order map. The position-from-velocity STM block maps guarded unit-ball coordinates to an ellipsoidal waypoint set centered on the nominal coast position, with orientation and semiaxis lengths set by local segment geometry. 
+
+4The policy produces ak ∈ [−1, 1] 3. After componentwise clipping to this box, the action is mapped radially into B2
+
+according to 
+
+uk =
+
+
+
+0, ∥ak∥2 ≤ ε, 
+
+(min {1, ∥ak∥2})p ak
+
+∥ak∥2
+
+, otherwise , (16) where ε > 0 is a numerical zero threshold and p > 0 is a radial exponent. Values p > 1 shift the represented radius toward the interior, whereas values p < 1 shift it toward the boundary. All experiments reported in this paper use p = 1 .A zero policy action selects the nominal coast position, while actions outside the unit ball are projected radially onto its boundary. The selected waypoint is 
+
+rRS  
+
+> k+1
+
+= rnom  
+
+> k+1
+
++ Ak (∆ VRS uk) . (17) For a fixed spacecraft state and segment duration, Eq. (17) maps uk affinely to the selected waypoint, whereas the preceding radial transformation from the box-constrained policy action ak to uk is generally nonlinear. The guard provides an empirical margin for small nonlinear reconstruction discrepancies observed at the action boundary, and its selection and validation are reported in Sections 4 and 5. However, it does not guarantee that every Lambert-reconstructed impulse satisfies the physical limit ∆Vmax . The first-order set is therefore used as a local decision interface rather than as a nonlinear reachability or recursive-feasibility certificate. 
+
+3.3 Deterministic Segment Reconstruction and Terminal Closure 
+
+For k = 0 , . . . , N − 2, the policy-selected waypoint is realized through a zero-revolution prograde Lambert solve [29] over ∆tk, 
+
+vpro 
+
+> k, dep
+
+, vpro 
+
+> k+1 ,arr
+
+
+
+= Lambert 0,pro 
+
+ rk, rRS 
+
+> k+1
+
+, ∆tk
+
+ . (18) The resulting departure impulse and next pre-impulse state are 
+
+∆vk = vpro  
+
+> k, dep
+
+− v− 
+
+> k
+
+, (19a) 
+
+x− 
+
+> k+1
+
+=
+
+ rRS 
+
+> k+1
+
+vpro 
+
+> k+1 ,arr
+
+
+
+. (19b) This reconstruction makes the selected waypoint dynamically consistent with the adopted two-body model when the Lambert solution exists. Compliance with the physical impulse limit is evaluated separately because membership in the linear set does not guarantee that the Lambert-reconstructed impulse obeys the same limit. The policy controls the first N − 1 transfers. At node N − 1, a zero-revolution Lambert rendezvous closes both terminal position and velocity. The prograde and retrograde branches are evaluated. Let BN −1 ⊆ { pro , retro } contain the branches for which the Lambert solver returns a solution. When this set is nonempty, the branch with the lower total terminal impulse is selected. For b ∈ B N −1,
+
+
+
+v0,b N −1,dep , v0,b N, arr 
+
+
+
+= Lambert 0,b (rN −1,rT (tf ),∆tN −1) , (20a) 
+
+b⋆ = arg min  
+
+> b∈B N−1
+
+
+
+∆v(b)  
+
+> N−12
+
++ ∆v(b) 
+
+> N2
+
+
+
+, (20b) 
+
+∆v(b)  
+
+> N−1
+
+= v0,b N −1,dep − v− 
+
+> N−1
+
+, (20c) 
+
+∆v(b) 
+
+> N
+
+= vT (tf ) − v0,b N, arr . (20d) If BN −1 is empty, the transition is truncated as a terminal Lambert failure. Accordingly, the reconstructed trajectory contains N − 1 intermediate departure impulses and two terminal impulses, consistent with the N + 1 impulse slots defined in Section 2. When the selected terminal solve succeeds, the environment assigns xN = xT (tf ), so the terminal error is zero by construction under the adopted dynamics model rather than through a property learned by the policy or a guarantee under unmodeled dynamics. 53.4 MDP Observation and Reward Construction 
+
+RARL is formulated as a finite-horizon Markov decision process (MDP). At each node, the observation augments the absolute spacecraft state with its position and velocity relative to the moving target in Eq. (9). These relative quantities are expressed in the spacecraft-defined radial-transverse-normal (RTN) frame. The radial direction is aligned with rk,the normal direction is aligned with rk × vk, and the transverse direction completes the right-handed orthonormal triad. Let CI→ RTN (x− 
+
+> k
+
+) denote the corresponding inertial-to-RTN rotation. The target-relative position and velocity differences expressed in this RTN frame are 
+
+∆rRTN  
+
+> k
+
+= CI→ RTN (x− 
+
+> k
+
+)  rT (tk) − r−
+
+> k
+
+ , (21a) 
+
+∆vRTN  
+
+> k
+
+= CI→ RTN (x− 
+
+> k
+
+)  vT (tk) − v−
+
+> k
+
+ . (21b) The 14 -dimensional observation is 
+
+ok = S
+
+
+
+x−
+
+> k
+
+∆rRTN 
+
+> k
+
+∆vRTN 
+
+> k
+
+τk
+
+ρk−1
+
+ , τk = tf − tk
+
+tf − t0
+
+, (22) where S(·) applies fixed componentwise affine scaling and clips the resulting components to [−1, 1] . The previous impulse ratio is 
+
+ρk−1 = ∥∆vk−1∥2
+
+∆Vmax 
+
+, ρ−1 = 0 . (23) Section 5 defines the characteristic units and fixed scaling bounds used in the present implementation. A low-cost two-impulse assessment can be defined at a generic node over the remaining time ∆tk→f = tf − tk. The nominal terminal state and its mismatch from the prescribed target are 
+
+xnom  
+
+> f
+
+= P x− 
+
+> k
+
+, ∆tk→f
+
+ , (24a) 
+
+∆xk→f = xT (tf ) − xnom  
+
+> f
+
+=
+
+∆rk→f
+
+∆vk→f
+
+
+
+. (24b) Over the same remaining interval, let Φk→f denote the STM, partitioned as in Eq. (11). Using the Moore–Penrose pseudoinverse [30, 31], denoted by (·)†, the minimum-norm departure estimate and the corresponding arrival correction are 
+
+∆vlin 1,k = Φ† 
+
+> rv,k →f
+
+∆rk→f , (25a) 
+
+∆vlin 2,k = ∆ vk→f − Φvv,k →f ∆vlin 1,k . (25b) Although Φrv,k →f is square, it may become singular or ill-conditioned for particular orbital geometries and times-to-go. The pseudoinverse, evaluated using the prescribed singular-value cutoff, therefore provides a numerically stable minimum-norm least-squares construction. When the matrix is nonsingular and all its singular values are retained, the pseudoinverse reduces to the ordinary inverse. Since the underlying sensitivity relation is first order, the resulting corrections remain local estimates of the required maneuver authority. Their magnitudes are normalized by ∆Vmax , and the associated one-sided excess is defined by 
+
+η1,k =
+
+∆vlin 1,k 2
+
+∆Vmax 
+
+, (26a) 
+
+η2,k =
+
+∆vlin 2,k 2
+
+∆Vmax 
+
+, (26b) 
+
+ξk = [max {η1,k , η 2,k } − 1] + , (26c) where [z]+ = max {0, z }. The construction can also be evaluated at earlier nodes when an anticipatory learning signal is desired. A value ξk > 0 at such a node does not establish infeasibility of the multi-impulse problem because additional intermediate maneuvers remain available. The present implementation evaluates ξk only at k = N − 1, where the remaining horizon consists of the final segment. At this node, ξN −1 is zero when both estimated corrections remain within ∆Vmax and increases only when either estimate exceeds that limit. The resulting one-sided measure informs 6learning only when the estimated terminal maneuver demand exceeds the available per-impulse authority. Within that authority, candidate terminal solutions remain differentiated by their reconstructed Lambert impulse costs. An alternative full-state least-squares construction is presented in Appendix A. It estimates a single linearized correction from the combined terminal position and velocity mismatch. The two-impulse measure is adopted in the present formulation because its departure-and-arrival structure mirrors the terminal rendezvous reconstruction. The full-state formulation is retained as a complementary diagnostic that may be useful when a single-correction surrogate is preferred. For a unified reward definition, let ∆vk, 1 denote the departure impulse on transition k and let ∆vk, 2 denote the additional arrival impulse on the terminal transition. Define the per-impulse cap exceedance as 
+
+ϵ∆vk,i = ∥∆vk,i ∥2 − ∆Vmax 
+
+ 
+
+> +
+
+, i ∈ { 1, 2}. (27) For a named event E, let 1E equal one when the event occurs and zero otherwise. The terminal-transition indicator 
+
+1{k=N −1} is one only for the final segment. Let EL 
+
+> k
+
+denote failure of the Lambert reconstruction on transition k,whether on an intermediate or terminal segment, and let EU 
+
+> k
+
+denote detection of an unbound two-body state on that transition. The four reward contributions account for reconstructed maneuver expenditure, per-impulse cap exceedance, final-segment proxy shaping and truncation-triggering failures, respectively. The transition reward is decomposed as 
+
+rk = r∆vk + rcap  
+
+> k
+
++ rproxy  
+
+> k
+
++ rfail  
+
+> k
+
+, (28a) 
+
+r∆vk = −λ∆v
+
+ ∥∆vk, 1∥2 + 1{k=N −1} ∥∆vk, 2∥2
+
+ , (28b) 
+
+rcap  
+
+> k
+
+= −λviol 
+
+ ϵ∆vk, 1 + 1{k=N −1}ϵ∆vk, 2
+
+ , (28c) 
+
+rproxy  
+
+> k
+
+= −1{k=N −1}λη ξN −1, (28d) 
+
+rfail  
+
+> k
+
+= −λL1EL 
+
+> k
+
+− λU1EU 
+
+> k
+
+. (28e) The nonnegative weights λ∆v , λviol , λη , λL and λU scale the maneuver, cap-exceedance, proxy, Lambert-failure and unbound-state contributions, respectively. The proxy contribution is active only on the final transition. It vanishes when both linearized correction estimates remain within ∆Vmax and increases in magnitude according to the larger normalized exceedance. Unlike the cap-exceedance contribution, this term depends on the STM-based two-impulse assessment rather than the impulses returned by the terminal Lambert reconstruction. An episode terminates normally after N segments and is truncated if an intermediate or terminal Lambert solve fails or if an unbound two-body state is detected. An impulse-limit exceedance contributes the cap term in Eq. (28) but does not itself truncate the episode. The impulse costs and cap exceedances are evaluated in physical velocity units. The dimensional cap exceedance is related to the impulse-to-limit ratio through 
+
+ϵ∆vk,i = ∆ Vmax 
+
+ ∥∆vk,i ∥2
+
+∆Vmax 
+
+− 1
+
+
+
+> +
+
+. (29) Thus, dimensional and ratio-based penalties impose the same threshold after the associated weight is rescaled. The dimensional form in Eq. (27) is retained so that the maneuver and cap-exceedance terms are both expressed in physical velocity units. This decomposition places maneuver expenditure, impulse-limit exceedance, final-segment proxy shaping and truncating numerical or dynamical failures within a single transition reward. 
+
+3.5 PPO Training Workflow 
+
+The policy πθ (ak | ok) is represented by a stochastic actor–critic model and trained using proximal policy optimization (PPO) [32]. The actor neural network (NN) parameterizes this conditional action distribution, while the critic NN approximates the expected discounted return from ok through the value function Vϕ(ok). Section 5 defines the network dimensions, PPO hyperparameters, rollout budget and checkpoint-selection rules used in the present implementation. Algorithm 1 summarizes the interaction between policy learning and deterministic reconstruction. Here, Nroll denotes the prescribed number of transitions collected in each fixed-length rollout before a PPO update. The generic workflow may stop when the prescribed training budget is exhausted or when a prespecified convergence criterion is satisfied. The reported experiments use the fixed training budgets specified in Section 5. 7Algorithm 1 RARL Rollout and Training Workflow 
+
+Require: x0, xT (tf ), {tk}Nk=0 , ∆Vmax , g, p, P(·, ∆t), Lambert solver, actor and critic NN architectures, reward weights, Nroll and a prespecified stopping criterion 
+
+Ensure: Trained RARL policy π⋆θ 
+
+> 1:
+
+Initialization: Initialize the actor parameters θ, critic parameters ϕ and PPO optimizer  
+
+> 2:
+
+repeat  
+
+> 3:
+
+Rollout collection: Initialize an empty rollout buffer D 
+
+> 4:
+
+while |D| < N roll do  
+
+> 5:
+
+Episode initialization: If required, initialize the episode at x0 with k ← 0 and ρ−1 ← 0 
+
+> 6:
+
+Observation: Evaluate the moving target using Eq. (9) and form ok using Eq. (22)  
+
+> 7:
+
+if k ≤ N − 2 then  
+
+> 8:
+
+Policy query: Sample ak from πθ 
+
+> 9:
+
+Reachability map: Propagate the nominal coast and STM  
+
+> 10:
+
+Action projection: Map ak using Eq. (16)  
+
+> 11:
+
+Reachable-waypoint selection: Construct rRS  
+
+> k+1
+
+using Eq. (17)  
+
+> 12:
+
+Lambert reconstruction: Solve the prograde Lambert reconstruction  
+
+> 13:
+
+State update: If the Lambert reconstruction succeeds, update x− 
+
+> k+1
+
+and ρk. Otherwise, set EL 
+
+> k
+> 14:
+
+else  
+
+> 15:
+
+Terminal closure: Propagate the terminal nominal coast and form the terminal STM  
+
+> 16:
+
+Evaluate ξN −1 using Eq. (26)  
+
+> 17:
+
+Solve the terminal branches using Eq. (20)  
+
+> 18:
+
+If BN −1 is empty, set EL 
+
+> N−1
+
+. Otherwise, assign xN ← xT (tf ) 
+
+> 19:
+
+end if  
+
+> 20:
+
+Failure assessment: Set EU 
+
+> k
+
+if the state is unbound  
+
+> 21:
+
+Reward and transition: Evaluate Eq. (28) and store the transition in D 
+
+> 22:
+
+Episode status: Truncate on EL 
+
+> k
+
+or EU 
+
+> k
+
+, terminate if k = N − 1, and otherwise set k ← k + 1  
+
+> 23:
+
+end while  
+
+> 24:
+
+Policy update: Update θ and ϕ with PPO using D 
+
+> 25:
+
+until budget exhausted or convergence criterion met  
+
+> 26:
+
+return π⋆θ
+
+## 4 Analysis and Validation of the Reachability Interface 
+
+This section analyzes the action mapping, evaluates the accuracy of the local reachability map, and examines the terminal two-impulse proxy as a measure of maneuver demand. The studies use the deterministic Earth–Mars configuration described in Section 5. 
+
+4.1 Action-Mapping Properties 
+
+The cube-to-ball transformation determines how policy actions populate the local waypoint set. Boundedness ensures that the selected point belongs to Rlin  
+
+> k
+
+, while centering, directional behavior, and radial scaling determine how coast, interior, and boundary selections are represented. The centered L2 map in Eq. (16), with p = 1 , is compared with two alternative parameterizations under identical uniform cube inputs. The first alternative is an equal-volume spherical construction. Let qi = ( ai + 1) /2 for i = 1 , 2, 3. The mapped coordinate is 
+
+u =
+
+s√1 − z2 cos ϕs√1 − z2 sin ϕsz 
+
+ ,s = q1/31 ,z = 1 − 2q2,ϕ = 2 πq 3.
+
+(30) Uniform cube inputs produce a uniform distribution in the unit ball, but a = 0 maps to u = [ −2−1/3, 0, 0] T rather than the coast center. The second alternative is the L∞-based radial map, 
+
+u = a
+
+∥a∥2
+
+∥a∥∞, ∥a∥2 > ε, (31) with u = 0 otherwise. Like the centered L2 map, it preserves zero-action centering and the direction of nonzero inputs. Both radial maps therefore retain the angular distribution induced by the cube, while differing in the radius assigned to each input. 8−121 −120 −119   
+
+> x[10 6km]
+> −92.0 −91.2 −90.4
+> y [10 6 km]
+
+Centered L2       
+
+> 0.0 0.5 1.0
+> Normalized radius, r
+> 0.00 0.25 0.50 0.75 1.00
+> P(ru ≥ r)
+> Boundary mass: 47.33%
+> −121 −120 −119
+> x[10 6km]
+
+Equal-volume        
+
+> 0.0 0.5 1.0
+> Normalized radius, r
+> Boundary mass: 0.00%
+> −121 −120 −119
+> x[10 6km]
+
+L∞-inspired         
+
+> 0.0 0.5 1.0
+> Normalized radius, r
+> Boundary mass: 0.00%
+> (a) Waypoint distributions in the common local geometry (b) Radial exceedance probabilities under uniform cube sampling
+> Projected boundary Extreme actions Coast center Zero action Samples (mapping colours) Analytical
+
+Figure 2: Action-mapping comparison for 10 4 uniform cube inputs. (a) Projected waypoints at the initial Earth–Mars node. (b) Radial exceedance probabilities for ru = ∥u∥2. Dashed curves show analytical values, and annotations report empirical boundary probabilities. 
+
+Figure 2 compares 10 4 uniformly sampled cube inputs passed through each map. The projected waypoints use the same STM evaluated at the initial benchmark state and the same guarded radius. These controlled inputs isolate the effect of the parameterization from changes in the local orbital geometry. For the ideal maps, with the numerical zero threshold set to zero, the inclusive radial exceedance probabilities for 
+
+0 ≤ r ≤ 1 are 
+
+Pr( ru ≥ r) = 
+
+(1 − πr 3/6, centered L2,
+
+1 − r3, either alternative . (32) As the centered L2 map leaves inputs inside the unit ball unchanged and projects the remaining cube volume onto its boundary, the probability inside radius r follows from the ball-to-cube volume ratio. The theoretical boundary probability is therefore Pr( ru = 1) = 1 − π/ 6 ≈ 47 .64% , closely matching the empirical value of 47 .33% , as stated in Fig. 2. Neither alternative mapping produced boundary samples in this comparison. The empirical and analytical exceedance curves distinguish the radial behavior of the centered L2 and L∞ mappings, despite their similar projected waypoint distributions. In their ideal forms, both radial maps are continuous and differentiable almost everywhere. The centered map changes derivative at the unit sphere, while the L∞ map also changes derivative where the dominant action component changes. The centered map combines a direct local relation u = a with a finite input volume assigned to the boundary. These properties motivate its use for representing coast, interior, and high-authority waypoint selections. Boundary selection refers to the linear waypoint set, with the physical impulse subsequently determined by Lambert reconstruction. 
+
+4.2 Accuracy of the Local Linear Map 
+
+The first-order map is assessed by comparing its predicted position change with nonlinear propagation from the same initial state. For a local impulse perturbation δvk, define 
+
+xtrue 
+
+> k+1
+
+(δvk) = P
+
+ r−
+
+> k
+
+v− 
+
+> k
+
++ δvk
+
+
+
+, ∆tk
+
+
+
+. (33) 9Its position component gives the nonlinear displacement from the nominal coast in Eq. (10). The nonlinear and linearized displacements are 
+
+∆rtrue  
+
+> k+1
+
+= rtrue  
+
+> k+1
+
+− rnom  
+
+> k+1
+
+, (34a) 
+
+∆rlin  
+
+> k+1
+
+= Akδvk. (34b) The absolute and relative errors are then 
+
+er = ∆rtrue  
+
+> k+1
+
+− ∆rlin   
+
+> k+1 2
+
+, (35a) 
+
+¯er = er
+
+∆rtrue  
+
+> k+1 2
+
+. (35b) The relative error is normalized by the magnitude of the impulse-induced position change. The diagnostic uses 20 consecutive nominal coast nodes from the benchmark initial state, with a segment duration of 17 .4395 days. At each node, 200 independent directions are sampled for each of five impulse fractions, α ∈{0.1, 0.25 , 0.5, 0.75 , 1.0}, with 
+
+δvk = α∆Vmax d, d ∼ U (S2), (36) where S2 is the unit sphere. Figure 3 shows the mean relative error and the 5th–95th-percentile range across sampled directions and nodes. At the physical cap, the mean relative error is 9.52 × 10 −5, the 95th percentile is 1.54 × 10 −4,and the maximum is 1.81 × 10 −4. These results support the local position approximation over the tested coast states and impulse amplitudes in the considered Earth–Mars case study. 0.1 0.5 1.0 
+
+Impulse fraction, α
+
+> 0.0 0.5 1.0 1.5 2.0
+> Relative error [ 10 −4]
+
+(a)     
+
+> 1510 15 20
+
+Segment index 
+
+(b)      
+
+> Mean 5th-95th percentile
+> Figure 3: Linearization adequacy of the first-order reachability map. (a) Relative error versus impulse fraction. (b) Segment-wise error for α= 1 (maximum impulse).
+
+The selected waypoints are realized through nonlinear Lambert reconstruction as described in Section 3.3. Checks of the reconstructed intermediate impulses showed no cap violations over the confirmation runs. The inner guard is treated as an empirical margin and does not guarantee containment. 
+
+4.3 Analysis of the Terminal Two-Impulse Proxy 
+
+The terminal two-impulse proxy assesses maneuver demand using the first-order departure and arrival corrections defined in Section 3. At the penultimate node, let η2imp = max {η1,N −1, η 2,N −1} denote the larger normalized estimate. The reward contribution in Eq. (28d) then depends on ξN −1 = [ η2imp − 1] +. Below the activation threshold, terminal solutions remain differentiated by their reconstructed impulse costs. Above it, the assessment provides a graded measure of estimated excess demand. Figure 4 examines how this proxy ranks nonlinear terminal maneuver demand. The terminal diagnostic comprises 10 4 penultimate states generated by random impulsive coasts from the benchmark initial condition. For this diagnostic, the two-impulse estimates in Eq. (25) were computed using the Yamanaka– Ankersen STM [33]. The nonlinear terminal demand was obtained by solving the zero-revolution prograde and retrograde Lambert branches and selecting the successful solution with minimum total departure-and-arrival impulse cost. The plotted demand is this total normalized by the combined allowance 2∆ Vmax for the departure and arrival impulses. A normalized total at or below unity satisfies the combined impulse allowance, although either maneuver may still exceed its individual cap. Terminal feasibility therefore also depends on how the demand is distributed between the departure and arrival impulses. 10 0 100 200 300 
+
+Two-impulse proxy, η2imp 
+
+> 0100 200 300
+> Lambert demand /  (2 ΔVmax  )
+
+ρs = 0.9991  
+
+> η2imp = 1
+> Demand ratio = 1 1100 200 300
+> Count
+
+Figure 4: Terminal two-impulse proxy versus normalized Lambert demand. Hexbins aggregate 10 4 infeasible samples. Dashed and dotted lines mark activation and total-demand thresholds, respectively. 
+
+The Spearman rank correlation [34, 35] is ρs = 0 .9991 , indicating a strong monotone association within the sampled set. All samples are terminal-infeasible and have η2imp > 1, placing the comparison in the regime where the one-sided penalty is active. Since ξN −1 = η2imp − 1 throughout this set, the excess used in the reward has exactly the same ranking. The reference lines identify the proxy activation threshold and the combined impulse budget. The observed association supports two-impulse assessment as a measure of terminal demand within the sampled infeasible regime. 
+
+## 5 Earth–Mars Transfer Case Study 
+
+5.1 Benchmark and Numerical Configuration 
+
+The case study considers a deterministic Earth–Mars rendezvous based on the benchmark of Marmo et al. [28]. The prescribed initial and target states are expressed in the heliocentric ecliptic J2000 frame. Between maneuver nodes, the spacecraft evolves under two-body dynamics, 
+
+˙r = v, ˙v = −μ⊙
+
+r
+
+∥r∥32
+
+, (37) where μ⊙ is the solar gravitational parameter. This force model is used consistently for propagation, STM construction, and Lambert reconstruction. Two-body propagation and Lambert reconstruction in the RARL environment use PyKEP [36]. 
+
+Table 1: Earth–Mars benchmark parameters and numerical scales.                                                 
+
+> Quantity Value Unit
+> μ⊙132 ,712 ,440 ,018 km 3/s2
+> tf−t0348 .79 days
+> N20 –
+> ∆tk17 .4395 days
+> ∆Vmax 0.7600 km /s
+> r−
+> 0[−140 ,699 ,693 ,−51 ,614 ,428 ,980] Tkm
+> v−
+> 0[9 .7746 ,−28 .0783 ,4.3377 ×10 −4]Tkm /s
+> rT(tf)[−172 ,682 ,023 ,176 ,959 ,469 ,7,948 ,912] Tkm
+> vT(tf)[−16 .4274 ,−14 .8605 ,9.2149 ×10 −2]Tkm /s
+> rscale 1.4960 ×10 8km
+> vscale 29 .7845 km /s
+> tscale 5.02275 ×10 6s
+
+Table 1 lists the nominal boundary states and numerical configuration. The fixed transfer duration tf − t0 is divided into 
+
+N = 20 ballistic segments of equal duration ∆tk, giving 21 impulse slots including the terminal arrival impulse. The initial position r− 
+
+> 0
+
+and velocity v− 
+
+> 0
+
+are specified before the departure impulse. The target position rT (tf ) and velocity 11 vT (tf ) specify the required state after the arrival impulse, consistent with Eq. (6). Terminal rendezvous is imposed through the reconstruction described in Section 3.3. The environment uses nondimensional position, velocity, and time, with characteristic scales rscale , vscale =pμ⊙/r scale , and tscale = rscale /v scale . These choices give a unit nondimensional gravitational parameter. Re-ported distances, maneuver magnitudes, and times are expressed in physical units. The inner guard introduced in Section 3.2 is set to g = 2 × 10 −4 km /s in Eq. (14). 
+
+5.2 Training and Evaluation Protocol 
+
+RARL policies are trained either at the nominal departure state, termed single-state training, or across a prescribed family of initial states, termed multi-state training. Both regimes use the 14-dimensional observation and three-dimensional action defined in Section 3. Positions and velocities are first nondimensionalized using the scales in Table 1. Table 2 lists the fixed componentwise bounds used by S(·) in Eq. (22) throughout training and evaluation. The reward weights in Eq. (28) are λ∆v = 25 , λviol = 200 , λη = 10 , and λL = λU = 500 for both training regimes. Online reward normalization is applied during training, while evaluation uses the unnormalized rewards and physical maneuver costs. 
+
+Table 2: Bounds for fixed observation scaling.                                   
+
+> Input Lower bound Upper bound
+> r−
+> k/r scale [−2.3,−2.4,−0.3] [2 .3,2.4,0.3]
+> v−
+> k/v scale [−2.1,−2.2,−0.25] [2 .1,2.2,0.25] ∆rRTN
+> k/r scale [−3.5,−2.7,−0.4] [3 .5,2.7,0.4] ∆vRTN
+> k/v scale [−1.6,−2.5,−0.2] [1 .6,2.5,0.2]
+> τk01
+> ρk−102
+
+The actor and critic use separate multilayer perceptrons (MLPs), each with three hidden layers and hyperbolic tangent activations. The hidden layer sizes are listed in Table 3. Together with the output layers, the model contains approximately 5,600 trainable parameters. PPO uses generalized advantage estimation (GAE), and the learning rate and clip range decrease linearly over the prescribed training budget. Single-state and multi-state training use the same network and PPO settings, with three independently initialized policies per regime. Each single-state run uses approximately 240 million training transitions, with evaluation every 9,600 transitions. Each multi-state run uses approximately 160 million transitions, with evaluation every 96 ,000 transitions. Stable-Baselines3 [37] provides the PPO implementation, built on PyTorch [38, 39], while the training environments are implemented as custom classes compatible with Gymnasium [40]. 
+
+Table 3: Policy architecture and PPO training configuration.                                                
+
+> Parameter Symbol Value Actor hidden sizes –[70 ,32 ,15]
+> Critic hidden sizes –[56 ,14 ,4]
+> Initial action log-std log σπ, 00
+> Initial learning rate α03.0×10 −4
+> Final learning rate αfinal 1.0×10 −5
+> Discount factor γ0.9999
+> GAE factor λGAE 0.99
+> Initial clip range εclip ,00.20
+> Final clip range εclip ,final 0.10
+> Entropy coefficient cent 0.01
+> Value-function coefficient cV0.6
+> Maximum gradient norm –0.5
+> Target Kullback–Leibler divergence –0.05
+> Vectorized environments Nenv 8
+> Rollout transitions per environment nsteps 1,200
+> Total rollout transitions Nroll 9,600
+> Minibatch size Bmb 150
+> PPO epochs per update nepochs 10
+
+Single-state policies are trained and evaluated at the nominal departure state. Multi-state training uses a launch-window-inspired initial-state family obtained by propagating the nominal departure state through offsets ∆tdep ∈ [−2, 2] days 12 under the same two-body model. The terminal target state and the transfer duration remain fixed. Table 4 summarizes the three state sets. The training set contains 100 states on a uniform offset grid within the prescribed interval, and each training episode samples one of these states uniformly. The separate ten-state evaluation grid is interleaved between training states and has no overlap with the training grid. It assesses interpolation and is used for policy checkpoint selection. The MC validation set contains 10 4 states with offsets sampled uniformly from [−2, 2] days. It is used only after policy selection to estimate maneuver-cost distributions and feasibility rates over the prescribed family. Each state set is shared across the three policies.          
+
+> Table 4: State sets for training, evaluation, and MC validation.
+> Set States Construction and purpose Training 100 Uniform grid sampled during training Interleaved evaluation 10 Separate grid between training states for checkpoint selection MC validation 10 4Uniformly sampled offsets for assessment after selection
+
+During evaluation, actions are selected deterministically from the mean of the policy distribution and passed through the action mapping in Eq. (16). An episode is considered feasible if it completes the transfer without a Lambert failure or an unbound-state truncation and all 21 impulses satisfy the physical cap, allowing a numerical comparison tolerance of 10 −12 km /s. Policy checkpoints are ranked first by the fraction of feasible episodes, then by the fraction without truncation, the mean maximum impulse-cap violation, and the mean total maneuver cost. The first two quantities are maximized and the latter two minimized, with violations within the numerical tolerance treated as zero. Among fully feasible candidates, this selects the lowest mean-cost checkpoint. Selection uses the nominal state for single-state training and the ten-state interleaved evaluation set for multi-state training. The selected policies are retained for the reported results. Results are reported for each trained policy and summarized by the mean and sample standard deviation across three independent training runs with different random seeds. For the multi-state results, variation across MC validation states is reported separately from variation across independently trained policies. 
+
+5.3 Deterministic SCP Reference 
+
+A deterministic reference trajectory is computed using SCP, which solves a sequence of convex approximations to the nonlinear transfer problem [41]. The calculation uses the boundary states, transfer duration, discretization and physical impulse cap in Table 1, with the total maneuver objective defined in Eq. (8). All 21 impulses, including the terminal arrival impulse, are optimization variables. The state and impulse variables are nondimensionalized using the scales in Section 5.1. At iteration j, the impulse application and subsequent two-body propagation over segment k are approximated by 
+
+ex− 
+
+> k+1
+
+= C(j) 
+
+> k
+
+ex− 
+
+> k
+
++ D(j) 
+
+> k
+
+∆evk + d(j) 
+
+> k
+
+, (38) for k = 0 , . . . , N − 1. Here, tildes denote nondimensional quantities, C(j) 
+
+> k
+
+∈ R6×6 and D(j) 
+
+> k
+
+∈ R6×3 are the state and impulse Jacobians evaluated along the reference trajectory, and d(j) 
+
+> k
+
+ensures agreement with nonlinear propagation at that reference. The state Jacobian is obtained by integrating the two-body variational equations, and the impulse Jacobian comprises its three velocity columns. The state and STM are integrated together using the DOP853 solver in SciPy [42], with relative and absolute tolerances of 10 −12 and 10 −13 , respectively. Each convex subproblem minimizes the sum of impulse magnitudes subject to the affine dynamics, the prescribed initial and terminal conditions, and the impulse bounds. Euclidean trust regions constrain changes from the reference state and impulse at each node, with nondimensional radii of 0.1 and 0.02 , respectively. A numerical margin of 10 −9 km /s is subtracted from the physical impulse cap within the optimizer. The resulting second-order cone programs are formulated in CVXPY [43, 44] and solved using MOSEK [45], with primal feasibility, dual feasibility and relative-gap tolerances of 10 −10 .The initialization originates from a two-impulse Lambert transfer between the prescribed endpoint positions, with zero intermediate impulses. A stored SCP solution obtained from this initialization is subsequently refined to the tolerances specified here. After each convex solve, the updated impulses are propagated from the prescribed initial state under the nonlinear dynamics to construct the next reference. Convergence requires terminal position and velocity errors no greater than 10 −3 km and 10 −6 km /s, respectively, with no physical impulse-cap exceedance. It also requires a maximum absolute componentwise difference of 10 −11 between the optimized and nonlinearly propagated nondimensional node states, and a change in total maneuver cost no greater than 10 −8 km /s.13 The nominal refinement converges in four SCP iterations. Independent propagation of the resulting impulse sequence using PyKEP [36] gives terminal position and velocity errors of 2.19 × 10 −4 km and 2.20 × 10 −11 km /s, respectively, with all impulses within the physical cap. This solution provides the validated local SCP reference used in the subsequent performance comparison. 
+
+5.4 Single-State Benchmark Performance 
+
+Table 5: Nominal single-state performance and impulse allocation. Quantity Unit SCP RARL (single-state) Seed 1 Seed 2 Seed 3 Mean ± SD a
+
+Transfer performance 
+
+Total maneuver cost km/s 10 .0585 10 .2069 10 .2469 10 .2416 10 .2318 ± 0.0218 
+
+Cost above SCP b km/s 0.0000 0.1484 0.1884 0.1831 0.1733 ± 0.0218 
+
+Gap to SCP b % 0.00 1.47 1.87 1.82 1.72 ± 0.22 
+
+Impulse allocation 
+
+Near-coast impulses c count 7 5 5 6 5.3 ± 0.6
+
+Near-coast maneuver cost c km/s 0.0000 0.0627 0.0702 0.1347 0.0892 ± 0.0396 
+
+Near-cap impulses d count 13 12 12 12 12 Terminal departure impulse km/s 0.7600 0.7424 0.7248 0.7354 0.7342 ± 0.0089 
+
+Terminal arrival impulse km/s 0.7600 0.7541 0.7427 0.7411 0.7460 ± 0.0071  
+
+> a
+
+Mean ± sample standard deviation (SD) over three independently trained policies. Identical counts are shown once.  
+
+> b
+
+Absolute and percentage cost differences are relative to the SCP reference.  
+
+> c
+
+Near-coast counts impulses with ∥∆vk ∥2 < 0.05 km /s. 
+
+> d
+
+Near-cap counts impulses with ∥∆vk ∥2 > 0.95∆ Vmax .
+
+The single-state results correspond to the nominal departure condition, ∆tdep = 0 . Table 5 compares the three selected RARL policies with the SCP reference described in Section 5.3. All three RARL policies complete the nominal transfer without truncation or impulse-cap violations. Terminal rendezvous is imposed through the Lambert reconstruction described in Section 3.3. 0.0 0.2 0.4 0.6 0.8 
+
+> Impulse [km/s]
+
+(a) RARL (single-state)        
+
+> 050 100 150 200 250 300 350
+
+Time [days] 
+
+> 0.0 0.2 0.4 0.6 0.8
+> Impulse [km/s]
+
+(b) SCP   
+
+> Impulse cap ±1 SD
+
+Figure 5: Nominal impulse allocation for (a) RARL and (b) SCP. RARL bars and whiskers show the mean and sample standard deviation across three independent runs. 
+
+14 The total maneuver cost is 10 .2318 ± 0.0218 km /s, reported as the mean ± sample standard deviation across the three independently trained policies. This corresponds to a mean cost difference of 0.1733 km /s, or 1.72% , above the SCP reference of 10 .0585 km /s. Marmo et al. [28] report a deterministic optimal control solution with a total maneuver cost of 10 .4048 km /s, placing the present RARL costs close to the reported literature result. These results show that the proposed RARL methodology recovers benchmark-quality nominal performance across three independently trained policies, with costs close to the SCP reference. Presenting each policy alongside the aggregate statistics makes the observed variation across independent training runs explicit, both in total maneuver cost and in impulse allocation. The consistently feasible nominal outcomes and small cost dispersion provide evidence that the reported performance is repeatable across the tested training seeds. Figure 5 compares the node-wise RARL allocation with the SCP solution. The RARL bars and whiskers report the mean and sample standard deviation at each impulse node. Both profiles exhibit an approximate bang–off–bang structure, with large early and late maneuvers separated by a near-coast portion. This broad allocation pattern is also evident in the reported deterministic optimal control solution [28]. Using the thresholds defined in Table 5, each RARL policy has 12 near-cap impulses and 5 or 6 near-coast impulses, compared with 13 and 7, respectively, for SCP. The RARL near-coast impulses contribute 0.0892 ± 0.0396 km /s across the three policies. The terminal departure and arrival impulses remain below the physical cap, with respective mean values of 0.7342 ± 0.0089 km /s and 0.7460 ± 0.0071 km /s.−200 −100 0 100 200                   
+
+> X[10 6km]
+> −200 −100 0100 200
+> Y [10 6 km] (a) XY plane
+> −100 0200
+> Y[10 6km]
+> −2.5 0.0 2.5 5.0 7.5
+> Z [10 6 km] (b) YZ plane
+> −100 0100
+> X[10 6km]
+> −2.5 0.0 2.5 5.0 7.5
+> Z [10 6 km] (c) XZ plane
+> −173 −172
+> X[10 6km]
+> 177 178 179
+> Y [10 6 km]
+> Sun Earth orbit Mars orbit RARL trajectory Earth (initial) Mars (target) Selected waypoint Projected waypoint set
+
+Figure 6: Nominal Earth–Mars transfer for the representative single-state RARL policy. Panel (a) shows the XY projection, with a terminal inset showing the projected waypoint set. Panels (b)–(c) show the Y Z and XZ projections. Crosses mark selected intermediate waypoints. 
+
+Figure 6 shows a representative single-state RARL trajectory, generated by the Seed 3 policy, whose nominal maneuver cost of 10 .2416 km /s is the median of the three runs, as reported in Table 5. The three spatial projections show the transfer geometry, while the terminal inset resolves the final approach to the prescribed target. 15 −121 −120 −119 −92 −91 −90 
+
+Node 1 
+
+ηxy = 0.98; ‖Δ v0‖ = 0.760 km/s −88 −87 −121 −120 −119 
+
+Node 2 
+
+ηxy = 0.98; ‖Δ v1‖ = 0.760 km/s −47 −46 −45 −138 −137 
+
+Node 3 
+
+ηxy = 0.97; ‖Δ v2‖ = 0.760 km/s −1 0 1−141 −140 −139 
+
+Node 4 
+
+ηxy = 0.98; ‖Δ v3‖ = 0.760 km/s 46 47 48 −128 −127 −126 
+
+Node 5 
+
+ηxy = 0.99; ‖Δ v4‖ = 0.760 km/s 88 89 90 −99 −98 −97 
+
+Node 6 
+
+ηxy = 1.00; ‖Δ v5‖ = 0.760 km/s 120 121 122 −56 −55 −54 
+
+Node 7 
+
+ηxy = 1.00; ‖Δ v6‖ = 0.760 km/s 137 138 139 −6 −5 −4 
+
+Node 8 
+
+ηxy = 0.99; ‖Δ v7‖ = 0.760 km/s 139 140 141 46 47 48 
+
+Node 9 
+
+ηxy = 0.39; ‖Δ v8‖ = 0.304 km/s 127 128 129 93 94 95 
+
+Node 10 
+
+ηxy = 0.06; ‖Δ v9‖ = 0.050 km/s 106 107 108 134 135 
+
+Node 11 
+
+ηxy = 0.03; ‖Δ v10 ‖ = 0.023 km/s 78 79 80 166 167 168 
+
+Node 12 
+
+ηxy = 0.01; ‖Δ v11 ‖ = 0.015 km/s 47 48 49 190 191 192 
+
+Node 13 
+
+ηxy = 0.02; ‖Δ v12 ‖ = 0.019 km/s 13 14 15 207 208 209 
+
+Node 14 
+
+ηxy = 0.01; ‖Δ v13 ‖ = 0.013 km/s −21 −20 −19 218 219 
+
+Node 15 
+
+ηxy = 0.02; ‖Δ v14 ‖ = 0.015 km/s −54 −53 −52 221 222 223 
+
+Node 16 
+
+ηxy = 0.21; ‖Δ v15 ‖ = 0.165 km/s −87 −86 −85 219 220 221 
+
+Node 17 
+
+ηxy = 0.75; ‖Δ v16 ‖ = 0.580 km/s −118 −117 −116 211 212 213 
+
+Node 18 
+
+ηxy = 0.99; ‖Δ v17 ‖ = 0.751 km/s −147 −146 −145 197 198 
+
+Node 19 
+
+ηxy = 0.99; ‖Δ v18 ‖ = 0.752 km/s −173 −172 −171 177 178 179 
+
+Node 20 
+
+ηxy = 0.97; ‖Δ v19 ‖ = 0.735 km/s 
+
+> Y [10 6 km] Y [10 6 km] Y [10 6 km] Y [10 6 km] Y [10 6 km]
+
+X [10 6 km] X [10 6 km] X [10 6 km] X [10 6 km] 
+
+Earth orbit Mars orbit RARL trajectory Projected waypoint set Coast center Selected waypoint Mars (target) Figure 7: Local XY projections of the waypoint sets along the representative nominal trajectory. Crosses mark policy-selected waypoints at nodes 1–19, and the diamond marks the terminal target at node 20. Annotations give the normalized projected radius 
+
+ηxy and the preceding reconstructed impulse magnitude. All panels use the same spatial scale. 
+
+16 Figure 7 presents the corresponding local XY projections of the waypoint sets at every arrival node along the trajectory. Nodes 1–19 show policy-selected waypoints, and node 20 shows the prescribed terminal target. Each panel pairs the arrival-node geometry with the impulse applied at the preceding departure node. The normalized projected radius ηxy measures the displacement from the coast center relative to the ellipse boundary in the same projected direction. It is zero at the center and unity on the boundary. The accompanying impulse magnitude is obtained from the three-dimensional Lambert reconstruction. Together, these quantities describe the waypoint’s location within the projected set and the maneuver required to realize it. At nodes 1–8, the selected waypoints lie near the projected boundary, with ηxy between approximately 0.97 and 
+
+1.00 , and the preceding impulses are close to the physical cap. Node 9 marks the transition toward the interior, with ηxy = 0 .386 and an impulse of 0.304 km /s. At nodes 10–15, ηxy lies between 0.014 and 0.064 , while the corresponding impulses range from approximately 0.013 to 0.050 km /s and contribute 0.1347 km /s in total. The selections then move outward through nodes 16–17 and return close to the boundary at nodes 18–19. This progression connects the near-coast portion and subsequent increase in maneuver effort to the local waypoint geometry exposed to the policy. The nominal results therefore demonstrate that waypoint selection coupled with deterministic reconstruction can achieve maneuver costs close to the SCP reference while preserving a direct geometric interpretation of the policy decisions. 
+
+5.5 Multi-State Performance under Launch-Time Dispersion 
+
+Section 5.4 establishes the nominal-transfer performance of RARL. Multi-state evaluation examines whether this capability extends to dispersed departure conditions, allowing a trained policy to be reused across transfers with different initial states. Launch-time offsets in [−2, 2] days produce dispersion in the initial position and velocity, while the target state and transfer duration remain those of the nominal benchmark. The policies must therefore accommodate the resulting changes in transfer geometry through waypoint selection, seeking low maneuver cost while satisfying terminal rendezvous and the individual impulse limits. The state sets in Table 4 separate policy training, selection on interleaved evaluation states, and subsequent MC validation. The selected single-state and multi-state policies are assessed on the same 10 4 MC departures, providing a common basis for comparing feasibility and maneuver-cost distributions. Each selected policy is applied across these departures without further training. Table 6 compares the selected single-state and multi-state RARL policies over this departure family and at the nominal departure state.                                                                                           
+
+> Table 6: Multi-state performance under launch-time dispersion. All quantities except feasibility rate and percentage gaps are in km/s. Quantity RARL (single-state) RARL (multi-state)
+> Mean ±SD aSeed 1 Seed 2 Seed 3 Mean ±SD a
+> MC validation b
+> Feasibility rate (6 .49 ±2.49)% 100 .00% 100 .00% 100 .00% 100 .00%
+> Mean maneuver cost 10 .3320 ±0.0420 10 .3362 10 .3091 10 .2831 10 .3095 ±0.0266
+> MC cost spread, SD MC c0.0829 ±0.0115 0.1235 0.1114 0.1337 0.1229 ±0.0112
+> 95th-percentile cost 10 .4868 ±0.0443 10 .5506 10 .4978 10 .5074 10 .5186 ±0.0281
+> Central 90% width d0.2549 ±0.0290 0.3747 0.3496 0.4168 0.3803 ±0.0340
+> Nominal departure, ∆tdep = 0
+> Total maneuver cost 10 .2318 ±0.0218 10 .3154 10 .2976 10 .2707 10 .2946 ±0.0225
+> Cost above RARL (single-state) e0.0000 0.0836 0.0658 0.0389 0.0628 ±0.0225
+> Gap to RARL (single-state) e0.00% 0.82% 0.64% 0.38% (0 .61 ±0.22)%
+> aAggregate entries give the mean ±sample SD of each row quantity across three independently trained policies.
+> bMC statistics use the same 10 4states per policy and include outcomes with impulse-cap violations.
+> cSD MC denotes the sample standard deviation of maneuver cost across MC states.
+> dCentral 90% width is the difference between the 95th and 5th cost percentiles.
+> eDifferences use the single-state mean nominal cost as a fixed reference, shown as zero in its aggregate column.
+
+All three multi-state RARL policies complete every MC transfer without truncation or impulse-cap violations, giving a feasibility rate of 100% for each policy. This agreement across independent training runs supports the ability of RARL to learn reusable policies that retain feasibility beyond the departure states used for training and policy selection. 17 On the other hand, the single-state policies have feasibility rates of 3.75% , 8.62% , and 7.10% for Seeds 1–3, respectively, with an aggregate value of (6 .49 ± 2.49)% , as reported in Table 6. Their infeasible outcomes arise from impulse-cap violations in the terminal departure or arrival impulse, with no Lambert failures or unbound-state truncations. Maneuver costs are therefore available for every MC outcome, and the reported cost statistics include the transfers with impulse-cap violations. The multi-state policies have a mean MC maneuver cost of 10 .3095 ± 0.0266 km /s. Each statistic is calculated over the MC states for one policy and then summarized across the three independent training runs. In particular, SD MC 
+
+measures variation across departures, while the SD in the aggregate columns measures variation in the corresponding statistic across trained policies. The multi-state cost distributions have a larger SD MC and central 90% width than their single-state counterparts. However, most single-state outcomes exceed the available terminal impulse authority, and their narrower cost distributions therefore cannot, on their own, be interpreted as more consistent feasible performance. 10.1 10.3 10.5 
+
+> Maneuver cost [km/s]
+
+(a) RARL (multi-state)     
+
+> −2−1012
+
+Departure offset, Δtdep [days] 
+
+> 10.1 10.3 10.5
+> Maneuver cost [km/s]
+
+(b) RARL (single-state)     
+
+> Seed 1 Seed 2 Seed 3 Feasible Cap violation
+> Figure 8: MC cost comparison of single- and multi-state RARL seeds.
+
+Figure 8 shows the dependence of maneuver cost on departure offset. For the multi-state policies, maneuver cost generally decreases toward later departure offsets within the tested interval, while feasibility is retained across the sampled departures. The lower single-state costs near nominal departure are consistent with specialization to the nominal training state. These policies also retain feasibility for some nearby departures, indicating limited local generalization, although most of the sampled departure family remains infeasible. The separation between solid and dashed portions of the curves in Fig. 8 makes this distinction explicit. At nominal departure, all three multi-state policies remain feasible, with a total maneuver cost of 10 .2946 ±0.0225 km /s.Relative to the single-state mean nominal cost of 10 .2318 km /s, the increase in the mean is 0.0628 km /s, or 0.61% .For this case study, the broader departure-state feasibility is therefore accompanied by a small increase in mean nominal maneuver cost, illustrating an empirical robustness–cost tradeoff between nominal specialization and performance across dispersed initial states. 18 −200 −100 0 100 200                       
+
+> X[10 6km]
+> −200 −100 0100 200
+> Y [10 6 km] (a) XY plane
+> MC Spread: ×7.5
+> −100 0200
+> Y[10 6km]
+> −2.5 0.0 2.5 5.0 7.5
+> Z [10 6 km] (b) YZ plane
+> MC Spread: ×2.5
+> −100 0100
+> X[10 6km]
+> −2.5 0.0 2.5 5.0 7.5
+> Z [10 6 km] (c) XZ plane
+> MC Spread: ×2.5
+> −173 −172
+> X[10 6km]
+> 177 178 179
+> Y [10 6 km]
+> Sun Earth orbit Mars orbit Nominal trajectory MC trajectories Earth (initial) Mars (target) Selected waypoint Projected waypoint set
+
+Figure 9: Earth–Mars trajectory ensemble for the representative multi-state RARL policy, showing 201 MC departures and nominal waypoints. MC deviations from the nominal trajectory are visually magnified ×7.5 in the XY plane (a) and ×2.5 in the YZ and XZ projections (b)–(c). The terminal inset shows the nominal waypoint set and MC trajectories at true scale. 
+
+Figure 9 illustrates the transfer family for Seed 2, the representative multi-state policy with the median MC mean maneuver cost. The figure shows trajectories from 201 sampled MC departures together with the nominal trajectory, while the waypoint markers and projected waypoint sets correspond to the nominal transfer. The trajectories reach the common terminal target from dispersed initial states, complementing the feasibility assessment over the full MC set in Table 6. Figure 10 pairs the node-wise impulse distributions with the maneuver-cost distribution for each multi-state policy. The allocation retains the approximate bang–off–bang structure observed at nominal departure. Impulses at nodes 0–7 remain close to the physical cap, followed by a reduction in maneuver effort. All three policies have median impulse magnitudes below the near-coast threshold of 0.05 km /s defined in Table 5 at nodes 10–14. Maneuver effort then increases through nodes 15–18, and the terminal departure and arrival impulses, at nodes 19 and 20, remain below the cap for every MC realization. The boxes and percentile whiskers describe variation across departure states, while the nominal markers locate the corresponding nominal impulse within each distribution. Successful terminal reconstruction alone does not establish feasibility, since the required departure or arrival impulse may exceed its cap. Across the sampled departures, the multi-state policies reach terminal conditions that admit the reconstructed two-impulse maneuver within both limits. 19 0.0 0.2 0.4 0.6 0.8               
+
+> Impulse [km/s]
+> 0510
+> MC outcomes [%]
+> 0.0 0.2 0.4 0.6 0.8
+> Impulse [km/s]
+> 02.5 5
+> MC outcomes [%]
+> 0510 15 20
+> Node index
+> 0.0 0.2 0.4 0.6 0.8
+> Impulse [km/s]
+> 10.1 10.3 10.5
+> Maneuver cost [km/s]
+> 02.5 5
+> MC outcomes [%] (a) Seed 1 (b) Seed 2 (c) Seed 3
+> Mean Median 25th percentile 75th percentile 95th percentile Nominal Impulse cap Figure 10: MC impulse and cost distributions for RARL (multi-state) policy seeds, with 5th–95th percentile whiskers and 0.01 km /s
+> bins.
+
+Across three independent training runs, multi-state RARL extends feasible performance across the sampled departure family while retaining the approximate bang–off–bang maneuver structure and incurring a small increase in nominal cost. 
+
+## 6 Conclusion 
+
+This paper presented Reachability Analysis-Informed Reinforcement Learning (RARL) for deterministic multi-impulse interplanetary transfers. The formulation places intermediate waypoint selection at the center of the learned decision process, using a local first-order reachability map to define the waypoint set and Lambert solutions to reconstruct the corresponding nonlinear transfer segments. This gives the policy a geometrically interpretable decision space while retaining classical astrodynamics for maneuver reconstruction. The accompanying diagnostics examine the action geometry, local approximation error, and terminal maneuver-demand assessment, making the role and limitations of this interface explicit. In the Earth–Mars case study, this formulation recovers benchmark-quality nominal performance across three indepen-dent training runs, with a mean maneuver cost 1.72% above the SCP reference. Training over dispersed initial states extends this capability beyond the nominal departure condition. Each of the three independently trained multi-state policies completes all 10 4 Monte Carlo departures without truncation or impulse-cap violations, using the same selected policy across departures without further training. This broader sampled feasibility is accompanied by a 0.61% increase in mean nominal maneuver cost relative to single-state training, while retaining the approximate bang–off–bang allocation. The resulting empirical robustness–cost tradeoff shows how the same reachability-informed formulation can support both nominal specialization and policy reuse across a family of departure conditions. These findings concern a two-body Earth–Mars transfer with launch-time-induced initial-state dispersion, a fixed target state, and a fixed transfer duration. Within this setting, nonlinear feasibility is established empirically, and the 20 reachability map remains a local approximation. Extending the formulation to broader transfer families, adaptive node placement, and refined reachability approximations would help assess its applicability to longer or more nonlinear arcs. The reusable state-feedback mapping also offers potential use as an onboard high-level guidance layer coupled to deterministic reconstruction, or as a structured initializer for subsequent trajectory optimization. Both applications build on the central contribution demonstrated here, a policy interface that couples learned selection of the transfer geometry with deterministic reconstruction of the maneuvers required to realize it. 
+
+## A Secondary Full-State Terminal-Difficulty Proxy 
+
+The two-impulse construction in Section 3.4 separates terminal position and velocity correction in a manner consistent with the terminal rendezvous. A supplementary alternative is obtained by estimating a single impulsive correction from the complete linearized terminal mismatch. Define 
+
+Gk→f =
+
+Φrv,k →f
+
+Φvv,k →f
+
+
+
+∈ R6×3. (39) For this supplementary diagnostic, the matrix and state mismatch are evaluated using kilometers and seconds as the base units. This fixed unit convention determines the relative weighting of the position and velocity residuals in the least-squares fit. The minimum-norm least-squares estimate and its normalized magnitude are 
+
+∆vlin 6,k = G† 
+
+> k→f
+
+∆xk→f , (40a) 
+
+η6,k =
+
+∆vlin 6,k 2
+
+∆Vmax 
+
+. (40b) Unlike the two-impulse assessment, η6,k represents the combined full-state correction through a single linearized impulse rather than through separate departure and arrival impulses. It therefore provides a complementary measure of terminal correction demand. The present reward adopts the two-impulse assessment to remain aligned with the terminal rendezvous structure, while η6,k remains available for diagnostic studies or for formulations that prefer a single-correction surrogate. 
+
+## References 
+
+[1] J. T. Betts, Survey of numerical methods for trajectory optimization, Journal of Guidance, Control, and Dynamics 21 (2) (1998) 193–207. doi:10.2514/2.4231 .[2] B. A. Conway (Ed.), Spacecraft Trajectory Optimization, Cambridge University Press, Cambridge, U.K., 2010. doi: 10.1017/CBO9780511778025 .[3] B. Benedikter, A. Zavoli, Z. Wang, S. Pizzurro, E. Cavallini, Convex approach to covariance control with application to stochastic low-thrust trajectory optimization, Journal of Guidance, Control, and Dynamics 45 (11) (2022) 2061–2075. 
+
+doi:10.2514/1.G006806 .[4] R. S. Sutton, A. G. Barto, Reinforcement Learning: An Introduction, 2nd Edition, MIT Press, Cambridge, MA, USA, 2018. [5] D. Izzo, M. Märtens, B. Pan, A survey on artificial intelligence trends in spacecraft guidance dynamics and control, Astrody-namics 3 (4) (2019) 287–299. doi:10.1007/s42064-018-0053-6 .[6] A. Zavoli, L. Federici, Reinforcement learning for robust trajectory design of interplanetary missions, Journal of Guidance, Control, and Dynamics 44 (8) (2021) 1440–1453. doi:10.2514/1.G005794 .[7] L. Federici, A. Zavoli, Robust interplanetary trajectory design under multiple uncertainties via meta-reinforcement learning, Acta Astronautica 214 (2024) 147–158. doi:10.1016/j.actaastro.2023.10.018 .[8] L. Federici, A. Scorsoglio, A. Zavoli, R. Furfaro, Autonomous guidance for cislunar orbit transfers via reinforcement learning, in: AAS/AIAA Astrodynamics Specialist Conference, 2021, paper AAS 21-610. [9] H. Holt, R. Armellin, N. Baresi, Y. Hashida, A. Turconi, A. Scorsoglio, et al., Optimal Q-laws via reinforcement learning with guaranteed stability, Acta Astronautica 187 (2021) 511–528. doi:10.1016/j.actaastro.2021.07.010 .[10] H. Holt, N. Baresi, R. Armellin, Reinforced Lyapunov controllers for low-thrust lunar transfers, Astrodynamics 8 (4) (2024) 633–656. doi:10.1007/s42064-024-0212-x .[11] Y. Chaudhary, H. Holt, L. Anoè, R. Armellin, C. Bombardelli, Low-thrust cis-lunar transfers exploiting ballistic capture trajectories, in: AIAA SCITECH 2024 Forum, American Institute of Aeronautics and Astronautics (AIAA), 2024, paper AIAA 2024-0837. doi:10.2514/6.2024-0837 .[12] Y. Chaudhary, R. Armellin, H. Holt, M. Sagliano, Distribution-agnostic robust trajectory optimization via chance-constrained reinforcement learning, Aerospace Science and Technology 179, art. no. 113521 (2026). doi:10.1016/j.ast.2026.113521 .[13] R. H. Battin, An Introduction to the Mathematics and Methods of Astrodynamics, American Institute of Aeronautics and Astronautics, Reston, VA, USA, 1999, revised edition. 
+
+21 [14] D. A. Vallado, Fundamentals of Astrodynamics and Applications, 4th Edition, Microcosm Press, Hawthorne, CA, USA, 2013. [15] I. M. Mitchell, A. M. Bayen, C. J. Tomlin, A time-dependent Hamilton–Jacobi formulation of reachable sets for continuous dynamic games, IEEE Transactions on Automatic Control 50 (7) (2005) 947–957. doi:10.1109/TAC.2005.851439 .[16] S. Bansal, M. Chen, S. Herbert, C. J. Tomlin, Hamilton–Jacobi reachability: A brief overview and recent advances, in: 2017 IEEE 56th Annual Conference on Decision and Control (CDC), 2017, pp. 2242–2253. doi:10.1109/CDC.2017.8263977 .[17] A. B. Kurzhanski, P. Varaiya, Ellipsoidal techniques for reachability analysis, in: N. Lynch, B. H. Krogh (Eds.), Hybrid Systems: Computation and Control, Vol. 1790 of Lecture Notes in Computer Science, Springer, Berlin, Germany, 2000, pp. 202–214. doi:10.1007/3-540-46430-1_19 .[18] M. Althoff, O. Stursberg, M. Buss, Computing reachable sets of hybrid systems using a combination of zonotopes and polytopes, Nonlinear Analysis: Hybrid Systems 4 (2) (2010) 233–249. doi:10.1016/j.nahs.2009.03.009 .[19] D. Xue, J. Li, H. Baoyin, F. Jiang, Reachable domain for spacecraft with a single impulse, Journal of Guidance, Control, and Dynamics 33 (3) (2010) 934–942. doi:10.2514/1.43963 .[20] G. Zhang, X. Cao, G. Ma, Reachable domain of spacecraft with a single tangent impulse considering trajectory safety, Acta Astronautica 91 (2013) 228–236. doi:10.1016/j.actaastro.2013.06.016 .[21] C. Wen, C. Peng, Y. Gao, Reachable domain for spacecraft with ellipsoidal Delta-V distribution, Astrodynamics 2 (3) (2018) 265–288. doi:10.1007/s42064-018-0025-x .[22] J.-P. Aubin, Viability Theory, Birkhäuser, Boston, MA, USA, 1991. [23] R. Tedrake, I. R. Manchester, M. Tobenkin, J. W. Roberts, LQR-trees: Feedback motion planning via sums-of-squares verification, The International Journal of Robotics Research 29 (8) (2010) 1038–1052. doi:10.1177/0278364910369189 .[24] J. García, F. Fernández, A comprehensive survey on safe reinforcement learning, Journal of Machine Learning Research 16 (42) (2015) 1437–1480. [25] M. Ganai, Z. Gong, C. Yu, S. Herbert, S. Gao, Iterative reachability estimation for safe reinforcement learning, in: Advances in Neural Information Processing Systems, Vol. 36, Curran Associates, Inc., 2023, pp. 69764–69797. doi:10.52202/ 075280-3058 .[26] N. Kochdumper, H. Krasowski, X. Wang, S. Bak, M. Althoff, Provably safe reinforcement learning via action projection using reachability analysis and polynomial zonotopes, IEEE Open Journal of Control Systems 2 (2023) 79–92. doi:10.1109/ OJCSYS.2023.3256305 .[27] M. Ganai, S. Gao, S. Herbert, Hamilton–Jacobi reachability in reinforcement learning: A survey, IEEE Open Journal of Control Systems 3 (2024) 310–324. doi:10.1109/OJCSYS.2024.3449138 .[28] N. Marmo, A. Zavoli, N. Ozaki, Chance-constraint robust trajectory optimization with a hybrid multiple-shooting approach, Journal of Guidance, Control, and Dynamics 48 (11) (2025) 2495–2511. doi:10.2514/1.G008275 .[29] D. Izzo, Revisiting Lambert’s problem, Celestial Mechanics and Dynamical Astronomy 121 (1) (2015) 1–15. doi:10.1007/ s10569-014-9587-y .[30] R. A. Horn, C. R. Johnson, Matrix Analysis, 2nd Edition, Cambridge University Press, Cambridge, U.K., 2012. [31] G. H. Golub, C. F. Van Loan, Matrix Computations, 4th Edition, Johns Hopkins University Press, Baltimore, MD, USA, 2013. [32] J. Schulman, F. Wolski, P. Dhariwal, A. Radford, O. Klimov, Proximal policy optimization algorithms, arXiv:1707.06347 (2017). doi:10.48550/arXiv.1707.06347 .[33] K. Yamanaka, F. Ankersen, New state transition matrix for relative motion on an arbitrary elliptical orbit, Journal of Guidance, Control, and Dynamics 25 (1) (2002) 60–66. doi:10.2514/2.4875 .[34] C. Spearman, The proof and measurement of association between two things, The American Journal of Psychology 15 (1) (1904) 72–101. doi:10.2307/1412159 .[35] J. H. Zar, Biostatistical Analysis, 4th Edition, Prentice Hall, Upper Saddle River, NJ, USA, 1999. [36] D. Izzo, pykep: A research toolbox for space flight mechanics and interplanetary trajectory design, manuscript submitted to the Journal of Open Source Software (2026). URL https://github.com/esa/pykep/blob/master/paper/paper.pdf 
+
+[37] A. Raffin, A. Hill, A. Gleave, A. Kanervisto, M. Ernestus, N. Dormann, Stable-Baselines3: Reliable reinforcement learning implementations, Journal of Machine Learning Research 22 (268) (2021) 1–8. [38] A. Paszke, S. Gross, F. Massa, A. Lerer, J. Bradbury, G. Chanan, et al., PyTorch: An imperative style, high-performance deep learning library, in: Advances in Neural Information Processing Systems, Vol. 32, Curran Associates, Inc., 2019, pp. 8024–8035. [39] J. Ansel, E. Yang, H. He, N. Gimelshein, A. Jain, M. Voznesensky, et al., PyTorch 2: Faster machine learning through dynamic Python bytecode transformation and graph compilation, in: Proceedings of the 29th ACM International Conference on Architectural Support for Programming Languages and Operating Systems, Volume 2, ACM, 2024, pp. 929–947. doi: 10.1145/3620665.3640366 .[40] M. Towers, A. Kwiatkowski, J. Terry, J. U. Balis, G. De Cola, T. Deleu, et al., Gymnasium: A standardized interface for reinforcement learning environments, in: Advances in Neural Information Processing Systems, Vol. 38, Curran Associates, Inc., 2025, pp. 163114–163129. doi:10.52202/085713-4916 .
+
+22 [41] D. Malyuta, T. P. Reynolds, M. Szmuk, T. Lew, R. Bonalli, M. Pavone, et al., Convex optimization for trajectory generation: A tutorial on generating dynamically feasible trajectories reliably and efficiently, IEEE Control Systems Magazine 42 (5) (2022) 40–113. doi:10.1109/MCS.2022.3187542 .[42] P. Virtanen, R. Gommers, T. E. Oliphant, M. Haberland, T. Reddy, D. Cournapeau, et al., SciPy 1.0: Fundamental algorithms for scientific computing in Python, Nature Methods 17 (3) (2020) 261–272. doi:10.1038/s41592-019-0686-2 .[43] S. Diamond, S. Boyd, CVXPY: A Python-embedded modeling language for convex optimization, Journal of Machine Learning Research 17 (83) (2016) 1–5. [44] A. Agrawal, R. Verschueren, S. Diamond, S. Boyd, A rewriting system for convex optimization problems, Journal of Control and Decision 5 (1) (2018) 42–60. doi:10.1080/23307706.2017.1397554 .[45] MOSEK ApS, The MOSEK Python Optimizer API manual. Version 11.1 (2025). URL https://docs.mosek.com/11.1/pythonapi/index.html 
+
+23
