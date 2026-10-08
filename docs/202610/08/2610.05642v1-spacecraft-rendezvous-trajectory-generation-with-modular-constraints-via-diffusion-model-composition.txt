@@ -1,0 +1,551 @@
+Title: Spacecraft Rendezvous Trajectory Generation with Modular Constraints via Diffusion Model Composition
+
+URL Source: https://arxiv.org/pdf/2610.05642v1
+
+Published Time: Tue, 06 Oct 2026 02:07:54 GMT
+
+Number of Pages: 17
+
+Markdown Content:
+# AAS 26-777 SPACECRAFT RENDEZVOUS TRAJECTORY GENERATION WITH MODULAR CONSTRAINTS VIA DIFFUSION MODEL COMPOSITION 
+
+## Mariko A. Storey-Matsutani *, Richard Linares †
+
+Emerging mission classes such as on-orbit servicing, satellite inspection, and ac-tive debris removal require trajectory design methods that are adaptable to a variety of mission scenarios. We present a diffusion-based trajectory generation approach for rendezvous and proximity operations (RPO) that enables flexible configuration of mission constraints. First, individual energy-based diffusion models are trained to satisfy distinct constraints such as approach cone and sensor line-of-sight from a set of optimized trajectories. Then, at inference time, the learned energy models can be composed with one another, or with an analytically defined energy field, to enforce specific constraint combinations. We validate this framework with the composition of a learned approach cone model and a learned sensor line-of-sight model, as well as a learned approach cone model and synthetic obstacle avoidance model, both of which yield constraint satisfaction rates that are within 1 percent-age point of the single-constraint models or higher. These results indicate that our compositional diffusion framework can provide a modular approach to RPO tra-jectory design and enable reconfiguration for new constraint combinations without requiring model retraining. 
+
+INTRODUCTION 
+
+In recent years, rapidly growing interest in space-based infrastructure has accelerated the need for advanced trajectory design methods. In particular, emerging mission classes such as on-orbit servicing, active debris removal, and in-space assembly have emphasized a focus on rendezvous and proximity operations (RPO) maneuvers, which require spacecraft to operate in close proximity while satisfying dynamical and safety constraints. 1 The ongoing NASA Artemis program and com-mercial space station development efforts further motivate the need for robust autonomous RPO capabilities to expand human presence in space, as tasks like docking and resupply are prime exam-ples of critical RPO maneuvers. 2
+
+The relative motion dynamics for RPO regimes are commonly modeled using linearized formula-tions such as the Clohessy–Wiltshire (CW) or Hill equations. 1, 3 However, practical missions require further optimization methods to yield fuel-optimal trajectories that are typically prioritized in space missions. 4 Despite the benefit of these linearized models, trajectory design for RPO is fundamen-tally challenging because the close coordination of spacecraft introduces tightly coupled constraints that require full, six degree-of-freedom motion planning. The consideration of approach cone, sen-sor line-of-sight (LOS), plume impingement avoidance, and collision avoidance constraints can introduce nonconvex feasible regions in the state-control space. 1
+
+> *Graduate Student, Department of Aeronautics and Astronautics, Massachusetts Inst. of Technology, Cambridge MA
+> †Associate Professor, Department of Aeronautics and Astronautics, Massachusetts Inst. of Technology, Cambridge MA
+
+1arXiv:2610.05642v1 [cs.RO] 5 Oct 2026 As shown in classical optimal control literature, one approach to solving such nonconvex tra-jectory optimization problems is sequential convex programming (SCP), which has been applied to RPO mission applications. 5 SCP works by iteratively approximating a convex subproblem of the original nonconvex problem formulation, which enables the application of traditional convex optimization methods. 6, 7 While SCP has demonstrated strong performance in many path planning scenarios, its convergence can be sensitive to initialization and the addition or modification of con-straint sets requires reformulation of the convexification strategy. 8 As missions increasingly rely on coordinated, multi-spacecraft operations in cislunar and Earth-orbit environments, there is a need for modular, flexible tools for trajectory design that can adapt to changing mission needs. Given these limitations, recent work has explored learning-based alternatives for the generation of spacecraft trajectories. Reinforcement learning, 9 imitation learning, 10 and transformer-based archi-tectures 11–14 have been used to approximate optimal policies or directly generate feasible trajecto-ries, as well as to warm-start traditional solvers for nonconvex optimal spacecraft control. However, many existing approaches exhibit limited generalization across varying constraint configurations. As a result, changes in constraint geometry or combinations typically necessitate retraining, thus reducing flexibility and limiting deployment in adaptive mission contexts. 15, 16 
+
+To this end, existing research has begun to explore the application of diffusion models as an al-ternative approach to generative trajectory design. 15–17 Diffusion probabilistic models are a type of generative model capable of representing complex multimodal distributions through an iterative denoising process. 18, 19 Originally developed for high-dimensional data such as images, 18 diffusion models learn probabilistic distributions over solution spaces and allow conditioning mechanisms that are well-suited for trajectory generation problems. 20 In particular, the formulation of diffu-sion models as energy-based models further supports model composition and posterior conditional sampling, enabling constraint-flexible trajectory generation without model retraining. 21 
+
+Diffusion-based models have recently been applied to several spacecraft trajectory problems, in-cluding powered descent guidance, low-thrust transfers, and ballistic transfer generation. 15, 17, 22, 23 
+
+These works show that diffusion models can learn complex solution manifolds, provide diverse and high-quality initial guesses, and accelerate warm-starting of indirect and direct optimal control solvers. 15, 16, 23 However, most existing applications focus on single-vehicle scenarios with rela-tively structured constraints, and do not directly address RPO-specific constraints like approach cones, collision avoidance, and sensor line of sight. This gap motivates the compositional diffusion framework for RPO trajectory generation devel-oped in this work. Instead of training a single complex model to satisfy all mission constraints simultaneously, we demonstrate the decomposition of the constraint space into modular compo-nents and train individual diffusion models on distinct constraint classes (e.g. approach cone, sen-sor line-of-sight). At inference time, these models are composed to generate trajectories that satisfy multiple constraints concurrently, enabling reconfiguration to new RPO mission constraint profiles while reducing retraining requirements. 
+
+METHODOLOGY 
+
+We propose a two-phase framework for generating warm-start trajectories for rendezvous and proximity operations (RPO) under modular constraint profiles. In the first phase, individual dif-fusion models are trained on constraint-specific expert trajectories that are generated offline using sequential convex programming (SCP) via the SCPToolbox framework. 24 In the second phase, these 2diffusion models are composed and conditioned at inference time to generate trajectories that satisfy flexible constraint combinations. The following sections detail the key elements of this framework, including data generation, diffusion model training, and composition operations. 
+
+SCP-Based Data Generation 
+
+Expert trajectories are generated using the Apollo CSM rendezvous example provided in SCP-Toolbox. 24 The relative translational dynamics between the two spacecraft are modeled using the linearized Clohessy–Wiltshire (CW) equations in the local orbital frame, while the rotational mo-tion is represented through rigid-body attitude dynamics under thruster actuation. 24 The trajectory’s initial state is randomized within a defined range to generate diverse rendezvous scenarios. The system state and control vectors are defined as 
+
+xk =
+
+
+
+rk
+
+vk
+
+qk
+
+ωk
+
+ ∈ R13 , uk =
+
+
+
+fk
+
+f ref 
+
+> k
+
+f eq 
+
+> k
+
+ ∈ R33 . (1) Here rk and vk denote the relative position and velocity in the local orbital frame, qk represents the spacecraft attitude quaternion using scalar-last convention, and ωk denotes the angular velocity. The control vector contains the commanded thruster forces fk ∈ R16 , the reference thruster forces 
+
+f ref  
+
+> k
+
+∈ R16 , and a scalar slack variable f eq  
+
+> k
+
+∈ R used to enforce the minimum-impulse firing logic. 24 
+
+Expert trajectories are generated by solving the following trajectory optimization problem based on the Apollo CSM rendezvous scenario implemented in SCPToolbox: 24 
+
+min      
+
+> {xk,u k}N−1
+> k=0 ,t f,∆xf
+
+PN −1 
+
+> k=0
+
+wk
+
+ 1⊤fk 
+
+> fmax
+
++ γc f eq 
+
+> k
+> fmin
+
+
+
+s.t. Dynamics: xk+1 = fd(xk, u k, t f ), k = 0 , . . . , N − 2
+
+Initial state: x0 = xinit 
+
+Docking condition: xN −1 + ∆ xf = xdock 
+
+Terminal position tolerance: ∥∆rf ∥∞ ≤ rtol , ξ⊤∆rf = 0 
+
+Terminal velocity tolerance: ∥∆vf ∥∞ ≤ vtol 
+
+Terminal angular rate tolerance: ∥∆ωf ∥∞ ≤ ωtol 
+
+Attitude alignment: q⊤ 
+
+> N−1
+
+qf ≥ cos 
+
+ θtol 
+
+> 2
+
+
+
+Thruster limits: 0 ≤ fk,i ≤ fmax , ∀i = 1 , . . . , 16 
+
+Reference thrust limits: 0 ≤ f ref  
+
+> k,i
+
+≤ fmax , ∀i = 1 , . . . , 16 
+
+Control allocation slack: ∥fk − f ref  
+
+> k
+
+∥1 ≤ f eq  
+
+> k
+
+, k = 0 , . . . , N − 1
+
+Final time bounds: tmin  
+
+> f
+
+≤ tf ≤ tmax 
+
+> f
+
+Minimum thruster firing constraint: fk,i − OR κ
+
+
+
+f ref  
+
+> k,i
+
+− fmin 
+
+
+
+f ref  
+
+> k,i
+
+≤ 0
+
+Reference thrust consistency: OR κ
+
+
+
+f ref  
+
+> k,i
+
+− fmin 
+
+
+
+f ref  
+
+> k,i
+
+− fk,i ≤ 0
+
+Additional path constraints: s(xk, u k; κ) ≤ 0
+
+(2) We focus on defining the distinct constraints that were used to demonstrate the compositional na-ture of the proposed diffusion-based trajectory generation framework: the approach cone constraint 3and the sensor line-of-sight (LOS) constraint. Separate datasets are generated for each constraint, with a common set of base RPO constraints (dynamics, docking, thruster, and minimum-impulse logic) and the distinct additional path constraint s(·).The approach cone constraint restricts the vehicle to approach the target from a specified direction once within a distance threshold rA:
+
+cos θA − r⊤ 
+
+> k
+
+ξ
+
+∥rk∥ ≤ 0, when ∥rk∥ < r A. (3) This constraint ensures that the spacecraft’s relative position rk lies within a cone of half-angle 
+
+θA aligned with the docking axis ξ when the vehicle enters the terminal approach region of radius 
+
+rA. The distance-dependent activation is implemented through OR κ, a homotopy-parameterized approximation to the logical disjunction that enforces the angular restriction once the spacecraft is within the approach distance threshold. 24 
+
+The sensor line-of-sight constraint seeks to maintain the chaser’s target visibility over the full trajectory. This requires the body-fixed sensor axis to remain pointed toward the target within a sensor viewing angle, as defined by 
+
+cos θS − b · ˆr ≤ 0. (4) This constraint enforces that the angle between the chaser’s body-fixed sensor axis b and the target direction ˆr remains below a threshold θS throughout the trajectory. The resulting trajectories are filtered for numerical validity and dynamic feasibility. To reduce the dimensionality of model training, the 16 commanded RCS thruster forces are aggregated into a net three-axis force and torque vector, yielding a 6-dimensional control representation. Combined with the 13-dimensional spacecraft state, this yields a 19-dimensional feature vector discretized over 50 time steps. This feature vector is normalized per-feature to have zero mean and unit standard deviation ( μ = 0 , σ = 1 ) prior to training. The parameters for the generated data are given in Table 1. 
+
+> Table 1. Dataset and Constraint Parameters
+
+Parameter Value Initial position ranges (m) ([45, 135], [-75, 75], [-75, 75]) Final position (m) (4.48, 0.05, 0.17) Time steps per trajectory 50 Time of flight range (s) [100, 1000] Approach radius rA (m) 30 Approach cone half-angle θA 10 ◦
+
+Sensor FOV half-angle θS 50 ◦
+
+Approach Cone Dataset Size 14259 Sensor Line-of-Sight Dataset Size 15786 4Diffusion-Based Trajectory Modeling 
+
+Diffusion model training involves a forward “noising” process that gradually corrupts the input data as a neural network learns the reverse “denoising” process to reconstruct the input. While stan-dard diffusion models apply independently sampled Gaussian noise to each state, this assumption neglects the strong temporal dependencies inherent in trajectory data. To address this limitation, we adopt the Dynamical Diffusion formulation introduced by Guo et al., 25 which incorporates an explicit temporal coupling mechanism into the forward process. Given a trajectory x0 = {xs
+
+> 0
+
+}S−1 
+
+> s=0
+
+, the forward process constructs noisy samples by combining Gaussian diffusion with a recursive dynamics operator. At diffusion step t, the corrupted trajectory is defined as 
+
+xst = √¯γt
+
+ √¯αt x0 
+
+> s
+
++ √1 − ¯αt ϵst
+
+ + p1 − ¯γt xs−1 
+
+> t
+
+, ϵst ∼ N (0 , I ), (5) where ¯αt is the cumulative diffusion noise schedule and ¯γt governs the strength of temporal coupling between adjacent trajectory states. As ¯γt increases, the process places greater emphasis on local state information, while smaller values promote stronger temporal smoothing. 25 
+
+This construction can be equivalently expressed through a dynamics transformation operator 
+
+Φ( ·, ¯γt) applied recursively along the trajectory: 
+
+xdyn = Φ( x, ¯γt), xs, dyn = p1 − ¯γt xs−1,dyn + √¯γt xs, (6) with initialization x0,dyn = x0. The same operator is applied to both the clean trajectory and the Gaussian noise, yielding xdyn 0 = Φ( x0, ¯γt) and ϵdyn  
+
+> t
+
+= Φ( ϵt, ¯γt). This ensures that both signal and noise share consistent temporal structure. 25 
+
+We adopt an energy-based formulation of diffusion models, 21 in which the model learns a scalar energy function Eθ(xdyn  
+
+> t
+
+, t ) over the dynamics-transformed trajectory. The model is trained via standard denoising score matching, such that the scaled energy gradient approximates the temporally-conditioned noise via 
+
+L(θ) = Ex0,t,ϵ t
+
+"
+
+ϵdyn  
+
+> t
+
+− 1
+
+√1 − ¯αt
+
+∇xdyn 
+
+> t
+
+Eθ(xdyn  
+
+> t
+
+, t )
+
+> 2
+
+#
+
+. (7) During sampling, we reverse the diffusion process iteratively from Gaussian noise. At each step 
+
+t, the current sample is transformed via xdyn  
+
+> t
+
+= Φ( xt, ¯γt), and a noise estimate is obtained from the energy gradient: 
+
+ˆϵdyn  
+
+> θ
+
+(xt, t ) = 1
+
+√1 − ¯αt
+
+∇xdyn 
+
+> t
+
+Eθ(xdyn  
+
+> t
+
+, t ). (8) This is mapped back to untransformed coordinates via the inverse dynamics operator: 
+
+ˆϵ = Φ −1(ˆ ϵdyn  
+
+> θ
+
+, ¯γt), where xs = xs, dyn − √1 − ¯γt xs−1,dyn 
+
+√¯γt
+
+.
+
+The clean trajectory prediction is then given by 
+
+ˆx0 = xt − √1 − ¯αt ˆϵ
+
+√¯αt
+
+, (9) 5which is fed into a standard reverse diffusion update to obtain xt−1. To accelerate sampling, we employ a DDIM (Denoising Diffusion Implicit Models) sampler, 26 which uses deterministic reverse steps instead of the stochastic updates of DDPM (Denoising Diffusion Probabilistic Models). 18 This enables fast sampling with 50-100 denoising steps while maintaining comparable sample quality. The energy network Eθ is realized with a U-Net architecture, a standard choice for diffusion models due to its ability to capture multi-scale feature interactions. 18, 27, 28 Trajectories are encoded as single-channel 50 × 19 tensors (50 time steps, 19 features) and processed through a symmetric encoder–decoder with convolutional blocks, layer normalization, and swish activations. Skip con-nections between matching encoder and decoder levels preserve fine temporal detail. The diffusion timestep t is encoded via sinusoidal embeddings and additively injected into each block to condi-tion the network on the noise level. The final convolutional layer produces a feature map that is spatially summed to yield the scalar energy Eθ(xdyn  
+
+> t
+
+, t ). The input gradient of this energy func-tion ( ∇xdyn 
+
+> t
+
+Eθ) serves as the score estimate used during training and sampling. Architectural and training hyperparameters are provided in Table 2. 
+
+> Table 2. U-Net Architecture and Training Hyperparameters
+
+Parameter Value 
+
+Architecture 
+
+Input shape (time × features × channels) 50 × 19 × 1
+
+Resolution levels 4Base channels 32 Channel multipliers (1 , 2, 4, 8) 
+
+Block structure 2× (3 × 3 Convolution, Layer Normalization, Swish activation) Downsampling 2 × 2 max pooling Upsampling 4 × 4 transposed convolution Stride 2 
+
+Training 
+
+Diffusion steps 1000 Noise schedule Linear, β ∈ [10 −4, 2 × 10 −2]
+
+Temporal coupling ¯γt 0.5 Optimizer Adam Learning rate 1 × 10 −4
+
+Batch size 32 Training epochs 100 EMA decay 0.995 
+
+Constraint Composition and Conditioning 
+
+The energy-based formulation enables inference-time composition of independently trained mod-els without retraining. 21 In particular, multiple constraint models can be combined by manipulating their probability densities or corresponding energy functions during sampling. Two composition op-erators are considered in this work: product composition, which enforces simultaneous satisfaction 6of multiple constraints; and negation composition, which suppresses trajectory regions associated with undesirable constraint energies. Following Briden et al., 15, 22 we define product and negation composition as weighted sums of learned energy functions applied during DDIM sampling. Let 
+
+pi(x) denote the trajectory distribution learned for constraint set i, with corresponding energy func-tion Ei(x). These operators are defined as Product: Eprod (xdyn  
+
+> t
+
+, t ) = 
+
+> K
+
+X
+
+> i=1
+
+wiEi(xdyn  
+
+> t
+
+, t ), wi > 0 (10) Negation: Eneg (xdyn  
+
+> t
+
+, t ) = αE 1(xdyn  
+
+> t
+
+, t ) − βE 2(xdyn  
+
+> t
+
+, t ), α, β > 0 (11) where K is the number of component models, wi are nonnegative composition weights, and α, β 
+
+control the relative influence of attractive and repulsive energy terms. 15, 21, 22, 29 
+
+In addition to the composition of learned energy models, we investigate the composition of a learned energy model with an analytically-defined energy field, which offers a simpler approach for constraints with predictable energy landscapes. For example, to encourage obstacle-avoidance behavior at inference time, we artificially generate an energy field whose values are highly negative at the obstacle location and decay in magnitude with radial distance. The synthetic obstacle energy is defined as 
+
+Eobs (x) = g X
+
+> t
+
+
+
+− softplus 
+
+
+
+− ∥pphys (t) − c∥2 − (R − σ)
+
+σ
+
+ 
+
+, (12) where pphys (t) is the position of the spacecraft at time t in physical units, c is the obstacle center, 
+
+R is the obstacle radius, σ is the softening length, and g is the gain. All other dimensions besides position are given an energy value of zero. This synthetic energy field is then composed with a learned energy model via negation composition to yield a composed model that respects both the obstacle avoidance and learned model constraints. Aside from full model composition, inference-time conditioning can be applied through trajec-tory inpainting. During the iterative denoising process, inpainting fixes selected feature values to prescribed targets at each step while the remaining features are updated by the learned reverse pro-cess. At each reverse step, the clean-trajectory estimate ˆx0 is computed as above; the entries in the inpaint set M are overwritten with their target values, and the modified estimate is used in the subsequent reverse diffusion update, as in Equation 13. By repeatedly re-imposing the fixed val-ues throughout sampling, the diffusion process generates trajectories that remain consistent with the specified constraints. 30, 31 We employ this inpainting mechanism to condition the final position of the trajectory to the docking site, while allowing the remaining portions of the trajectory to be generated by the diffusion model. The general inpainting formulation is 
+
+xst−1 = √¯αt−1 ˜xs 
+
+> 0
+
++ p1 − ¯αt−1 ˆϵs, ˜xs 
+
+> 0
+
+=
+
+
+
+ys if s ∈ M (inpaint region) 
+
+ˆxs 
+
+> 0
+
+if s / ∈ M (non-inpaint region) (13) where M indexes the fixed inpaint region (e.g. the position at the final trajectory timestep) and ys
+
+is the overwriting trajectory data (e.g. the target position). 32 
+
+7Together, these operations enable flexible inference-time manipulation of learned trajectory dis-tributions, allowing constraint composition and partial trajectory conditioning without retraining the underlying diffusion models. 
+
+RESULTS 
+
+This section evaluates the compositional diffusion-based framework for RPO trajectory genera-tion. Our objective is to determine whether energy-based model composition and synthetic energy shaping can enforce combined constraints at inference time without any additional training. In addi-tion to constraint satisfaction, the models are evaluated on their ability to learn or preserve feasible trajectory dynamics and fuel optimality. Unless otherwise noted, all diffusion trajectories are gen-erated with 50 DDIM steps and metrics are computed over 100 generated samples per model with a 50-step discretization per trajectory sample. 
+
+Individual Model Performance 
+
+We first characterize each single-constraint model in isolation to establish that neither trivially satisfies the other’s constraint, thereby motivating a meaningful composition study. One model is trained on the approach cone constraint of Equation 3 and one on the sensor line-of-sight (LOS) constraint of Equation 4. 
+
+> Figure 1. 3D plot of Approach Cone-Only and LOS-Only Trajectory Samples
+
+The 100 samples drawn from each model are shown in Figure 1, and per-constraint metrics are reported in Table 3 along with training data metrics for reference. The satisfaction metric measures the mean fraction of constraint-active timesteps satisfying the constraint, while the peak violation metric measures the mean (across samples) of the maximum angular constraint violation along each trajectory’s constraint-active region. Each model closely satisfies the constraint on which it was trained, while exhibiting significant violations for the other. The approach cone model holds the approach cone over 96 .1% of constraint-active timesteps, while its sensor pointing is effectively unconstrained. The approach cone model satisfies the LOS constraint at only 24 .2% of constraint-active timesteps and exhibits a mean peak violation of 104 .8◦. Conversely, the LOS model satisfies the LOS constraint at 99 .6% of constraint-active timesteps but satisfies the approach cone at only 836 .9% of constraint-active timesteps with a mean peak violation of 20 .2◦. This confirms a com-pelling scenario for composition, since the two constraints are non-trivial and neither single model satisfies both constraints.  
+
+> Table 3. Constraint Satisfaction and Peak Violation Metrics for the Constraint-Specific Models and Training Data (N=100)
+
+Approach Cone Constraint Sensor LOS Constraint 
+
+Satisfaction (%) Peak Violation ( ◦) Satisfaction (%) Peak Violation ( ◦)
+
+Learned Models 
+
+Approach Cone 96 .1 ± 9.6 0.29 ± 0.76 24 .2 ± 7.7 104 .77 ± 14 .87 
+
+Sensor LOS 36 .9 ± 27 .5 20 .21 ± 14 .66 99 .6 ± 3.0 0.12 ± 0.95 
+
+Training Data 
+
+Approach Cone 97 .0 ± 4.5 0.32 ± 6.69 28 .2 ± 8.7 104 .58 ± 13 .89 
+
+Sensor LOS 36 .3 ± 25 .5 20 .70 ± 14 .49 100 .0 ± 0.2 0.02 ± 1.45 
+
+In addition to constraint satisfaction, we investigate the dynamic feasibility of the generated sam-ples. Since the denoising process of diffusion sampling simultaneously generates the full trajectory output, it is necessary to validate that the generated state and control values are self-consistent. By re-propagating each sequence of diffusion-generated controls through the 6-DOF dynamics and measuring the resulting position error, we obtain a mean position error of 7.19 ± 3.45 m for the approach cone model and 5.88 ± 3.64 m for the LOS model. Although this dynamic consistency can improve with further model training, the discrepancy motivates the use of diffusion-generated trajectories as warm starts to traditional solvers, which can restore dynamic feasibility. While diffu-sion models can produce trajectories that are comparable to the SCP solutions, they offer no formal guarantee of dynamic feasibility or optimality. Instead, the diffusion model output can be used to warm-start a traditional optimal solver like the SCP solver used to generate the training data, such that the SCP solver can recover a dynamically feasible and locally optimal solution.  
+
+> Figure 2. Dynamic Feasibility and Control Effort of Cold-Started SCP, Warm-Started SCP, and Pure Diffusion Samples Across Control Configurations (Generated, Velocity-Based Inverse Dynamics, Position-Based Inverse Dynamics)
+
+While the warm-start framework improves mean propagated position errors on generated controls 9by over 70%, the warm-start process alone does not recover dynamic feasibility that is comparable to the training data. As such, velocity-based inverse dynamics and position-based inverse dynam-ics are explored as alternatives to direct application of diffusion-generated control outputs. Figure 2 presents the mean propagated position error and total control effort across each propagation ap-proach, where control effort accounts for both translational and rotational actuation. We find that the combination of diffusion-warm-started SCP and subsequent controls regeneration via position-based inverse dynamics yields the best balance between error and control minimization. In Figure 3, we provide a comparison of solve time, fuel optimality, and constraint satisfaction across cold-started SCP, warm-started SCP, and diffusion-only approaches. Here, the warm-started SCP solve time includes diffusion sampling time with 10 DDIM steps, SCP solve time with diffusion-output initialization, and controls computation via position-based inverse dynamics.  
+
+> Figure 3. Total Wall Time and Constraint Satisfaction of Approach Cone and LOS Models Across Cold-Started SCP, Warm-Started SCP, and Pure Diffusion Samples
+
+Over a sweep of 100 seeds per model with 10 denoising steps, the warm start combined with position-based inverse dynamics controls reduces the mean end-to-end solve time by 28 .3% for the LOS model and 29 .4% for the approach cone model. Furthermore, with both the cold-start and warm-start approaches, the constraint satisfaction rate remains consistent. The cold-start SCP pro-cess achieves a constraint satisfaction of 100 .0% for the LOS constraint and 95 .9% for the approach cone constraint, while the warm-start approach achieves 100 .0% for the LOS constraint and 96 .8% 
+
+for the approach cone constraint. Furthermore, these time improvements are accompanied by less than a 3.5% increase in SCP-converged control effort for the LOS model and 0.4% for the approach cone model. The pure diffusion samples were generated with 50 DDIM steps and the performance metrics are provided as a point of comparison. While the sampling speed is much faster and the constraint sat-isfaction is comparable, the pure diffusion approach does not guarantee optimality or dynamic con-sistency. On the other hand, the warm-started SCP and position-based inverse dynamics approach achieves comparable fuel consumption and constraint satisfaction, and converges nearly 30% faster compared to the cold-started SCP approach. 
+
+Joint Constraint Satisfaction 
+
+The product-composed model was obtained according to the following energy composition: 10 Eprod (x) = 0 .1 ELOS, 6-DOF (x) + 0 .9 Eappch, 3-DOF (x), (14) where ELOS, 6-DOF (x) denotes the sensor line-of-sight energy model and Eappch, 3-DOF (x) de-notes the translational subspace of the 6-DOF approach cone energy model. The weights were selected based on a parameter sweep analysis and act on the shared translational dimensions while the rotational dimensions are defined solely by the LOS model. We validate empirically that the ro-tational policy learned by the LOS model generalizes to the approach cone-constrained trajectories. The trajectory samples from the product-composed model are presented in Figure 4. 
+
+> Figure 4. 3D plot of Product-Composed Trajectory Samples (N=100)
+
+To evaluate the ability of the composed model to enforce multiple constraints simultaneously, we analyze approach cone and sensor line-of-sight (LOS) satisfaction percentage and peak violations over each trajectory’s constraint-active region. Table 4 summarizes per-constraint performance for the product-composed model and combined constraint performance across all models. The product-composed model demonstrates strong multi-constraint behavior, achieving low violation across both constraints simultaneously. 
+
+> Table 4. Constraint Satisfaction and Peak Violation Metrics for the Product Composed Model (N=100)
+
+Approach Cone Constraint Sensor LOS Constraint Model Satisfaction (%) Peak Violation ( ◦) Satisfaction (%) Peak Violation ( ◦)Product 99 .3 ± 5.1 0.03 ± 0.21 98 .6 ± 7.1 0.36 ± 1.76 
+
+The product-composed model satisfies the approach cone constraint at 99 .3 ± 5.1% of constraint-active timesteps and the sensor-LOS constraint at 98 .6 ± 7.1% . Each single-constraint model, in contrast, satisfies only its trained constraint: the approach cone model holds the cone at 96 .1% 
+
+but the LOS constraint at just 24 .2% , and the LOS model holds LOS constraint at 99 .6% but the approach cone constraint at only 36 .9% , as presented in Table 3. The composed model thus attains specialist-level satisfaction on both constraints from a single sampler, matching or exceeding the approach cone specialist on the cone ( 99 .3% vs. 96 .1% ) while trailing the LOS specialist by roughly 11 one point ( 98 .6% vs. 99 .6% ). The constraint satisfaction rate over the course of the trajectory is visualized in Figure 5 
+
+> Figure 5. Comparison of Constraint Satisfaction Along Trajectory
+
+Considering the joint satisfaction of the approach cone and sensor LOS constraints, we see that the product-composed model demonstrates strong multi-constraint behavior, achieving low viola-tion across both constraints simultaneously. While each single model achieves minimal error on its respective trained constraint, both exhibit substantial violations when evaluated jointly. These results indicate that product composition can effectively combine probabilistic solution regions to encourage joint constraint feasibility. The composed model matches or exceeds each specialist on the approach cone constraint while remaining comparable to the dedicated LOS model within 1 per-centage point, yielding a balanced solution that satisfies both constraints in the evaluated samples.  
+
+> Figure 6. Approach Angle and Sensor Line-of-Sight Angle Over Constraint-Active Trajectory Region
+
+Figure 6 illustrates how the constraint metrics evolve over the constraint-active portion of the trajectory. The product-composed model maintains approach angles below the 10 ◦ threshold for the majority of the trajectory and exhibits a smooth decrease as the vehicle approaches the target. 12 In contrast, the sensor LOS model shows sustained violations of the approach constraint, and the approach-only model shows mixed satisfaction of the approach angle constraint. As for the LOS angle evolution, the product-composed model maintains pointing angles well within the 50 ◦ field-of-view constraint throughout the trajectory, while significantly reducing the large initial pointing errors observed in the approach-only model. Although the dedicated LOS model achieves the lowest absolute error, the composed model demonstrates comparable constraint satisfaction with improved balance across both constraints. Taken together, these results indicate that the composed model successfully considers both con-straints simultaneously, achieving low mean error and improved constraint performance over the full trajectory, without being explicitly trained on the joint constraint space. 
+
+Synthetic Constraint Composition 
+
+To demonstrate the flexibility of the framework, we compose the approach cone energy model with a synthetic obstacle avoidance energy landscape. Rather than training on obstacle avoidance scenarios, we inject an analytically-derived energy field at inference time, demonstrating how the framework can incorporate new constraints without retraining. The composed energy function is 
+
+ENeg = Eappch − 0.5Eobs , (15) where Eobs is defined in Equation 12 and parameters are specified in Table 5. 
+
+> Table 5. Obstacle Constraint Parameters
+
+Parameter Value Obstacle Center c (m) (80, 0, 0) Obstacle Radius R (m) 10 Softening Length σ (m) 10 Gain g 0.5 Figure 7 visualizes the approach cone energy, the synthetic obstacle barrier, and their negation composition on an xy grid at z = 0 . The learned approach cone energy defines a natural corri-dor through which trajectories should pass, while the synthetic obstacle term provides a heuristic guidance mechanism that deflects samples away from the high-energy collision region.   
+
+> Figure 7. Energy Landscape ( z= 0 , Z-score normalized for visualization) for the Approach Cone Model, Synthetic Obstacle Model, and Negation Composition
+
+13 The composed model achieves strong constraint satisfaction across 100 samples: 100% obstacle avoidance with mean minimum clearance of 22.9m ( ±9.6m), while maintaining 96.5% approach cone satisfaction. Figure 8 shows an xy -plane and xz -plane view of the trajectories and the mean obstacle distance over time. The samples curve around the obstacle and generally hold a generous margin, as encouraged by the gradual taper of the obstacle energy. While an aggressive synthetic barrier can introduce localized jaggedness in the trajectory, this can be remedied by further tuning of the obstacle energy parameters or by adopting the warm-start approach.  
+
+> Table 6. Constraint Satisfaction, Peak Violation, and Minimum Clearance Metrics for the Obstacle-Avoidance Composed Model (N=100)
+
+Approach Cone Constraint Obstacle Avoidance Constraint Model Satisfaction (%) Peak Violation ( ◦) Satisfaction (%) Min Clearance (m) Obstacle 96 .5 ± 9.5 0.21 ± 0.61 100 .0 ± 0.0 22 .86 ± 9.58  
+
+> Figure 8. Plane view of Negation-Composed Trajectories and Mean Obstacle Dis-tance Over Trajectory Time
+
+This result is significant because the obstacle constraint was never seen during training. The closed-form energy landscape is injected at sampling time and steers the learned distribution into a new feasible region, demonstrating that the diffusion-based trajectory generation framework extends beyond composing pre-trained models to composing learned and hand-specified constraints. 
+
+DISCUSSION 
+
+This framework couples diffusion-based generative modeling with inference-time energy compo-sition to produce constraint-modular RPO trajectories. The presented results support three claims. First, diffusion models can generate constraint-satisfying RPO trajectories that reduce end-to-end solution time when used to warm-start a traditional SCP solver. The diffusion-warm-started solve with position-based inverse dynamics reduces end-to-end wall-clock time by roughly 30% (includ-ing the cost of generating the diffusion sample) at a control-effort penalty of ≤ 3.5% and with constraint satisfaction preserved. Notably, this speed-up stems less from a reduction in SCP itera-tions than from better-conditioned convex subproblems. The constraint-aware initial guess places the SCP solver closer to the feasible manifold and thus lowers the per-iteration cost. Furthermore, the near-identical converged fuel cost confirms that the warm start trades little to no optimality for 14 speed. In short, the diffusion sample supplies a constraint-aware, near-optimal initial guess that can be paired with a traditional solver to certify dynamic feasibility and local fuel optimality. Second, composition can induce combined constraint behavior without retraining and with min-imal constraint penalty. Product composition yields a model that satisfies the approach cone and sensor-LOS constraints at 99 .3% and 98 .6% of constraint-active timesteps respectively, despite each single-constraint model satisfying the competing constraint at only 24 –37% . Relative to each constraint-specific model, the product modestly exceeds the approach cone constraint satisfaction by 3.2 percentage points, while incurring a slight reduction of 1.0 percentage points in the satisfaction of the LOS constraint. Third, learned energy landscapes can be composed with synthetic energies to extend the frame-work beyond pre-trained models. Across 100 samples, the negation-composed model achieves 
+
+100% satisfaction of the obstacle-avoidance constraint while preserving the base approach cone satisfaction at 96 .5% of constraint-active timesteps. Because the obstacle term is analytic, new keep-out constraints can be specified and enforced at sampling time without obstacle-specific train-ing data or retraining, which can be an advantageous capability for mission scenarios that demand quick adaptation to unseen obstacle configurations. However, an introduced synthetic energy can degrade trajectory smoothness depending on the barrier form and composition parameters, motivat-ing well-tuned barriers or use as a warm start. Several limitations qualify these findings. First, the analyses are empirical, drawn from 100 
+
+samples on a single rendezvous scenario, and should be read as observations rather than guarantees. The warm-start approach remains the only component that certifies dynamic feasibility and local optimality. Additionally, the composition weights and energy parameters were manually tuned for this work, and a real deployment would require systematic calibration. In particular, when constraints act on different state subsets or bind over overlapping time windows, naive weighting can let some energy fields dominate and suppress joint satisfaction. Finally, dynamic consistency is enforced only weakly during generation and is not explicitly considered during composition. The product-composed samples exhibit larger re-propagation error than the single-constraint samples, and should therefore be validated through the warm-start optimizer. Future work could include physics-informed training and composition to tighten dynamic fea-sibility and fuel optimality without the warm-start framework. Additionally, the synthetic energy approach can be expanded beyond obstacle avoidance, to constraints like keep-out and corridor constraints. Finally, further study of the composition method could explore principled weight cali-bration or additional composition operators for new constraint types. 
+
+CONCLUSION 
+
+In this paper, we present a diffusion-based RPO trajectory generation approach, in which inde-pendently trained, single-constraint energy-based models are composed at sampling time to enforce unseen constraint combinations without additional training. Three findings support this framework. First, the single-constraint models can reproduce intended constraint behavior with high fidelity. Second, product composition of the learned models can yield joint satisfaction of nontrivial con-straints. Third, composing a learned energy with a closed-form energy field can extend the frame-work to unseen constraints. Since diffusion samples carry no formal feasibility or optimality guarantee, we pair them with the same sequential convex programming solver used to generate the training data, warm-starting 15 it to cut end-to-end wall-clock time by roughly 30% with minimal control-effort penalty and with constraint satisfaction preserved, yielding a dynamically feasible, locally fuel-optimal maneuver. Inference-time composition thus provides a flexible, retraining-free mechanism for multi-constraint RPO trajectory generation, and the diffusion-warm-started SCP pipeline provides a practical route from constraint-aware samples to deployable trajectories. Broader initial-condition and geometry sweeps, systematic weight calibration, and dynamics-informed training and composition remain as future work. 
+
+ACKNOWLEDGMENTS 
+
+Research was sponsored by the Department of the Air Force Artificial Intelligence Accelerator and was accomplished under Cooperative Agreement Number FA8750-19-2-1000. The views and conclusions contained in this document are those of the authors and should not be interpreted as representing the official policies, either expressed or implied, of the Department of the Air Force or the U.S. Government. The U.S. Government is authorized to reproduce and distribute reprints for Government purposes notwithstanding any copyright notation herein. 
+
+REFERENCES 
+
+[1] J. A. Starek, E. Schmerling, G. D. Maher, B. W. Barbee, and M. Pavone, “Fast, Safe, Propellant-Efficient Spacecraft Motion Planning Under Clohessy–Wiltshire–Hill Dynamics,” Journal of Guidance, Control, and Dynamics , Vol. 40, No. 2, 2017, pp. 418–438. eprint: https://doi.org/10.2514/1.G001913, 10.2514/1.G001913. [2] M. Smith, D. Craig, N. Herrmann, E. Mahoney, J. Krezel, N. McIntyre, and K. Goodliff, “The Artemis Program: An Overview of NASA’s Activities to Return Humans to the Moon,” 2020 IEEE Aerospace Conference , Mar. 2020, pp. 1–10. ISSN: 1095-323X, 10.1109/AERO47225.2020.9172323. [3] W. H. Clohessy and R. S. Wiltshire, “Terminal Guidance System for Satellite Rendezvous,” Journal of the Aerospace Sciences , Vol. 27, No. 9, 1960, pp. 653–658. [4] A. Miele, M. W. Weeks, and M. Ciarci` a, “Optimal Trajectories for Spacecraft Rendezvous,” Journal of Optimization Theory and Applications , Vol. 132, Mar. 2007, pp. 353–376, 10.1007/s10957-007-9166-4. [5] D. Malyuta, T. Reynolds, M. Szmuk, B. Acikmese, and M. Mesbahi, “Fast Trajectory Op-timization via Successive Convexification for Spacecraft Rendezvous with Integer Constraints,” 
+
+AIAA Scitech 2020 Forum , American Institute of Aeronautics and Astronautics. eprint: https://arc.aiaa.org/doi/pdf/10.2514/6.2020-0616, 10.2514/6.2020-0616. [6] Y. Mao, M. Szmuk, and B. Ac ¸ıkmes ¸e, “Successive convexification of non-convex optimal control prob-lems and its convergence properties,” 2016 IEEE 55th Conference on Decision and Control (CDC) ,Dec. 2016, pp. 3636–3641, 10.1109/CDC.2016.7798816. [7] M. Szmuk, U. Eren, and B. Acikmese, “Successive Convexification for Mars 6-DoF Powered De-scent Landing Guidance,” AIAA Guidance, Navigation, and Control Conference , AIAA SciTech Forum, American Institute of Aeronautics and Astronautics, Jan. 2017, 10.2514/6.2017-1500. [8] T. Kim, P. Elango, D. Malyuta, and B. Ac ¸ıkmes ¸e, “Guided Policy Search using Sequential Convex Programming for Initialization of Trajectory Optimization Algorithms,” 2022 American Control Con-ference (ACC) , June 2022, pp. 3572–3578. ISSN: 2378-5861, 10.23919/ACC53348.2022.9867151. [9] E. G. Chang and K. Schroeder, “Reinforcement Learning for Rendezvous and Proximity Opera-tions,” AIAA SCITECH 2026 Forum , American Institute of Aeronautics and Astronautics. eprint: https://arc.aiaa.org/doi/pdf/10.2514/6.2026-1161, 10.2514/6.2026-1161. [10] S. Shao, D. Zhou, G. Sun, L. Zhang, and M. Jiang, “Imitation learning-based spacecraft rendezvous and docking method with Expert Demonstration,” Jan. 2026, 10.48550/arXiv.2601.12952. [11] J. Briden, T. Gurga, B. J. Johnson, A. Cauligi, and R. Linares, “Improving Computational Efficiency for Powered Descent Guidance via Transformer-based Tight Constraint Prediction,” 
+
+AIAA SCITECH 2024 Forum , American Institute of Aeronautics and Astronautics. eprint: https://arc.aiaa.org/doi/pdf/10.2514/6.2024-1760, 10.2514/6.2024-1760. [12] T. Guffanti, D. Gammelli, S. D’Amico, and M. Pavone, “Transformers for Trajectory Optimization with Application to Spacecraft Rendezvous,” 2024 IEEE Aerospace Conference , Mar. 2024, pp. 1–13. ISSN: 1095-323X, 10.1109/AERO58975.2024.10521334. 
+
+16 [13] Y. Takubo, T. Guffanti, D. Gammelli, M. Pavone, and S. D’Amico, “Towards Robust Spacecraft Trajec-tory Optimization via Transformers,” 2025 IEEE Aerospace Conference , Mar. 2025, pp. 1–13. ISSN: 2996-2358, 10.1109/AERO63441.2025.11068406. [14] A. Jain, V. Rodriguez-Fernandez, and R. Linares, “Multi-Phase Spacecraft Trajectory Opti-mization via Transformer-Based Reinforcement Learning,” Nov. 2025. arXiv:2511.11402 [cs], 10.48550/arXiv.2511.11402. [15] J. Briden, B. Johnson, R. Linares, and A. Cauligi, “Diffusion Policies for Generative Modeling of Spacecraft Trajectories,” Jan. 2025. arXiv:2501.00915 [cs], 10.48550/arXiv.2501.00915. [16] A. Li, Z. Ding, A. B. Dieng, and R. Beeson, “DiffuSolve: Diffusion-based Solver for Non-convex Trajectory Optimization,” Oct. 2024. arXiv:2403.05571 [cs], 10.48550/arXiv.2403.05571. [17] T. Presser, A. Dasgupta, D. Erwin, and A. Oberai, “Diffusion Models for Generating Ballistic Spacecraft Trajectories,” May 2024. arXiv:2405.11738 [cs], 10.48550/arXiv.2405.11738. [18] J. Ho, A. Jain, and P. Abbeel, “Denoising Diffusion Probabilistic Models,” Dec. 2020. arXiv:2006.11239 [cs], 10.48550/arXiv.2006.11239. [19] Y. Song, J. Sohl-Dickstein, D. P. Kingma, A. Kumar, S. Ermon, and B. Poole, “Score-Based Gen-erative Modeling through Stochastic Differential Equations,” Feb. 2021. arXiv:2011.13456 [cs], 10.48550/arXiv.2011.13456. [20] M. Janner, Y. Du, J. B. Tenenbaum, and S. Levine, “Planning with Diffusion for Flexible Behavior Synthesis,” Dec. 2022. arXiv:2205.09991 [cs], 10.48550/arXiv.2205.09991. [21] Y. Du, C. Durkan, R. Strudel, J. B. Tenenbaum, S. Dieleman, R. Fergus, J. Sohl-Dickstein, A. Doucet, and W. Grathwohl, “Reduce, Reuse, Recycle: Compositional Generation with Energy-Based Diffusion Models and MCMC,” Sept. 2024. arXiv:2302.11552 [cs], 10.48550/arXiv.2302.11552. [22] J. Briden, Y. Du, E. M. Zucchelli, and R. Linares, “Compositional Diffusion Models for Powered De-scent Trajectory Generation with Flexible Constraints,” 2025 IEEE Aerospace Conference , Mar. 2025, pp. 1–19. ISSN: 2996-2358, 10.1109/AERO63441.2025.11068454. [23] J. Graebner and R. Beeson, “Global Search for Optimal Low Thrust Spacecraft Trajectories Using Diffusion Models and the Indirect Method,” The Journal of the Astronautical Sciences , Vol. 72, Nov. 2025, p. 62, 10.1007/s40295-025-00535-1. [24] D. Malyuta, T. P. Reynolds, M. Szmuk, T. Lew, R. Bonalli, M. Pavone, and B. Ac ¸ıkmes ¸e, “Convex Optimization for Trajectory Generation: A Tutorial on Generating Dynamically Feasible Trajectories Reliably and Efficiently,” IEEE Control Systems , Vol. 42, Oct. 2022, pp. 40–113. Free preprint available at https://arxiv.org/abs/2106.09125, 10.1109/mcs.2022.3187542. [25] X. Guo, Y. Zhang, B. Chen, H. Xu, J. Wang, and M. Long, “Dynamical Diffusion: Learning Temporal Dynamics with Diffusion Models,” Mar. 2025. arXiv:2503.00951 [cs], 10.48550/arXiv.2503.00951. [26] J. Song, C. Meng, and S. Ermon, “Denoising Diffusion Implicit Models,” Oct. 2022. arXiv:2010.02502 [cs.LG], 10.48550/arXiv.2010.02502. [27] P. Dhariwal and A. Nichol, “Diffusion Models Beat GANs on Image Synthesis,” June 2021. arXiv:2105.05233 [cs], 10.48550/arXiv.2105.05233. [28] O. Ronneberger, P. Fischer, and T. Brox, “U-Net: Convolutional Networks for Biomedical Image Seg-mentation,” MICCAI , 2015. [29] Y. Du, S. Li, and I. Mordatch, “Compositional Visual Generation and Inference with Energy Based Models,” Dec. 2020. arXiv:2004.06030 [cs.CV], 10.48550/arXiv.2004.06030. [30] C.-F. Yang, H. Xu, T.-L. Wu, X. Gao, K.-W. Chang, and F. Gao, “Planning as In-Painting: ADiffusion-Based Embodied Task Planning Framework for Environments under Uncertainty,” Dec. 2023. arXiv:2312.01097 [cs.CV], 10.48550/arXiv.2312.01097. [31] A. Li and R. Beeson, “Aligning Diffusion Model with Problem Constraints for Trajectory Optimiza-tion,” Apr. 2025. arXiv:2504.00342 [cs], 10.48550/arXiv.2504.00342. [32] A. Lugmayr, M. Danelljan, A. Romero, F. Yu, R. Timofte, and L. Van Gool, “RePaint: Inpaint-ing using Denoising Diffusion Probabilistic Models,” 2022 IEEE/CVF Conference on Computer Vi-sion and Pattern Recognition (CVPR) , New Orleans, LA, USA, IEEE, June 2022, pp. 11451–11461, 10.1109/CVPR52688.2022.01117. 
+
+17
